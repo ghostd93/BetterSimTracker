@@ -4,7 +4,7 @@
   "requires": [],
   "optional": [],
   "js": "dist/index.js",
-  "auto_update": false,
+  "auto_update": true,
   "author": "BetterSimTracker",
   "version": "1.0.0",
   "homePage": "https://github.com/your-org/BetterSimTracker"
