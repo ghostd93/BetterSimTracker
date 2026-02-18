@@ -4,6 +4,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.3.11] - 2026-02-18
+### Changed
+- Diagnostics dump now includes settings provenance, graph preferences, profile resolution, request metadata, and a history sample for faster debugging.
+
 ## [1.0.3.10] - 2026-02-18
 ### Changed
 - Graph history now ignores legacy snapshots without a message index and skips deleted messages to prevent retrack stacking.
