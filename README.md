@@ -123,6 +123,32 @@ Model confidence behavior:
 - `Mood Stickiness` uses confidence as a gate: low confidence keeps previous mood.
 - If confidence is missing for a character, runtime fallback is `0.8`.
 
+### How Stat Updates Are Applied (Exact Runtime Logic)
+
+For each active character and numeric stat (`affection`, `trust`, `desire`, `connection`):
+
+1. Read previous value:
+   - from prior tracker state for that character, else stat default.
+2. Read model delta and clamp:
+   - `boundedDelta = clamp(delta, -MaxDeltaPerTurn, +MaxDeltaPerTurn)`
+3. Read confidence:
+   - parsed `confidence` in `0..1`, fallback `0.8` if missing.
+4. Compute scale:
+   - `scale = (1 - ConfidenceDampening) + confidence * ConfidenceDampening`
+5. Apply:
+   - `scaledDelta = round(boundedDelta * scale)`
+   - `next = clamp(previous + scaledDelta, 0, 100)`
+
+Behavior notes:
+
+- `ConfidenceDampening = 0`: confidence has no effect (`scale = 1`).
+- `ConfidenceDampening = 1`: confidence fully controls delta strength (`scale = confidence`).
+- Mood is not delta-based:
+  - if `confidence < MoodStickiness`, keep previous mood;
+  - otherwise apply parsed mood.
+- `lastThought` is direct text replacement when present.
+- Missing parsed fields keep prior values via merge fallback.
+
 ### Extraction Priority (Actual Runtime Logic)
 
 1. Extraction runs only after a valid chat generation cycle that rendered a new AI character message.
@@ -197,8 +223,9 @@ Direct key path:
 
 Priority order:
 
-1. Character card Advanced definitions (`extensions.bettersimtracker.defaults`)
-2. Contextual baseline inference
+1. Extension sidebar Character Defaults (`settings.characterDefaults`)
+2. Character card Advanced definitions (`extensions.bettersimtracker.defaults`)
+3. Contextual baseline inference
 
 These defaults are used for initial tracker baseline (when there is no prior tracker state yet for that character/chat).
 

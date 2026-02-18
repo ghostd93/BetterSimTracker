@@ -158,6 +158,7 @@ export function parseUnifiedDeltaResponse(
   rawText: string,
   activeCharacters: string[],
   enabled: StatKey[],
+  maxDelta = 15,
 ): {
   confidence: Record<string, number>;
   deltas: {
@@ -197,7 +198,8 @@ export function parseUnifiedDeltaResponse(
     }
   }
 
-  const clampDelta = (n: number): number => Math.max(-15, Math.min(15, Math.round(n)));
+  const safeMaxDelta = Math.max(1, Math.round(Number(maxDelta) || 15));
+  const clampDelta = (n: number): number => Math.max(-safeMaxDelta, Math.min(safeMaxDelta, Math.round(n)));
   const coerceDelta = (value: unknown): number | null => {
     if (typeof value === "number" && Number.isFinite(value)) return clampDelta(value);
     if (typeof value === "string") {

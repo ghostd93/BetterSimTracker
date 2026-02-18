@@ -2,19 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [0.1.71] - 2026-02-18
+## [1.0.1] - 2026-02-18
 
-- Added `Quick Help` block in settings modal.
-- Mobile usability improvements for settings/graph modals.
-- Unified close button UX (`×`) across modals.
-- Added global tracker collapse with compact summary view.
-- Hardened behavior for SD/image generation:
-  - ignore generated-media chat messages for tracking,
-  - prevent quiet/image generation from driving tracker progress state,
-  - prevent progress UI from rendering on user/system messages.
-- Improved debug tooling and diagnostics controls.
-- Cleaned unused UI remnants.
+- Made `Max Delta Per Turn` effective end-to-end:
+  - parser delta clamp now follows configured max delta,
+  - extraction parse/retry pipeline passes configured max delta,
+  - unified prompt requests deltas in configured range.
+- Expanded README with exact confidence/delta application math.
+- Corrected README character-default priority to match runtime behavior.
 
-## [0.1.0] - Initial scaffold
+## [1.0.0] - 2026-02-18
 
-- TypeScript extension architecture and initial tracker pipeline.
+- First stable public release.

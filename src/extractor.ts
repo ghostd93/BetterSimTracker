@@ -223,12 +223,20 @@ export async function extractStatisticsParallel(input: {
     };
 
     const runOneStat = async (statList: StatKey[]): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
-      const prompt = buildUnifiedPrompt(statList, userName, activeCharacters, contextText, previousStatistics, history);
+      const prompt = buildUnifiedPrompt(
+        statList,
+        userName,
+        activeCharacters,
+        contextText,
+        previousStatistics,
+        history,
+        settings.maxDeltaPerTurn,
+      );
       tickProgress();
       attempts += 1;
       let raw = await generateJson(prompt, settings);
       tickProgress();
-      let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList);
+      let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList, settings.maxDeltaPerTurn);
       const firstHasValues = hasParsedValues(parsedOne);
       firstParseHadValues = firstParseHadValues && firstHasValues;
       let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
@@ -238,7 +246,7 @@ export async function extractStatisticsParallel(input: {
         retryUsed = true;
         retriesLeft -= 1;
         const retryRaw = await generateJson(retryPrompt, settings);
-        const retryParsed = parseUnifiedDeltaResponse(retryRaw, activeCharacters, statList);
+        const retryParsed = parseUnifiedDeltaResponse(retryRaw, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(retryParsed, statList)) {
           raw = retryRaw;
           parsedOne = retryParsed;
@@ -255,7 +263,7 @@ export async function extractStatisticsParallel(input: {
         retryUsed = true;
         retriesLeft -= 1;
         const repairRaw = await generateJson(repairPrompt, settings);
-        const repairParsed = parseUnifiedDeltaResponse(repairRaw, activeCharacters, statList);
+        const repairParsed = parseUnifiedDeltaResponse(repairRaw, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(repairParsed, statList)) {
           raw = repairRaw;
           parsedOne = repairParsed;
@@ -267,7 +275,7 @@ export async function extractStatisticsParallel(input: {
         retryUsed = true;
         retriesLeft -= 1;
         const strictRaw = await generateJson(strictPrompt, settings);
-        const strictParsed = parseUnifiedDeltaResponse(strictRaw, activeCharacters, statList);
+        const strictParsed = parseUnifiedDeltaResponse(strictRaw, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(strictParsed, statList)) {
           raw = strictRaw;
           parsedOne = strictParsed;

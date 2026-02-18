@@ -77,6 +77,7 @@ export function buildUnifiedPrompt(
   contextText: string,
   current: Statistics | null,
   history: TrackerData[] = [],
+  maxDeltaPerTurn = 15,
 ): string {
   const envelope = commonEnvelope(userName, characters, contextText);
   const numericStats = stats.filter(stat =>
@@ -106,6 +107,8 @@ export function buildUnifiedPrompt(
     return `${header}\n${rows}`;
   }).join("\n");
 
+  const safeMaxDelta = Math.max(1, Math.round(Number(maxDeltaPerTurn) || 15));
+
   return `${envelope}
 Current tracker state:
 ${currentLines}
@@ -119,7 +122,7 @@ Task:
 - Keep updates conservative and realistic.
 
 Numeric stats to update (${numericStats.length ? numericStats.join(", ") : "none"}):
-- Return deltas only, each in range -15..15.
+- Return deltas only, each in range -${safeMaxDelta}..${safeMaxDelta}.
 
 Text stats to update (${textStats.length ? textStats.join(", ") : "none"}):
 - mood must be one of: ${moodOptions.join(", ")}.
