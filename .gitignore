@@ -1,6 +1,3 @@
-# Local release planning notes (keep out of GitHub)
-RELEASE_CHECKLIST.md
-
 # Build/dependency artifacts
 node_modules/
 
