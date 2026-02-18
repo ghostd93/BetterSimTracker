@@ -4,6 +4,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.3.12] - 2026-02-18
+### Changed
+- Diagnostics request numbering now starts at 1 for each run.
+
 ## [1.0.3.11] - 2026-02-18
 ### Changed
 - Diagnostics dump now includes settings provenance, graph preferences, profile resolution, request metadata, and a history sample for faster debugging.
