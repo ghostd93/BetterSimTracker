@@ -1,0 +1,361 @@
+import { STAT_KEYS } from "./constants";
+import { generateJson } from "./generator";
+import { parseUnifiedDeltaResponse } from "./parse";
+import { buildUnifiedPrompt } from "./prompts";
+import type { BetterSimTrackerSettings, DeltaDebugRecord, StatKey, Statistics, TrackerData } from "./types";
+
+function enabledStats(settings: BetterSimTrackerSettings): StatKey[] {
+  const selected: StatKey[] = [];
+  if (settings.trackAffection) selected.push("affection");
+  if (settings.trackTrust) selected.push("trust");
+  if (settings.trackDesire) selected.push("desire");
+  if (settings.trackConnection) selected.push("connection");
+  if (settings.trackMood) selected.push("mood");
+  if (settings.trackLastThought) selected.push("lastThought");
+  return selected;
+}
+
+function emptyStatistics(): Statistics {
+  return {
+    affection: {},
+    trust: {},
+    desire: {},
+    connection: {},
+    mood: {},
+    lastThought: {}
+  };
+}
+
+function hasAnyValues(values: Record<string, unknown>): boolean {
+  return Object.keys(values).length > 0;
+}
+
+function clamp(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function hasParsedValues(parsed: ReturnType<typeof parseUnifiedDeltaResponse>): boolean {
+  return (
+    hasAnyValues(parsed.confidence) ||
+    hasAnyValues(parsed.deltas.affection) ||
+    hasAnyValues(parsed.deltas.trust) ||
+    hasAnyValues(parsed.deltas.desire) ||
+    hasAnyValues(parsed.deltas.connection) ||
+    hasAnyValues(parsed.mood) ||
+    hasAnyValues(parsed.lastThought)
+  );
+}
+
+function hasValuesForRequestedStats(
+  parsed: ReturnType<typeof parseUnifiedDeltaResponse>,
+  stats: StatKey[],
+): boolean {
+  for (const stat of stats) {
+    if (stat === "affection" && hasAnyValues(parsed.deltas.affection)) return true;
+    if (stat === "trust" && hasAnyValues(parsed.deltas.trust)) return true;
+    if (stat === "desire" && hasAnyValues(parsed.deltas.desire)) return true;
+    if (stat === "connection" && hasAnyValues(parsed.deltas.connection)) return true;
+    if (stat === "mood" && hasAnyValues(parsed.mood)) return true;
+    if (stat === "lastThought" && hasAnyValues(parsed.lastThought)) return true;
+  }
+  return false;
+}
+
+function buildStrictJsonRetryPrompt(basePrompt: string): string {
+  return [
+    "SYSTEM OVERRIDE:",
+    "Return ONLY valid JSON.",
+    "No prose. No roleplay. No markdown except optional ```json fences.",
+    "If uncertain, still return best-effort JSON with required keys.",
+    "",
+    basePrompt
+  ].join("\n");
+}
+
+function buildStatRepairRetryPrompt(basePrompt: string, stat: StatKey): string {
+  if (stat === "mood") {
+    return [
+      "SYSTEM OVERRIDE:",
+      "Return ONLY valid JSON, no prose, no roleplay.",
+      "MANDATORY: include `mood` for every character.",
+      "Use one of allowed mood labels exactly.",
+      "",
+      basePrompt
+    ].join("\n");
+  }
+  if (stat === "lastThought") {
+    return [
+      "SYSTEM OVERRIDE:",
+      "Return ONLY valid JSON, no prose, no roleplay.",
+      "MANDATORY: include `lastThought` for every character.",
+      "Keep it to one short sentence per character.",
+      "",
+      basePrompt
+    ].join("\n");
+  }
+  return buildStrictJsonRetryPrompt(basePrompt);
+}
+
+function countMapValues(values: Record<string, unknown>): number {
+  return Object.keys(values).length;
+}
+
+export async function extractStatisticsParallel(input: {
+  settings: BetterSimTrackerSettings;
+  userName: string;
+  activeCharacters: string[];
+  contextText: string;
+  previousStatistics: Statistics | null;
+  history: TrackerData[];
+  onProgress?: (done: number, total: number) => void;
+}): Promise<{ statistics: Statistics; debug: DeltaDebugRecord | null }> {
+  const { settings, userName, activeCharacters, contextText, previousStatistics, history, onProgress } = input;
+  const stats = enabledStats(settings);
+  const output = emptyStatistics();
+  let debugRecord: DeltaDebugRecord | null = null;
+
+  if (!stats.length || !activeCharacters.length) return { statistics: output, debug: debugRecord };
+
+  const total = 3;
+  onProgress?.(0, settings.sequentialExtraction ? Math.max(1, stats.length * 3) : total);
+
+  try {
+    const applyDelta = (prev: number, delta: number, confidence: number): number => {
+      const conf = Math.max(0, Math.min(1, confidence));
+      const damp = Math.max(0, Math.min(1, settings.confidenceDampening));
+      const scale = (1 - damp) + conf * damp;
+      const limit = Math.max(1, Math.round(settings.maxDeltaPerTurn || 15));
+      const bounded = Math.max(-limit, Math.min(limit, delta));
+      const scaledDelta = Math.round(bounded * scale);
+      return clamp(prev + scaledDelta);
+    };
+
+    const applied = {
+      affection: {} as Record<string, number>,
+      trust: {} as Record<string, number>,
+      desire: {} as Record<string, number>,
+      connection: {} as Record<string, number>,
+      mood: {} as Record<string, string>,
+      lastThought: {} as Record<string, string>,
+    };
+    const moodFallbackApplied = new Set<string>();
+    const parsed = {
+      confidence: {} as Record<string, number>,
+      deltas: {
+        affection: {} as Record<string, number>,
+        trust: {} as Record<string, number>,
+        desire: {} as Record<string, number>,
+        connection: {} as Record<string, number>,
+      },
+      mood: {} as Record<string, string>,
+      lastThought: {} as Record<string, string>,
+    };
+
+    const applyParsedForStat = (stat: StatKey, parsedOne: ReturnType<typeof parseUnifiedDeltaResponse>): void => {
+      for (const [name, value] of Object.entries(parsedOne.confidence)) {
+        parsed.confidence[name] = value;
+      }
+      for (const name of activeCharacters) {
+        const confidence = parsedOne.confidence[name] ?? 0.8;
+        if (stat === "affection" && parsedOne.deltas.affection[name] !== undefined) {
+          parsed.deltas.affection[name] = parsedOne.deltas.affection[name];
+          const prevAffection = Number(previousStatistics?.affection?.[name] ?? settings.defaultAffection);
+          const next = applyDelta(prevAffection, parsedOne.deltas.affection[name], confidence);
+          output.affection[name] = next;
+          applied.affection[name] = next;
+        }
+        if (stat === "trust" && parsedOne.deltas.trust[name] !== undefined) {
+          parsed.deltas.trust[name] = parsedOne.deltas.trust[name];
+          const prevTrust = Number(previousStatistics?.trust?.[name] ?? settings.defaultTrust);
+          const next = applyDelta(prevTrust, parsedOne.deltas.trust[name], confidence);
+          output.trust[name] = next;
+          applied.trust[name] = next;
+        }
+        if (stat === "desire" && parsedOne.deltas.desire[name] !== undefined) {
+          parsed.deltas.desire[name] = parsedOne.deltas.desire[name];
+          const prevDesire = Number(previousStatistics?.desire?.[name] ?? settings.defaultDesire);
+          const next = applyDelta(prevDesire, parsedOne.deltas.desire[name], confidence);
+          output.desire[name] = next;
+          applied.desire[name] = next;
+        }
+        if (stat === "connection" && parsedOne.deltas.connection[name] !== undefined) {
+          parsed.deltas.connection[name] = parsedOne.deltas.connection[name];
+          const prevConnection = Number(previousStatistics?.connection?.[name] ?? settings.defaultConnection);
+          const next = applyDelta(prevConnection, parsedOne.deltas.connection[name], confidence);
+          output.connection[name] = next;
+          applied.connection[name] = next;
+        }
+        if (stat === "mood" && parsedOne.mood[name] !== undefined) {
+          parsed.mood[name] = parsedOne.mood[name];
+          const stick = Math.max(0, Math.min(1, settings.moodStickiness));
+          const prevMood = String(previousStatistics?.mood?.[name] ?? settings.defaultMood);
+          const keepPrev = confidence < stick;
+          output.mood[name] = keepPrev ? prevMood : parsedOne.mood[name];
+          applied.mood[name] = output.mood[name] as string;
+        }
+        if (stat === "lastThought" && parsedOne.lastThought[name] !== undefined) {
+          parsed.lastThought[name] = parsedOne.lastThought[name];
+          output.lastThought[name] = parsedOne.lastThought[name];
+          applied.lastThought[name] = parsedOne.lastThought[name];
+        }
+      }
+      if (stat === "mood") {
+        for (const name of activeCharacters) {
+          if (output.mood[name] !== undefined) continue;
+          const prevMood = String(previousStatistics?.mood?.[name] ?? settings.defaultMood);
+          output.mood[name] = prevMood;
+          applied.mood[name] = prevMood;
+          moodFallbackApplied.add(name);
+        }
+      }
+    };
+
+    let attempts = 0;
+    let retryUsed = false;
+    let firstParseHadValues = true;
+    let rawOutputAggregate = "";
+    let promptAggregate = "";
+    let progressDone = 0;
+    const progressTotal = settings.sequentialExtraction ? Math.max(1, stats.length * 3) : total;
+    const tickProgress = (): void => {
+      progressDone = Math.min(progressTotal, progressDone + 1);
+      onProgress?.(progressDone, progressTotal);
+    };
+
+    const runOneStat = async (statList: StatKey[]): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
+      const prompt = buildUnifiedPrompt(statList, userName, activeCharacters, contextText, previousStatistics, history);
+      tickProgress();
+      attempts += 1;
+      let raw = await generateJson(prompt, settings);
+      tickProgress();
+      let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList);
+      const firstHasValues = hasParsedValues(parsedOne);
+      firstParseHadValues = firstParseHadValues && firstHasValues;
+      let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
+      if (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
+        const retryPrompt = buildStrictJsonRetryPrompt(prompt);
+        attempts += 1;
+        retryUsed = true;
+        retriesLeft -= 1;
+        const retryRaw = await generateJson(retryPrompt, settings);
+        const retryParsed = parseUnifiedDeltaResponse(retryRaw, activeCharacters, statList);
+        if (hasValuesForRequestedStats(retryParsed, statList)) {
+          raw = retryRaw;
+          parsedOne = retryParsed;
+        }
+      }
+      if (
+        statList.length === 1 &&
+        !hasValuesForRequestedStats(parsedOne, statList) &&
+        retriesLeft > 0 &&
+        settings.strictJsonRepair
+      ) {
+        const repairPrompt = buildStatRepairRetryPrompt(prompt, statList[0]);
+        attempts += 1;
+        retryUsed = true;
+        retriesLeft -= 1;
+        const repairRaw = await generateJson(repairPrompt, settings);
+        const repairParsed = parseUnifiedDeltaResponse(repairRaw, activeCharacters, statList);
+        if (hasValuesForRequestedStats(repairParsed, statList)) {
+          raw = repairRaw;
+          parsedOne = repairParsed;
+        }
+      }
+      while (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
+        const strictPrompt = buildStrictJsonRetryPrompt(prompt);
+        attempts += 1;
+        retryUsed = true;
+        retriesLeft -= 1;
+        const strictRaw = await generateJson(strictPrompt, settings);
+        const strictParsed = parseUnifiedDeltaResponse(strictRaw, activeCharacters, statList);
+        if (hasValuesForRequestedStats(strictParsed, statList)) {
+          raw = strictRaw;
+          parsedOne = strictParsed;
+          break;
+        }
+      }
+      tickProgress();
+      return { prompt, raw, parsedOne };
+    };
+
+    if (!settings.sequentialExtraction) {
+      const one = await runOneStat(stats);
+      rawOutputAggregate = one.raw;
+      promptAggregate = one.prompt;
+      for (const stat of stats) {
+        applyParsedForStat(stat, one.parsedOne);
+      }
+    } else {
+      const queue = [...stats];
+      const workers = Math.max(1, Math.min(settings.maxConcurrentCalls || 1, 8));
+      const rawByStat: Array<{ stat: StatKey; raw: string }> = [];
+      const promptByStat: Array<{ stat: StatKey; prompt: string }> = [];
+      const worker = async (): Promise<void> => {
+        while (queue.length) {
+          const stat = queue.shift();
+          if (!stat) return;
+          const one = await runOneStat([stat]);
+          rawByStat.push({ stat, raw: one.raw });
+          promptByStat.push({ stat, prompt: one.prompt });
+          applyParsedForStat(stat, one.parsedOne);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(workers, stats.length) }, () => worker()));
+      rawOutputAggregate = rawByStat.map(item => `--- ${item.stat} ---\n${item.raw}`).join("\n\n");
+      promptAggregate = promptByStat.map(item => `--- ${item.stat} ---\n${item.prompt}`).join("\n\n");
+    }
+
+    debugRecord = {
+      rawModelOutput: rawOutputAggregate,
+      promptText: settings.includeContextInDiagnostics ? promptAggregate : undefined,
+      contextText: settings.includeContextInDiagnostics ? contextText : undefined,
+      parsed,
+      applied,
+      meta: {
+        promptChars: promptAggregate.length,
+        contextChars: contextText.length,
+        historySnapshots: history.length,
+        activeCharacters: [...activeCharacters],
+        statsRequested: [...stats],
+        attempts,
+        extractionMode: settings.sequentialExtraction ? "sequential" : "unified",
+        retryUsed,
+        firstParseHadValues,
+        rawLength: rawOutputAggregate.length,
+        parsedCounts: {
+          confidence: countMapValues(parsed.confidence),
+          affection: countMapValues(parsed.deltas.affection),
+          trust: countMapValues(parsed.deltas.trust),
+          desire: countMapValues(parsed.deltas.desire),
+          connection: countMapValues(parsed.deltas.connection),
+          mood: countMapValues(parsed.mood),
+          lastThought: countMapValues(parsed.lastThought)
+        },
+        appliedCounts: {
+          affection: countMapValues(applied.affection),
+          trust: countMapValues(applied.trust),
+          desire: countMapValues(applied.desire),
+          connection: countMapValues(applied.connection),
+          mood: countMapValues(applied.mood),
+          lastThought: countMapValues(applied.lastThought)
+        },
+        moodFallbackApplied: Array.from(moodFallbackApplied)
+      }
+    };
+  } catch (error) {
+    console.error("[BetterSimTracker] Unified extraction failed:", error);
+  } finally {
+    const done = settings.sequentialExtraction ? Math.max(1, stats.length * 3) : 3;
+    onProgress?.(done, done);
+  }
+
+  if (!settings.trackMood) {
+    output.mood = Object.fromEntries(activeCharacters.map(name => [name, settings.defaultMood]));
+  }
+
+  for (const key of STAT_KEYS) {
+    if (!output[key]) output[key] = {};
+  }
+
+  return { statistics: output, debug: debugRecord };
+}

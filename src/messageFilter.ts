@@ -1,0 +1,30 @@
+import type { ChatMessage } from "./types";
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  return value as Record<string, unknown>;
+}
+
+function hasGeneratedMediaAttachment(message: ChatMessage): boolean {
+  const extra = asRecord((message as unknown as { extra?: unknown }).extra);
+  if (!extra) return false;
+
+  const media = Array.isArray(extra.media) ? extra.media : [];
+  for (const item of media) {
+    const entry = asRecord(item);
+    if (!entry) continue;
+    const source = String(entry.source ?? "").trim().toLowerCase();
+    if (source === "generated") return true;
+    if (typeof entry.generation_type === "number") return true;
+  }
+
+  if (typeof extra.generation_type === "number") return true;
+  return false;
+}
+
+export function isTrackableAiMessage(message: ChatMessage): boolean {
+  if (message.is_user || message.is_system) return false;
+  if (hasGeneratedMediaAttachment(message)) return false;
+  return true;
+}
+

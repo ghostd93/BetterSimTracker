@@ -1,0 +1,16 @@
+# Local release planning notes (keep out of GitHub)
+RELEASE_CHECKLIST.md
+
+# Build/dependency artifacts
+node_modules/
+dist/
+
+# Local temp/cache files
+*.log
+*.tmp
+*.temp
+.cache/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
