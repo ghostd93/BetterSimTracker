@@ -4,6 +4,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.3.5] - 2026-02-18
+### Changed
+- Always use SillyTavern's internal quiet generation pipeline so the selected connection profile is honored for tc/cc backends.
+
 ## [1.0.3.4] - 2026-02-18
 
 - When a connection profile is selected in the extension, the generator now skips ST’s quiet pipeline so the chosen profile is always used.
