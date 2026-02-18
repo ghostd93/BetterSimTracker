@@ -4,6 +4,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.3.2] - 2026-02-18
+
+- Attempt to honor extension connection profiles via ST quiet pipeline (if supported) and include compatibility profile fields for direct fetch requests.
+
 ## [1.0.3.1] - 2026-02-18
 
 - Added compatibility `profile_id` field to extraction requests to avoid 400s on older ST backends while still honoring extension connection profiles.

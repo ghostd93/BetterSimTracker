@@ -52,13 +52,16 @@ async function requestGenerate(body: Record<string, unknown>): Promise<string> {
   return content;
 }
 
-async function generateViaSillyTavern(prompt: string): Promise<string> {
+async function generateViaSillyTavern(prompt: string, profileId?: string): Promise<string> {
   const loadScriptModule = Function("return import('/script.js')") as () => Promise<unknown>;
   const module = await loadScriptModule();
   const quietFn = (module as { generateQuietPrompt?: (args: {
     quietPrompt?: string;
     responseLength?: number;
     removeReasoning?: boolean;
+    profileId?: string;
+    profile_id?: string;
+    connectionProfile?: string;
   }) => Promise<string> }).generateQuietPrompt;
 
   if (typeof quietFn !== "function") {
@@ -68,7 +71,10 @@ async function generateViaSillyTavern(prompt: string): Promise<string> {
   const text = await quietFn({
     quietPrompt: prompt,
     responseLength: 300,
-    removeReasoning: true
+    removeReasoning: true,
+    profileId,
+    profile_id: profileId,
+    connectionProfile: profileId
   });
 
   const output = String(text ?? "").trim();
@@ -83,13 +89,11 @@ export async function generateJson(
   settings: BetterSimTrackerSettings,
 ): Promise<string> {
   const profileId = normalizeProfileId(settings);
-  if (!profileId) {
-    try {
-      // Prefer ST's internal quiet generation pipeline for backend compatibility.
-      return await generateViaSillyTavern(prompt);
-    } catch {
-      // Fallback to direct fetch attempts below.
-    }
+  try {
+    // Prefer ST's internal quiet generation pipeline for backend compatibility.
+    return await generateViaSillyTavern(prompt, profileId);
+  } catch {
+    // Fallback to direct fetch attempts below.
   }
 
   const attempts: Array<Record<string, unknown>> = [
@@ -97,6 +101,8 @@ export async function generateJson(
       prompt,
       profileId,
       profile_id: profileId,
+      profile: profileId,
+      connectionProfile: profileId,
       temperature: 0.3,
       max_tokens: 300,
       no_cache: true,
@@ -106,6 +112,8 @@ export async function generateJson(
       messages: [{ role: "user", content: prompt }],
       profileId,
       profile_id: profileId,
+      profile: profileId,
+      connectionProfile: profileId,
       temperature: 0.3,
       max_tokens: 300,
       no_cache: true,
