@@ -109,12 +109,12 @@ flowchart TD
   A[Inputs: previous value, parsed delta, parsed confidence] --> B{Confidence present?}
   B -- No --> C[Use confidence fallback: 0.8]
   B -- Yes --> D[Use parsed confidence]
-  C --> E[Clamp confidence to 0..1]
+  C --> E[Clamp confidence to range 0 to 1]
   D --> E
-  E --> F[Clamp delta to +/- Max Delta Per Turn]
-  F --> G[Compute scale: (1-dampening) + confidence*dampening]
-  G --> H[scaledDelta = round(clampedDelta * scale)]
-  H --> I[nextValue = clamp(previous + scaledDelta, 0..100)]
+  E --> F[Clamp delta using Max Delta Per Turn]
+  F --> G[Compute scale from confidence and dampening]
+  G --> H[Compute scaled delta]
+  H --> I[Compute next value and clamp to 0 to 100]
   I --> J[Save numeric stat]
   A --> K[For mood: compare confidence vs Mood Stickiness]
   K --> L{confidence < Mood Stickiness?}
