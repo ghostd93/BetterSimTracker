@@ -1,6 +1,14 @@
 # Changelog
 
+# Changelog
+
 All notable changes to BetterSimTracker are documented here.
+
+## [1.0.3] - 2026-02-18
+
+- Connection profiles now always come from the extension settings by skipping the quiet-generation path when a profile is configured.
+- Retrack now loads the previous AI message’s tracker state before applying new deltas so values don’t stack on themselves.
+- Parser delta clamping obeys `maxDeltaPerTurn`, and the README/workflow notes were refreshed to describe the exact behavior.
 
 ## [1.0.2] - 2026-02-18
 
