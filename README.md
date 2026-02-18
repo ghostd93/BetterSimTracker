@@ -47,29 +47,29 @@ It tracks character relationship stats over time, stores them per AI message, vi
 
 ## Installation
 
-Put this extension in SillyTavern third-party extensions:
+Install directly from the GitHub repo in SillyTavern:
 
-`public/scripts/extensions/third-party/BetterSimTracker`
+1. Copy this repository URL from GitHub
+2. In SillyTavern, open Extensions (stacked cubes) -> `Install Extension`
+3. Paste the repo URL and install (optionally pick branch/version)
+4. Reload SillyTavern and enable `BetterSimTracker`
 
-Then in that folder run:
-
-```bash
-npm install
-npm run build
-```
-
-Reload SillyTavern and enable `BetterSimTracker` in Extensions.
+`dist` is committed to this repository, so users do not need to run a local build.
 
 ## Updating
 
-When pulling new changes:
+Pull/update the extension to the latest commit in SillyTavern.
+
+Hard refresh browser if old UI/assets are cached.
+
+## Development (Contributors)
+
+Only needed if you are editing TypeScript source and regenerating `dist`:
 
 ```bash
 npm install
 npm run build
 ```
-
-Hard refresh browser if old UI/assets are cached.
 
 ## Quick Usage
 
@@ -205,7 +205,7 @@ If something looks wrong:
 Common checks:
 
 - Wrong/empty tracker: verify selected connection profile and extraction settings.
-- UI issues after update: run build again and hard refresh browser.
+- UI issues after update: hard refresh browser.
 - Group edge cases: retrack last AI message once after major chat edits/swipes.
 
 ## License
