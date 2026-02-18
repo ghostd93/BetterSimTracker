@@ -96,6 +96,7 @@ export async function generateJson(
     {
       prompt,
       profileId,
+      profile_id: profileId,
       temperature: 0.3,
       max_tokens: 300,
       no_cache: true,
@@ -104,6 +105,7 @@ export async function generateJson(
     {
       messages: [{ role: "user", content: prompt }],
       profileId,
+      profile_id: profileId,
       temperature: 0.3,
       max_tokens: 300,
       no_cache: true,
