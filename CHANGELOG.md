@@ -4,6 +4,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.3.3] - 2026-02-18
+
+- Route extraction requests based on the selected connection profile mode (`tc` uses text-completions; `cc` uses chat-completions).
+- Keep profile override fields for compatibility with older ST backends.
+
 ## [1.0.3.2] - 2026-02-18
 
 - Attempt to honor extension connection profiles via ST quiet pipeline (if supported) and include compatibility profile fields for direct fetch requests.

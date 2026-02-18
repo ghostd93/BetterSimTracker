@@ -5,6 +5,11 @@ interface GenerateResponse {
   choices?: Array<{ message?: { content?: string }; text?: string }>;
 }
 
+type ConnectionProfile = {
+  id?: string;
+  mode?: string;
+};
+
 function getHeaders(): Record<string, string> {
   const token = SillyTavern.getContext().csrf_token ?? "";
   return {
@@ -24,6 +29,20 @@ function normalizeProfileId(settings: BetterSimTrackerSettings): string | undefi
   if (!raw) return undefined;
   if (raw.toLowerCase() === "default") return undefined;
   return raw;
+}
+
+function getProfileMode(profileId?: string): "tc" | "cc" | undefined {
+  if (!profileId) return undefined;
+  try {
+    const context = SillyTavern.getContext();
+    const profiles = (context.extensionSettings?.connectionManager as { profiles?: ConnectionProfile[] } | undefined)?.profiles ?? [];
+    const found = profiles.find(profile => profile.id === profileId);
+    const mode = String(found?.mode ?? "").toLowerCase();
+    if (mode === "tc" || mode === "cc") return mode;
+  } catch {
+    // ignore lookup failures
+  }
+  return undefined;
 }
 
 async function requestGenerate(body: Record<string, unknown>): Promise<string> {
@@ -89,6 +108,8 @@ export async function generateJson(
   settings: BetterSimTrackerSettings,
 ): Promise<string> {
   const profileId = normalizeProfileId(settings);
+  const mode = getProfileMode(profileId);
+
   try {
     // Prefer ST's internal quiet generation pipeline for backend compatibility.
     return await generateViaSillyTavern(prompt, profileId);
@@ -96,48 +117,54 @@ export async function generateJson(
     // Fallback to direct fetch attempts below.
   }
 
-  const attempts: Array<Record<string, unknown>> = [
-    {
-      prompt,
-      profileId,
-      profile_id: profileId,
-      profile: profileId,
-      connectionProfile: profileId,
-      temperature: 0.3,
-      max_tokens: 300,
-      no_cache: true,
-      quiet_to_console: true
-    },
-    {
-      messages: [{ role: "user", content: prompt }],
-      profileId,
-      profile_id: profileId,
-      profile: profileId,
-      connectionProfile: profileId,
-      temperature: 0.3,
-      max_tokens: 300,
-      no_cache: true,
-      quiet_to_console: true
-    },
-    {
-      prompt,
-      temperature: 0.3,
-      max_tokens: 300,
-      no_cache: true,
-      quiet_to_console: true
-    },
-    {
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
-      max_tokens: 300,
-      no_cache: true,
-      quiet_to_console: true
-    }
-  ];
+  const base = {
+    profileId,
+    profile_id: profileId,
+    profile: profileId,
+    connectionProfile: profileId,
+    temperature: 0.3,
+    max_tokens: 300,
+    no_cache: true,
+    quiet_to_console: true
+  };
+  const attempts: Array<Record<string, unknown>> = [];
+
+  if (mode !== "cc") {
+    // Text completion path: use prompt only.
+    attempts.push({ ...base, prompt });
+    attempts.push({ prompt, temperature: 0.3, max_tokens: 300, no_cache: true, quiet_to_console: true });
+  } else {
+    // Chat completion path: allow both message and prompt shapes.
+    attempts.push({ ...base, prompt });
+    attempts.push({ ...base, messages: [{ role: "user", content: prompt }] });
+    attempts.push({ prompt, temperature: 0.3, max_tokens: 300, no_cache: true, quiet_to_console: true });
+    attempts.push({ messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 300, no_cache: true, quiet_to_console: true });
+  }
 
   const errors: string[] = [];
   for (const body of attempts) {
     try {
+      if (mode === "tc") {
+        const response = await fetch("/api/backends/text-completions/generate", {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify(body)
+        });
+        const text = await response.text();
+        let payload: GenerateResponse | null = null;
+        try {
+          payload = JSON.parse(text) as GenerateResponse;
+        } catch {
+          payload = null;
+        }
+        const content = payload ? extractContent(payload).trim() : "";
+        const explicitError = Boolean((payload as Record<string, unknown> | null)?.error);
+        const isFailure = !response.ok || explicitError || !content;
+        if (isFailure) {
+          throw new Error(`Generation request failed (${response.status}): ${text}`);
+        }
+        return content;
+      }
       return await requestGenerate(body);
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
