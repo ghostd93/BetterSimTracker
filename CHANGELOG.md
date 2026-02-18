@@ -4,6 +4,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.3.10] - 2026-02-18
+### Changed
+- Graph history now ignores legacy snapshots without a message index and skips deleted messages to prevent retrack stacking.
+
 ## [1.0.3.9] - 2026-02-18
 ### Changed
 - Store up to 120 tracker snapshots so the graph window setting (30/60/120/all) has visible effect.

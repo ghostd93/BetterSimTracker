@@ -1,4 +1,5 @@
 import { EXTENSION_KEY, STAT_KEYS } from "./constants";
+import { isTrackableAiMessage } from "./messageFilter";
 import type { ChatMessage, STContext, Statistics, TrackerData } from "./types";
 const CHAT_STATE_KEY = `${EXTENSION_KEY}:chat`;
 
@@ -284,13 +285,12 @@ export function getRecentTrackerHistory(context: STContext, limit: number): Trac
     }
   }
 
-  const looseEntries: SnapshotEntry[] = [];
   for (const entry of combinedHistory) {
     if (!entry?.data) continue;
-    if (entry.messageIndex == null) {
-      looseEntries.push(entry);
-      continue;
-    }
+    if (entry.messageIndex == null) continue;
+    if (entry.messageIndex < 0 || entry.messageIndex >= context.chat.length) continue;
+    const message = context.chat[entry.messageIndex];
+    if (!isTrackableAiMessage(message)) continue;
     const existing = byMessageIndex.get(entry.messageIndex);
     if (!existing || entry.timestamp > existing.timestamp) {
       byMessageIndex.set(entry.messageIndex, entry);
@@ -300,16 +300,6 @@ export function getRecentTrackerHistory(context: STContext, limit: number): Trac
   const merged: SnapshotEntry[] = [
     ...byMessageIndex.values()
   ].sort((a, b) => b.timestamp - a.timestamp);
-
-  if (merged.length < limit && looseEntries.length) {
-    const existingTs = new Set(merged.map(item => item.data.timestamp));
-    for (const entry of looseEntries) {
-      if (merged.length >= limit) break;
-      if (existingTs.has(entry.data.timestamp)) continue;
-      merged.push(entry);
-      existingTs.add(entry.data.timestamp);
-    }
-  }
 
   return merged.slice(0, limit).map(item => item.data);
 }
