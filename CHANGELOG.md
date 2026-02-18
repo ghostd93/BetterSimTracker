@@ -4,6 +4,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.4] - 2026-02-18
+### Changed
+- Route extraction through Generator with the selected profile, and build as ES module for utils-lib compatibility.
+- Graph history now dedupes by message index, ignores legacy entries without messageIndex, skips deleted messages, and keeps up to 120 snapshots.
+- Diagnostics dumps now include settings provenance, graph preferences, profile resolution, request metadata, history sample, and request numbering starts at 1.
+
 ## [1.0.3.12] - 2026-02-18
 ### Changed
 - Diagnostics request numbering now starts at 1 for each run.
