@@ -34,14 +34,54 @@ async function generateViaSillyTavern(prompt: string, profileId?: string): Promi
     throw new Error("generateQuietPrompt not available from /script.js");
   }
 
-  const text = await quietFn({
-    quietPrompt: prompt,
-    responseLength: 300,
-    removeReasoning: true,
-    profileId,
-    profile_id: profileId,
-    connectionProfile: profileId
-  });
+  const targets: Array<{ obj: Record<string, unknown>; key: string; prev: unknown; had: boolean }> = [];
+  const addTarget = (obj: Record<string, unknown> | undefined, key: string, value: string | undefined): void => {
+    if (!obj || value === undefined) return;
+    const had = Object.prototype.hasOwnProperty.call(obj, key);
+    targets.push({ obj, key, prev: obj[key], had });
+    obj[key] = value;
+  };
+
+  if (profileId) {
+    try {
+      const context = SillyTavern.getContext();
+      const ctxConn = (context.extensionSettings as Record<string, unknown> | undefined)?.connectionManager as Record<string, unknown> | undefined;
+      addTarget(ctxConn, "selectedProfile", profileId);
+      addTarget(ctxConn, "selected_profile", profileId);
+
+      const globalExt = (globalThis as Record<string, unknown>).extension_settings as Record<string, unknown> | undefined;
+      const globalConn = globalExt?.connectionManager as Record<string, unknown> | undefined;
+      addTarget(globalConn, "selectedProfile", profileId);
+      addTarget(globalConn, "selected_profile", profileId);
+
+      const moduleExt = (module as Record<string, unknown>).extension_settings as Record<string, unknown> | undefined;
+      const moduleConn = moduleExt?.connectionManager as Record<string, unknown> | undefined;
+      addTarget(moduleConn, "selectedProfile", profileId);
+      addTarget(moduleConn, "selected_profile", profileId);
+    } catch {
+      // ignore profile forcing failures
+    }
+  }
+
+  let text = "";
+  try {
+    text = await quietFn({
+      quietPrompt: prompt,
+      responseLength: 300,
+      removeReasoning: true,
+      profileId,
+      profile_id: profileId,
+      connectionProfile: profileId
+    });
+  } finally {
+    for (const target of targets.reverse()) {
+      if (target.had) {
+        target.obj[target.key] = target.prev;
+      } else {
+        delete target.obj[target.key];
+      }
+    }
+  }
 
   const output = String(text ?? "").trim();
   if (!output) {

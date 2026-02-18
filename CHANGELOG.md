@@ -4,6 +4,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.3.6] - 2026-02-18
+### Changed
+- Force the selected connection profile during quiet generation and restore it afterward.
+
 ## [1.0.3.5] - 2026-02-18
 ### Changed
 - Always use SillyTavern's internal quiet generation pipeline so the selected connection profile is honored for tc/cc backends.
