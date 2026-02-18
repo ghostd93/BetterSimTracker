@@ -84,6 +84,8 @@ npm run build
 
 ## Workflow (Visual)
 
+### 1) Tracker Generation Flow
+
 ```mermaid
 flowchart TD
   A[AI message is generated] --> B{Trackable AI message?}
@@ -100,12 +102,26 @@ flowchart TD
   K --> L[Render tracker cards + graph]
 ```
 
+### 2) Stat Calculation Flow
+
 ```mermaid
-flowchart LR
-  A[Model delta] --> B[Clamp to Max Delta Per Turn]
-  B --> C[Scale by confidence]
-  C --> D[Add to previous stat]
-  D --> E[Clamp final stat to 0..100]
+flowchart TD
+  A[Inputs: previous value, parsed delta, parsed confidence] --> B{Confidence present?}
+  B -- No --> C[Use confidence fallback: 0.8]
+  B -- Yes --> D[Use parsed confidence]
+  C --> E[Clamp confidence to 0..1]
+  D --> E
+  E --> F[Clamp delta to +/- Max Delta Per Turn]
+  F --> G[Compute scale: (1-dampening) + confidence*dampening]
+  G --> H[scaledDelta = round(clampedDelta * scale)]
+  H --> I[nextValue = clamp(previous + scaledDelta, 0..100)]
+  I --> J[Save numeric stat]
+  A --> K[For mood: compare confidence vs Mood Stickiness]
+  K --> L{confidence < Mood Stickiness?}
+  L -- Yes --> M[Keep previous mood]
+  L -- No --> N[Apply parsed mood]
+  M --> O[Save mood]
+  N --> O
 ```
 
 Numeric scaling formula used by runtime:
