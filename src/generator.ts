@@ -110,11 +110,13 @@ export async function generateJson(
   const profileId = normalizeProfileId(settings);
   const mode = getProfileMode(profileId);
 
-  try {
-    // Prefer ST's internal quiet generation pipeline for backend compatibility.
-    return await generateViaSillyTavern(prompt, profileId);
-  } catch {
-    // Fallback to direct fetch attempts below.
+  if (!profileId) {
+    try {
+      // Prefer ST's internal quiet generation pipeline for backend compatibility.
+      return await generateViaSillyTavern(prompt, profileId);
+    } catch {
+      // Fallback to direct fetch attempts below.
+    }
   }
 
   const base = {

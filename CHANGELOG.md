@@ -4,6 +4,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.3.4] - 2026-02-18
+
+- When a connection profile is selected in the extension, the generator now skips ST’s quiet pipeline so the chosen profile is always used.
+
 ## [1.0.3.3] - 2026-02-18
 
 - Route extraction requests based on the selected connection profile mode (`tc` uses text-completions; `cc` uses chat-completions).
