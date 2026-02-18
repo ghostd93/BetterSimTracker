@@ -211,6 +211,7 @@ export async function extractStatisticsParallel(input: {
     };
 
     let attempts = 0;
+    let requestSeq = 0;
     let retryUsed = false;
     let firstParseHadValues = true;
     let rawOutputAggregate = "";
@@ -235,8 +236,9 @@ export async function extractStatisticsParallel(input: {
       );
       tickProgress();
       attempts += 1;
+      requestSeq += 1;
       let rawResponse = await generateJson(prompt, settings);
-      requestMetas.push({ ...rawResponse.meta, statList, attempt: attempts, retryType: "initial" });
+      requestMetas.push({ ...rawResponse.meta, statList, attempt: requestSeq, retryType: "initial" });
       let raw = rawResponse.text;
       tickProgress();
       let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList, settings.maxDeltaPerTurn);
@@ -246,10 +248,11 @@ export async function extractStatisticsParallel(input: {
       if (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
         const retryPrompt = buildStrictJsonRetryPrompt(prompt);
         attempts += 1;
+        requestSeq += 1;
         retryUsed = true;
         retriesLeft -= 1;
         const retryResponse = await generateJson(retryPrompt, settings);
-        requestMetas.push({ ...retryResponse.meta, statList, attempt: attempts, retryType: "strict" });
+        requestMetas.push({ ...retryResponse.meta, statList, attempt: requestSeq, retryType: "strict" });
         const retryParsed = parseUnifiedDeltaResponse(retryResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(retryParsed, statList)) {
           raw = retryResponse.text;
@@ -264,10 +267,11 @@ export async function extractStatisticsParallel(input: {
       ) {
         const repairPrompt = buildStatRepairRetryPrompt(prompt, statList[0]);
         attempts += 1;
+        requestSeq += 1;
         retryUsed = true;
         retriesLeft -= 1;
         const repairResponse = await generateJson(repairPrompt, settings);
-        requestMetas.push({ ...repairResponse.meta, statList, attempt: attempts, retryType: "repair" });
+        requestMetas.push({ ...repairResponse.meta, statList, attempt: requestSeq, retryType: "repair" });
         const repairParsed = parseUnifiedDeltaResponse(repairResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(repairParsed, statList)) {
           raw = repairResponse.text;
@@ -277,10 +281,11 @@ export async function extractStatisticsParallel(input: {
       while (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
         const strictPrompt = buildStrictJsonRetryPrompt(prompt);
         attempts += 1;
+        requestSeq += 1;
         retryUsed = true;
         retriesLeft -= 1;
         const strictResponse = await generateJson(strictPrompt, settings);
-        requestMetas.push({ ...strictResponse.meta, statList, attempt: attempts, retryType: "strict_loop" });
+        requestMetas.push({ ...strictResponse.meta, statList, attempt: requestSeq, retryType: "strict_loop" });
         const strictParsed = parseUnifiedDeltaResponse(strictResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(strictParsed, statList)) {
           raw = strictResponse.text;
