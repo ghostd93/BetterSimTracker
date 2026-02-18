@@ -114,6 +114,15 @@ npm run build
 - `Auto Detect Active`: in group chat, tries to determine which characters are currently active in the scene.
 - `Activity Lookback`: recent-message window used for active character detection.
 
+Model confidence behavior:
+
+- The model returns a per-character `confidence` value in range `0..1`.
+- Numeric deltas are scaled by that confidence via `Confidence Dampening`:
+  - `0` dampening = ignore confidence.
+  - `1` dampening = fully trust confidence scaling.
+- `Mood Stickiness` uses confidence as a gate: low confidence keeps previous mood.
+- If confidence is missing for a character, runtime fallback is `0.8`.
+
 ### Extraction Priority (Actual Runtime Logic)
 
 1. Extraction runs only after a valid chat generation cycle that rendered a new AI character message.
