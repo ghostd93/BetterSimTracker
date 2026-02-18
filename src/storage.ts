@@ -99,7 +99,7 @@ function getScopeKey(context: STContext): string {
   return `${chatId}|${target}`;
 }
 
-const HISTORY_LIMIT = 30;
+const HISTORY_LIMIT = 120;
 const LATEST_BY_SCOPE_KEY = `${EXTENSION_KEY}:latestByScope`;
 
 type SnapshotEntry = { data: TrackerData; timestamp: number; messageIndex?: number };

@@ -232,7 +232,7 @@ function queueRender(): void {
     renderTracker(entries, settings, allCharacterNames, Boolean(context?.groupId), trackerUiState, latestAiIndex, characterName => {
       const context = getSafeContext();
       if (!context || !settings) return;
-      const history = getRecentTrackerHistory(context, 30);
+      const history = getRecentTrackerHistory(context, 120);
       if (history.length === 0 && latestData) {
         history.push(latestData);
       }
