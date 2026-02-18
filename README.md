@@ -21,10 +21,19 @@ It tracks character relationship stats over time, stores them per AI message, vi
 
 ## Screenshots
 
+1. Tracker cards in chat  
 ![Tracker cards in chat](docs/screenshots/tracker-cards-chat.png)
+
+2. Tracker cards (group chat)  
 ![Tracker cards (group chat)](docs/screenshots/tracker-cards-group-chat.png)
+
+3. Collapsed tracker cards  
 ![Collapsed tracker cards](docs/screenshots/tracker-cards-collapsed.png)
+
+4. Tracker graph  
 ![Tracker graph](docs/screenshots/tracker-graph-desktop.png)
+
+5. Settings modal  
 ![Settings modal](docs/screenshots/settings-modal-desktop.png)
 
 ## What It Tracks
