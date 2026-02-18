@@ -78,6 +78,20 @@ export function getLatestTrackerDataWithIndex(context: STContext): { data: Track
   return null;
 }
 
+export function getLatestTrackerDataWithIndexBefore(
+  context: STContext,
+  beforeIndex: number,
+): { data: TrackerData; messageIndex: number } | null {
+  const start = Math.min(Math.max(beforeIndex - 1, 0), context.chat.length - 1);
+  for (let i = start; i >= 0; i -= 1) {
+    const found = getTrackerDataFromMessage(context.chat[i]);
+    if (found) {
+      return { data: found, messageIndex: i };
+    }
+  }
+  return null;
+}
+
 function getScopeKey(context: STContext): string {
   const anyContext = context as unknown as Record<string, unknown>;
   const chatId = String(anyContext.chatId ?? anyContext.chat_id ?? "").trim() || "nochat";

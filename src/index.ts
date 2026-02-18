@@ -4,7 +4,7 @@ import { isTrackableAiMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from "./promptInjection";
 import { upsertSettingsPanel } from "./settingsPanel";
 import { discoverConnectionProfiles, getContext, loadSettings, logDebug, saveSettings } from "./settings";
-import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getTrackerDataFromMessage, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
+import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLatestTrackerDataWithIndexBefore, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getTrackerDataFromMessage, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
 import type { BetterSimTrackerSettings, DeltaDebugRecord, STContext, TrackerData } from "./types";
 import { closeGraphModal, closeSettingsModal, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
 
@@ -548,7 +548,10 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       return;
     }
 
-    const previousEntry = getLatestTrackerDataWithIndex(context);
+    const previousEntry =
+      typeof targetMessageIndex === "number" && targetMessageIndex >= 0
+        ? getLatestTrackerDataWithIndexBefore(context, targetMessageIndex)
+        : getLatestTrackerDataWithIndex(context);
     let previous = previousEntry?.data ?? null;
     if (!previous) {
       latestData = buildBaselineData(activeCharacters, settings);

@@ -82,14 +82,15 @@ export async function generateJson(
   prompt: string,
   settings: BetterSimTrackerSettings,
 ): Promise<string> {
-  try {
-    // Prefer ST's internal quiet generation pipeline for backend compatibility.
-    return await generateViaSillyTavern(prompt);
-  } catch {
-    // Fallback to direct fetch attempts below.
-  }
-
   const profileId = normalizeProfileId(settings);
+  if (!profileId) {
+    try {
+      // Prefer ST's internal quiet generation pipeline for backend compatibility.
+      return await generateViaSillyTavern(prompt);
+    } catch {
+      // Fallback to direct fetch attempts below.
+    }
+  }
 
   const attempts: Array<Record<string, unknown>> = [
     {
