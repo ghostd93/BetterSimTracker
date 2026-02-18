@@ -1,7 +1,5 @@
 # Changelog
 
-# Changelog
-
 All notable changes to BetterSimTracker are documented here.
 
 ## [1.0.4] - 2026-02-18
