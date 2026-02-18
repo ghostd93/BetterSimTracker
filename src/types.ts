@@ -95,8 +95,8 @@ export interface STContext {
   groupId?: string;
   characters?: Character[];
   groups?: Group[];
-  eventSource: STEventSource;
-  event_types: Record<string, string>;
+  eventSource?: STEventSource;
+  event_types?: Record<string, string>;
   saveChat?: () => Promise<void> | void;
   saveChatDebounced?: () => void;
   saveSettingsDebounced?: () => void;
@@ -174,8 +174,4 @@ declare global {
       refresh: () => Promise<void>;
     };
   }
-
-  const SillyTavern: {
-    getContext: () => STContext;
-  };
 }

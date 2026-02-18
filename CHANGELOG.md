@@ -4,6 +4,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.3.7] - 2026-02-18
+### Changed
+- Route generation through `sillytavern-utils-lib` Generator with the selected profileId so the extension profile is always used.
+- Switch build output to ES module and externalize SillyTavern runtime imports for Generator compatibility.
+
 ## [1.0.3.6] - 2026-02-18
 ### Changed
 - Force the selected connection profile during quiet generation and restore it afterward.

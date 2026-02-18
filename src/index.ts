@@ -714,8 +714,12 @@ function refreshFromStoredData(): void {
 }
 
 function registerEvents(context: STContext): void {
-  const events = context.event_types;
+  const events = context.event_types ?? {};
   const source = context.eventSource;
+  if (!source) {
+    pushTrace("event.register.skip", { reason: "missing_event_source" });
+    return;
+  }
 
   if (events.GENERATION_STARTED) {
     source.on(events.GENERATION_STARTED, (generationType: unknown, _options: unknown, isDryRun: unknown) => {

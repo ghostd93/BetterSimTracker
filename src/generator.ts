@@ -1,4 +1,6 @@
 import type { BetterSimTrackerSettings } from "./types";
+import { Generator } from "sillytavern-utils-lib";
+import type { Message } from "sillytavern-utils-lib";
 
 interface GenerateResponse {
   content?: string;
@@ -11,6 +13,8 @@ function extractContent(payload: GenerateResponse): string {
   return first?.message?.content ?? first?.text ?? "";
 }
 
+const generator = new Generator();
+
 function normalizeProfileId(settings: BetterSimTrackerSettings): string | undefined {
   const raw = settings.connectionProfile?.trim();
   if (!raw) return undefined;
@@ -18,76 +22,48 @@ function normalizeProfileId(settings: BetterSimTrackerSettings): string | undefi
   return raw;
 }
 
-async function generateViaSillyTavern(prompt: string, profileId?: string): Promise<string> {
-  const loadScriptModule = Function("return import('/script.js')") as () => Promise<unknown>;
-  const module = await loadScriptModule();
-  const quietFn = (module as { generateQuietPrompt?: (args: {
-    quietPrompt?: string;
-    responseLength?: number;
-    removeReasoning?: boolean;
-    profileId?: string;
-    profile_id?: string;
-    connectionProfile?: string;
-  }) => Promise<string> }).generateQuietPrompt;
-
-  if (typeof quietFn !== "function") {
-    throw new Error("generateQuietPrompt not available from /script.js");
+function extractContentFromData(data: unknown): string {
+  if (typeof data === "string") return data;
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    if (typeof record.content === "string") return record.content;
   }
+  return extractContent(data as GenerateResponse);
+}
 
-  const targets: Array<{ obj: Record<string, unknown>; key: string; prev: unknown; had: boolean }> = [];
-  const addTarget = (obj: Record<string, unknown> | undefined, key: string, value: string | undefined): void => {
-    if (!obj || value === undefined) return;
-    const had = Object.prototype.hasOwnProperty.call(obj, key);
-    targets.push({ obj, key, prev: obj[key], had });
-    obj[key] = value;
-  };
+async function generateViaGenerator(prompt: string, profileId: string): Promise<string> {
+  const messages: Message[] = [{ role: "user", content: prompt }];
 
-  if (profileId) {
-    try {
-      const context = SillyTavern.getContext();
-      const ctxConn = (context.extensionSettings as Record<string, unknown> | undefined)?.connectionManager as Record<string, unknown> | undefined;
-      addTarget(ctxConn, "selectedProfile", profileId);
-      addTarget(ctxConn, "selected_profile", profileId);
-
-      const globalExt = (globalThis as Record<string, unknown>).extension_settings as Record<string, unknown> | undefined;
-      const globalConn = globalExt?.connectionManager as Record<string, unknown> | undefined;
-      addTarget(globalConn, "selectedProfile", profileId);
-      addTarget(globalConn, "selected_profile", profileId);
-
-      const moduleExt = (module as Record<string, unknown>).extension_settings as Record<string, unknown> | undefined;
-      const moduleConn = moduleExt?.connectionManager as Record<string, unknown> | undefined;
-      addTarget(moduleConn, "selectedProfile", profileId);
-      addTarget(moduleConn, "selected_profile", profileId);
-    } catch {
-      // ignore profile forcing failures
-    }
-  }
-
-  let text = "";
-  try {
-    text = await quietFn({
-      quietPrompt: prompt,
-      responseLength: 300,
-      removeReasoning: true,
-      profileId,
-      profile_id: profileId,
-      connectionProfile: profileId
-    });
-  } finally {
-    for (const target of targets.reverse()) {
-      if (target.had) {
-        target.obj[target.key] = target.prev;
-      } else {
-        delete target.obj[target.key];
+  return new Promise((resolve, reject) => {
+    const abortController = new AbortController();
+    generator.generateRequest(
+      {
+        profileId,
+        prompt: messages,
+        maxTokens: 300,
+        custom: { signal: abortController.signal }
+      },
+      {
+        abortController,
+        onFinish: (_requestId: string, data: unknown, error: unknown) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          if (!data) {
+            reject(new DOMException("Request aborted by user", "AbortError"));
+            return;
+          }
+          const output = extractContentFromData(data).trim();
+          if (!output) {
+            reject(new Error("Generator returned empty output"));
+            return;
+          }
+          resolve(output);
+        }
       }
-    }
-  }
-
-  const output = String(text ?? "").trim();
-  if (!output) {
-    throw new Error("generateQuietPrompt returned empty output");
-  }
-  return output;
+    );
+  });
 }
 
 export async function generateJson(
@@ -95,5 +71,8 @@ export async function generateJson(
   settings: BetterSimTrackerSettings,
 ): Promise<string> {
   const profileId = normalizeProfileId(settings);
-  return generateViaSillyTavern(prompt, profileId);
+  if (!profileId) {
+    throw new Error("Please select a connection profile in BetterSimTracker settings.");
+  }
+  return generateViaGenerator(prompt, profileId);
 }

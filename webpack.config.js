@@ -6,8 +6,23 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, "dist"),
     filename: "index.js",
-    clean: true
+    clean: true,
+    library: {
+      type: "module"
+    }
   },
+  experiments: {
+    outputModule: true
+  },
+  externalsType: "module",
+  externals: [
+    function({ request }, callback) {
+      if (typeof request === "string" && request.includes("../../..")) {
+        return callback(null, `module ${request}`);
+      }
+      callback();
+    },
+  ],
   resolve: {
     extensions: [".ts", ".js"]
   },

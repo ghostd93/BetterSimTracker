@@ -40,7 +40,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
 
 export function getContext(): STContext | null {
   try {
-    return SillyTavern.getContext();
+    return SillyTavern.getContext() as unknown as STContext;
   } catch {
     return null;
   }
