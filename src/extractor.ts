@@ -2,7 +2,7 @@ import { STAT_KEYS } from "./constants";
 import { generateJson } from "./generator";
 import { parseUnifiedDeltaResponse } from "./parse";
 import { buildUnifiedPrompt } from "./prompts";
-import type { BetterSimTrackerSettings, DeltaDebugRecord, StatKey, Statistics, TrackerData } from "./types";
+import type { BetterSimTrackerSettings, DeltaDebugRecord, GenerateRequestMeta, StatKey, Statistics, TrackerData } from "./types";
 
 function enabledStats(settings: BetterSimTrackerSettings): StatKey[] {
   const selected: StatKey[] = [];
@@ -215,6 +215,7 @@ export async function extractStatisticsParallel(input: {
     let firstParseHadValues = true;
     let rawOutputAggregate = "";
     let promptAggregate = "";
+    const requestMetas: Array<GenerateRequestMeta & { statList: StatKey[]; attempt: number; retryType: string }> = [];
     let progressDone = 0;
     const progressTotal = settings.sequentialExtraction ? Math.max(1, stats.length * 3) : total;
     const tickProgress = (): void => {
@@ -234,7 +235,9 @@ export async function extractStatisticsParallel(input: {
       );
       tickProgress();
       attempts += 1;
-      let raw = await generateJson(prompt, settings);
+      let rawResponse = await generateJson(prompt, settings);
+      requestMetas.push({ ...rawResponse.meta, statList, attempt: attempts, retryType: "initial" });
+      let raw = rawResponse.text;
       tickProgress();
       let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList, settings.maxDeltaPerTurn);
       const firstHasValues = hasParsedValues(parsedOne);
@@ -245,10 +248,11 @@ export async function extractStatisticsParallel(input: {
         attempts += 1;
         retryUsed = true;
         retriesLeft -= 1;
-        const retryRaw = await generateJson(retryPrompt, settings);
-        const retryParsed = parseUnifiedDeltaResponse(retryRaw, activeCharacters, statList, settings.maxDeltaPerTurn);
+        const retryResponse = await generateJson(retryPrompt, settings);
+        requestMetas.push({ ...retryResponse.meta, statList, attempt: attempts, retryType: "strict" });
+        const retryParsed = parseUnifiedDeltaResponse(retryResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(retryParsed, statList)) {
-          raw = retryRaw;
+          raw = retryResponse.text;
           parsedOne = retryParsed;
         }
       }
@@ -262,10 +266,11 @@ export async function extractStatisticsParallel(input: {
         attempts += 1;
         retryUsed = true;
         retriesLeft -= 1;
-        const repairRaw = await generateJson(repairPrompt, settings);
-        const repairParsed = parseUnifiedDeltaResponse(repairRaw, activeCharacters, statList, settings.maxDeltaPerTurn);
+        const repairResponse = await generateJson(repairPrompt, settings);
+        requestMetas.push({ ...repairResponse.meta, statList, attempt: attempts, retryType: "repair" });
+        const repairParsed = parseUnifiedDeltaResponse(repairResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(repairParsed, statList)) {
-          raw = repairRaw;
+          raw = repairResponse.text;
           parsedOne = repairParsed;
         }
       }
@@ -274,10 +279,11 @@ export async function extractStatisticsParallel(input: {
         attempts += 1;
         retryUsed = true;
         retriesLeft -= 1;
-        const strictRaw = await generateJson(strictPrompt, settings);
-        const strictParsed = parseUnifiedDeltaResponse(strictRaw, activeCharacters, statList, settings.maxDeltaPerTurn);
+        const strictResponse = await generateJson(strictPrompt, settings);
+        requestMetas.push({ ...strictResponse.meta, statList, attempt: attempts, retryType: "strict_loop" });
+        const strictParsed = parseUnifiedDeltaResponse(strictResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(strictParsed, statList)) {
-          raw = strictRaw;
+          raw = strictResponse.text;
           parsedOne = strictParsed;
           break;
         }
@@ -347,7 +353,8 @@ export async function extractStatisticsParallel(input: {
           mood: countMapValues(applied.mood),
           lastThought: countMapValues(applied.lastThought)
         },
-        moodFallbackApplied: Array.from(moodFallbackApplied)
+        moodFallbackApplied: Array.from(moodFallbackApplied),
+        requests: requestMetas
       }
     };
   } catch (error) {

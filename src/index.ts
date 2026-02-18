@@ -3,10 +3,10 @@ import { extractStatisticsParallel } from "./extractor";
 import { isTrackableAiMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from "./promptInjection";
 import { upsertSettingsPanel } from "./settingsPanel";
-import { discoverConnectionProfiles, getContext, loadSettings, logDebug, saveSettings } from "./settings";
-import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLatestTrackerDataWithIndexBefore, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getTrackerDataFromMessage, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
+import { discoverConnectionProfiles, getActiveConnectionProfileId, getContext, getSettingsProvenance, loadSettings, logDebug, saveSettings } from "./settings";
+import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLatestTrackerDataWithIndexBefore, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getRecentTrackerHistoryEntries, getTrackerDataFromMessage, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
 import type { BetterSimTrackerSettings, DeltaDebugRecord, STContext, TrackerData } from "./types";
-import { closeGraphModal, closeSettingsModal, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
+import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
 
 let settings: BetterSimTrackerSettings | null = null;
 let isExtracting = false;
@@ -908,6 +908,25 @@ function openSettings(): void {
       const activeContext = getSafeContext();
       if (!activeContext || !settings) return;
       const currentSettings = settings;
+      const graphPreferences = getGraphPreferences();
+      const settingsProvenance = getSettingsProvenance(activeContext);
+      const activeProfileId = getActiveConnectionProfileId(activeContext);
+      const profileCandidate = currentSettings.connectionProfile?.trim() ?? "";
+      const resolvedProfileId = profileCandidate && profileCandidate.toLowerCase() !== "default"
+        ? profileCandidate
+        : null;
+      const historySample = getRecentTrackerHistoryEntries(activeContext, 10).map(entry => ({
+        messageIndex: entry.messageIndex,
+        timestamp: entry.timestamp,
+        activeCharacters: entry.data.activeCharacters,
+        statistics: {
+          affection: entry.data.statistics.affection,
+          trust: entry.data.statistics.trust,
+          desire: entry.data.statistics.desire,
+          connection: entry.data.statistics.connection,
+          mood: entry.data.statistics.mood
+        }
+      }));
       const filterGraphTrace = (lines: string[]): string[] => {
         if (currentSettings.includeGraphInDiagnostics) return lines;
         return lines.filter(line => !line.includes(" graph.open "));
@@ -930,6 +949,15 @@ function openSettings(): void {
         latestDataMessageIndex,
         latestDataTimestamp: latestData?.timestamp ?? null,
         allCharacterNames,
+        settingsProvenance,
+        graphPreferences,
+        profileDebug: {
+          selectedProfile: currentSettings.connectionProfile,
+          resolvedProfileId,
+          activeProfileId
+        },
+        historySample,
+        requestMeta: filteredLastDebugRecord?.meta?.requests ?? null,
         settings: {
           enabled: currentSettings.enabled,
           debug: currentSettings.debug,

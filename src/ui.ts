@@ -1030,6 +1030,13 @@ function setGraphWindowPreference(windowSize: GraphWindow): void {
   }
 }
 
+export function getGraphPreferences(): { window: GraphWindow; smoothing: boolean } {
+  return {
+    window: getGraphWindowPreference(),
+    smoothing: getGraphSmoothingPreference()
+  };
+}
+
 function downsampleIndices(length: number, target: number): number[] {
   if (length <= target) return Array.from({ length }, (_, i) => i);
   const out = new Set<number>([0, length - 1]);

@@ -304,6 +304,51 @@ export function getRecentTrackerHistory(context: STContext, limit: number): Trac
   return merged.slice(0, limit).map(item => item.data);
 }
 
+export function getRecentTrackerHistoryEntries(
+  context: STContext,
+  limit: number,
+): Array<{ data: TrackerData; timestamp: number; messageIndex: number }> {
+  type HistoryEntry = { data: TrackerData; timestamp: number; messageIndex: number };
+  const entries: HistoryEntry[] = [];
+  for (let i = context.chat.length - 1; i >= 0 && entries.length < limit; i -= 1) {
+    const found = getTrackerDataFromMessage(context.chat[i]);
+    if (found) {
+      entries.push({ data: found, timestamp: found.timestamp, messageIndex: i });
+    }
+  }
+
+  if (entries.length >= limit) return entries.slice(0, limit);
+
+  const localStore = readStore(context);
+  const metadataStore = readMetadataStore(context);
+  const chatStateStore = readChatStateStore(context);
+  const combinedHistory = [...chatStateStore.history, ...metadataStore.history, ...localStore.history];
+
+  const byMessageIndex = new Map<number, HistoryEntry>();
+  for (const entry of entries) {
+    byMessageIndex.set(entry.messageIndex, entry);
+  }
+
+  for (const entry of combinedHistory) {
+    if (!entry?.data) continue;
+    if (entry.messageIndex == null) continue;
+    if (entry.messageIndex < 0 || entry.messageIndex >= context.chat.length) continue;
+    const message = context.chat[entry.messageIndex];
+    if (!isTrackableAiMessage(message)) continue;
+    const existing = byMessageIndex.get(entry.messageIndex);
+    if (!existing || entry.timestamp > existing.timestamp) {
+      byMessageIndex.set(entry.messageIndex, {
+        data: entry.data,
+        timestamp: entry.timestamp,
+        messageIndex: entry.messageIndex
+      });
+    }
+  }
+
+  const merged = [...byMessageIndex.values()].sort((a, b) => b.timestamp - a.timestamp);
+  return merged.slice(0, limit);
+}
+
 export function writeTrackerDataToLastMessage(
   context: STContext,
   data: TrackerData,

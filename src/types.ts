@@ -51,6 +51,18 @@ export interface BetterSimTrackerSettings {
   includeGraphInDiagnostics: boolean;
 }
 
+export interface GenerateRequestMeta {
+  profileId: string;
+  promptChars: number;
+  maxTokens: number;
+  requestId?: string;
+  durationMs: number;
+  outputChars: number;
+  responseMeta?: Record<string, unknown>;
+  timestamp: number;
+  error?: string;
+}
+
 export interface ConnectionProfileOption {
   id: string;
   label: string;
@@ -161,6 +173,7 @@ export interface DeltaDebugRecord {
       lastThought: number;
     };
     moodFallbackApplied?: string[];
+    requests?: Array<GenerateRequestMeta & { statList: StatKey[]; attempt: number; retryType: string }>;
   };
   trace?: string[];
 }

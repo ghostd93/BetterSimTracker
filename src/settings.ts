@@ -53,6 +53,43 @@ export function loadSettings(context: STContext): BetterSimTrackerSettings {
   return sanitizeSettings({ ...defaultSettings, ...fromLocal, ...fromContext });
 }
 
+export function getSettingsProvenance(context: STContext): Record<string, "context" | "local" | "default"> {
+  const bag = (context.extensionSettings ?? {}) as Record<string, unknown>;
+  const fromContext = (bag[EXTENSION_KEY] ?? {}) as Record<string, unknown>;
+  const fromLocal = loadFromLocalStorage() as Record<string, unknown>;
+  const provenance: Record<string, "context" | "local" | "default"> = {};
+  for (const key of Object.keys(defaultSettings)) {
+    if (Object.prototype.hasOwnProperty.call(fromContext, key)) {
+      provenance[key] = "context";
+    } else if (Object.prototype.hasOwnProperty.call(fromLocal, key)) {
+      provenance[key] = "local";
+    } else {
+      provenance[key] = "default";
+    }
+  }
+  return provenance;
+}
+
+export function getActiveConnectionProfileId(context: STContext): string | null {
+  const extSettings = context.extensionSettings as Record<string, unknown> | undefined;
+  const extConnectionManager = extSettings?.connectionManager as Record<string, unknown> | undefined;
+
+  const cc = context.chatCompletionSettings as Record<string, unknown> | undefined;
+
+  const globalObj = globalThis as Record<string, unknown>;
+  const globalExt = globalObj.extension_settings as Record<string, unknown> | undefined;
+  const globalConn = globalExt?.connectionManager as Record<string, unknown> | undefined;
+
+  const candidate = String(
+    extConnectionManager?.selectedProfile ??
+      cc?.selectedProfile ??
+      cc?.profile ??
+      globalConn?.selectedProfile ??
+      "",
+  ).trim();
+  return candidate || null;
+}
+
 export function saveSettings(
   context: STContext,
   settings: BetterSimTrackerSettings,
