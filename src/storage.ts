@@ -102,14 +102,16 @@ function getScopeKey(context: STContext): string {
 const HISTORY_LIMIT = 30;
 const LATEST_BY_SCOPE_KEY = `${EXTENSION_KEY}:latestByScope`;
 
+type SnapshotEntry = { data: TrackerData; timestamp: number; messageIndex?: number };
+
 type SnapshotStore = {
   latest?: { data: TrackerData; messageIndex: number; timestamp: number };
-  history: Array<{ data: TrackerData; timestamp: number }>;
+  history: SnapshotEntry[];
 };
 
 type ChatStateStore = {
   latest?: { data: TrackerData; messageIndex: number; timestamp: number };
-  history: Array<{ data: TrackerData; timestamp: number }>;
+  history: SnapshotEntry[];
 };
 
 function normalizeStore(raw: unknown): SnapshotStore {
@@ -213,7 +215,7 @@ export function saveTrackerSnapshot(
       ...store,
       latest: { data, messageIndex, timestamp },
       history: [
-        { data, timestamp },
+        { data, timestamp, messageIndex },
         ...store.history.filter(item => item.data.timestamp !== data.timestamp)
       ].slice(0, HISTORY_LIMIT)
     };
@@ -262,26 +264,54 @@ export function getLocalLatestTrackerData(context: STContext): { data: TrackerDa
 }
 
 export function getRecentTrackerHistory(context: STContext, limit: number): TrackerData[] {
-  const fromChat: TrackerData[] = [];
+  const fromChat: Array<{ data: TrackerData; timestamp: number; messageIndex?: number }> = [];
   for (let i = context.chat.length - 1; i >= 0 && fromChat.length < limit; i -= 1) {
     const found = getTrackerDataFromMessage(context.chat[i]);
-    if (found) fromChat.push(found);
+    if (found) fromChat.push({ data: found, timestamp: found.timestamp, messageIndex: i });
   }
 
-  if (fromChat.length >= limit) return fromChat.slice(0, limit);
+  if (fromChat.length >= limit) return fromChat.slice(0, limit).map(item => item.data);
 
   const localStore = readStore(context);
   const metadataStore = readMetadataStore(context);
   const chatStateStore = readChatStateStore(context);
-  const existingTs = new Set(fromChat.map(item => item.timestamp));
   const combinedHistory = [...chatStateStore.history, ...metadataStore.history, ...localStore.history];
-  for (const item of combinedHistory) {
-    if (fromChat.length >= limit) break;
-    if (!item?.data || existingTs.has(item.data.timestamp)) continue;
-    fromChat.push(item.data);
-    existingTs.add(item.data.timestamp);
+
+  const byMessageIndex = new Map<number, SnapshotEntry>();
+  for (const entry of fromChat) {
+    if (entry.messageIndex != null) {
+      byMessageIndex.set(entry.messageIndex, entry);
+    }
   }
-  return fromChat.slice(0, limit);
+
+  const looseEntries: SnapshotEntry[] = [];
+  for (const entry of combinedHistory) {
+    if (!entry?.data) continue;
+    if (entry.messageIndex == null) {
+      looseEntries.push(entry);
+      continue;
+    }
+    const existing = byMessageIndex.get(entry.messageIndex);
+    if (!existing || entry.timestamp > existing.timestamp) {
+      byMessageIndex.set(entry.messageIndex, entry);
+    }
+  }
+
+  const merged: SnapshotEntry[] = [
+    ...byMessageIndex.values()
+  ].sort((a, b) => b.timestamp - a.timestamp);
+
+  if (merged.length < limit && looseEntries.length) {
+    const existingTs = new Set(merged.map(item => item.data.timestamp));
+    for (const entry of looseEntries) {
+      if (merged.length >= limit) break;
+      if (existingTs.has(entry.data.timestamp)) continue;
+      merged.push(entry);
+      existingTs.add(entry.data.timestamp);
+    }
+  }
+
+  return merged.slice(0, limit).map(item => item.data);
 }
 
 export function writeTrackerDataToLastMessage(

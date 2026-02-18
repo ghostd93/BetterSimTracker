@@ -4,6 +4,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.3.8] - 2026-02-18
+### Changed
+- De-duplicate graph history by message index so retracks do not add extra points.
+
 ## [1.0.3.7] - 2026-02-18
 ### Changed
 - Route generation through `sillytavern-utils-lib` Generator with the selected profileId so the extension profile is always used.
