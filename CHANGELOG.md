@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.2] - 2026-02-18
+
+- Removed hidden `settings.characterDefaults` baseline path from runtime.
+- Removed character-defaults popup integration and related settings fields.
+- Baseline defaults now use only:
+  - character advanced definitions (`extensions.bettersimtracker.defaults`),
+  - contextual inference fallback.
+- Updated README to match this behavior.
+
 ## [1.0.1] - 2026-02-18
 
 - Made `Max Delta Per Turn` effective end-to-end:

@@ -49,7 +49,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 
 Install directly from the GitHub repo in SillyTavern:
 
-1. Copy this repository URL from GitHub
+1. Copy this repository URL: `https://github.com/ghostd93/BetterSimTracker`
 2. In SillyTavern, open Extensions (stacked cubes) -> `Install Extension`
 3. Paste the repo URL and install (optionally pick branch/version)
 4. Reload SillyTavern and enable `BetterSimTracker`
@@ -81,6 +81,38 @@ npm run build
    - tune extraction mode (unified/sequential)
    - enable debug if you need diagnostics
 5. Use graph button on a character card to view relationship trends.
+
+## Workflow (Visual)
+
+```mermaid
+flowchart TD
+  A[AI message is generated] --> B{Trackable AI message?}
+  B -- No --> Z[Skip tracker update]
+  B -- Yes --> C[Resolve active characters]
+  C --> D[Load previous tracker state]
+  D --> E[Build extraction prompt]
+  E --> F[Model returns JSON: deltas, mood, lastThought, confidence]
+  F --> G[Parse and validate fields]
+  G --> H[Apply numeric updates with confidence scaling]
+  H --> I[Apply mood and lastThought rules]
+  I --> J[Merge with previous values for missing fields]
+  J --> K[Save snapshot to message/chat metadata/local storage]
+  K --> L[Render tracker cards + graph]
+```
+
+```mermaid
+flowchart LR
+  A[Model delta] --> B[Clamp to Max Delta Per Turn]
+  B --> C[Scale by confidence]
+  C --> D[Add to previous stat]
+  D --> E[Clamp final stat to 0..100]
+```
+
+Numeric scaling formula used by runtime:
+
+`scale = (1 - confidenceDampening) + confidence * confidenceDampening`  
+`scaledDelta = round(clampedDelta * scale)`  
+`nextStat = clamp(previousStat + scaledDelta, 0, 100)`
 
 ## Important Behavior Notes
 
@@ -221,13 +253,7 @@ Direct key path:
 
 - `extensions.bettersimtracker.defaults`
 
-Priority order:
-
-1. Extension sidebar Character Defaults (`settings.characterDefaults`)
-2. Character card Advanced definitions (`extensions.bettersimtracker.defaults`)
-3. Contextual baseline inference
-
-These defaults are used for initial tracker baseline (when there is no prior tracker state yet for that character/chat).
+If no advanced defaults are present, tracker baseline falls back to contextual inference.
 
 ## Troubleshooting
 

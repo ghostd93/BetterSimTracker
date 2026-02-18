@@ -1,5 +1,4 @@
 import { getAllTrackedCharacterNames, buildRecentContext, resolveActiveCharacterAnalysis } from "./activity";
-import { mountCharacterDefaultsPanel } from "./characterDefaultsPanel";
 import { extractStatisticsParallel } from "./extractor";
 import { isTrackableAiMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from "./promptInjection";
@@ -380,23 +379,6 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
     const contextual = inferFromContext(name);
 
     const character = charByName.get(name);
-    const sidebarKey = character?.avatar ? `avatar:${character.avatar}` : `name:${name}`;
-    const fromSidebar = s.characterDefaults?.[sidebarKey] ?? s.characterDefaults?.[name];
-    const hasSidebarDefaults =
-      fromSidebar?.affection !== undefined ||
-      fromSidebar?.trust !== undefined ||
-      fromSidebar?.desire !== undefined ||
-      fromSidebar?.connection !== undefined ||
-      fromSidebar?.mood !== undefined;
-    if (hasSidebarDefaults) {
-      return {
-        affection: pickNumber(fromSidebar?.affection, contextual.affection),
-        trust: pickNumber(fromSidebar?.trust, contextual.trust),
-        desire: pickNumber(fromSidebar?.desire, contextual.desire),
-        connection: pickNumber(fromSidebar?.connection, contextual.connection),
-        mood: pickText(fromSidebar?.mood, contextual.mood)
-      };
-    }
 
     const extFromCharacter = character?.extensions as Record<string, unknown> | undefined;
     const extFromData = character?.data?.extensions as Record<string, unknown> | undefined;
@@ -1028,17 +1010,6 @@ async function init(): Promise<void> {
       chatLength: context.chat.length
     });
   }
-  mountCharacterDefaultsPanel({
-    context,
-    getSettings: () => settings,
-    onSettingsUpdate: next => {
-      const activeContext = getSafeContext();
-      if (!activeContext) return;
-      settings = next;
-      saveSettings(activeContext, settings);
-      refreshFromStoredData();
-    }
-  });
   registerEvents(context);
   refreshFromStoredData();
   setTimeout(() => refreshFromStoredData(), 500);

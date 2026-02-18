@@ -46,13 +46,6 @@ export interface BetterSimTrackerSettings {
   defaultDesire: number;
   defaultConnection: number;
   defaultMood: string;
-  characterDefaults: Record<string, {
-    affection?: number;
-    trust?: number;
-    desire?: number;
-    connection?: number;
-    mood?: string;
-  }>;
   debug: boolean;
   includeContextInDiagnostics: boolean;
   includeGraphInDiagnostics: boolean;

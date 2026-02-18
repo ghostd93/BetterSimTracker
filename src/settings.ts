@@ -33,7 +33,6 @@ export const defaultSettings: BetterSimTrackerSettings = {
   defaultDesire: 50,
   defaultConnection: 50,
   defaultMood: "Neutral",
-  characterDefaults: {},
   debug: false,
   includeContextInDiagnostics: false,
   includeGraphInDiagnostics: true
@@ -231,27 +230,6 @@ function asText(value: unknown, fallback: string): string {
   return trimmed || fallback;
 }
 
-function sanitizeCharacterDefaults(
-  input: BetterSimTrackerSettings["characterDefaults"] | unknown,
-): BetterSimTrackerSettings["characterDefaults"] {
-  if (!input || typeof input !== "object") return {};
-  const out: BetterSimTrackerSettings["characterDefaults"] = {};
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    if (!value || typeof value !== "object") continue;
-    const row = value as Record<string, unknown>;
-    const next: BetterSimTrackerSettings["characterDefaults"][string] = {};
-    if (row.affection !== undefined) next.affection = clampInt(row.affection, 50, 0, 100);
-    if (row.trust !== undefined) next.trust = clampInt(row.trust, 50, 0, 100);
-    if (row.desire !== undefined) next.desire = clampInt(row.desire, 50, 0, 100);
-    if (row.connection !== undefined) next.connection = clampInt(row.connection, 50, 0, 100);
-    if (typeof row.mood === "string" && row.mood.trim()) next.mood = row.mood.trim().slice(0, 80);
-    if (Object.keys(next).length > 0) {
-      out[key] = next;
-    }
-  }
-  return out;
-}
-
 export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): BetterSimTrackerSettings {
   return {
     ...defaultSettings,
@@ -287,7 +265,6 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     defaultDesire: clampInt(input.defaultDesire, defaultSettings.defaultDesire, 0, 100),
     defaultConnection: clampInt(input.defaultConnection, defaultSettings.defaultConnection, 0, 100),
     defaultMood: asText(input.defaultMood, defaultSettings.defaultMood).slice(0, 80),
-    characterDefaults: sanitizeCharacterDefaults(input.characterDefaults),
     debug: asBool(input.debug, defaultSettings.debug),
     includeContextInDiagnostics: asBool(input.includeContextInDiagnostics, defaultSettings.includeContextInDiagnostics),
     includeGraphInDiagnostics: asBool(input.includeGraphInDiagnostics, defaultSettings.includeGraphInDiagnostics),
