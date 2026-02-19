@@ -147,6 +147,8 @@ Numeric scaling formula used by runtime:
 - `Inject Tracker Into Prompt`: uses current relationship state as hidden guidance
 - `Prompt Templates`: edit unified + per-stat sequential prompts (repair prompts are fixed)
 - `Profile Token Limits`: extraction now respects profile max tokens and truncation length (when available)
+- `Max Tokens Override`: force max tokens for extraction (0 = auto)
+- `Context Size Override`: force truncation length for extraction (0 = auto)
 
 ## Settings Reference (Detailed)
 
@@ -168,6 +170,8 @@ Numeric scaling formula used by runtime:
   - Each prompt has a reset-to-default button.
   - Strict/repair prompts are fixed for safety and consistency.
 - `Profile Token Limits`: extraction uses the selected connection profile's max token and truncation limits when available. If missing, it falls back to the active preset values, and finally to a safe default.
+- `Max Tokens Override`: set a fixed token limit for extraction requests. Use `0` to keep profile/preset defaults.
+- `Context Size Override`: set a fixed truncation length for extraction context. Use `0` to keep profile/preset defaults.
 
 Model confidence behavior:
 

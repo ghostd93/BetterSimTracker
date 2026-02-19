@@ -1328,6 +1328,8 @@ export function openSettingsModal(input: {
         <label data-bst-row="maxRetriesPerStat">Max Retries Per Stat <input data-k="maxRetriesPerStat" type="number" min="0" max="4"></label>
         <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
         <label>Max Delta Per Turn <input data-k="maxDeltaPerTurn" type="number" min="1" max="30"></label>
+        <label>Max Tokens Override <input data-k="maxTokensOverride" type="number" min="0" max="100000"></label>
+        <label>Context Size Override <input data-k="truncationLengthOverride" type="number" min="0" max="200000"></label>
         <label>Confidence Dampening <input data-k="confidenceDampening" type="number" min="0" max="1" step="0.05"></label>
         <label>Mood Stickiness <input data-k="moodStickiness" type="number" min="0" max="1" step="0.05"></label>
         <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
@@ -1469,6 +1471,8 @@ export function openSettingsModal(input: {
   set("maxRetriesPerStat", String(input.settings.maxRetriesPerStat));
   set("contextMessages", String(input.settings.contextMessages));
   set("maxDeltaPerTurn", String(input.settings.maxDeltaPerTurn));
+  set("maxTokensOverride", String(input.settings.maxTokensOverride));
+  set("truncationLengthOverride", String(input.settings.truncationLengthOverride));
   set("confidenceDampening", String(input.settings.confidenceDampening));
   set("moodStickiness", String(input.settings.moodStickiness));
   set("injectTrackerIntoPrompt", String(input.settings.injectTrackerIntoPrompt));
@@ -1524,6 +1528,8 @@ export function openSettingsModal(input: {
       maxRetriesPerStat: readNumber("maxRetriesPerStat", input.settings.maxRetriesPerStat, 0, 4),
       contextMessages: readNumber("contextMessages", input.settings.contextMessages, 1, 40),
       maxDeltaPerTurn: readNumber("maxDeltaPerTurn", input.settings.maxDeltaPerTurn, 1, 30),
+      maxTokensOverride: readNumber("maxTokensOverride", input.settings.maxTokensOverride, 0, 100000),
+      truncationLengthOverride: readNumber("truncationLengthOverride", input.settings.truncationLengthOverride, 0, 200000),
       confidenceDampening: readNumber("confidenceDampening", input.settings.confidenceDampening, 0, 1),
       moodStickiness: readNumber("moodStickiness", input.settings.moodStickiness, 0, 1),
       injectTrackerIntoPrompt: readBool("injectTrackerIntoPrompt"),
@@ -1617,6 +1623,8 @@ export function openSettingsModal(input: {
     maxRetriesPerStat: "Maximum repair retries for each stat extraction stage.",
     contextMessages: "How many recent chat messages are included in tracker extraction context.",
     maxDeltaPerTurn: "Hard cap for stat change magnitude in one tracker update before confidence scaling.",
+    maxTokensOverride: "Override max tokens for extraction requests (0 = use profile/preset defaults).",
+    truncationLengthOverride: "Override context truncation length for extraction requests (0 = use profile/preset defaults).",
     confidenceDampening: "How strongly model confidence scales stat deltas (0 = ignore confidence, 1 = full effect).",
     moodStickiness: "Higher values keep previous mood unless confidence is strong.",
     injectTrackerIntoPrompt: "Inject current relationship state into generation prompt for behavioral coherence.",
