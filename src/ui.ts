@@ -1359,28 +1359,6 @@ export function openSettingsModal(input: {
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4>Debug</h4>
-      <div class="bst-settings-grid">
-        <label class="bst-check"><input data-k="debug" type="checkbox">Debug</label>
-      </div>
-      <div data-bst-row="debugBody">
-        <div class="bst-settings-grid">
-        <label class="bst-check" data-bst-row="includeContextInDiagnostics"><input data-k="includeContextInDiagnostics" type="checkbox">Include Context In Diagnostics</label>
-        <label class="bst-check" data-bst-row="includeGraphInDiagnostics"><input data-k="includeGraphInDiagnostics" type="checkbox">Include Graph Data In Diagnostics</label>
-        </div>
-        <div class="bst-debug-actions">
-          <button class="bst-btn bst-btn-soft bst-btn-icon" data-action="retrack" title="Retrack Last AI Message" aria-label="Retrack Last AI Message"><span aria-hidden="true">&#x21BB;</span></button>
-          <button class="bst-btn bst-btn-danger" data-action="clear-chat" title="Delete all tracker data for the currently open chat only.">Delete Tracker Data (Current Chat)</button>
-          <button class="bst-btn" data-action="dump-diagnostics" title="Collect and copy current diagnostics report to clipboard.">Dump Diagnostics</button>
-          <button class="bst-btn bst-btn-danger" data-action="clear-diagnostics" title="Clear stored diagnostics traces and last debug record for this chat scope.">Clear Diagnostics</button>
-        </div>
-        <div style="margin-top:8px;font-size:12px;opacity:.9;">Latest Extraction Debug Record</div>
-        <div class="bst-debug-box">${input.debugRecord ? JSON.stringify(input.debugRecord, null, 2) : "No debug record yet."}</div>
-        <div style="margin-top:8px;font-size:12px;opacity:.9;">Latest Injected Prompt Block</div>
-        <div class="bst-debug-box">${input.injectedPrompt?.trim() ? input.injectedPrompt : "No injected prompt currently active."}</div>
-      </div>
-    </div>
-    <div class="bst-settings-section">
       <h4>Prompts</h4>
       <div class="bst-help-line">Unified prompt is used for one-prompt extraction. Sequential mode uses per-stat prompts.</div>
       <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
@@ -1401,52 +1379,74 @@ export function openSettingsModal(input: {
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Unified Prompt</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateUnified" title="Reset to default.">⟲</button>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateUnified" title="Reset to default.">⟲</button>
           </div>
           <textarea data-k="promptTemplateUnified" rows="10"></textarea>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Affection</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialAffection" title="Reset to default.">⟲</button>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialAffection" title="Reset to default.">⟲</button>
           </div>
           <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Trust</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialTrust" title="Reset to default.">⟲</button>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialTrust" title="Reset to default.">⟲</button>
           </div>
           <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Desire</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialDesire" title="Reset to default.">⟲</button>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialDesire" title="Reset to default.">⟲</button>
           </div>
           <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Connection</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialConnection" title="Reset to default.">⟲</button>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialConnection" title="Reset to default.">⟲</button>
           </div>
           <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Mood</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialMood" title="Reset to default.">⟲</button>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialMood" title="Reset to default.">⟲</button>
           </div>
           <textarea data-k="promptTemplateSequentialMood" rows="6"></textarea>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: LastThought</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialLastThought" title="Reset to default.">⟲</button>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialLastThought" title="Reset to default.">⟲</button>
           </div>
           <textarea data-k="promptTemplateSequentialLastThought" rows="6"></textarea>
         </label>
+      </div>
+    </div>
+    <div class="bst-settings-section">
+      <h4>Debug</h4>
+      <div class="bst-settings-grid">
+        <label class="bst-check"><input data-k="debug" type="checkbox">Debug</label>
+      </div>
+      <div data-bst-row="debugBody">
+        <div class="bst-settings-grid">
+        <label class="bst-check" data-bst-row="includeContextInDiagnostics"><input data-k="includeContextInDiagnostics" type="checkbox">Include Context In Diagnostics</label>
+        <label class="bst-check" data-bst-row="includeGraphInDiagnostics"><input data-k="includeGraphInDiagnostics" type="checkbox">Include Graph Data In Diagnostics</label>
+        </div>
+        <div class="bst-debug-actions">
+          <button class="bst-btn bst-btn-soft bst-btn-icon" data-action="retrack" title="Retrack Last AI Message" aria-label="Retrack Last AI Message"><span aria-hidden="true">&#x21BB;</span></button>
+          <button class="bst-btn bst-btn-danger" data-action="clear-chat" title="Delete all tracker data for the currently open chat only.">Delete Tracker Data (Current Chat)</button>
+          <button class="bst-btn" data-action="dump-diagnostics" title="Collect and copy current diagnostics report to clipboard.">Dump Diagnostics</button>
+          <button class="bst-btn bst-btn-danger" data-action="clear-diagnostics" title="Clear stored diagnostics traces and last debug record for this chat scope.">Clear Diagnostics</button>
+        </div>
+        <div style="margin-top:8px;font-size:12px;opacity:.9;">Latest Extraction Debug Record</div>
+        <div class="bst-debug-box">${input.debugRecord ? JSON.stringify(input.debugRecord, null, 2) : "No debug record yet."}</div>
+        <div style="margin-top:8px;font-size:12px;opacity:.9;">Latest Injected Prompt Block</div>
+        <div class="bst-debug-box">${input.injectedPrompt?.trim() ? input.injectedPrompt : "No injected prompt currently active."}</div>
       </div>
     </div>
   `;
@@ -1693,7 +1693,7 @@ export function openSettingsModal(input: {
       event.preventDefault();
       event.stopPropagation();
       const target = event.currentTarget as HTMLElement | null;
-      const key = target?.getAttribute("data-k") as keyof BetterSimTrackerSettings | null;
+      const key = target?.getAttribute("data-reset-for") as keyof BetterSimTrackerSettings | null;
       if (!key) return;
       const value = promptDefaults[key];
       if (typeof value !== "string") return;
