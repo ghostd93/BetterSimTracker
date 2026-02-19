@@ -1308,6 +1308,35 @@ export function openSettingsModal(input: {
       <button class="bst-btn bst-close-btn" data-action="close" title="Close settings" aria-label="Close settings">&times;</button>
     </div>
     <div class="bst-settings-section">
+      <h4>Connection</h4>
+      <div class="bst-settings-grid">
+        <label>Connection Profile <select data-k="connectionProfile">${profileOptionsHtml}</select></label>
+      </div>
+    </div>
+    <div class="bst-settings-section">
+      <h4>Generation</h4>
+      <div class="bst-settings-grid">
+        <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
+        <label>Max Tokens Override <input data-k="maxTokensOverride" type="number" min="0" max="100000"></label>
+        <label>Context Size Override <input data-k="truncationLengthOverride" type="number" min="0" max="200000"></label>
+        <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
+      </div>
+    </div>
+    <div class="bst-settings-section">
+      <h4>Extraction</h4>
+      <div class="bst-settings-grid">
+        <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
+        <label data-bst-row="maxConcurrentCalls">Max Concurrent Requests <input data-k="maxConcurrentCalls" type="number" min="1" max="8"></label>
+        <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
+        <label data-bst-row="maxRetriesPerStat">Max Retries Per Stat <input data-k="maxRetriesPerStat" type="number" min="0" max="4"></label>
+        <label>Max Delta Per Turn <input data-k="maxDeltaPerTurn" type="number" min="1" max="30"></label>
+        <label>Confidence Dampening <input data-k="confidenceDampening" type="number" min="0" max="1" step="0.05"></label>
+        <label>Mood Stickiness <input data-k="moodStickiness" type="number" min="0" max="1" step="0.05"></label>
+        <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
+        <label data-bst-row="activityLookback">Activity Lookback <input data-k="activityLookback" type="number" min="1" max="25"></label>
+      </div>
+    </div>
+    <div class="bst-settings-section">
       <h4>Quick Help</h4>
       <div class="bst-help-line"><strong>Extraction mode:</strong> Unified = faster single request. Sequential = one request per stat (more robust, slower).</div>
       <ul class="bst-help-list">
@@ -1317,25 +1346,6 @@ export function openSettingsModal(input: {
         <li><strong>Connection:</strong> bond depth and emotional attunement</li>
       </ul>
       <div class="bst-help-line"><strong>Mood</strong> is short-term tone. <strong>Last Thought</strong> is one brief internal line for continuity.</div>
-    </div>
-    <div class="bst-settings-section">
-      <h4>Extraction</h4>
-      <div class="bst-settings-grid">
-        <label>Connection Profile <select data-k="connectionProfile">${profileOptionsHtml}</select></label>
-        <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
-        <label data-bst-row="maxConcurrentCalls">Max Concurrent Requests <input data-k="maxConcurrentCalls" type="number" min="1" max="8"></label>
-        <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
-        <label data-bst-row="maxRetriesPerStat">Max Retries Per Stat <input data-k="maxRetriesPerStat" type="number" min="0" max="4"></label>
-        <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
-        <label>Max Delta Per Turn <input data-k="maxDeltaPerTurn" type="number" min="1" max="30"></label>
-        <label>Max Tokens Override <input data-k="maxTokensOverride" type="number" min="0" max="100000"></label>
-        <label>Context Size Override <input data-k="truncationLengthOverride" type="number" min="0" max="200000"></label>
-        <label>Confidence Dampening <input data-k="confidenceDampening" type="number" min="0" max="1" step="0.05"></label>
-        <label>Mood Stickiness <input data-k="moodStickiness" type="number" min="0" max="1" step="0.05"></label>
-        <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
-        <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
-        <label data-bst-row="activityLookback">Activity Lookback <input data-k="activityLookback" type="number" min="1" max="25"></label>
-      </div>
     </div>
     <div class="bst-settings-section">
       <h4>Tracked Stats</h4>

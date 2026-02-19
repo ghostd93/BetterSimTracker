@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.4.12] - 2026-02-19
+### Changed
+- Reorganized settings layout: connection section first, then generation and extraction.
+
 ## [1.0.4.11] - 2026-02-19
 ### Added
 - Settings to override max tokens and context truncation length for extraction requests.
