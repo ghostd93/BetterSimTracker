@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.9] - 2026-02-19
+### Changed
+- Added Font Awesome icons to settings section headers, prompt groups, and debug actions.
+
 ## [1.0.6.8] - 2026-02-19
 ### Changed
 - Default open drawers: Extraction and Display.

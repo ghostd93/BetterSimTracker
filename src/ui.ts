@@ -470,6 +470,13 @@ function ensureStyles(): void {
   letter-spacing: 0.4px;
   text-transform: uppercase;
   opacity: 0.9;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.bst-header-icon {
+  font-size: 12px;
+  opacity: 0.85;
 }
 .bst-section-toggle {
   border: 1px solid rgba(255,255,255,0.2);
@@ -491,25 +498,17 @@ function ensureStyles(): void {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.22);
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(8,12,18,0.85));
   line-height: 1;
-  transition: border-color .16s ease, background .16s ease;
+  font-size: 18px;
+  transition: transform .16s ease, color .16s ease;
+  color: rgba(243,245,249,0.9);
+  transform: rotate(0deg);
 }
 .bst-section-head:hover .bst-section-icon {
-  border-color: rgba(255,255,255,0.35);
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.22), rgba(10,14,22,0.9));
+  color: #ffffff;
 }
-.bst-section-icon svg {
-  width: 14px;
-  height: 14px;
-  display: block;
-  transition: transform .16s ease;
-  transform: rotate(90deg);
-}
-.bst-section-collapsed .bst-section-icon svg {
-  transform: rotate(0deg);
+.bst-section-collapsed .bst-section-icon {
+  transform: rotate(-90deg);
 }
 .bst-section-collapsed .bst-section-body {
   display: none;
@@ -592,6 +591,13 @@ function ensureStyles(): void {
 .bst-prompt-title {
   font-weight: 600;
   letter-spacing: 0.2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bst-prompt-icon {
+  font-size: 12px;
+  opacity: 0.85;
 }
 .bst-prompt-toggle {
   display: inline-flex;
@@ -626,6 +632,9 @@ function ensureStyles(): void {
 .bst-prompt-reset:hover {
   border-color: rgba(255,255,255,0.45);
   background: rgba(20,26,38,0.9);
+}
+.bst-btn .bst-btn-icon-left {
+  margin-right: 6px;
 }
 .bst-btn {
   border: 1px solid rgba(255,255,255,0.2);
@@ -1488,7 +1497,7 @@ export function openSettingsModal(input: {
       <div class="bst-help-line"><strong>Mood</strong> is short-term tone. <strong>Last Thought</strong> is one brief internal line for continuity.</div>
     </div>
     <div class="bst-settings-section">
-      <h4>Connection &amp; Generation</h4>
+      <h4><span class="bst-header-icon fa-solid fa-plug"></span>Connection &amp; Generation</h4>
       <div class="bst-settings-grid">
         <label>Connection Profile <select data-k="connectionProfile">${profileOptionsHtml}</select></label>
       </div>
@@ -1501,7 +1510,7 @@ export function openSettingsModal(input: {
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4>Extraction</h4>
+      <h4><span class="bst-header-icon fa-solid fa-filter"></span>Extraction</h4>
       <div class="bst-settings-grid">
         <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
         <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
@@ -1521,7 +1530,7 @@ export function openSettingsModal(input: {
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4>Tracked Stats</h4>
+      <h4><span class="bst-header-icon fa-solid fa-chart-line"></span>Tracked Stats</h4>
       <div class="bst-settings-grid">
         <label class="bst-check"><input data-k="trackAffection" type="checkbox">Track Affection</label>
         <label class="bst-check"><input data-k="trackTrust" type="checkbox">Track Trust</label>
@@ -1532,7 +1541,7 @@ export function openSettingsModal(input: {
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4>Display</h4>
+      <h4><span class="bst-header-icon fa-solid fa-eye"></span>Display</h4>
       <div class="bst-settings-grid">
         <label data-bst-row="inactiveLabel">Inactive Label <input data-k="inactiveLabel" type="text"></label>
         <label>Accent Color <input data-k="accentColor" type="text"></label>
@@ -1545,7 +1554,7 @@ export function openSettingsModal(input: {
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4>Prompts</h4>
+      <h4><span class="bst-header-icon fa-solid fa-pen-to-square"></span>Prompts</h4>
       <div class="bst-help-line">Unified prompt is used for one-prompt extraction. Sequential mode uses per-stat prompts.</div>
       <div class="bst-help-line">Only the instruction section is editable; protocol blocks are fixed for safety and consistency.</div>
       <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
@@ -1565,7 +1574,7 @@ export function openSettingsModal(input: {
       <div class="bst-settings-grid bst-settings-grid-single bst-prompts-stack">
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Unified Prompt</span>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-layer-group"></span>Unified Prompt</span>
             <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateUnified" title="Reset to default.">⟲</button>
           </div>
@@ -1578,7 +1587,7 @@ export function openSettingsModal(input: {
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: Affection</span>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-heart"></span>Seq: Affection</span>
             <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialAffection" title="Reset to default.">⟲</button>
           </div>
@@ -1591,7 +1600,7 @@ export function openSettingsModal(input: {
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: Trust</span>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-shield-heart"></span>Seq: Trust</span>
             <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialTrust" title="Reset to default.">⟲</button>
           </div>
@@ -1604,7 +1613,7 @@ export function openSettingsModal(input: {
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: Desire</span>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-fire"></span>Seq: Desire</span>
             <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialDesire" title="Reset to default.">⟲</button>
           </div>
@@ -1617,7 +1626,7 @@ export function openSettingsModal(input: {
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: Connection</span>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-link"></span>Seq: Connection</span>
             <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialConnection" title="Reset to default.">⟲</button>
           </div>
@@ -1630,7 +1639,7 @@ export function openSettingsModal(input: {
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: Mood</span>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-face-smile"></span>Seq: Mood</span>
             <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialMood" title="Reset to default.">⟲</button>
           </div>
@@ -1643,7 +1652,7 @@ export function openSettingsModal(input: {
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: LastThought</span>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-brain"></span>Seq: LastThought</span>
             <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialLastThought" title="Reset to default.">⟲</button>
           </div>
@@ -1657,7 +1666,7 @@ export function openSettingsModal(input: {
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4>Debug</h4>
+      <h4><span class="bst-header-icon fa-solid fa-bug"></span>Debug</h4>
       <div class="bst-settings-grid">
         <label class="bst-check"><input data-k="debug" type="checkbox">Debug</label>
       </div>
@@ -1667,10 +1676,21 @@ export function openSettingsModal(input: {
         <label class="bst-check" data-bst-row="includeGraphInDiagnostics"><input data-k="includeGraphInDiagnostics" type="checkbox">Include Graph Data In Diagnostics</label>
         </div>
         <div class="bst-debug-actions">
-          <button class="bst-btn bst-btn-soft bst-btn-icon" data-action="retrack" title="Retrack Last AI Message" aria-label="Retrack Last AI Message"><span aria-hidden="true">&#x21BB;</span></button>
-          <button class="bst-btn bst-btn-danger" data-action="clear-chat" title="Delete all tracker data for the currently open chat only.">Delete Tracker Data (Current Chat)</button>
-          <button class="bst-btn" data-action="dump-diagnostics" title="Collect and copy current diagnostics report to clipboard.">Dump Diagnostics</button>
-          <button class="bst-btn bst-btn-danger" data-action="clear-diagnostics" title="Clear stored diagnostics traces and last debug record for this chat scope.">Clear Diagnostics</button>
+          <button class="bst-btn bst-btn-soft bst-btn-icon" data-action="retrack" title="Retrack Last AI Message" aria-label="Retrack Last AI Message">
+            <span class="fa-solid fa-rotate-left" aria-hidden="true"></span>
+          </button>
+          <button class="bst-btn bst-btn-danger" data-action="clear-chat" title="Delete all tracker data for the currently open chat only.">
+            <span class="fa-solid fa-trash bst-btn-icon-left" aria-hidden="true"></span>
+            Delete Tracker Data (Current Chat)
+          </button>
+          <button class="bst-btn" data-action="dump-diagnostics" title="Collect and copy current diagnostics report to clipboard.">
+            <span class="fa-solid fa-file-export bst-btn-icon-left" aria-hidden="true"></span>
+            Dump Diagnostics
+          </button>
+          <button class="bst-btn bst-btn-danger" data-action="clear-diagnostics" title="Clear stored diagnostics traces and last debug record for this chat scope.">
+            <span class="fa-solid fa-broom bst-btn-icon-left" aria-hidden="true"></span>
+            Clear Diagnostics
+          </button>
         </div>
         <div style="margin-top:8px;font-size:12px;opacity:.9;">Latest Extraction Debug Record</div>
         <div class="bst-debug-box">${input.debugRecord ? JSON.stringify(input.debugRecord, null, 2) : "No debug record yet."}</div>
@@ -1798,8 +1818,7 @@ export function openSettingsModal(input: {
       head.setAttribute("aria-expanded", "true");
       head.setAttribute("title", "Toggle section");
       const icon = document.createElement("span");
-      icon.className = "bst-section-icon";
-      icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      icon.className = "bst-section-icon fa-solid fa-circle-chevron-down";
       head.appendChild(header);
       head.appendChild(icon);
       section.insertBefore(head, section.firstChild);
