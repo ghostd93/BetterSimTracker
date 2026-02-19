@@ -427,14 +427,15 @@ function ensureStyles(): void {
   gap: 10px;
   cursor: pointer;
   user-select: none;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: rgba(12, 16, 26, 0.5);
-  border: 1px solid rgba(255,255,255,0.08);
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(18, 24, 36, 0.75), rgba(10, 14, 22, 0.75));
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25);
 }
 .bst-section-head:hover {
-  background: rgba(18, 24, 36, 0.7);
-  border-color: rgba(255,255,255,0.16);
+  background: linear-gradient(135deg, rgba(24, 32, 48, 0.85), rgba(12, 18, 28, 0.85));
+  border-color: rgba(255,255,255,0.2);
 }
 .bst-section-head:focus-visible {
   outline: 2px solid rgba(125, 211, 252, 0.6);
@@ -466,21 +467,28 @@ function ensureStyles(): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(8, 12, 18, 0.8);
-  font-size: 11px;
+  border: 1px solid rgba(255,255,255,0.22);
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(8,12,18,0.85));
+  font-size: 13px;
   line-height: 1;
-  transition: transform .16s ease;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
   transform: rotate(90deg);
+}
+.bst-section-head:hover .bst-section-icon {
+  border-color: rgba(255,255,255,0.35);
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.22), rgba(10,14,22,0.9));
 }
 .bst-section-collapsed .bst-section-icon {
   transform: rotate(0deg);
 }
 .bst-section-collapsed .bst-section-body {
   display: none;
+}
+.bst-section-body {
+  margin-top: 10px;
 }
 .bst-section-divider {
   margin: 8px 0 6px;
@@ -1647,6 +1655,7 @@ export function openSettingsModal(input: {
         notice.style.display = "none";
         label.appendChild(notice);
       }
+      let clearTimer: number | null = null;
       const clamp = (): void => {
         if (input.value.trim() === "") return;
         const raw = Number(input.value);
@@ -1661,10 +1670,12 @@ export function openSettingsModal(input: {
           if (typeof max === "number") parts.push(`max ${max}`);
           notice.textContent = `Allowed range: ${parts.join(" · ")}. Value adjusted.`;
           notice.style.display = "block";
-          return;
+          if (clearTimer !== null) window.clearTimeout(clearTimer);
+          clearTimer = window.setTimeout(() => {
+            notice.textContent = "";
+            notice.style.display = "none";
+          }, 2500);
         }
-        notice.textContent = "";
-        notice.style.display = "none";
       };
       input.addEventListener("input", clamp);
       input.addEventListener("blur", clamp);
@@ -1699,7 +1710,7 @@ export function openSettingsModal(input: {
       head.setAttribute("title", "Toggle section");
       const icon = document.createElement("span");
       icon.className = "bst-section-icon";
-      icon.textContent = ">";
+      icon.textContent = "›";
       head.appendChild(header);
       head.appendChild(icon);
       section.insertBefore(head, section.firstChild);

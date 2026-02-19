@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.4] - 2026-02-19
+### Changed
+- Refined drawer header styling and icons; added spacing below headers.
+- Clamp notices persist briefly to be readable.
+
 ## [1.0.6.3] - 2026-02-19
 ### Changed
 - Clamp numeric inputs to min/max and show inline notice when adjusted.
