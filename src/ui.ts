@@ -31,6 +31,7 @@ export type TrackerUiState = {
   done: number;
   total: number;
   messageIndex: number | null;
+  stepLabel?: string | null;
 };
 
 type RenderEntry = {
@@ -163,10 +164,11 @@ function ensureStyles(): void {
 }
 .bst-loading {
   border: 1px solid rgba(255,255,255,0.16);
-  background: linear-gradient(180deg, rgba(23, 27, 38, 0.95), rgba(15, 18, 26, 0.95));
+  background: linear-gradient(165deg, color-mix(in srgb, var(--bst-card) 86%, #ffffff 14%), color-mix(in srgb, var(--bst-card) 70%, #000 30%));
   border-radius: 12px;
   color: #f3f5f9;
   padding: 10px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.04) inset;
 }
 .bst-loading-row {
   display: flex;
@@ -182,7 +184,7 @@ function ensureStyles(): void {
 .bst-loading-track {
   height: 8px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.18);
   overflow: hidden;
 }
 .bst-loading-fill {
@@ -190,6 +192,7 @@ function ensureStyles(): void {
   width: 0%;
   background: linear-gradient(90deg, var(--bst-accent), #ffd38f);
   transition: width 0.25s ease;
+  min-width: 2px;
 }
 .bst-loading-track-indeterminate .bst-loading-fill {
   width: 42%;
@@ -225,7 +228,7 @@ function ensureStyles(): void {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(5, 7, 12, 0.43);
+  background: rgba(5, 7, 12, 0.30);
   pointer-events: none;
 }
 .bst-card-inactive .bst-state {
@@ -243,7 +246,7 @@ function ensureStyles(): void {
 }
 .bst-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   margin-bottom: 6px;
   gap: 8px;
@@ -303,12 +306,12 @@ function ensureStyles(): void {
   border-color: color-mix(in srgb, var(--bst-accent) 78%, #ffffff 22%);
   background: color-mix(in srgb, var(--bst-accent) 33%, #131a28 67%);
 }
-.bst-row { margin: 6px 0; }
+.bst-row { margin: 5px 0; }
 .bst-label {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   opacity: 0.93;
 }
 .bst-track {
@@ -345,6 +348,9 @@ function ensureStyles(): void {
 .bst-delta-up { color: #94f7a8; }
 .bst-delta-down { color: #ff9ea8; }
 .bst-delta-flat { color: #d4d9e8; }
+.bst-delta-up::before { content: "▲ "; }
+.bst-delta-down::before { content: "▼ "; }
+.bst-delta-flat::before { content: "• "; }
 .bst-thought {
   margin-top: 8px;
   font-size: 11px;
@@ -827,12 +833,35 @@ function ensureStyles(): void {
   border-radius: 8px;
   padding: 4px 6px;
 }
+.bst-graph-window-select.active {
+  border-color: color-mix(in srgb, var(--bst-accent) 70%, #ffffff 30%);
+  box-shadow: 0 0 0 2px rgba(56,189,248,0.2);
+}
+.bst-graph-canvas {
+  position: relative;
+}
 .bst-graph-svg {
   width: 100%;
   height: 320px;
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 10px;
   background: #0d1220;
+}
+.bst-graph-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(8, 12, 20, 0.95);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: #f3f5f9;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.bst-graph-tooltip.visible {
+  opacity: 1;
 }
 .bst-graph-toggle {
   display: inline-flex;
@@ -1127,14 +1156,17 @@ export function renderTracker(
       const ratio = Math.max(0, Math.min(1, done / total));
       const percent = Math.round(ratio * 100);
       const left = `stage ${Math.min(done + 1, total)}/${total}`;
-      let title = "Preparing tracker context";
+      let title = uiState.stepLabel ?? "Preparing tracker context";
       let subtitle = "Collecting recent messages and active characters.";
       if (done === 1) {
-        title = "Requesting relationship analysis";
+        title = uiState.stepLabel ?? "Requesting relationship analysis";
         subtitle = "Sending extraction prompt to backend/profile.";
       } else if (done >= 2) {
-        title = "Parsing and applying tracker update";
+        title = uiState.stepLabel ?? "Parsing and applying tracker update";
         subtitle = "Validating AI delta output and updating relationship state.";
+      }
+      if (uiState.stepLabel && uiState.stepLabel !== title) {
+        subtitle = uiState.stepLabel;
       }
       const loadingBox = document.createElement("div");
       loadingBox.className = "bst-loading";
@@ -1383,6 +1415,16 @@ function buildPointCircles(values: number[], color: string, _stat: string, width
   }).join("");
 }
 
+function buildLastPointCircle(values: number[], color: string, width: number, height: number, pad = 24): string {
+  if (!values.length) return "";
+  const drawableW = Math.max(1, width - pad * 2);
+  const drawableH = Math.max(1, height - pad * 2);
+  const idx = values.length - 1;
+  const x = pad + (values.length === 1 ? drawableW / 2 : (drawableW * idx) / (values.length - 1));
+  const y = pad + ((100 - values[idx]) / 100) * drawableH;
+  return `<circle cx="${x}" cy="${y}" r="4.2" fill="${color}" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />`;
+}
+
 export function openGraphModal(input: {
   character: string;
   history: TrackerData[];
@@ -1460,7 +1502,7 @@ export function openGraphModal(input: {
     <div class="bst-graph-controls">
       <label class="bst-graph-toggle" title="Display history range">
         <span>History</span>
-        <select class="bst-graph-window-select" data-action="window">
+        <select class="bst-graph-window-select${windowPreference !== "all" ? " active" : ""}" data-action="window">
           <option value="30" ${windowPreference === "30" ? "selected" : ""}>30</option>
           <option value="60" ${windowPreference === "60" ? "selected" : ""}>60</option>
           <option value="120" ${windowPreference === "120" ? "selected" : ""}>120</option>
@@ -1473,12 +1515,13 @@ export function openGraphModal(input: {
         <span>Smoothed</span>
       </label>
     </div>
+    <div class="bst-graph-canvas">
     <svg class="bst-graph-svg" viewBox="0 0 ${width} ${height}" width="100%" height="320">
-      <line x1="24" y1="${height - 24 - ((height - 48) * 0.25)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.25)}" stroke="rgba(255,255,255,0.11)" stroke-width="1"></line>
-      <line x1="24" y1="${height - 24 - ((height - 48) * 0.5)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.5)}" stroke="rgba(255,255,255,0.11)" stroke-width="1"></line>
-      <line x1="24" y1="${height - 24 - ((height - 48) * 0.75)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.75)}" stroke="rgba(255,255,255,0.11)" stroke-width="1"></line>
-      <line x1="24" y1="${height - 24}" x2="${width - 24}" y2="${height - 24}" stroke="rgba(255,255,255,0.25)" stroke-width="1"></line>
-      <line x1="24" y1="24" x2="24" y2="${height - 24}" stroke="rgba(255,255,255,0.25)" stroke-width="1"></line>
+      <line x1="24" y1="${height - 24 - ((height - 48) * 0.25)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.25)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"></line>
+      <line x1="24" y1="${height - 24 - ((height - 48) * 0.5)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.5)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"></line>
+      <line x1="24" y1="${height - 24 - ((height - 48) * 0.75)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.75)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"></line>
+      <line x1="24" y1="${height - 24}" x2="${width - 24}" y2="${height - 24}" stroke="rgba(255,255,255,0.18)" stroke-width="1"></line>
+      <line x1="24" y1="24" x2="24" y2="${height - 24}" stroke="rgba(255,255,255,0.18)" stroke-width="1"></line>
       <text x="8" y="${height - 24}" fill="rgba(255,255,255,0.75)" font-size="10">0</text>
       <text x="4" y="${height - 24 - ((height - 48) * 0.25)}" fill="rgba(255,255,255,0.75)" font-size="10">25</text>
       <text x="4" y="${height - 24 - ((height - 48) * 0.5)}" fill="rgba(255,255,255,0.75)" font-size="10">50</text>
@@ -1497,8 +1540,21 @@ export function openGraphModal(input: {
       ${trustDots}
       ${desireDots}
       ${connectionDots}
+      ${buildLastPointCircle(points.affection, "#ff6b81", width, height)}
+      ${buildLastPointCircle(points.trust, "#55d5ff", width, height)}
+      ${buildLastPointCircle(points.desire, "#ffb347", width, height)}
+      ${buildLastPointCircle(points.connection, connectionColor, width, height)}
+      <g id="bst-graph-hover" opacity="0">
+        <line id="bst-graph-hover-line" x1="0" y1="24" x2="0" y2="${height - 24}" stroke="rgba(255,255,255,0.25)" stroke-width="1"></line>
+        <circle id="bst-graph-hover-affection" r="3.8" fill="#ff6b81"></circle>
+        <circle id="bst-graph-hover-trust" r="3.8" fill="#55d5ff"></circle>
+        <circle id="bst-graph-hover-desire" r="3.8" fill="#ffb347"></circle>
+        <circle id="bst-graph-hover-connection" r="3.8" fill="${connectionColor}"></circle>
+      </g>
       ${snapshotCount === 0 ? `<text x="${Math.round(width / 2)}" y="${Math.round(height / 2)}" fill="rgba(255,255,255,0.65)" font-size="13" text-anchor="middle">No tracker history yet</text>` : ""}
     </svg>
+    <div class="bst-graph-tooltip" id="bst-graph-tooltip"></div>
+    </div>
     <div class="bst-graph-legend">
       <span><i class="bst-legend-dot" style="background:#ff6b81;"></i>Affection ${Math.round(latest.affection)}</span>
       <span><i class="bst-legend-dot" style="background:#55d5ff;"></i>Trust ${Math.round(latest.trust)}</span>
@@ -1507,6 +1563,68 @@ export function openGraphModal(input: {
     </div>
   `;
   document.body.appendChild(modal);
+
+  const svg = modal.querySelector(".bst-graph-svg") as SVGSVGElement | null;
+  const hoverGroup = modal.querySelector("#bst-graph-hover") as SVGGElement | null;
+  const hoverLine = modal.querySelector("#bst-graph-hover-line") as SVGLineElement | null;
+  const hoverDots = {
+    affection: modal.querySelector("#bst-graph-hover-affection") as SVGCircleElement | null,
+    trust: modal.querySelector("#bst-graph-hover-trust") as SVGCircleElement | null,
+    desire: modal.querySelector("#bst-graph-hover-desire") as SVGCircleElement | null,
+    connection: modal.querySelector("#bst-graph-hover-connection") as SVGCircleElement | null,
+  };
+  const tooltip = modal.querySelector("#bst-graph-tooltip") as HTMLDivElement | null;
+  const pointCount = points.affection.length;
+  if (svg && hoverGroup && hoverLine && tooltip && pointCount > 0) {
+    const pad = 24;
+    const drawableW = Math.max(1, width - pad * 2);
+    const drawableH = Math.max(1, height - pad * 2);
+    const xFor = (idx: number): number =>
+      pad + (pointCount === 1 ? drawableW / 2 : (drawableW * idx) / (pointCount - 1));
+    const yFor = (value: number): number => pad + ((100 - value) / 100) * drawableH;
+    const clampIndex = (idx: number): number => Math.max(0, Math.min(pointCount - 1, idx));
+    const updateHover = (clientX: number, clientY: number): void => {
+      const rect = svg.getBoundingClientRect();
+      const relX = clientX - rect.left;
+      const idx = clampIndex(Math.round(((relX - pad) / drawableW) * (pointCount - 1)));
+      const cx = xFor(idx);
+      const ay = yFor(points.affection[idx] ?? 0);
+      const ty = yFor(points.trust[idx] ?? 0);
+      const dy = yFor(points.desire[idx] ?? 0);
+      const cy = yFor(points.connection[idx] ?? 0);
+
+      hoverGroup.setAttribute("opacity", "1");
+      hoverLine.setAttribute("x1", String(cx));
+      hoverLine.setAttribute("x2", String(cx));
+      hoverDots.affection?.setAttribute("cx", String(cx));
+      hoverDots.affection?.setAttribute("cy", String(ay));
+      hoverDots.trust?.setAttribute("cx", String(cx));
+      hoverDots.trust?.setAttribute("cy", String(ty));
+      hoverDots.desire?.setAttribute("cx", String(cx));
+      hoverDots.desire?.setAttribute("cy", String(dy));
+      hoverDots.connection?.setAttribute("cx", String(cx));
+      hoverDots.connection?.setAttribute("cy", String(cy));
+
+      tooltip.classList.add("visible");
+      tooltip.innerHTML = `
+        <div><strong>Index:</strong> ${idx + 1}/${pointCount}</div>
+        <div>Affection: ${Math.round(points.affection[idx] ?? 0)}</div>
+        <div>Trust: ${Math.round(points.trust[idx] ?? 0)}</div>
+        <div>Desire: ${Math.round(points.desire[idx] ?? 0)}</div>
+        <div>Connection: ${Math.round(points.connection[idx] ?? 0)}</div>
+      `;
+      const canvasRect = (modal.querySelector(".bst-graph-canvas") as HTMLElement).getBoundingClientRect();
+      const left = Math.min(canvasRect.width - 140, Math.max(8, cx + 10));
+      const top = Math.min(canvasRect.height - 60, Math.max(8, clientY - canvasRect.top - 28));
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top = `${top}px`;
+    };
+    svg.addEventListener("mousemove", event => updateHover(event.clientX, event.clientY));
+    svg.addEventListener("mouseleave", () => {
+      hoverGroup.setAttribute("opacity", "0");
+      tooltip.classList.remove("visible");
+    });
+  }
 
   modal.querySelector('[data-action="close"]')?.addEventListener("click", () => closeGraphModal());
   modal.querySelector('[data-action="toggle-smoothing"]')?.addEventListener("change", event => {
