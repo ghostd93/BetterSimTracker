@@ -2,6 +2,7 @@ import { EXTENSION_KEY } from "./constants";
 import {
   DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE,
   DEFAULT_REPAIR_MOOD_TEMPLATE,
+  DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES,
   DEFAULT_STRICT_RETRY_TEMPLATE,
   DEFAULT_UNIFIED_PROMPT_TEMPLATE
 } from "./prompts";
@@ -45,7 +46,13 @@ export const defaultSettings: BetterSimTrackerSettings = {
   promptTemplateUnified: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
   promptTemplateStrictRetry: DEFAULT_STRICT_RETRY_TEMPLATE,
   promptTemplateRepairMood: DEFAULT_REPAIR_MOOD_TEMPLATE,
-  promptTemplateRepairLastThought: DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE
+  promptTemplateRepairLastThought: DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE,
+  promptTemplateSequentialAffection: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.affection,
+  promptTemplateSequentialTrust: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.trust,
+  promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.desire,
+  promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.connection,
+  promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.mood,
+  promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.lastThought
 };
 
 export function getContext(): STContext | null {
@@ -319,5 +326,11 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     promptTemplateStrictRetry: asText(input.promptTemplateStrictRetry, defaultSettings.promptTemplateStrictRetry).slice(0, 20000),
     promptTemplateRepairMood: asText(input.promptTemplateRepairMood, defaultSettings.promptTemplateRepairMood).slice(0, 20000),
     promptTemplateRepairLastThought: asText(input.promptTemplateRepairLastThought, defaultSettings.promptTemplateRepairLastThought).slice(0, 20000),
+    promptTemplateSequentialAffection: asText(input.promptTemplateSequentialAffection, defaultSettings.promptTemplateSequentialAffection).slice(0, 20000),
+    promptTemplateSequentialTrust: asText(input.promptTemplateSequentialTrust, defaultSettings.promptTemplateSequentialTrust).slice(0, 20000),
+    promptTemplateSequentialDesire: asText(input.promptTemplateSequentialDesire, defaultSettings.promptTemplateSequentialDesire).slice(0, 20000),
+    promptTemplateSequentialConnection: asText(input.promptTemplateSequentialConnection, defaultSettings.promptTemplateSequentialConnection).slice(0, 20000),
+    promptTemplateSequentialMood: asText(input.promptTemplateSequentialMood, defaultSettings.promptTemplateSequentialMood).slice(0, 20000),
+    promptTemplateSequentialLastThought: asText(input.promptTemplateSequentialLastThought, defaultSettings.promptTemplateSequentialLastThought).slice(0, 20000),
   };
 }

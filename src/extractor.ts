@@ -4,7 +4,9 @@ import { parseUnifiedDeltaResponse } from "./parse";
 import {
   DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE,
   DEFAULT_REPAIR_MOOD_TEMPLATE,
+  DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES,
   DEFAULT_STRICT_RETRY_TEMPLATE,
+  buildSequentialPrompt,
   buildUnifiedPrompt,
   moodOptions
 } from "./prompts";
@@ -220,17 +222,37 @@ export async function extractStatisticsParallel(input: {
       onProgress?.(progressDone, progressTotal);
     };
 
+    const getSequentialTemplate = (stat: StatKey): string => {
+      if (stat === "affection") return settings.promptTemplateSequentialAffection || DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.affection;
+      if (stat === "trust") return settings.promptTemplateSequentialTrust || DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.trust;
+      if (stat === "desire") return settings.promptTemplateSequentialDesire || DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.desire;
+      if (stat === "connection") return settings.promptTemplateSequentialConnection || DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.connection;
+      if (stat === "mood") return settings.promptTemplateSequentialMood || DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.mood;
+      return settings.promptTemplateSequentialLastThought || DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.lastThought;
+    };
+
     const runOneStat = async (statList: StatKey[]): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
-      const prompt = buildUnifiedPrompt(
-        statList,
-        userName,
-        activeCharacters,
-        contextText,
-        previousStatistics,
-        history,
-        settings.maxDeltaPerTurn,
-        settings.promptTemplateUnified,
-      );
+      const prompt = settings.sequentialExtraction && statList.length === 1
+        ? buildSequentialPrompt(
+            statList[0],
+            userName,
+            activeCharacters,
+            contextText,
+            previousStatistics,
+            history,
+            settings.maxDeltaPerTurn,
+            getSequentialTemplate(statList[0]),
+          )
+        : buildUnifiedPrompt(
+            statList,
+            userName,
+            activeCharacters,
+            contextText,
+            previousStatistics,
+            history,
+            settings.maxDeltaPerTurn,
+            settings.promptTemplateUnified,
+          );
       tickProgress();
       attempts += 1;
       requestSeq += 1;
