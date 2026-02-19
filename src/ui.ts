@@ -1308,6 +1308,17 @@ export function openSettingsModal(input: {
       <button class="bst-btn bst-close-btn" data-action="close" title="Close settings" aria-label="Close settings">&times;</button>
     </div>
     <div class="bst-settings-section">
+      <h4>Quick Help</h4>
+      <div class="bst-help-line"><strong>Extraction mode:</strong> Unified = faster single request. Sequential = one request per stat (more robust, slower).</div>
+      <ul class="bst-help-list">
+        <li><strong>Affection:</strong> emotional warmth and care</li>
+        <li><strong>Trust:</strong> safety and willingness to be vulnerable</li>
+        <li><strong>Desire:</strong> attraction/flirt tension</li>
+        <li><strong>Connection:</strong> bond depth and emotional attunement</li>
+      </ul>
+      <div class="bst-help-line"><strong>Mood</strong> is short-term tone. <strong>Last Thought</strong> is one brief internal line for continuity.</div>
+    </div>
+    <div class="bst-settings-section">
       <h4>Connection</h4>
       <div class="bst-settings-grid">
         <label>Connection Profile <select data-k="connectionProfile">${profileOptionsHtml}</select></label>
@@ -1335,17 +1346,6 @@ export function openSettingsModal(input: {
         <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
         <label data-bst-row="activityLookback">Activity Lookback <input data-k="activityLookback" type="number" min="1" max="25"></label>
       </div>
-    </div>
-    <div class="bst-settings-section">
-      <h4>Quick Help</h4>
-      <div class="bst-help-line"><strong>Extraction mode:</strong> Unified = faster single request. Sequential = one request per stat (more robust, slower).</div>
-      <ul class="bst-help-list">
-        <li><strong>Affection:</strong> emotional warmth and care</li>
-        <li><strong>Trust:</strong> safety and willingness to be vulnerable</li>
-        <li><strong>Desire:</strong> attraction/flirt tension</li>
-        <li><strong>Connection:</strong> bond depth and emotional attunement</li>
-      </ul>
-      <div class="bst-help-line"><strong>Mood</strong> is short-term tone. <strong>Last Thought</strong> is one brief internal line for continuity.</div>
     </div>
     <div class="bst-settings-section">
       <h4>Tracked Stats</h4>

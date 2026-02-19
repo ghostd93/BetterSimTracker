@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.4.13] - 2026-02-19
+### Changed
+- Moved Quick Help to the top of settings.
+
 ## [1.0.4.12] - 2026-02-19
 ### Changed
 - Reorganized settings layout: connection section first, then generation and extraction.
