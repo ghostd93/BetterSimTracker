@@ -230,6 +230,11 @@ function ensureStyles(): void {
 .bst-card-inactive .bst-state {
   background: rgba(0,0,0,0.45);
 }
+.bst-inactive-icon {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.8;
+}
 .bst-head {
   display: flex;
   align-items: baseline;
@@ -1182,7 +1187,7 @@ export function renderTracker(
           <div class="bst-name">${name}</div>
           <div class="bst-actions">
             <button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> Graph</button>
-            <div class="bst-state">${isActive ? "Active" : settings.inactiveLabel}</div>
+            <div class="bst-state">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>
           </div>
         </div>
         <div class="bst-collapsed-summary" title="Affection / Trust / Desire / Connection">
