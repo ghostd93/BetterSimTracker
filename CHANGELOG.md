@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.4.9] - 2026-02-19
+### Changed
+- Prompt reset buttons no longer clear prompt textareas.
+- Debug section moved to the bottom of settings.
+
 ## [1.0.4.8] - 2026-02-19
 ### Changed
 - Documented prompt templates and placeholders in README.
