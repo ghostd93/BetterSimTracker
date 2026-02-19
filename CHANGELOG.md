@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.13] - 2026-02-19
+### Changed
+- Added accent color picker synced with hex input.
+- Styled Quick Help and renamed Open Settings button with icon.
+
 ## [1.0.6.12] - 2026-02-19
 ### Changed
 - Styled section dividers as full-width separators with line accents.
