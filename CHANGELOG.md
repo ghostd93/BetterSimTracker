@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.17] - 2026-02-19
+### Changed
+- Polished tracker cards (spacing, hover, inactive badge, ellipsis, last thought clamp).
+
 ## [1.0.6.16] - 2026-02-19
 ### Changed
 - Replaced accent color hex input with a color picker only.
