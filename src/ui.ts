@@ -467,22 +467,27 @@ function ensureStyles(): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.22);
   background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(8,12,18,0.85));
-  font-size: 14px;
   line-height: 1;
-  transition: transform .16s ease, border-color .16s ease, background .16s ease;
-  transform: rotate(90deg) translateY(-0.5px);
+  transition: border-color .16s ease, background .16s ease;
 }
 .bst-section-head:hover .bst-section-icon {
   border-color: rgba(255,255,255,0.35);
   background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.22), rgba(10,14,22,0.9));
 }
-.bst-section-collapsed .bst-section-icon {
-  transform: rotate(0deg) translateY(-0.5px);
+.bst-section-icon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  transition: transform .16s ease;
+  transform: rotate(90deg);
+}
+.bst-section-collapsed .bst-section-icon svg {
+  transform: rotate(0deg);
 }
 .bst-section-collapsed .bst-section-body {
   display: none;
@@ -1710,7 +1715,7 @@ export function openSettingsModal(input: {
       head.setAttribute("title", "Toggle section");
       const icon = document.createElement("span");
       icon.className = "bst-section-icon";
-      icon.textContent = "›";
+      icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       head.appendChild(header);
       head.appendChild(icon);
       section.insertBefore(head, section.firstChild);
