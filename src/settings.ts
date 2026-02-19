@@ -1,4 +1,10 @@
 import { EXTENSION_KEY } from "./constants";
+import {
+  DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE,
+  DEFAULT_REPAIR_MOOD_TEMPLATE,
+  DEFAULT_STRICT_RETRY_TEMPLATE,
+  DEFAULT_UNIFIED_PROMPT_TEMPLATE
+} from "./prompts";
 import type { BetterSimTrackerSettings, ConnectionProfileOption, STContext } from "./types";
 
 export const defaultSettings: BetterSimTrackerSettings = {
@@ -35,7 +41,11 @@ export const defaultSettings: BetterSimTrackerSettings = {
   defaultMood: "Neutral",
   debug: false,
   includeContextInDiagnostics: false,
-  includeGraphInDiagnostics: true
+  includeGraphInDiagnostics: true,
+  promptTemplateUnified: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
+  promptTemplateStrictRetry: DEFAULT_STRICT_RETRY_TEMPLATE,
+  promptTemplateRepairMood: DEFAULT_REPAIR_MOOD_TEMPLATE,
+  promptTemplateRepairLastThought: DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE
 };
 
 export function getContext(): STContext | null {
@@ -305,5 +315,9 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     debug: asBool(input.debug, defaultSettings.debug),
     includeContextInDiagnostics: asBool(input.includeContextInDiagnostics, defaultSettings.includeContextInDiagnostics),
     includeGraphInDiagnostics: asBool(input.includeGraphInDiagnostics, defaultSettings.includeGraphInDiagnostics),
+    promptTemplateUnified: asText(input.promptTemplateUnified, defaultSettings.promptTemplateUnified).slice(0, 20000),
+    promptTemplateStrictRetry: asText(input.promptTemplateStrictRetry, defaultSettings.promptTemplateStrictRetry).slice(0, 20000),
+    promptTemplateRepairMood: asText(input.promptTemplateRepairMood, defaultSettings.promptTemplateRepairMood).slice(0, 20000),
+    promptTemplateRepairLastThought: asText(input.promptTemplateRepairLastThought, defaultSettings.promptTemplateRepairLastThought).slice(0, 20000),
   };
 }

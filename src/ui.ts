@@ -1,5 +1,11 @@
 import { STYLE_ID } from "./constants";
 import type { BetterSimTrackerSettings, ConnectionProfileOption, DeltaDebugRecord, StatValue, TrackerData } from "./types";
+import {
+  DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE,
+  DEFAULT_REPAIR_MOOD_TEMPLATE,
+  DEFAULT_STRICT_RETRY_TEMPLATE,
+  DEFAULT_UNIFIED_PROMPT_TEMPLATE
+} from "./prompts";
 
 const statLabels: Array<{ key: "affection" | "trust" | "desire" | "connection"; label: string }> = [
   { key: "affection", label: "Affection" },
@@ -381,12 +387,18 @@ function ensureStyles(): void {
 .bst-settings label { font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
 .bst-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
 .bst-check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--bst-accent); }
-.bst-settings input, .bst-settings select {
+.bst-settings input, .bst-settings select, .bst-settings textarea {
   background: #0d1220 !important;
   color: #f3f5f9 !important;
   border: 1px solid rgba(255,255,255,0.20) !important;
   border-radius: 8px;
   padding: 7px;
+}
+.bst-settings textarea {
+  resize: vertical;
+  min-height: 120px;
+  font-family: Consolas, "Courier New", monospace;
+  line-height: 1.35;
 }
 .bst-settings input::placeholder { color: rgba(243,245,249,0.6); }
 .bst-settings-section {
@@ -1338,6 +1350,20 @@ export function openSettingsModal(input: {
         <div class="bst-debug-box">${input.injectedPrompt?.trim() ? input.injectedPrompt : "No injected prompt currently active."}</div>
       </div>
     </div>
+    <div class="bst-settings-section">
+      <h4>Prompts</h4>
+      <div class="bst-help-line">Unified prompt is used for both unified and sequential extraction. Templates support placeholders.</div>
+      <div class="bst-help-line">Placeholders: <code>{{envelope}}</code> <code>{{userName}}</code> <code>{{characters}}</code> <code>{{contextText}}</code> <code>{{currentLines}}</code> <code>{{historyLines}}</code> <code>{{numericStats}}</code> <code>{{textStats}}</code> <code>{{maxDelta}}</code> <code>{{moodOptions}}</code> <code>{{basePrompt}}</code></div>
+      <div class="bst-settings-grid">
+        <label>Unified Prompt <textarea data-k="promptTemplateUnified" rows="10"></textarea></label>
+        <label>Strict Retry Prompt <textarea data-k="promptTemplateStrictRetry" rows="6"></textarea></label>
+        <label>Repair Mood Prompt <textarea data-k="promptTemplateRepairMood" rows="6"></textarea></label>
+        <label>Repair LastThought Prompt <textarea data-k="promptTemplateRepairLastThought" rows="6"></textarea></label>
+      </div>
+      <div class="bst-debug-actions">
+        <button class="bst-btn" data-action="reset-prompts" title="Reset all prompt templates to defaults.">Reset Prompts to Default</button>
+      </div>
+    </div>
   `;
   document.body.appendChild(modal);
 
@@ -1379,6 +1405,10 @@ export function openSettingsModal(input: {
   set("debug", String(input.settings.debug));
   set("includeContextInDiagnostics", String(input.settings.includeContextInDiagnostics));
   set("includeGraphInDiagnostics", String(input.settings.includeGraphInDiagnostics));
+  set("promptTemplateUnified", input.settings.promptTemplateUnified);
+  set("promptTemplateStrictRetry", input.settings.promptTemplateStrictRetry);
+  set("promptTemplateRepairMood", input.settings.promptTemplateRepairMood);
+  set("promptTemplateRepairLastThought", input.settings.promptTemplateRepairLastThought);
 
   const collectSettings = (): BetterSimTrackerSettings => {
     const read = (k: keyof BetterSimTrackerSettings): string =>
@@ -1426,7 +1456,11 @@ export function openSettingsModal(input: {
       fontSize: readNumber("fontSize", input.settings.fontSize, 10, 22),
       debug: readBool("debug"),
       includeContextInDiagnostics: readBool("includeContextInDiagnostics"),
-      includeGraphInDiagnostics: readBool("includeGraphInDiagnostics")
+      includeGraphInDiagnostics: readBool("includeGraphInDiagnostics"),
+      promptTemplateUnified: read("promptTemplateUnified") || input.settings.promptTemplateUnified,
+      promptTemplateStrictRetry: read("promptTemplateStrictRetry") || input.settings.promptTemplateStrictRetry,
+      promptTemplateRepairMood: read("promptTemplateRepairMood") || input.settings.promptTemplateRepairMood,
+      promptTemplateRepairLastThought: read("promptTemplateRepairLastThought") || input.settings.promptTemplateRepairLastThought
     };
   };
 
@@ -1512,7 +1546,11 @@ export function openSettingsModal(input: {
     fontSize: "Base font size used inside tracker cards.",
     debug: "Enable verbose diagnostics logging for troubleshooting.",
     includeContextInDiagnostics: "Include extraction prompt/context text in diagnostics dumps (larger logs).",
-    includeGraphInDiagnostics: "Include graph-open series payloads in diagnostics trace output."
+    includeGraphInDiagnostics: "Include graph-open series payloads in diagnostics trace output.",
+    promptTemplateUnified: "Unified prompt template used for all extraction runs.",
+    promptTemplateStrictRetry: "Wrapper template for strict JSON retries. Use {{basePrompt}} placeholder.",
+    promptTemplateRepairMood: "Repair template when mood is missing/invalid. Use {{basePrompt}} and {{moodOptions}}.",
+    promptTemplateRepairLastThought: "Repair template when lastThought is missing/invalid. Use {{basePrompt}}."
   };
   for (const [key, tooltip] of Object.entries(tooltips) as Array<[keyof BetterSimTrackerSettings, string]>) {
     const inputNode = modal.querySelector(`[data-k="${key}"]`) as HTMLElement | null;
@@ -1545,6 +1583,17 @@ export function openSettingsModal(input: {
   modal.querySelector('[data-action="clear-diagnostics"]')?.addEventListener("click", () => {
     persistLive();
     input.onClearDiagnostics?.();
+  });
+  modal.querySelector('[data-action="reset-prompts"]')?.addEventListener("click", () => {
+    input.settings.promptTemplateUnified = DEFAULT_UNIFIED_PROMPT_TEMPLATE;
+    input.settings.promptTemplateStrictRetry = DEFAULT_STRICT_RETRY_TEMPLATE;
+    input.settings.promptTemplateRepairMood = DEFAULT_REPAIR_MOOD_TEMPLATE;
+    input.settings.promptTemplateRepairLastThought = DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE;
+    set("promptTemplateUnified", input.settings.promptTemplateUnified);
+    set("promptTemplateStrictRetry", input.settings.promptTemplateStrictRetry);
+    set("promptTemplateRepairMood", input.settings.promptTemplateRepairMood);
+    set("promptTemplateRepairLastThought", input.settings.promptTemplateRepairLastThought);
+    persistLive();
   });
 }
 

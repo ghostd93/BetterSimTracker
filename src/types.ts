@@ -49,6 +49,10 @@ export interface BetterSimTrackerSettings {
   debug: boolean;
   includeContextInDiagnostics: boolean;
   includeGraphInDiagnostics: boolean;
+  promptTemplateUnified: string;
+  promptTemplateStrictRetry: string;
+  promptTemplateRepairMood: string;
+  promptTemplateRepairLastThought: string;
 }
 
 export interface GenerateRequestMeta {

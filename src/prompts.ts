@@ -2,7 +2,7 @@ import type { StatKey } from "./types";
 import type { Statistics } from "./types";
 import type { TrackerData } from "./types";
 
-const moodOptions = [
+export const moodOptions = [
   "Happy",
   "Sad",
   "Angry",
@@ -20,6 +20,72 @@ const moodOptions = [
   "Neutral"
 ];
 
+export const DEFAULT_UNIFIED_PROMPT_TEMPLATE = `{{envelope}}
+Current tracker state:
+{{currentLines}}
+
+Recent tracker snapshots:
+{{historyLines}}
+
+Task:
+- Propose incremental changes to tracker state from the recent messages.
+- Do NOT rewrite absolute values; provide per-stat deltas.
+- Keep updates conservative and realistic.
+- It is valid to return 0 or negative deltas if the interaction is neutral or negative.
+- Do not reuse the same delta for all stats unless strongly justified by context.
+
+Numeric stats to update ({{numericStats}}):
+- Return deltas only, each in range -{{maxDelta}}..{{maxDelta}}.
+
+Text stats to update ({{textStats}}):
+- mood must be one of: {{moodOptions}}.
+- lastThought must be one short sentence.
+
+Return STRICT JSON only:
+{
+  "characters": [
+    {
+      "name": "Character Name",
+      "confidence": 0.0,
+      "delta": {
+        "affection": 0,
+        "trust": 0,
+        "desire": 0,
+        "connection": 0
+      },
+      "mood": "Neutral",
+      "lastThought": ""
+    }
+  ]
+}
+
+Rules:
+- confidence is 0..1 (0 low confidence, 1 high confidence).
+- include one entry for each character name exactly: {{characters}}.
+- omit fields for stats that are not requested.
+- output JSON only, no commentary.`;
+
+export const DEFAULT_STRICT_RETRY_TEMPLATE = `SYSTEM OVERRIDE:
+Return ONLY valid JSON.
+No prose. No roleplay. No markdown except optional \`\`\`json fences.
+If uncertain, still return best-effort JSON with required keys.
+
+{{basePrompt}}`;
+
+export const DEFAULT_REPAIR_MOOD_TEMPLATE = `SYSTEM OVERRIDE:
+Return ONLY valid JSON, no prose, no roleplay.
+MANDATORY: include \`mood\` for every character.
+Use one of allowed mood labels exactly: {{moodOptions}}.
+
+{{basePrompt}}`;
+
+export const DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE = `SYSTEM OVERRIDE:
+Return ONLY valid JSON, no prose, no roleplay.
+MANDATORY: include \`lastThought\` for every character.
+Keep it to one short sentence per character.
+
+{{basePrompt}}`;
+
 function commonEnvelope(userName: string, characters: string[], contextText: string): string {
   return [
     `User: ${userName}`,
@@ -29,6 +95,14 @@ function commonEnvelope(userName: string, characters: string[], contextText: str
     contextText,
     ""
   ].join("\n");
+}
+
+function renderTemplate(template: string, values: Record<string, string>): string {
+  let output = template;
+  for (const [key, value] of Object.entries(values)) {
+    output = output.replaceAll(`{{${key}}}`, value);
+  }
+  return output;
 }
 
 export function buildPrompt(
@@ -78,6 +152,7 @@ export function buildUnifiedPrompt(
   current: Statistics | null,
   history: TrackerData[] = [],
   maxDeltaPerTurn = 15,
+  template?: string,
 ): string {
   const envelope = commonEnvelope(userName, characters, contextText);
   const numericStats = stats.filter(stat =>
@@ -108,47 +183,17 @@ export function buildUnifiedPrompt(
   }).join("\n");
 
   const safeMaxDelta = Math.max(1, Math.round(Number(maxDeltaPerTurn) || 15));
-
-  return `${envelope}
-Current tracker state:
-${currentLines}
-
-Recent tracker snapshots:
-${historyLines || "- none"}
-
-Task:
-- Propose incremental changes to tracker state from the recent messages.
-- Do NOT rewrite absolute values; provide per-stat deltas.
-- Keep updates conservative and realistic.
-
-Numeric stats to update (${numericStats.length ? numericStats.join(", ") : "none"}):
-- Return deltas only, each in range -${safeMaxDelta}..${safeMaxDelta}.
-
-Text stats to update (${textStats.length ? textStats.join(", ") : "none"}):
-- mood must be one of: ${moodOptions.join(", ")}.
-- lastThought must be one short sentence.
-
-Return STRICT JSON only:
-{
-  "characters": [
-    {
-      "name": "Character Name",
-      "confidence": 0.0,
-      "delta": {
-        "affection": 0,
-        "trust": 0,
-        "desire": 0,
-        "connection": 0
-      },
-      "mood": "Neutral",
-      "lastThought": ""
-    }
-  ]
-}
-
-Rules:
-- confidence is 0..1 (0 low confidence, 1 high confidence).
-- include one entry for each character name exactly: ${characters.join(", ")}.
-- omit fields for stats that are not requested.
-- output JSON only, no commentary.`;
+  const resolvedTemplate = template?.trim() ? template : DEFAULT_UNIFIED_PROMPT_TEMPLATE;
+  return renderTemplate(resolvedTemplate, {
+    envelope,
+    userName,
+    characters: characters.join(", "),
+    contextText,
+    currentLines,
+    historyLines: historyLines || "- none",
+    numericStats: numericStats.length ? numericStats.join(", ") : "none",
+    textStats: textStats.length ? textStats.join(", ") : "none",
+    maxDelta: String(safeMaxDelta),
+    moodOptions: moodOptions.join(", "),
+  });
 }
