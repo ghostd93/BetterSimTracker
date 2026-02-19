@@ -425,6 +425,13 @@ function ensureStyles(): void {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.bst-section-head:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.6);
+  outline-offset: 2px;
+  border-radius: 10px;
 }
 .bst-settings-section h4 {
   margin: 0 0 10px 0;
@@ -449,14 +456,30 @@ function ensureStyles(): void {
   background: rgba(20,26,38,0.9);
 }
 .bst-section-icon {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.25);
+  font-size: 12px;
+  line-height: 1;
   transition: transform .16s ease;
+  transform: rotate(90deg);
 }
 .bst-section-collapsed .bst-section-icon {
-  transform: rotate(-90deg);
+  transform: rotate(0deg);
 }
 .bst-section-collapsed .bst-section-body {
   display: none;
+}
+.bst-section-divider {
+  margin: 8px 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  opacity: 0.7;
 }
 .bst-help-list {
   margin: 0;
@@ -1549,10 +1572,25 @@ export function openSettingsModal(input: {
   `;
   document.body.appendChild(modal);
 
+  const mergeConnectionAndGeneration = (): void => {
+    const sections = Array.from(modal.querySelectorAll(".bst-settings-section")) as HTMLElement[];
+    const connectionSection = sections.find(section => section.querySelector("h4")?.textContent?.trim() === "Connection");
+    const generationSection = sections.find(section => section.querySelector("h4")?.textContent?.trim() === "Generation");
+    if (!connectionSection || !generationSection) return;
+    const generationGrid = generationSection.querySelector(".bst-settings-grid");
+    if (!generationGrid) return;
+    const divider = document.createElement("div");
+    divider.className = "bst-section-divider";
+    divider.textContent = "Generation";
+    connectionSection.appendChild(divider);
+    connectionSection.appendChild(generationGrid);
+    generationSection.remove();
+  };
+  mergeConnectionAndGeneration();
+
   const initSectionDrawers = (): void => {
     const sectionIds: Record<string, string> = {
       "Connection": "connection",
-      "Generation": "generation",
       "Extraction": "extraction",
       "Tracked Stats": "tracked-stats",
       "Display": "display",
@@ -1569,18 +1607,17 @@ export function openSettingsModal(input: {
       section.dataset.bstSection = id;
       const head = document.createElement("div");
       head.className = "bst-section-head";
-      const toggle = document.createElement("button");
-      toggle.className = "bst-section-toggle";
-      toggle.setAttribute("data-action", "toggle-section");
-      toggle.setAttribute("data-section", id);
-      toggle.setAttribute("aria-expanded", "true");
-      toggle.setAttribute("title", "Toggle section");
+      head.setAttribute("role", "button");
+      head.setAttribute("tabindex", "0");
+      head.setAttribute("data-action", "toggle-section");
+      head.setAttribute("data-section", id);
+      head.setAttribute("aria-expanded", "true");
+      head.setAttribute("title", "Toggle section");
       const icon = document.createElement("span");
       icon.className = "bst-section-icon";
-      icon.textContent = "v";
-      toggle.appendChild(icon);
+      icon.textContent = ">";
       head.appendChild(header);
-      head.appendChild(toggle);
+      head.appendChild(icon);
       section.insertBefore(head, section.firstChild);
 
       const body = document.createElement("div");
@@ -1596,16 +1633,21 @@ export function openSettingsModal(input: {
       const collapsed = stored ? stored === "collapsed" : true;
       if (collapsed) {
         section.classList.add("bst-section-collapsed");
-        toggle.setAttribute("aria-expanded", "false");
+        head.setAttribute("aria-expanded", "false");
       }
 
-      toggle.addEventListener("click", event => {
+      const toggleSection = (event: Event): void => {
         event.preventDefault();
         event.stopPropagation();
         const nextCollapsed = !section.classList.contains("bst-section-collapsed");
         section.classList.toggle("bst-section-collapsed", nextCollapsed);
-        toggle.setAttribute("aria-expanded", nextCollapsed ? "false" : "true");
+        head.setAttribute("aria-expanded", nextCollapsed ? "false" : "true");
         localStorage.setItem(storageKey, nextCollapsed ? "collapsed" : "expanded");
+      };
+      head.addEventListener("click", toggleSection);
+      head.addEventListener("keydown", event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        toggleSection(event);
       });
     });
   };
