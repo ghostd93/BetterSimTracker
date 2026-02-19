@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.4.3] - 2026-02-18
+### Added
+- Prompt placeholder reference list in settings to explain available macros.
+### Changed
+- Expanded prompt editor help text for clarity.
+
 ## [1.0.4.2] - 2026-02-18
 ### Added
 - Per-stat sequential prompt templates in settings, with a reset-to-defaults button.
