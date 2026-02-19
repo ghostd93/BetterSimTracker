@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.20] - 2026-02-19
+### Changed
+- Graph tooltip now follows cursor within canvas.
+
 ## [1.0.6.19] - 2026-02-19
 ### Changed
 - Added extraction step labels to loading UI and styled it to match cards.
