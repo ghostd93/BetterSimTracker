@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.5.4] - 2026-02-19
+### Changed
+- Added a hidden, fixed main prompt prefix applied to all extraction prompts.
+
 ## [1.0.5.3] - 2026-02-19
 ### Changed
 - Prompt editing now only affects the instruction section; protocol blocks are fixed and read-only.
