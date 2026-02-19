@@ -146,6 +146,7 @@ Numeric scaling formula used by runtime:
 - `Auto Detect Active`: scene-based active character detection
 - `Inject Tracker Into Prompt`: uses current relationship state as hidden guidance
 - `Prompt Templates`: edit unified + per-stat sequential prompts (repair prompts are fixed)
+- `Profile Token Limits`: extraction now respects profile max tokens and truncation length (when available)
 
 ## Settings Reference (Detailed)
 
@@ -166,6 +167,7 @@ Numeric scaling formula used by runtime:
 - `Prompt Templates`: unified prompt for one-shot extraction, per-stat prompts for sequential mode.
   - Each prompt has a reset-to-default button.
   - Strict/repair prompts are fixed for safety and consistency.
+- `Profile Token Limits`: extraction uses the selected connection profile's max token and truncation limits when available. If missing, it falls back to the active preset values, and finally to a safe default.
 
 Model confidence behavior:
 

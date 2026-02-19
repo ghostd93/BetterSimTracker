@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.4.10] - 2026-02-19
+### Changed
+- Extraction now respects profile token limits and truncation length when available.
+
 ## [1.0.4.9] - 2026-02-19
 ### Changed
 - Prompt reset buttons no longer clear prompt textareas.
