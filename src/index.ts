@@ -1,4 +1,5 @@
 import { getAllTrackedCharacterNames, buildRecentContext, resolveActiveCharacterAnalysis } from "./activity";
+import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
 import { isTrackableAiMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from "./promptInjection";
@@ -562,7 +563,10 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     }
 
     const userName = context.name1 ?? "User";
-    const contextText = buildRecentContext(context, settings.contextMessages);
+    let contextText = buildRecentContext(context, settings.contextMessages);
+    if (settings.includeCharacterCardsInPrompt) {
+      contextText = `${contextText}${buildCharacterCardsContext(context, activeCharacters)}`.trim();
+    }
 
     logDebug(settings, `Extraction started (${reason})`, {
       activeCharacters,
@@ -969,6 +973,7 @@ function openSettings(): void {
           maxDeltaPerTurn: currentSettings.maxDeltaPerTurn,
           maxTokensOverride: currentSettings.maxTokensOverride,
           truncationLengthOverride: currentSettings.truncationLengthOverride,
+          includeCharacterCardsInPrompt: currentSettings.includeCharacterCardsInPrompt,
           autoDetectActive: currentSettings.autoDetectActive,
           activityLookback: currentSettings.activityLookback,
           strictJsonRepair: currentSettings.strictJsonRepair,
@@ -1001,6 +1006,27 @@ function openSettings(): void {
 
 function closeSettings(): void {
   closeSettingsModal();
+}
+
+function buildCharacterCardsContext(context: STContext, activeCharacters: string[]): string {
+  if (!context.characters || !context.characters.length) return "";
+  const byName = new Map<string, Character>();
+  for (const character of context.characters) {
+    if (character?.name) byName.set(character.name, character);
+  }
+  const chunks: string[] = [];
+  for (const name of activeCharacters) {
+    const card = byName.get(name);
+    if (!card) continue;
+    const lines: string[] = [];
+    if (card.description) lines.push(`Description: ${card.description}`);
+    if (card.personality) lines.push(`Personality: ${card.personality}`);
+    if (card.scenario) lines.push(`Scenario: ${card.scenario}`);
+    if (!lines.length) continue;
+    chunks.push(`Character Card — ${name}\n${lines.join("\n")}`);
+  }
+  if (!chunks.length) return "";
+  return `\n\nCharacter cards (use only to disambiguate if recent messages are unclear):\n${chunks.join("\n\n")}`;
 }
 
 function toggle(): boolean {

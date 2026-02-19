@@ -33,6 +33,7 @@ Task:
 - Keep updates conservative and realistic.
 - It is valid to return 0 or negative deltas if the interaction is neutral or negative.
 - Do not reuse the same delta for all stats unless strongly justified by context.
+- Use recent messages first; use character cards only to disambiguate when context is unclear.
 
 Numeric stats to update ({{numericStats}}):
 - Return deltas only, each in range -{{maxDelta}}..{{maxDelta}}.
@@ -99,6 +100,7 @@ Task:
 - Keep updates conservative and realistic.
 - It is valid to return 0 or negative deltas if the interaction is neutral or negative.
 - Do not reuse the same delta for all characters unless strongly justified by context.
+- Use recent messages first; use character cards only to disambiguate when context is unclear.
 
 Return deltas only, each in range -{{maxDelta}}..{{maxDelta}}.
 
@@ -137,6 +139,7 @@ Task:
 - Determine each character's current mood toward the user.
 - Choose one mood label from: {{moodOptions}}.
 - Keep updates conservative and realistic.
+- Use recent messages first; use character cards only to disambiguate when context is unclear.
 
 Return STRICT JSON only:
 {
@@ -164,6 +167,7 @@ Recent tracker snapshots:
 Task:
 - Write a short internal thought (one sentence) each character has right now.
 - Keep it concise and grounded in the recent messages.
+- Use recent messages first; use character cards only to disambiguate when context is unclear.
 
 Return STRICT JSON only:
 {

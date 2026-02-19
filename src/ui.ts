@@ -1330,6 +1330,7 @@ export function openSettingsModal(input: {
         <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
         <label>Max Tokens Override <input data-k="maxTokensOverride" type="number" min="0" max="100000"></label>
         <label>Context Size Override <input data-k="truncationLengthOverride" type="number" min="0" max="200000"></label>
+        <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
         <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
       </div>
     </div>
@@ -1483,6 +1484,7 @@ export function openSettingsModal(input: {
   set("maxDeltaPerTurn", String(input.settings.maxDeltaPerTurn));
   set("maxTokensOverride", String(input.settings.maxTokensOverride));
   set("truncationLengthOverride", String(input.settings.truncationLengthOverride));
+  set("includeCharacterCardsInPrompt", String(input.settings.includeCharacterCardsInPrompt));
   set("confidenceDampening", String(input.settings.confidenceDampening));
   set("moodStickiness", String(input.settings.moodStickiness));
   set("injectTrackerIntoPrompt", String(input.settings.injectTrackerIntoPrompt));
@@ -1540,6 +1542,7 @@ export function openSettingsModal(input: {
       maxDeltaPerTurn: readNumber("maxDeltaPerTurn", input.settings.maxDeltaPerTurn, 1, 30),
       maxTokensOverride: readNumber("maxTokensOverride", input.settings.maxTokensOverride, 0, 100000),
       truncationLengthOverride: readNumber("truncationLengthOverride", input.settings.truncationLengthOverride, 0, 200000),
+      includeCharacterCardsInPrompt: readBool("includeCharacterCardsInPrompt"),
       confidenceDampening: readNumber("confidenceDampening", input.settings.confidenceDampening, 0, 1),
       moodStickiness: readNumber("moodStickiness", input.settings.moodStickiness, 0, 1),
       injectTrackerIntoPrompt: readBool("injectTrackerIntoPrompt"),
@@ -1635,6 +1638,7 @@ export function openSettingsModal(input: {
     maxDeltaPerTurn: "Hard cap for stat change magnitude in one tracker update before confidence scaling.",
     maxTokensOverride: "Override max tokens for extraction requests (0 = use profile/preset defaults).",
     truncationLengthOverride: "Override context truncation length for extraction requests (0 = use profile/preset defaults).",
+    includeCharacterCardsInPrompt: "Include character card description/personality/scenario if recent messages are unclear.",
     confidenceDampening: "How strongly model confidence scales stat deltas (0 = ignore confidence, 1 = full effect).",
     moodStickiness: "Higher values keep previous mood unless confidence is strong.",
     injectTrackerIntoPrompt: "Inject current relationship state into generation prompt for behavioral coherence.",
