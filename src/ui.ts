@@ -430,6 +430,28 @@ function ensureStyles(): void {
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(9, 12, 20, 0.45);
 }
+.bst-color-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.bst-color-inputs input[type="text"] { flex: 1 1 auto; }
+.bst-color-inputs input[type="color"] {
+  width: 36px;
+  height: 30px;
+  padding: 0;
+  border-radius: 6px;
+}
+.bst-quick-help {
+  background: linear-gradient(135deg, rgba(10, 18, 32, 0.75), rgba(8, 12, 22, 0.75));
+  border-color: rgba(56,189,248,0.25);
+  box-shadow: inset 0 0 0 1px rgba(56,189,248,0.12);
+}
+.bst-quick-help .bst-help-line,
+.bst-quick-help .bst-help-list {
+  opacity: 0.95;
+}
 .bst-section-head {
   display: flex;
   align-items: center;
@@ -662,6 +684,11 @@ function ensureStyles(): void {
 }
 .bst-btn .bst-btn-icon-left {
   margin-right: 6px;
+}
+.bst-open-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .bst-btn {
   border: 1px solid rgba(255,255,255,0.2);
@@ -1512,8 +1539,8 @@ export function openSettingsModal(input: {
       </div>
       <button class="bst-btn bst-close-btn" data-action="close" title="Close settings" aria-label="Close settings">&times;</button>
     </div>
-    <div class="bst-settings-section">
-      <h4>Quick Help</h4>
+    <div class="bst-settings-section bst-quick-help">
+      <h4><span class="bst-header-icon fa-solid fa-circle-info"></span>Quick Help</h4>
       <div class="bst-help-line"><strong>Extraction mode:</strong> Unified = faster single request. Sequential = one request per stat (more robust, slower).</div>
       <ul class="bst-help-list">
         <li><strong>Affection:</strong> emotional warmth and care</li>
@@ -1564,7 +1591,12 @@ export function openSettingsModal(input: {
       <h4><span class="bst-header-icon fa-solid fa-eye"></span>Display</h4>
       <div class="bst-settings-grid">
         <label data-bst-row="inactiveLabel">Inactive Label <input data-k="inactiveLabel" type="text"></label>
-        <label>Accent Color <input data-k="accentColor" type="text"></label>
+        <label>Accent Color
+          <div class="bst-color-inputs">
+            <input data-k="accentColor" type="text">
+            <input data-k-color="accentColor" type="color">
+          </div>
+        </label>
         <label>Card Opacity <input data-k="cardOpacity" type="number" min="0.1" max="1" step="0.01"></label>
         <label>Border Radius <input data-k="borderRadius" type="number" min="0" max="32"></label>
         <label>Font Size <input data-k="fontSize" type="number" min="10" max="22"></label>
@@ -1903,6 +1935,31 @@ export function openSettingsModal(input: {
     });
   };
   initPromptGroups();
+
+  const initAccentColorPicker = (): void => {
+    const textInput = modal.querySelector('[data-k="accentColor"]') as HTMLInputElement | null;
+    const colorInput = modal.querySelector('[data-k-color="accentColor"]') as HTMLInputElement | null;
+    if (!textInput || !colorInput) return;
+    const normalizeHex = (value: string): string | null => {
+      const v = value.trim();
+      if (!v.startsWith("#")) return null;
+      if (v.length === 7 || v.length === 4) return v;
+      return null;
+    };
+    const applyColor = (value: string): void => {
+      const normalized = normalizeHex(value);
+      if (normalized) colorInput.value = normalized.length === 4
+        ? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
+        : normalized;
+    };
+    applyColor(textInput.value);
+    textInput.addEventListener("input", () => applyColor(textInput.value));
+    colorInput.addEventListener("input", () => {
+      textInput.value = colorInput.value;
+      persistLive();
+    });
+  };
+  initAccentColorPicker();
 
   const set = (key: keyof BetterSimTrackerSettings, value: string): void => {
     const node = modal.querySelector(`[data-k="${key}"]`) as HTMLInputElement | HTMLSelectElement | null;

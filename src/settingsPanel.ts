@@ -44,7 +44,10 @@ export function upsertSettingsPanel(input: {
           <input id="bst-settings-enabled" type="checkbox" ${input.settings.enabled ? "checked" : ""}>
           <span>Enabled</span>
         </label>
-        <button id="bst-open-settings" class="menu_button">Open BetterSimTracker Settings</button>
+        <button id="bst-open-settings" class="menu_button bst-open-settings-btn">
+          <span class="fa-solid fa-gear" aria-hidden="true"></span>
+          Open Settings
+        </button>
       </div>
     </div>
   `;
