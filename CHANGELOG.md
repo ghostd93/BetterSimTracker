@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6] - 2026-02-19
+### Added
+- Fixed main prompt prefix applied to all extraction requests (hidden from settings).
+- Stat meaning definitions included in the main prompt.
+### Changed
+- Prompt editing now only affects instruction sections; protocol blocks are fixed and read-only.
+- Legacy full-template prompt settings are normalized to instruction-only on load.
+- Non-romantic desire rules enforced in the main prompt (no romance inference from affection/playfulness).
+
 ## [1.0.5.8] - 2026-02-19
 ### Changed
 - Main prompt now forbids inferring romance from affection or playfulness.
