@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.5.6] - 2026-02-19
+### Changed
+- Main prompt prefix wording updated to "relationship-state extraction engine."
+
 ## [1.0.5.5] - 2026-02-19
 ### Changed
 - Main prompt prefix now includes stat meaning definitions.

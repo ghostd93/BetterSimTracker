@@ -21,7 +21,7 @@ export const moodOptions = [
 ];
 
 export const MAIN_PROMPT = `SYSTEM:
-You are a structured extraction engine. Follow the task and protocol exactly.
+You are a relationship-state extraction engine. Follow the task and protocol exactly.
 Stat meanings:
 - affection: emotional warmth, fondness, care toward the user
 - trust: perceived safety/reliability; willingness to be vulnerable
