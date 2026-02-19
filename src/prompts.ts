@@ -34,6 +34,7 @@ Task:
 - It is valid to return 0 or negative deltas if the interaction is neutral or negative.
 - Do not reuse the same delta for all stats unless strongly justified by context.
 - Use recent messages first; use character cards only to disambiguate when context is unclear.
+- Only increase desire if the relationship is explicitly romantic/sexual in the recent messages. If the relationship is non-romantic, desire must be 0 or negative. Do not infer romance from affectionate or playful behavior alone.
 
 Numeric stats to update ({{numericStats}}):
 - Return deltas only, each in range -{{maxDelta}}..{{maxDelta}}.
@@ -123,10 +124,47 @@ Rules:
 - omit fields for stats that are not requested.
 - output JSON only, no commentary.`;
 
+const buildDesireSequentialTemplate = (): string => `{{envelope}}
+Current tracker state:
+{{currentLines}}
+
+Recent tracker snapshots:
+{{historyLines}}
+
+Task:
+- Propose incremental changes to DESIRE from the recent messages.
+- Only update desire deltas. Ignore other stats.
+- Keep updates conservative and realistic.
+- It is valid to return 0 or negative deltas if the interaction is neutral or negative.
+- Do not reuse the same delta for all characters unless strongly justified by context.
+- Use recent messages first; use character cards only to disambiguate when context is unclear.
+- Only increase desire if the relationship is explicitly romantic/sexual in the recent messages. If the relationship is non-romantic, desire must be 0 or negative. Do not infer romance from affectionate or playful behavior alone.
+
+Return deltas only, each in range -{{maxDelta}}..{{maxDelta}}.
+
+Return STRICT JSON only:
+{
+  "characters": [
+    {
+      "name": "Character Name",
+      "confidence": 0.0,
+      "delta": {
+        "desire": 0
+      }
+    }
+  ]
+}
+
+Rules:
+- confidence is 0..1 (0 low confidence, 1 high confidence).
+- include one entry for each character name exactly: {{characters}}.
+- omit fields for stats that are not requested.
+- output JSON only, no commentary.`;
+
 export const DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES: Record<StatKey, string> = {
   affection: buildNumericSequentialTemplate("AFFECTION", "affection"),
   trust: buildNumericSequentialTemplate("TRUST", "trust"),
-  desire: buildNumericSequentialTemplate("DESIRE", "desire"),
+  desire: buildDesireSequentialTemplate(),
   connection: buildNumericSequentialTemplate("CONNECTION", "connection"),
   mood: `{{envelope}}
 Current tracker state:
