@@ -20,6 +20,10 @@ export const moodOptions = [
   "Neutral"
 ];
 
+export const MAIN_PROMPT = `SYSTEM:
+You are a structured extraction engine. Follow the task and protocol exactly.
+Do not add commentary or roleplay.`;
+
 export const DEFAULT_UNIFIED_PROMPT_INSTRUCTION = [
   "- Propose incremental changes to tracker state from the recent messages.",
   "- Do NOT rewrite absolute values; provide per-stat deltas.",
@@ -271,6 +275,8 @@ export function buildUnifiedPrompt(
   const safeMaxDelta = Math.max(1, Math.round(Number(maxDeltaPerTurn) || 15));
   const instruction = template?.trim() ? template : DEFAULT_UNIFIED_PROMPT_INSTRUCTION;
   const assembled = [
+    MAIN_PROMPT,
+    "",
     "{{envelope}}",
     "Current tracker state:",
     "{{currentLines}}",
@@ -346,6 +352,8 @@ export function buildSequentialPrompt(
       ? LAST_THOUGHT_PROMPT_PROTOCOL
       : NUMERIC_PROMPT_PROTOCOL(stat);
   const assembled = [
+    MAIN_PROMPT,
+    "",
     "{{envelope}}",
     "Current tracker state:",
     "{{currentLines}}",
