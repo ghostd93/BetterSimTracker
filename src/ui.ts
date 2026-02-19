@@ -1583,42 +1583,48 @@ export function openGraphModal(input: {
       pad + (pointCount === 1 ? drawableW / 2 : (drawableW * idx) / (pointCount - 1));
     const yFor = (value: number): number => pad + ((100 - value) / 100) * drawableH;
     const clampIndex = (idx: number): number => Math.max(0, Math.min(pointCount - 1, idx));
-    const updateHover = (clientX: number, clientY: number): void => {
-      const rect = svg.getBoundingClientRect();
-      const relX = clientX - rect.left;
-      const idx = clampIndex(Math.round(((relX - pad) / drawableW) * (pointCount - 1)));
-      const cx = xFor(idx);
-      const ay = yFor(points.affection[idx] ?? 0);
-      const ty = yFor(points.trust[idx] ?? 0);
-      const dy = yFor(points.desire[idx] ?? 0);
-      const cy = yFor(points.connection[idx] ?? 0);
+      const updateHover = (clientX: number, clientY: number): void => {
+        const rect = svg.getBoundingClientRect();
+        const relX = clientX - rect.left;
+        const relY = clientY - rect.top;
+        const idx = clampIndex(Math.round(((relX - pad) / drawableW) * (pointCount - 1)));
+        const cx = xFor(idx);
+        const ay = yFor(points.affection[idx] ?? 0);
+        const ty = yFor(points.trust[idx] ?? 0);
+        const dy = yFor(points.desire[idx] ?? 0);
+        const cy = yFor(points.connection[idx] ?? 0);
 
-      hoverGroup.setAttribute("opacity", "1");
-      hoverLine.setAttribute("x1", String(cx));
-      hoverLine.setAttribute("x2", String(cx));
-      hoverDots.affection?.setAttribute("cx", String(cx));
-      hoverDots.affection?.setAttribute("cy", String(ay));
-      hoverDots.trust?.setAttribute("cx", String(cx));
-      hoverDots.trust?.setAttribute("cy", String(ty));
-      hoverDots.desire?.setAttribute("cx", String(cx));
-      hoverDots.desire?.setAttribute("cy", String(dy));
-      hoverDots.connection?.setAttribute("cx", String(cx));
-      hoverDots.connection?.setAttribute("cy", String(cy));
+        hoverGroup.setAttribute("opacity", "1");
+        hoverLine.setAttribute("x1", String(cx));
+        hoverLine.setAttribute("x2", String(cx));
+        hoverDots.affection?.setAttribute("cx", String(cx));
+        hoverDots.affection?.setAttribute("cy", String(ay));
+        hoverDots.trust?.setAttribute("cx", String(cx));
+        hoverDots.trust?.setAttribute("cy", String(ty));
+        hoverDots.desire?.setAttribute("cx", String(cx));
+        hoverDots.desire?.setAttribute("cy", String(dy));
+        hoverDots.connection?.setAttribute("cx", String(cx));
+        hoverDots.connection?.setAttribute("cy", String(cy));
 
-      tooltip.classList.add("visible");
-      tooltip.innerHTML = `
-        <div><strong>Index:</strong> ${idx + 1}/${pointCount}</div>
-        <div>Affection: ${Math.round(points.affection[idx] ?? 0)}</div>
-        <div>Trust: ${Math.round(points.trust[idx] ?? 0)}</div>
-        <div>Desire: ${Math.round(points.desire[idx] ?? 0)}</div>
-        <div>Connection: ${Math.round(points.connection[idx] ?? 0)}</div>
-      `;
-      const canvasRect = (modal.querySelector(".bst-graph-canvas") as HTMLElement).getBoundingClientRect();
-      const left = Math.min(canvasRect.width - 140, Math.max(8, cx + 10));
-      const top = Math.min(canvasRect.height - 60, Math.max(8, clientY - canvasRect.top - 28));
-      tooltip.style.left = `${left}px`;
-      tooltip.style.top = `${top}px`;
-    };
+        tooltip.classList.add("visible");
+        tooltip.innerHTML = `
+          <div><strong>Index:</strong> ${idx + 1}/${pointCount}</div>
+          <div>Affection: ${Math.round(points.affection[idx] ?? 0)}</div>
+          <div>Trust: ${Math.round(points.trust[idx] ?? 0)}</div>
+          <div>Desire: ${Math.round(points.desire[idx] ?? 0)}</div>
+          <div>Connection: ${Math.round(points.connection[idx] ?? 0)}</div>
+        `;
+        const canvas = modal.querySelector(".bst-graph-canvas") as HTMLElement;
+        const canvasRect = canvas.getBoundingClientRect();
+        const localX = clientX - canvasRect.left;
+        const localY = clientY - canvasRect.top;
+        const tooltipWidth = tooltip.offsetWidth || 140;
+        const tooltipHeight = tooltip.offsetHeight || 60;
+        const left = Math.min(canvasRect.width - tooltipWidth - 8, Math.max(8, localX + 12));
+        const top = Math.min(canvasRect.height - tooltipHeight - 8, Math.max(8, localY + 12));
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      };
     svg.addEventListener("mousemove", event => updateHover(event.clientX, event.clientY));
     svg.addEventListener("mouseleave", () => {
       hoverGroup.setAttribute("opacity", "0");
