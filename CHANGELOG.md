@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.8] - 2026-02-19
+### Changed
+- Default open drawers: Extraction and Display.
+- Lighter header styling and label focus highlight.
+- Renamed section to Connection & Generation.
+- Prompt groups collapsible and default collapsed.
+- Clamp notice shows on blur only.
+
 ## [1.0.6.7] - 2026-02-19
 ### Changed
 - Added blue accent bar on drawer headers.
