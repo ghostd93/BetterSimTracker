@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.1] - 2026-02-19
+### Changed
+- Settings sections (except Quick Help) are collapsible and default to collapsed.
+
 ## [1.0.6] - 2026-02-19
 ### Added
 - Fixed main prompt prefix applied to all extraction requests (hidden from settings).

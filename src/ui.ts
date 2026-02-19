@@ -420,6 +420,12 @@ function ensureStyles(): void {
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(9, 12, 20, 0.45);
 }
+.bst-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
 .bst-settings-section h4 {
   margin: 0 0 10px 0;
   font-size: 13px;
@@ -427,6 +433,30 @@ function ensureStyles(): void {
   letter-spacing: 0.4px;
   text-transform: uppercase;
   opacity: 0.9;
+}
+.bst-section-toggle {
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  background: rgba(14,18,28,0.8);
+  color: #fff;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.bst-section-toggle:hover {
+  border-color: rgba(255,255,255,0.4);
+  background: rgba(20,26,38,0.9);
+}
+.bst-section-icon {
+  display: inline-block;
+  transition: transform .16s ease;
+}
+.bst-section-collapsed .bst-section-icon {
+  transform: rotate(-90deg);
+}
+.bst-section-collapsed .bst-section-body {
+  display: none;
 }
 .bst-help-list {
   margin: 0;
@@ -1518,6 +1548,68 @@ export function openSettingsModal(input: {
     </div>
   `;
   document.body.appendChild(modal);
+
+  const initSectionDrawers = (): void => {
+    const sectionIds: Record<string, string> = {
+      "Connection": "connection",
+      "Generation": "generation",
+      "Extraction": "extraction",
+      "Tracked Stats": "tracked-stats",
+      "Display": "display",
+      "Prompts": "prompts",
+      "Debug": "debug"
+    };
+    const sections = Array.from(modal.querySelectorAll(".bst-settings-section")) as HTMLElement[];
+    sections.forEach((section, index) => {
+      if (index === 0) return;
+      const header = section.querySelector("h4") as HTMLHeadingElement | null;
+      if (!header) return;
+      const label = header.textContent?.trim() ?? "";
+      const id = sectionIds[label] ?? label.toLowerCase().replace(/\s+/g, "-");
+      section.dataset.bstSection = id;
+      const head = document.createElement("div");
+      head.className = "bst-section-head";
+      const toggle = document.createElement("button");
+      toggle.className = "bst-section-toggle";
+      toggle.setAttribute("data-action", "toggle-section");
+      toggle.setAttribute("data-section", id);
+      toggle.setAttribute("aria-expanded", "true");
+      toggle.setAttribute("title", "Toggle section");
+      const icon = document.createElement("span");
+      icon.className = "bst-section-icon";
+      icon.textContent = "v";
+      toggle.appendChild(icon);
+      head.appendChild(header);
+      head.appendChild(toggle);
+      section.insertBefore(head, section.firstChild);
+
+      const body = document.createElement("div");
+      body.className = "bst-section-body";
+      body.dataset.bstSectionBody = id;
+      while (section.childNodes.length > 1) {
+        body.appendChild(section.childNodes[1]);
+      }
+      section.appendChild(body);
+
+      const storageKey = `bst.section.${id}`;
+      const stored = localStorage.getItem(storageKey);
+      const collapsed = stored ? stored === "collapsed" : true;
+      if (collapsed) {
+        section.classList.add("bst-section-collapsed");
+        toggle.setAttribute("aria-expanded", "false");
+      }
+
+      toggle.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        const nextCollapsed = !section.classList.contains("bst-section-collapsed");
+        section.classList.toggle("bst-section-collapsed", nextCollapsed);
+        toggle.setAttribute("aria-expanded", nextCollapsed ? "false" : "true");
+        localStorage.setItem(storageKey, nextCollapsed ? "collapsed" : "expanded");
+      });
+    });
+  };
+  initSectionDrawers();
 
   const set = (key: keyof BetterSimTrackerSettings, value: string): void => {
     const node = modal.querySelector(`[data-k="${key}"]`) as HTMLInputElement | HTMLSelectElement | null;
