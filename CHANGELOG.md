@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.7] - 2026-02-19
+### Changed
+- Added blue accent bar on drawer headers.
+
 ## [1.0.6.6] - 2026-02-19
 ### Changed
 - Replaced drawer angle with centered SVG chevron and larger icon container.
