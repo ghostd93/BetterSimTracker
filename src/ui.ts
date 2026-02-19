@@ -548,6 +548,14 @@ function ensureStyles(): void {
   font-size: 12px;
   opacity: 0.9;
 }
+.bst-help-details {
+  margin: 6px 0 10px;
+}
+.bst-help-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.85;
+}
 .bst-prompts-stack {
   margin-top: 8px;
 }
@@ -603,15 +611,17 @@ function ensureStyles(): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.2);
-  background: rgba(8,12,18,0.75);
-  font-size: 12px;
+  width: 24px;
+  height: 24px;
+  font-size: 18px;
   line-height: 1;
   margin-left: auto;
-  transition: transform .16s ease, border-color .16s ease;
+  color: rgba(243,245,249,0.9);
+  transition: transform .16s ease, color .16s ease;
+  transform: rotate(0deg);
+}
+.bst-prompt-head:hover .bst-prompt-toggle {
+  color: #ffffff;
 }
 .bst-prompt-group.collapsed .bst-prompt-toggle {
   transform: rotate(-90deg);
@@ -624,10 +634,15 @@ function ensureStyles(): void {
   border-radius: 8px;
   background: rgba(14,18,28,0.8);
   color: #fff;
-  padding: 4px 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   font-size: 12px;
   cursor: pointer;
   transition: border-color .16s ease, background-color .16s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .bst-prompt-reset:hover {
   border-color: rgba(255,255,255,0.45);
@@ -1499,7 +1514,9 @@ export function openSettingsModal(input: {
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-plug"></span>Connection &amp; Generation</h4>
       <div class="bst-settings-grid">
+        <div class="bst-section-divider">Connection</div>
         <label>Connection Profile <select data-k="connectionProfile">${profileOptionsHtml}</select></label>
+        <div class="bst-section-divider">Generation</div>
       </div>
     </div>
     <div class="bst-settings-section">
@@ -1555,28 +1572,31 @@ export function openSettingsModal(input: {
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-pen-to-square"></span>Prompts</h4>
-      <div class="bst-help-line">Unified prompt is used for one-prompt extraction. Sequential mode uses per-stat prompts.</div>
-      <div class="bst-help-line">Only the instruction section is editable; protocol blocks are fixed for safety and consistency.</div>
-      <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
-      <div class="bst-help-line">Placeholders you can use:</div>
-      <ul class="bst-help-list">
-        <li><code>{{envelope}}</code> — prebuilt header with user/characters + recent messages</li>
-        <li><code>{{userName}}</code> — current user name</li>
-        <li><code>{{characters}}</code> — comma-separated character names</li>
-        <li><code>{{contextText}}</code> — raw recent messages text</li>
-        <li><code>{{currentLines}}</code> — current tracker state lines</li>
-        <li><code>{{historyLines}}</code> — recent tracker snapshot lines</li>
-        <li><code>{{numericStats}}</code> — requested numeric stats list</li>
-        <li><code>{{textStats}}</code> — requested text stats list</li>
-        <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
-        <li><code>{{moodOptions}}</code> — allowed mood labels</li>
-      </ul>
+            <details class="bst-help-details">
+        <summary>Prompt help</summary>
+        <div class="bst-help-line">Unified prompt is used for one-prompt extraction. Sequential mode uses per-stat prompts.</div>
+        <div class="bst-help-line">Only the instruction section is editable; protocol blocks are fixed for safety and consistency.</div>
+        <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
+        <div class="bst-help-line">Placeholders you can use:</div>
+        <ul class="bst-help-list">
+          <li><code>{{envelope}}</code> — prebuilt header with user/characters + recent messages</li>
+          <li><code>{{userName}}</code> — current user name</li>
+          <li><code>{{characters}}</code> — comma-separated character names</li>
+          <li><code>{{contextText}}</code> — raw recent messages text</li>
+          <li><code>{{currentLines}}</code> — current tracker state lines</li>
+          <li><code>{{historyLines}}</code> — recent tracker snapshot lines</li>
+          <li><code>{{numericStats}}</code> — requested numeric stats list</li>
+          <li><code>{{textStats}}</code> — requested text stats list</li>
+          <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
+          <li><code>{{moodOptions}}</code> — allowed mood labels</li>
+        </ul>
+      </details>
       <div class="bst-settings-grid bst-settings-grid-single bst-prompts-stack">
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-layer-group"></span>Unified Prompt</span>
-            <span class="bst-prompt-toggle">›</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateUnified" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateUnified" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
@@ -1588,8 +1608,8 @@ export function openSettingsModal(input: {
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-heart"></span>Seq: Affection</span>
-            <span class="bst-prompt-toggle">›</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialAffection" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialAffection" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
@@ -1601,8 +1621,8 @@ export function openSettingsModal(input: {
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-shield-heart"></span>Seq: Trust</span>
-            <span class="bst-prompt-toggle">›</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialTrust" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialTrust" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
@@ -1614,8 +1634,8 @@ export function openSettingsModal(input: {
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-fire"></span>Seq: Desire</span>
-            <span class="bst-prompt-toggle">›</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialDesire" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialDesire" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
@@ -1627,8 +1647,8 @@ export function openSettingsModal(input: {
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-link"></span>Seq: Connection</span>
-            <span class="bst-prompt-toggle">›</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialConnection" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialConnection" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
@@ -1640,8 +1660,8 @@ export function openSettingsModal(input: {
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-face-smile"></span>Seq: Mood</span>
-            <span class="bst-prompt-toggle">›</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialMood" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialMood" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
@@ -1653,8 +1673,8 @@ export function openSettingsModal(input: {
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-brain"></span>Seq: LastThought</span>
-            <span class="bst-prompt-toggle">›</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialLastThought" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialLastThought" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
@@ -2146,3 +2166,4 @@ export function closeSettingsModal(): void {
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
 }
+

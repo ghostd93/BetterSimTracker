@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.10] - 2026-02-19
+### Changed
+- Unified prompt subdrawer toggles and reset icons to Font Awesome.
+- Collapsed prompt help into a details block.
+- Added Connection divider to match Generation divider.
+- Aligned prompt toggle and reset sizing.
+
 ## [1.0.6.9] - 2026-02-19
 ### Changed
 - Added Font Awesome icons to settings section headers, prompt groups, and debug actions.
