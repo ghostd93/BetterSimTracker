@@ -517,11 +517,23 @@ function ensureStyles(): void {
   margin-top: 10px;
 }
 .bst-section-divider {
-  margin: 8px 0 6px;
+  position: relative;
+  margin: 10px 0 8px;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-  opacity: 0.7;
+  letter-spacing: 0.35px;
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+.bst-section-divider::before,
+.bst-section-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.2), rgba(255,255,255,0.06));
 }
 .bst-minmax {
   display: inline-block;
