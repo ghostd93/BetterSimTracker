@@ -102,7 +102,7 @@ export async function extractStatisticsParallel(input: {
   contextText: string;
   previousStatistics: Statistics | null;
   history: TrackerData[];
-  onProgress?: (done: number, total: number) => void;
+  onProgress?: (done: number, total: number, label?: string) => void;
 }): Promise<{ statistics: Statistics; debug: DeltaDebugRecord | null }> {
   const { settings, userName, activeCharacters, contextText, previousStatistics, history, onProgress } = input;
   const stats = enabledStats(settings);
@@ -112,7 +112,7 @@ export async function extractStatisticsParallel(input: {
   if (!stats.length || !activeCharacters.length) return { statistics: output, debug: debugRecord };
 
   const total = 3;
-  onProgress?.(0, settings.sequentialExtraction ? Math.max(1, stats.length * 3) : total);
+  onProgress?.(0, settings.sequentialExtraction ? Math.max(1, stats.length * 3) : total, "Preparing context");
 
   try {
     const applyDelta = (prev: number, delta: number, confidence: number): number => {
@@ -214,9 +214,9 @@ export async function extractStatisticsParallel(input: {
     const requestMetas: Array<GenerateRequestMeta & { statList: StatKey[]; attempt: number; retryType: string }> = [];
     let progressDone = 0;
     const progressTotal = settings.sequentialExtraction ? Math.max(1, stats.length * 3) : total;
-    const tickProgress = (): void => {
+    const tickProgress = (label?: string): void => {
       progressDone = Math.min(progressTotal, progressDone + 1);
-      onProgress?.(progressDone, progressTotal);
+      onProgress?.(progressDone, progressTotal, label);
     };
 
     const getSequentialTemplate = (stat: StatKey): string => {
@@ -229,6 +229,7 @@ export async function extractStatisticsParallel(input: {
     };
 
     const runOneStat = async (statList: StatKey[]): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
+      const statLabel = statList.length === 1 ? statList[0] : "stats";
       const prompt = settings.sequentialExtraction && statList.length === 1
         ? buildSequentialPrompt(
             statList[0],
@@ -250,13 +251,13 @@ export async function extractStatisticsParallel(input: {
             settings.maxDeltaPerTurn,
             settings.promptTemplateUnified,
           );
-      tickProgress();
+      tickProgress(`Requesting ${statLabel}`);
       attempts += 1;
       requestSeq += 1;
       let rawResponse = await generateJson(prompt, settings);
       requestMetas.push({ ...rawResponse.meta, statList, attempt: requestSeq, retryType: "initial" });
       let raw = rawResponse.text;
-      tickProgress();
+      tickProgress(`Parsing ${statLabel}`);
       let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList, settings.maxDeltaPerTurn);
       const firstHasValues = hasParsedValues(parsedOne);
       firstParseHadValues = firstParseHadValues && firstHasValues;
@@ -309,7 +310,7 @@ export async function extractStatisticsParallel(input: {
           break;
         }
       }
-      tickProgress();
+      tickProgress(`Applying ${statLabel}`);
       return { prompt, raw, parsedOne };
     };
 
@@ -382,7 +383,7 @@ export async function extractStatisticsParallel(input: {
     console.error("[BetterSimTracker] Unified extraction failed:", error);
   } finally {
     const done = settings.sequentialExtraction ? Math.max(1, stats.length * 3) : 3;
-    onProgress?.(done, done);
+    onProgress?.(done, done, "Finalizing");
   }
 
   if (!settings.trackMood) {
