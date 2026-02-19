@@ -406,6 +406,16 @@ function ensureStyles(): void {
   border-radius: 8px;
   padding: 7px;
 }
+.bst-settings input:focus-visible,
+.bst-settings select:focus-visible,
+.bst-settings textarea:focus-visible {
+  outline: none;
+  border-color: rgba(56,189,248,0.9) !important;
+  box-shadow: 0 0 0 2px rgba(56,189,248,0.25);
+}
+.bst-settings label:focus-within {
+  color: #e6f6ff;
+}
 .bst-settings textarea {
   resize: vertical;
   min-height: 120px;
@@ -429,9 +439,8 @@ function ensureStyles(): void {
   user-select: none;
   padding: 8px 12px;
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(18, 24, 36, 0.75), rgba(10, 14, 22, 0.75));
-  border: 1px solid rgba(255,255,255,0.10);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+  background: linear-gradient(135deg, rgba(18, 24, 36, 0.6), rgba(10, 14, 22, 0.6));
+  border: 1px solid rgba(255,255,255,0.08);
   position: relative;
   padding-left: 16px;
 }
@@ -443,12 +452,12 @@ function ensureStyles(): void {
   bottom: 8px;
   width: 3px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(56,189,248,0.95), rgba(14,116,144,0.9));
-  box-shadow: 0 0 10px rgba(56,189,248,0.35);
+  background: linear-gradient(180deg, rgba(56,189,248,0.85), rgba(14,116,144,0.8));
+  box-shadow: 0 0 8px rgba(56,189,248,0.25);
 }
 .bst-section-head:hover {
-  background: linear-gradient(135deg, rgba(24, 32, 48, 0.85), rgba(12, 18, 28, 0.85));
-  border-color: rgba(255,255,255,0.2);
+  background: linear-gradient(135deg, rgba(22, 30, 44, 0.75), rgba(12, 18, 28, 0.75));
+  border-color: rgba(255,255,255,0.16);
 }
 .bst-section-head:focus-visible {
   outline: 2px solid rgba(125, 211, 252, 0.6);
@@ -571,10 +580,38 @@ function ensureStyles(): void {
   justify-content: space-between;
   gap: 8px;
   font-size: 12px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(12,16,26,0.45);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.bst-prompt-body {
+  margin-top: 6px;
 }
 .bst-prompt-title {
   font-weight: 600;
   letter-spacing: 0.2px;
+}
+.bst-prompt-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(8,12,18,0.75);
+  font-size: 12px;
+  line-height: 1;
+  margin-left: auto;
+  transition: transform .16s ease, border-color .16s ease;
+}
+.bst-prompt-group.collapsed .bst-prompt-toggle {
+  transform: rotate(-90deg);
+}
+.bst-prompt-group.collapsed .bst-prompt-body {
+  display: none;
 }
 .bst-prompt-reset {
   border: 1px solid rgba(255,255,255,0.25);
@@ -1451,7 +1488,7 @@ export function openSettingsModal(input: {
       <div class="bst-help-line"><strong>Mood</strong> is short-term tone. <strong>Last Thought</strong> is one brief internal line for continuity.</div>
     </div>
     <div class="bst-settings-section">
-      <h4>Connection</h4>
+      <h4>Connection &amp; Generation</h4>
       <div class="bst-settings-grid">
         <label>Connection Profile <select data-k="connectionProfile">${profileOptionsHtml}</select></label>
       </div>
@@ -1467,8 +1504,6 @@ export function openSettingsModal(input: {
       <h4>Extraction</h4>
       <div class="bst-settings-grid">
         <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
-        <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
-        <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
         <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
         <label data-bst-row="maxConcurrentCalls">Max Concurrent Requests <input data-k="maxConcurrentCalls" type="number" min="1" max="8"></label>
         <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
@@ -1476,8 +1511,13 @@ export function openSettingsModal(input: {
         <label>Max Delta Per Turn <input data-k="maxDeltaPerTurn" type="number" min="1" max="30"></label>
         <label>Confidence Dampening <input data-k="confidenceDampening" type="number" min="0" max="1" step="0.05"></label>
         <label>Mood Stickiness <input data-k="moodStickiness" type="number" min="0" max="1" step="0.05"></label>
-        <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
         <label data-bst-row="activityLookback">Activity Lookback <input data-k="activityLookback" type="number" min="1" max="25"></label>
+        <div class="bst-section-divider">Toggles</div>
+        <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
+        <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
+        <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
+        <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
+        <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
       </div>
     </div>
     <div class="bst-settings-section">
@@ -1499,6 +1539,7 @@ export function openSettingsModal(input: {
         <label>Card Opacity <input data-k="cardOpacity" type="number" min="0.1" max="1" step="0.01"></label>
         <label>Border Radius <input data-k="borderRadius" type="number" min="0" max="32"></label>
         <label>Font Size <input data-k="fontSize" type="number" min="10" max="22"></label>
+        <div class="bst-section-divider">Toggles</div>
         <label class="bst-check"><input data-k="showInactive" type="checkbox">Show Inactive</label>
         <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
       </div>
@@ -1525,72 +1566,93 @@ export function openSettingsModal(input: {
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Unified Prompt</span>
+            <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateUnified" title="Reset to default.">⟲</button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateUnified" rows="8"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(UNIFIED_PROMPT_PROTOCOL)}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateUnified" rows="8"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(UNIFIED_PROMPT_PROTOCOL)}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Affection</span>
+            <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialAffection" title="Reset to default.">⟲</button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("affection"))}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("affection"))}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Trust</span>
+            <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialTrust" title="Reset to default.">⟲</button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("trust"))}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("trust"))}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Desire</span>
+            <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialDesire" title="Reset to default.">⟲</button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("desire"))}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("desire"))}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Connection</span>
+            <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialConnection" title="Reset to default.">⟲</button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("connection"))}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("connection"))}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Mood</span>
+            <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialMood" title="Reset to default.">⟲</button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialMood" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(MOOD_PROMPT_PROTOCOL)}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialMood" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(MOOD_PROMPT_PROTOCOL)}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: LastThought</span>
+            <span class="bst-prompt-toggle">›</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialLastThought" title="Reset to default.">⟲</button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialLastThought" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(LAST_THOUGHT_PROMPT_PROTOCOL)}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialLastThought" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(LAST_THOUGHT_PROMPT_PROTOCOL)}</pre>
+          </div>
         </label>
       </div>
     </div>
@@ -1621,7 +1683,7 @@ export function openSettingsModal(input: {
 
   const mergeConnectionAndGeneration = (): void => {
     const sections = Array.from(modal.querySelectorAll(".bst-settings-section")) as HTMLElement[];
-    const connectionSection = sections.find(section => section.querySelector("h4")?.textContent?.trim() === "Connection");
+    const connectionSection = sections.find(section => section.querySelector("h4")?.textContent?.trim() === "Connection & Generation");
     const generationSection = sections.find(section => section.querySelector("h4")?.textContent?.trim() === "Generation");
     if (!connectionSection || !generationSection) return;
     const generationGrid = generationSection.querySelector(".bst-settings-grid");
@@ -1674,6 +1736,7 @@ export function openSettingsModal(input: {
         label.appendChild(notice);
       }
       let clearTimer: number | null = null;
+      let clampedThisFocus = false;
       const clamp = (): void => {
         if (input.value.trim() === "") return;
         const raw = Number(input.value);
@@ -1683,27 +1746,35 @@ export function openSettingsModal(input: {
         if (typeof max === "number") next = Math.min(max, next);
         if (next !== raw) {
           input.value = String(next);
-          const parts: string[] = [];
-          if (typeof min === "number") parts.push(`min ${min}`);
-          if (typeof max === "number") parts.push(`max ${max}`);
-          notice.textContent = `Allowed range: ${parts.join(" · ")}. Value adjusted.`;
-          notice.style.display = "block";
-          if (clearTimer !== null) window.clearTimeout(clearTimer);
-          clearTimer = window.setTimeout(() => {
-            notice.textContent = "";
-            notice.style.display = "none";
-          }, 2500);
+          clampedThisFocus = true;
         }
       };
       input.addEventListener("input", clamp);
-      input.addEventListener("blur", clamp);
+      input.addEventListener("blur", () => {
+        clamp();
+        if (!clampedThisFocus) return;
+        const parts: string[] = [];
+        if (typeof min === "number") parts.push(`min ${min}`);
+        if (typeof max === "number") parts.push(`max ${max}`);
+        notice.textContent = `Allowed range: ${parts.join(" · ")}. Value adjusted.`;
+        notice.style.display = "block";
+        if (clearTimer !== null) window.clearTimeout(clearTimer);
+        clearTimer = window.setTimeout(() => {
+          notice.textContent = "";
+          notice.style.display = "none";
+        }, 1800);
+        clampedThisFocus = false;
+      });
+      input.addEventListener("focus", () => {
+        clampedThisFocus = false;
+      });
     });
   };
   enforceNumberBounds();
 
   const initSectionDrawers = (): void => {
     const sectionIds: Record<string, string> = {
-      "Connection": "connection",
+      "Connection & Generation": "connection",
       "Extraction": "extraction",
       "Tracked Stats": "tracked-stats",
       "Display": "display",
@@ -1743,7 +1814,8 @@ export function openSettingsModal(input: {
 
       const storageKey = `bst.section.${id}`;
       const stored = localStorage.getItem(storageKey);
-      const collapsed = stored ? stored === "collapsed" : true;
+      const defaultOpen = id === "extraction" || id === "display";
+      const collapsed = stored ? stored === "collapsed" : !defaultOpen;
       if (collapsed) {
         section.classList.add("bst-section-collapsed");
         head.setAttribute("aria-expanded", "false");
@@ -1765,6 +1837,30 @@ export function openSettingsModal(input: {
     });
   };
   initSectionDrawers();
+
+  const initPromptGroups = (): void => {
+    const groups = Array.from(modal.querySelectorAll(".bst-prompt-group")) as HTMLElement[];
+    groups.forEach(group => {
+      const head = group.querySelector(".bst-prompt-head") as HTMLElement | null;
+      if (!head) return;
+      group.classList.add("collapsed");
+      head.setAttribute("role", "button");
+      head.setAttribute("tabindex", "0");
+      const toggle = (event: Event): void => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest(".bst-prompt-reset")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        group.classList.toggle("collapsed");
+      };
+      head.addEventListener("click", toggle);
+      head.addEventListener("keydown", event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        toggle(event);
+      });
+    });
+  };
+  initPromptGroups();
 
   const set = (key: keyof BetterSimTrackerSettings, value: string): void => {
     const node = modal.querySelector(`[data-k="${key}"]`) as HTMLInputElement | HTMLSelectElement | null;
