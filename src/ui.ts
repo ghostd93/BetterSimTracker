@@ -432,6 +432,19 @@ function ensureStyles(): void {
   background: linear-gradient(135deg, rgba(18, 24, 36, 0.75), rgba(10, 14, 22, 0.75));
   border: 1px solid rgba(255,255,255,0.10);
   box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+  position: relative;
+  padding-left: 16px;
+}
+.bst-section-head::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(56,189,248,0.95), rgba(14,116,144,0.9));
+  box-shadow: 0 0 10px rgba(56,189,248,0.35);
 }
 .bst-section-head:hover {
   background: linear-gradient(135deg, rgba(24, 32, 48, 0.85), rgba(12, 18, 28, 0.85));
