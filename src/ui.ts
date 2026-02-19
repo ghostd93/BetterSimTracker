@@ -1354,7 +1354,22 @@ export function openSettingsModal(input: {
     <div class="bst-settings-section">
       <h4>Prompts</h4>
       <div class="bst-help-line">Unified prompt is used for one-prompt extraction. Sequential mode uses per-stat prompts.</div>
-      <div class="bst-help-line">Placeholders: <code>{{envelope}}</code> <code>{{userName}}</code> <code>{{characters}}</code> <code>{{contextText}}</code> <code>{{currentLines}}</code> <code>{{historyLines}}</code> <code>{{numericStats}}</code> <code>{{textStats}}</code> <code>{{maxDelta}}</code> <code>{{moodOptions}}</code> <code>{{stat}}</code> <code>{{statUpper}}</code> <code>{{basePrompt}}</code></div>
+      <div class="bst-help-line">Placeholders you can use:</div>
+      <ul class="bst-help-list">
+        <li><code>{{envelope}}</code> — user/characters header + recent messages</li>
+        <li><code>{{userName}}</code> — current user name</li>
+        <li><code>{{characters}}</code> — comma-separated character names</li>
+        <li><code>{{contextText}}</code> — raw recent messages text</li>
+        <li><code>{{currentLines}}</code> — current tracker state lines</li>
+        <li><code>{{historyLines}}</code> — recent tracker snapshot lines</li>
+        <li><code>{{numericStats}}</code> — requested numeric stats list</li>
+        <li><code>{{textStats}}</code> — requested text stats list</li>
+        <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
+        <li><code>{{moodOptions}}</code> — allowed mood labels</li>
+        <li><code>{{stat}}</code> — current stat (sequential only)</li>
+        <li><code>{{statUpper}}</code> — current stat uppercased (sequential only)</li>
+        <li><code>{{basePrompt}}</code> — original prompt inside repair/strict templates</li>
+      </ul>
       <div class="bst-settings-grid">
         <label>Unified Prompt <textarea data-k="promptTemplateUnified" rows="10"></textarea></label>
         <label>Strict Retry Prompt <textarea data-k="promptTemplateStrictRetry" rows="6"></textarea></label>
