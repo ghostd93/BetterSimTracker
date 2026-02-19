@@ -24,6 +24,7 @@ export interface BetterSimTrackerSettings {
   maxDeltaPerTurn: number;
   maxTokensOverride: number;
   truncationLengthOverride: number;
+  includeCharacterCardsInPrompt: boolean;
   confidenceDampening: number;
   moodStickiness: number;
   strictJsonRepair: boolean;

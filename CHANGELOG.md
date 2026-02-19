@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.5.1] - 2026-02-19
+### Added
+- Optional inclusion of character card details in extraction prompts for disambiguation.
+
 ## [1.0.5] - 2026-02-19
 ### Added
 - Editable per-stat prompt templates with per-prompt reset buttons.
