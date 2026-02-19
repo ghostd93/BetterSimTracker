@@ -16,6 +16,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
   - raw/smoothed view
   - multi-stat lines (Affection/Trust/Desire/Connection)
 - Prompt injection (optional) for behavior consistency
+- Prompt templates (unified + per-stat) with per-prompt reset
 - Strong diagnostics/debug dump for bug reports
 - Mobile-friendly settings and graph modals
 
@@ -144,6 +145,7 @@ Numeric scaling formula used by runtime:
 - `Strict JSON Repair`: retries if model output is invalid
 - `Auto Detect Active`: scene-based active character detection
 - `Inject Tracker Into Prompt`: uses current relationship state as hidden guidance
+- `Prompt Templates`: edit unified + per-stat sequential prompts (repair prompts are fixed)
 
 ## Settings Reference (Detailed)
 
@@ -161,6 +163,9 @@ Numeric scaling formula used by runtime:
 - `Inject Tracker Into Prompt`: inject hidden relationship state guidance into chat generation prompts.
 - `Auto Detect Active`: in group chat, tries to determine which characters are currently active in the scene.
 - `Activity Lookback`: recent-message window used for active character detection.
+- `Prompt Templates`: unified prompt for one-shot extraction, per-stat prompts for sequential mode.
+  - Each prompt has a reset-to-default button.
+  - Strict/repair prompts are fixed for safety and consistency.
 
 Model confidence behavior:
 
@@ -254,6 +259,30 @@ You can disable any metric you do not want extracted.
 - `Delete Tracker Data (Current Chat)`: remove tracker data only for current chat.
 - `Dump Diagnostics`: copy full diagnostics JSON to clipboard.
 - `Clear Diagnostics`: clear stored debug traces/last debug record.
+
+### Prompt Templates (Editable)
+
+Two editable prompt types are supported:
+
+- Unified prompt: used when sequential extraction is off.
+- Per-stat prompts: used in sequential mode (`affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`).
+
+Each prompt can be reset to its default with the per-prompt reset button.
+
+Available placeholders:
+
+- `{{envelope}}`: prebuilt header that already includes user/character names and recent messages.
+- `{{userName}}`: current user name.
+- `{{characters}}`: comma-separated character names.
+- `{{contextText}}`: raw recent messages text.
+- `{{currentLines}}`: current tracker state lines.
+- `{{historyLines}}`: recent tracker snapshot lines.
+- `{{numericStats}}`: requested numeric stats list.
+- `{{textStats}}`: requested text stats list.
+- `{{maxDelta}}`: configured max delta per turn.
+- `{{moodOptions}}`: allowed mood labels.
+
+Note: strict/repair prompts are not editable.
 
 ### Character Defaults (Advanced Card Definitions)
 
