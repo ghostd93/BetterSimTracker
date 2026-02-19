@@ -1,5 +1,8 @@
 import { EXTENSION_KEY } from "./constants";
-import { DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES, DEFAULT_UNIFIED_PROMPT_TEMPLATE } from "./prompts";
+import {
+  DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
+  DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
+} from "./prompts";
 import type { BetterSimTrackerSettings, ConnectionProfileOption, STContext } from "./types";
 
 export const defaultSettings: BetterSimTrackerSettings = {
@@ -40,13 +43,42 @@ export const defaultSettings: BetterSimTrackerSettings = {
   debug: false,
   includeContextInDiagnostics: false,
   includeGraphInDiagnostics: true,
-  promptTemplateUnified: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
-  promptTemplateSequentialAffection: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.affection,
-  promptTemplateSequentialTrust: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.trust,
-  promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.desire,
-  promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.connection,
-  promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.mood,
-  promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.lastThought
+  promptTemplateUnified: DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
+  promptTemplateSequentialAffection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.affection,
+  promptTemplateSequentialTrust: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.trust,
+  promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.desire,
+  promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
+  promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
+  promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought
+};
+
+const extractInstructionBlock = (raw: string): string => {
+  const taskLabel = "Task:";
+  const taskIndex = raw.indexOf(taskLabel);
+  if (taskIndex < 0) {
+    return raw.trim();
+  }
+  const afterTask = raw.slice(taskIndex + taskLabel.length);
+  const markerCandidates = [
+    "Numeric stats to update",
+    "Return deltas only",
+    "Return STRICT JSON only",
+  ];
+  let cutIndex = -1;
+  for (const marker of markerCandidates) {
+    const idx = afterTask.indexOf(marker);
+    if (idx >= 0) {
+      cutIndex = cutIndex < 0 ? idx : Math.min(cutIndex, idx);
+    }
+  }
+  return (cutIndex >= 0 ? afterTask.slice(0, cutIndex) : afterTask).trim();
+};
+
+const normalizeInstruction = (value: unknown, fallback: string): string => {
+  const raw = asText(value, fallback).trim();
+  if (!raw) return fallback;
+  const extracted = extractInstructionBlock(raw);
+  return extracted || fallback;
 };
 
 export function getContext(): STContext | null {
@@ -319,12 +351,12 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     debug: asBool(input.debug, defaultSettings.debug),
     includeContextInDiagnostics: asBool(input.includeContextInDiagnostics, defaultSettings.includeContextInDiagnostics),
     includeGraphInDiagnostics: asBool(input.includeGraphInDiagnostics, defaultSettings.includeGraphInDiagnostics),
-    promptTemplateUnified: asText(input.promptTemplateUnified, defaultSettings.promptTemplateUnified).slice(0, 20000),
-    promptTemplateSequentialAffection: asText(input.promptTemplateSequentialAffection, defaultSettings.promptTemplateSequentialAffection).slice(0, 20000),
-    promptTemplateSequentialTrust: asText(input.promptTemplateSequentialTrust, defaultSettings.promptTemplateSequentialTrust).slice(0, 20000),
-    promptTemplateSequentialDesire: asText(input.promptTemplateSequentialDesire, defaultSettings.promptTemplateSequentialDesire).slice(0, 20000),
-    promptTemplateSequentialConnection: asText(input.promptTemplateSequentialConnection, defaultSettings.promptTemplateSequentialConnection).slice(0, 20000),
-    promptTemplateSequentialMood: asText(input.promptTemplateSequentialMood, defaultSettings.promptTemplateSequentialMood).slice(0, 20000),
-    promptTemplateSequentialLastThought: asText(input.promptTemplateSequentialLastThought, defaultSettings.promptTemplateSequentialLastThought).slice(0, 20000),
+    promptTemplateUnified: normalizeInstruction(input.promptTemplateUnified, defaultSettings.promptTemplateUnified).slice(0, 20000),
+    promptTemplateSequentialAffection: normalizeInstruction(input.promptTemplateSequentialAffection, defaultSettings.promptTemplateSequentialAffection).slice(0, 20000),
+    promptTemplateSequentialTrust: normalizeInstruction(input.promptTemplateSequentialTrust, defaultSettings.promptTemplateSequentialTrust).slice(0, 20000),
+    promptTemplateSequentialDesire: normalizeInstruction(input.promptTemplateSequentialDesire, defaultSettings.promptTemplateSequentialDesire).slice(0, 20000),
+    promptTemplateSequentialConnection: normalizeInstruction(input.promptTemplateSequentialConnection, defaultSettings.promptTemplateSequentialConnection).slice(0, 20000),
+    promptTemplateSequentialMood: normalizeInstruction(input.promptTemplateSequentialMood, defaultSettings.promptTemplateSequentialMood).slice(0, 20000),
+    promptTemplateSequentialLastThought: normalizeInstruction(input.promptTemplateSequentialLastThought, defaultSettings.promptTemplateSequentialLastThought).slice(0, 20000),
   };
 }
