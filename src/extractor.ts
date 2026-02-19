@@ -1,7 +1,13 @@
 import { STAT_KEYS } from "./constants";
 import { generateJson } from "./generator";
 import { parseUnifiedDeltaResponse } from "./parse";
-import { buildUnifiedPrompt } from "./prompts";
+import {
+  DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE,
+  DEFAULT_REPAIR_MOOD_TEMPLATE,
+  DEFAULT_STRICT_RETRY_TEMPLATE,
+  buildUnifiedPrompt,
+  moodOptions
+} from "./prompts";
 import type { BetterSimTrackerSettings, DeltaDebugRecord, GenerateRequestMeta, StatKey, Statistics, TrackerData } from "./types";
 
 function enabledStats(settings: BetterSimTrackerSettings): StatKey[] {
@@ -61,39 +67,29 @@ function hasValuesForRequestedStats(
   return false;
 }
 
-function buildStrictJsonRetryPrompt(basePrompt: string): string {
-  return [
-    "SYSTEM OVERRIDE:",
-    "Return ONLY valid JSON.",
-    "No prose. No roleplay. No markdown except optional ```json fences.",
-    "If uncertain, still return best-effort JSON with required keys.",
-    "",
-    basePrompt
-  ].join("\n");
+function renderTemplate(template: string, values: Record<string, string>): string {
+  let output = template;
+  for (const [key, value] of Object.entries(values)) {
+    output = output.replaceAll(`{{${key}}}`, value);
+  }
+  return output;
 }
 
-function buildStatRepairRetryPrompt(basePrompt: string, stat: StatKey): string {
+function buildStrictJsonRetryPrompt(basePrompt: string, settings: BetterSimTrackerSettings): string {
+  const template = settings.promptTemplateStrictRetry?.trim() || DEFAULT_STRICT_RETRY_TEMPLATE;
+  return renderTemplate(template, { basePrompt });
+}
+
+function buildStatRepairRetryPrompt(basePrompt: string, stat: StatKey, settings: BetterSimTrackerSettings): string {
   if (stat === "mood") {
-    return [
-      "SYSTEM OVERRIDE:",
-      "Return ONLY valid JSON, no prose, no roleplay.",
-      "MANDATORY: include `mood` for every character.",
-      "Use one of allowed mood labels exactly.",
-      "",
-      basePrompt
-    ].join("\n");
+    const template = settings.promptTemplateRepairMood?.trim() || DEFAULT_REPAIR_MOOD_TEMPLATE;
+    return renderTemplate(template, { basePrompt, moodOptions: moodOptions.join(", ") });
   }
   if (stat === "lastThought") {
-    return [
-      "SYSTEM OVERRIDE:",
-      "Return ONLY valid JSON, no prose, no roleplay.",
-      "MANDATORY: include `lastThought` for every character.",
-      "Keep it to one short sentence per character.",
-      "",
-      basePrompt
-    ].join("\n");
+    const template = settings.promptTemplateRepairLastThought?.trim() || DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE;
+    return renderTemplate(template, { basePrompt });
   }
-  return buildStrictJsonRetryPrompt(basePrompt);
+  return buildStrictJsonRetryPrompt(basePrompt, settings);
 }
 
 function countMapValues(values: Record<string, unknown>): number {
@@ -233,6 +229,7 @@ export async function extractStatisticsParallel(input: {
         previousStatistics,
         history,
         settings.maxDeltaPerTurn,
+        settings.promptTemplateUnified,
       );
       tickProgress();
       attempts += 1;
@@ -246,7 +243,7 @@ export async function extractStatisticsParallel(input: {
       firstParseHadValues = firstParseHadValues && firstHasValues;
       let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
       if (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
-        const retryPrompt = buildStrictJsonRetryPrompt(prompt);
+        const retryPrompt = buildStrictJsonRetryPrompt(prompt, settings);
         attempts += 1;
         requestSeq += 1;
         retryUsed = true;
@@ -265,7 +262,7 @@ export async function extractStatisticsParallel(input: {
         retriesLeft > 0 &&
         settings.strictJsonRepair
       ) {
-        const repairPrompt = buildStatRepairRetryPrompt(prompt, statList[0]);
+        const repairPrompt = buildStatRepairRetryPrompt(prompt, statList[0], settings);
         attempts += 1;
         requestSeq += 1;
         retryUsed = true;
@@ -279,7 +276,7 @@ export async function extractStatisticsParallel(input: {
         }
       }
       while (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
-        const strictPrompt = buildStrictJsonRetryPrompt(prompt);
+        const strictPrompt = buildStrictJsonRetryPrompt(prompt, settings);
         attempts += 1;
         requestSeq += 1;
         retryUsed = true;
