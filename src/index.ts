@@ -967,6 +967,8 @@ function openSettings(): void {
           contextMessages: currentSettings.contextMessages,
           maxConcurrentCalls: currentSettings.maxConcurrentCalls,
           maxDeltaPerTurn: currentSettings.maxDeltaPerTurn,
+          maxTokensOverride: currentSettings.maxTokensOverride,
+          truncationLengthOverride: currentSettings.truncationLengthOverride,
           autoDetectActive: currentSettings.autoDetectActive,
           activityLookback: currentSettings.activityLookback,
           strictJsonRepair: currentSettings.strictJsonRepair,

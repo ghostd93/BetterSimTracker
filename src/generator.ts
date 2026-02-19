@@ -137,7 +137,11 @@ function collectProfiles(context: STContext | null): Record<string, unknown>[] {
   return out;
 }
 
-function resolveProfileLimits(profileId: string, context: STContext | null): TokenLimits {
+function resolveProfileLimits(
+  profileId: string,
+  context: STContext | null,
+  settings: BetterSimTrackerSettings,
+): TokenLimits {
   const fallbackMax = 300;
   const profiles = collectProfiles(context);
   let profile: Record<string, unknown> | null = null;
@@ -149,7 +153,10 @@ function resolveProfileLimits(profileId: string, context: STContext | null): Tok
   }
 
   const fromProfile = extractTokenLimitsFromObject(profile);
-  const maxTokens = fromProfile.maxTokens ?? (() => {
+  const overrideMax = Number(settings.maxTokensOverride ?? 0);
+  const overrideTrunc = Number(settings.truncationLengthOverride ?? 0);
+
+  const maxTokens = (overrideMax > 0 ? clampTokens(overrideMax) : undefined) ?? fromProfile.maxTokens ?? (() => {
     const presetName = String(profile?.preset ?? "").trim();
     const presetManager = context?.getPresetManager?.(typeof profile?.api === "string" ? (profile.api as string) : undefined);
     const preset = presetName ? presetManager?.getCompletionPresetByName(presetName) : undefined;
@@ -175,6 +182,7 @@ function resolveProfileLimits(profileId: string, context: STContext | null): Tok
   })();
 
   const truncationLength =
+    (overrideTrunc > 0 ? clampTokens(overrideTrunc) : undefined) ??
     fromProfile.truncationLength ??
     (() => {
       const presetName = String(profile?.preset ?? "").trim();
@@ -264,6 +272,6 @@ export async function generateJson(
     throw new Error("Please select a connection profile in BetterSimTracker settings.");
   }
   const context = getContext();
-  const limits = resolveProfileLimits(profileId, context);
+  const limits = resolveProfileLimits(profileId, context, settings);
   return generateViaGenerator(prompt, profileId, limits);
 }

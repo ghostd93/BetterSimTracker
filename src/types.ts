@@ -22,6 +22,8 @@ export interface BetterSimTrackerSettings {
   injectTrackerIntoPrompt: boolean;
   sequentialExtraction: boolean;
   maxDeltaPerTurn: number;
+  maxTokensOverride: number;
+  truncationLengthOverride: number;
   confidenceDampening: number;
   moodStickiness: number;
   strictJsonRepair: boolean;

@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.4.11] - 2026-02-19
+### Added
+- Settings to override max tokens and context truncation length for extraction requests.
+
 ## [1.0.4.10] - 2026-02-19
 ### Changed
 - Extraction now respects profile token limits and truncation length when available.
