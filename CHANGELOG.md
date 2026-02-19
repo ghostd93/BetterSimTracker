@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.16] - 2026-02-19
+### Changed
+- Replaced accent color hex input with a color picker only.
+- Simplified accent color sync logic.
+
 ## [1.0.6.15] - 2026-02-19
 ### Changed
 - Added ghost icon to inactive label in tracker cards.

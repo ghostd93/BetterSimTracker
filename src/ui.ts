@@ -436,17 +436,15 @@ function ensureStyles(): void {
   background: rgba(9, 12, 20, 0.45);
 }
 .bst-color-inputs {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
   margin-top: 6px;
 }
-.bst-color-inputs input[type="text"] { flex: 1 1 auto; }
 .bst-color-inputs input[type="color"] {
-  width: 36px;
-  height: 30px;
+  width: 42px;
+  height: 32px;
   padding: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.2);
   background: rgba(10,14,22,0.9);
 }
@@ -1611,7 +1609,6 @@ export function openSettingsModal(input: {
         <label data-bst-row="inactiveLabel">Inactive Label <input data-k="inactiveLabel" type="text"></label>
         <label>Accent Color
           <div class="bst-color-inputs">
-            <input data-k="accentColor" type="text">
             <input data-k-color="accentColor" type="color">
           </div>
         </label>
@@ -1955,44 +1952,12 @@ export function openSettingsModal(input: {
   initPromptGroups();
 
   const initAccentColorPicker = (): void => {
-    const textInput = modal.querySelector('[data-k="accentColor"]') as HTMLInputElement | null;
     const colorInput = modal.querySelector('[data-k-color="accentColor"]') as HTMLInputElement | null;
-    if (!textInput || !colorInput) return;
-    const fallback = "#ff5a6f";
-    const cssToHex = (value: string): string | null => {
-      const temp = document.createElement("span");
-      temp.style.color = value;
-      document.body.appendChild(temp);
-      const computed = getComputedStyle(temp).color;
-      temp.remove();
-      const match = computed.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-      if (!match) return null;
-      const r = Number(match[1]);
-      const g = Number(match[2]);
-      const b = Number(match[3]);
-      if ([r, g, b].some(n => Number.isNaN(n))) return null;
-      const toHex = (n: number): string => n.toString(16).padStart(2, "0");
-      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-    };
-    const normalizeHex = (value: string): string | null => {
-      const v = value.trim();
-      if (!v.startsWith("#")) return null;
-      if (v.length === 7 || v.length === 4) return v;
-      return null;
-    };
-    const applyColor = (value: string): void => {
-      const normalized = normalizeHex(value);
-      const hex = normalized
-        ? (normalized.length === 4
-          ? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
-          : normalized)
-        : cssToHex(value);
-      colorInput.value = hex ?? fallback;
-    };
-    applyColor(textInput.value);
-    textInput.addEventListener("input", () => applyColor(textInput.value));
+    if (!colorInput) return;
+    const fallback = input.settings.accentColor || "#ff5a6f";
+    colorInput.value = fallback;
     colorInput.addEventListener("input", () => {
-      textInput.value = colorInput.value;
+      (input.settings as unknown as Record<string, unknown>).accentColor = colorInput.value;
       persistLive();
     });
   };
@@ -2032,7 +1997,8 @@ export function openSettingsModal(input: {
   set("trackConnection", String(input.settings.trackConnection));
   set("trackMood", String(input.settings.trackMood));
   set("trackLastThought", String(input.settings.trackLastThought));
-  set("accentColor", input.settings.accentColor);
+  const accentInput = modal.querySelector('[data-k-color="accentColor"]') as HTMLInputElement | null;
+  if (accentInput) accentInput.value = input.settings.accentColor || "#ff5a6f";
   set("cardOpacity", String(input.settings.cardOpacity));
   set("borderRadius", String(input.settings.borderRadius));
   set("fontSize", String(input.settings.fontSize));
