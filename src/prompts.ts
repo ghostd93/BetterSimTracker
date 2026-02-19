@@ -31,6 +31,7 @@ Stat meanings:
 - lastThought: brief internal thought grounded in recent messages
 Rule:
 - If the relationship is non-romantic, desire deltas must be 0 or negative.
+ - Do not infer romance from affection or playfulness.
 Do not add commentary or roleplay.`;
 
 export const DEFAULT_UNIFIED_PROMPT_INSTRUCTION = [
