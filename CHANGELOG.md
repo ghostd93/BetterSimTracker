@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.4.7] - 2026-02-19
+### Changed
+- Prompts section is now single-column with per-prompt reset buttons.
+- Added prompt-stack spacing for cleaner layout.
+
 ## [1.0.4.4] - 2026-02-19
 ### Changed
 - Repair/strict prompts are now fixed and no longer editable in settings.
