@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.12] - 2026-02-19
+### Changed
+- Styled section dividers as full-width separators with line accents.
+
 ## [1.0.6.11] - 2026-02-19
 ### Changed
 - Removed duplicate Generation section and extra dividers.
