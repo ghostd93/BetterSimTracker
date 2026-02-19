@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.3] - 2026-02-19
+### Changed
+- Clamp numeric inputs to min/max and show inline notice when adjusted.
+- Show min/max hints on numeric settings.
+
 ## [1.0.6.2] - 2026-02-19
 ### Changed
 - Merged Connection + Generation into a single drawer.
