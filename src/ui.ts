@@ -427,14 +427,21 @@ function ensureStyles(): void {
   gap: 10px;
   cursor: pointer;
   user-select: none;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(12, 16, 26, 0.5);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.bst-section-head:hover {
+  background: rgba(18, 24, 36, 0.7);
+  border-color: rgba(255,255,255,0.16);
 }
 .bst-section-head:focus-visible {
   outline: 2px solid rgba(125, 211, 252, 0.6);
   outline-offset: 2px;
-  border-radius: 10px;
 }
 .bst-settings-section h4 {
-  margin: 0 0 10px 0;
+  margin: 0;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.4px;
@@ -459,11 +466,12 @@ function ensureStyles(): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.25);
-  font-size: 12px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(8, 12, 18, 0.8);
+  font-size: 11px;
   line-height: 1;
   transition: transform .16s ease;
   transform: rotate(90deg);
@@ -480,6 +488,19 @@ function ensureStyles(): void {
   text-transform: uppercase;
   letter-spacing: 0.3px;
   opacity: 0.7;
+}
+.bst-minmax {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px;
+  opacity: 0.65;
+}
+.bst-validation {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #fbbf24;
+  opacity: 0.95;
 }
 .bst-help-list {
   margin: 0;
@@ -1412,16 +1433,16 @@ export function openSettingsModal(input: {
     <div class="bst-settings-section">
       <h4>Generation</h4>
       <div class="bst-settings-grid">
-        <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
         <label>Max Tokens Override <input data-k="maxTokensOverride" type="number" min="0" max="100000"></label>
         <label>Context Size Override <input data-k="truncationLengthOverride" type="number" min="0" max="200000"></label>
-        <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
-        <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
       </div>
     </div>
     <div class="bst-settings-section">
       <h4>Extraction</h4>
       <div class="bst-settings-grid">
+        <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
+        <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
+        <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
         <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
         <label data-bst-row="maxConcurrentCalls">Max Concurrent Requests <input data-k="maxConcurrentCalls" type="number" min="1" max="8"></label>
         <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
@@ -1447,13 +1468,13 @@ export function openSettingsModal(input: {
     <div class="bst-settings-section">
       <h4>Display</h4>
       <div class="bst-settings-grid">
-        <label class="bst-check"><input data-k="showInactive" type="checkbox">Show Inactive</label>
         <label data-bst-row="inactiveLabel">Inactive Label <input data-k="inactiveLabel" type="text"></label>
-        <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
         <label>Accent Color <input data-k="accentColor" type="text"></label>
         <label>Card Opacity <input data-k="cardOpacity" type="number" min="0.1" max="1" step="0.01"></label>
         <label>Border Radius <input data-k="borderRadius" type="number" min="0" max="32"></label>
         <label>Font Size <input data-k="fontSize" type="number" min="10" max="22"></label>
+        <label class="bst-check"><input data-k="showInactive" type="checkbox">Show Inactive</label>
+        <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
       </div>
     </div>
     <div class="bst-settings-section">
@@ -1587,6 +1608,69 @@ export function openSettingsModal(input: {
     generationSection.remove();
   };
   mergeConnectionAndGeneration();
+
+  const addMinMaxHints = (): void => {
+    const numberInputs = Array.from(modal.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
+    numberInputs.forEach(input => {
+      const minAttr = input.getAttribute("min");
+      const maxAttr = input.getAttribute("max");
+      if (minAttr === null && maxAttr === null) return;
+      const label = input.closest("label");
+      if (!label) return;
+      const existing = label.querySelector(".bst-minmax");
+      if (existing) return;
+      const span = document.createElement("span");
+      span.className = "bst-minmax";
+      const parts: string[] = [];
+      if (minAttr !== null && minAttr !== "") parts.push(`min ${minAttr}`);
+      if (maxAttr !== null && maxAttr !== "") parts.push(`max ${maxAttr}`);
+      span.textContent = parts.join(" · ");
+      label.appendChild(span);
+    });
+  };
+  addMinMaxHints();
+
+  const enforceNumberBounds = (): void => {
+    const numberInputs = Array.from(modal.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
+    numberInputs.forEach(input => {
+      const minAttr = input.getAttribute("min");
+      const maxAttr = input.getAttribute("max");
+      const min = minAttr !== null && minAttr !== "" ? Number(minAttr) : undefined;
+      const max = maxAttr !== null && maxAttr !== "" ? Number(maxAttr) : undefined;
+      if (min === undefined && max === undefined) return;
+      const label = input.closest("label");
+      if (!label) return;
+      let notice = label.querySelector(".bst-validation") as HTMLElement | null;
+      if (!notice) {
+        notice = document.createElement("span");
+        notice.className = "bst-validation";
+        notice.style.display = "none";
+        label.appendChild(notice);
+      }
+      const clamp = (): void => {
+        if (input.value.trim() === "") return;
+        const raw = Number(input.value);
+        if (Number.isNaN(raw)) return;
+        let next = raw;
+        if (typeof min === "number") next = Math.max(min, next);
+        if (typeof max === "number") next = Math.min(max, next);
+        if (next !== raw) {
+          input.value = String(next);
+          const parts: string[] = [];
+          if (typeof min === "number") parts.push(`min ${min}`);
+          if (typeof max === "number") parts.push(`max ${max}`);
+          notice.textContent = `Allowed range: ${parts.join(" · ")}. Value adjusted.`;
+          notice.style.display = "block";
+          return;
+        }
+        notice.textContent = "";
+        notice.style.display = "none";
+      };
+      input.addEventListener("input", clamp);
+      input.addEventListener("blur", clamp);
+    });
+  };
+  enforceNumberBounds();
 
   const initSectionDrawers = (): void => {
     const sectionIds: Record<string, string> = {
