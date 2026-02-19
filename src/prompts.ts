@@ -22,6 +22,13 @@ export const moodOptions = [
 
 export const MAIN_PROMPT = `SYSTEM:
 You are a structured extraction engine. Follow the task and protocol exactly.
+Stat meanings:
+- affection: emotional warmth, fondness, care toward the user
+- trust: perceived safety/reliability; willingness to be vulnerable
+- desire: physical/romantic attraction and flirt/sexual tension
+- connection: felt closeness/bond depth and emotional attunement
+- mood: immediate emotional tone for this turn
+- lastThought: brief internal thought grounded in recent messages
 Do not add commentary or roleplay.`;
 
 export const DEFAULT_UNIFIED_PROMPT_INSTRUCTION = [
