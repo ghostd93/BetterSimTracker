@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.5.7] - 2026-02-19
+### Changed
+- Main prompt now enforces non-romantic desire deltas to be 0 or negative.
+
 ## [1.0.5.6] - 2026-02-19
 ### Changed
 - Main prompt prefix wording updated to "relationship-state extraction engine."

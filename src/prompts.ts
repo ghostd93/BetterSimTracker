@@ -29,6 +29,8 @@ Stat meanings:
 - connection: felt closeness/bond depth and emotional attunement
 - mood: immediate emotional tone for this turn
 - lastThought: brief internal thought grounded in recent messages
+Rule:
+- If the relationship is non-romantic, desire deltas must be 0 or negative.
 Do not add commentary or roleplay.`;
 
 export const DEFAULT_UNIFIED_PROMPT_INSTRUCTION = [
