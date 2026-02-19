@@ -2,6 +2,112 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.7] - 2026-02-19
+### Added
+- Graph hover tooltip and latest-point emphasis.
+- Accent color picker in settings.
+- Extraction progress step labels in loading UI.
+### Changed
+- Settings UI polish (drawers, icons, prompt grouping, dividers, help collapse).
+- Tracker card polish (spacing, inactive badge, last thought clamp, delta arrows).
+### Fixed
+- Graph tooltip positioning and accent picker sync on reopen.
+
+## [1.0.6.20] - 2026-02-19
+### Changed
+- Graph tooltip now follows cursor within canvas.
+
+## [1.0.6.19] - 2026-02-19
+### Changed
+- Added extraction step labels to loading UI and styled it to match cards.
+- Graph: hover tooltip, latest point emphasis, lighter grid, active window highlight.
+- Cards: tighter spacing, delta arrows, softened inactive overlay.
+
+## [1.0.6.18] - 2026-02-19
+### Changed
+- Removed hover translate on tracker cards to prevent layout jump.
+
+## [1.0.6.17] - 2026-02-19
+### Changed
+- Polished tracker cards (spacing, hover, inactive badge, ellipsis, last thought clamp).
+
+## [1.0.6.16] - 2026-02-19
+### Changed
+- Replaced accent color hex input with a color picker only.
+- Simplified accent color sync logic.
+
+## [1.0.6.15] - 2026-02-19
+### Changed
+- Added ghost icon to inactive label in tracker cards.
+
+## [1.0.6.14] - 2026-02-19
+### Changed
+- Fixed accent color picker to reflect saved non-hex colors on reopen.
+
+## [1.0.6.13] - 2026-02-19
+### Changed
+- Added accent color picker synced with hex input.
+- Styled Quick Help and renamed Open Settings button with icon.
+
+## [1.0.6.12] - 2026-02-19
+### Changed
+- Styled section dividers as full-width separators with line accents.
+
+## [1.0.6.11] - 2026-02-19
+### Changed
+- Removed duplicate Generation section and extra dividers.
+- Enforced input/checkbox grouping in Extraction.
+
+## [1.0.6.10] - 2026-02-19
+### Changed
+- Unified prompt subdrawer toggles and reset icons to Font Awesome.
+- Collapsed prompt help into a details block.
+- Added Connection divider to match Generation divider.
+- Aligned prompt toggle and reset sizing.
+
+## [1.0.6.9] - 2026-02-19
+### Changed
+- Added Font Awesome icons to settings section headers, prompt groups, and debug actions.
+
+## [1.0.6.8] - 2026-02-19
+### Changed
+- Default open drawers: Extraction and Display.
+- Lighter header styling and label focus highlight.
+- Renamed section to Connection & Generation.
+- Prompt groups collapsible and default collapsed.
+- Clamp notice shows on blur only.
+
+## [1.0.6.7] - 2026-02-19
+### Changed
+- Added blue accent bar on drawer headers.
+
+## [1.0.6.6] - 2026-02-19
+### Changed
+- Replaced drawer angle with centered SVG chevron and larger icon container.
+
+## [1.0.6.5] - 2026-02-19
+### Changed
+- Centered and enlarged drawer angle icon.
+
+## [1.0.6.4] - 2026-02-19
+### Changed
+- Refined drawer header styling and icons; added spacing below headers.
+- Clamp notices persist briefly to be readable.
+
+## [1.0.6.3] - 2026-02-19
+### Changed
+- Clamp numeric inputs to min/max and show inline notice when adjusted.
+- Show min/max hints on numeric settings.
+
+## [1.0.6.2] - 2026-02-19
+### Changed
+- Merged Connection + Generation into a single drawer.
+- Drawer header bar now toggles; icon is a circular angle indicator.
+
+## [1.0.6.1] - 2026-02-19
+### Changed
+- Settings sections (except Quick Help) are collapsible and default to collapsed.
+
 ## [1.0.6] - 2026-02-19
 ### Added
 - Fixed main prompt prefix applied to all extraction requests (hidden from settings).

@@ -15,7 +15,7 @@ let runSequence = 0;
 let allCharacterNames: string[] = [];
 let latestData: TrackerData | null = null;
 let latestDataMessageIndex: number | null = null;
-let trackerUiState: TrackerUiState = { phase: "idle", done: 0, total: 0, messageIndex: null };
+let trackerUiState: TrackerUiState = { phase: "idle", done: 0, total: 0, messageIndex: null, stepLabel: null };
 let renderQueued = false;
 let extractionTimer: number | null = null;
 let lastDebugRecord: DeltaDebugRecord | null = null;
@@ -529,7 +529,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     targetMessageIndex: targetMessageIndex ?? null,
     resolvedMessageIndex: lastIndex
   });
-  setTrackerUi(context, { phase: "extracting", done: 0, total: 1, messageIndex: lastIndex });
+  setTrackerUi(context, { phase: "extracting", done: 0, total: 1, messageIndex: lastIndex, stepLabel: "Preparing context" });
   queueRender();
 
   try {
@@ -581,9 +581,9 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       contextText,
       previousStatistics: previous?.statistics ?? null,
       history: getRecentTrackerHistory(context, 6),
-      onProgress: (done, total) => {
-        pushTrace("extract.progress", { runId, done, total });
-        setTrackerUi(context, { phase: "extracting", done, total, messageIndex: lastIndex });
+      onProgress: (done, total, label) => {
+        pushTrace("extract.progress", { runId, done, total, label: label ?? null });
+        setTrackerUi(context, { phase: "extracting", done, total, messageIndex: lastIndex, stepLabel: label ?? null });
         queueRender();
       }
     });
@@ -630,7 +630,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     console.error("[BetterSimTracker] Extraction failed:", error);
   } finally {
     isExtracting = false;
-    setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex });
+    setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
     queueRender();
   }
 }
@@ -742,7 +742,7 @@ function registerEvents(context: STContext): void {
       chatGenerationStartLastAiIndex = getLastAiMessageIndex(context);
       const targetIndex = getGenerationTargetMessageIndex(context);
       pushTrace("event.generation_started", { targetIndex, type, startLastAiIndex: chatGenerationStartLastAiIndex });
-      setTrackerUi(context, { phase: "generating", done: 0, total: 0, messageIndex: targetIndex });
+      setTrackerUi(context, { phase: "generating", done: 0, total: 0, messageIndex: targetIndex, stepLabel: "Generating AI response" });
       queueRender();
       queuePromptSync(context);
     });
@@ -761,7 +761,7 @@ function registerEvents(context: STContext): void {
       chatGenerationInFlight = false;
       chatGenerationStartLastAiIndex = null;
       pushTrace("event.generation_ended_ignored", { reason: "no_new_ai_message_rendered" });
-      setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex });
+      setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
       queueRender();
       return;
     }
