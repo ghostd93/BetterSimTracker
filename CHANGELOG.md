@@ -12,6 +12,7 @@ All notable changes to BetterSimTracker are documented here.
 - Tracker card polish (spacing, inactive badge, last thought clamp, delta arrows).
 ### Fixed
 - Graph tooltip positioning and accent picker sync on reopen.
+- And more...
 
 ## [1.0.6.20] - 2026-02-19
 ### Changed
