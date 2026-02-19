@@ -2,6 +2,17 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.7] - 2026-02-19
+### Added
+- Graph hover tooltip and latest-point emphasis.
+- Accent color picker in settings.
+- Extraction progress step labels in loading UI.
+### Changed
+- Settings UI polish (drawers, icons, prompt grouping, dividers, help collapse).
+- Tracker card polish (spacing, inactive badge, last thought clamp, delta arrows).
+### Fixed
+- Graph tooltip positioning and accent picker sync on reopen.
+
 ## [1.0.6.20] - 2026-02-19
 ### Changed
 - Graph tooltip now follows cursor within canvas.
