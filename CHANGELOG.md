@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.4.8] - 2026-02-19
+### Changed
+- Documented prompt templates and placeholders in README.
+
 ## [1.0.4.7] - 2026-02-19
 ### Changed
 - Prompts section is now single-column with per-prompt reset buttons.
