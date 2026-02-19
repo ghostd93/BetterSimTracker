@@ -467,22 +467,22 @@ function ensureStyles(): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.22);
   background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(8,12,18,0.85));
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   transition: transform .16s ease, border-color .16s ease, background .16s ease;
-  transform: rotate(90deg);
+  transform: rotate(90deg) translateY(-0.5px);
 }
 .bst-section-head:hover .bst-section-icon {
   border-color: rgba(255,255,255,0.35);
   background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.22), rgba(10,14,22,0.9));
 }
 .bst-section-collapsed .bst-section-icon {
-  transform: rotate(0deg);
+  transform: rotate(0deg) translateY(-0.5px);
 }
 .bst-section-collapsed .bst-section-body {
   display: none;
