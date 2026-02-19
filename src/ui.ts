@@ -379,6 +379,7 @@ function ensureStyles(): void {
 }
 .bst-settings-subtitle { margin: 0 0 12px 0; opacity: 0.78; font-size: 12px; }
 .bst-settings-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bst-settings-grid-single { grid-template-columns: minmax(0, 1fr); }
 .bst-settings label { font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
 .bst-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
 .bst-check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--bst-accent); }
@@ -422,6 +423,40 @@ function ensureStyles(): void {
 .bst-help-line {
   font-size: 12px;
   opacity: 0.9;
+}
+.bst-prompts-stack {
+  margin-top: 8px;
+}
+.bst-prompt-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.bst-prompt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.bst-prompt-title {
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.bst-prompt-reset {
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 8px;
+  background: rgba(14,18,28,0.8);
+  color: #fff;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease;
+}
+.bst-prompt-reset:hover {
+  border-color: rgba(255,255,255,0.45);
+  background: rgba(20,26,38,0.9);
 }
 .bst-btn {
   border: 1px solid rgba(255,255,255,0.2);
@@ -1351,7 +1386,7 @@ export function openSettingsModal(input: {
       <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
       <div class="bst-help-line">Placeholders you can use:</div>
       <ul class="bst-help-list">
-        <li><code>{{envelope}}</code> — user/characters header + recent messages</li>
+        <li><code>{{envelope}}</code> — prebuilt header with user/characters + recent messages</li>
         <li><code>{{userName}}</code> — current user name</li>
         <li><code>{{characters}}</code> — comma-separated character names</li>
         <li><code>{{contextText}}</code> — raw recent messages text</li>
@@ -1362,17 +1397,56 @@ export function openSettingsModal(input: {
         <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
         <li><code>{{moodOptions}}</code> — allowed mood labels</li>
       </ul>
-      <div class="bst-settings-grid">
-        <label>Unified Prompt <textarea data-k="promptTemplateUnified" rows="10"></textarea></label>
-        <label>Seq: Affection <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea></label>
-        <label>Seq: Trust <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea></label>
-        <label>Seq: Desire <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea></label>
-        <label>Seq: Connection <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea></label>
-        <label>Seq: Mood <textarea data-k="promptTemplateSequentialMood" rows="6"></textarea></label>
-        <label>Seq: LastThought <textarea data-k="promptTemplateSequentialLastThought" rows="6"></textarea></label>
-      </div>
-      <div class="bst-debug-actions">
-        <button class="bst-btn" data-action="reset-prompts" title="Reset all prompt templates to defaults.">Reset Prompts to Default</button>
+      <div class="bst-settings-grid bst-settings-grid-single bst-prompts-stack">
+        <label class="bst-prompt-group">
+          <div class="bst-prompt-head">
+            <span class="bst-prompt-title">Unified Prompt</span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateUnified" title="Reset to default.">⟲</button>
+          </div>
+          <textarea data-k="promptTemplateUnified" rows="10"></textarea>
+        </label>
+        <label class="bst-prompt-group">
+          <div class="bst-prompt-head">
+            <span class="bst-prompt-title">Seq: Affection</span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialAffection" title="Reset to default.">⟲</button>
+          </div>
+          <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea>
+        </label>
+        <label class="bst-prompt-group">
+          <div class="bst-prompt-head">
+            <span class="bst-prompt-title">Seq: Trust</span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialTrust" title="Reset to default.">⟲</button>
+          </div>
+          <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea>
+        </label>
+        <label class="bst-prompt-group">
+          <div class="bst-prompt-head">
+            <span class="bst-prompt-title">Seq: Desire</span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialDesire" title="Reset to default.">⟲</button>
+          </div>
+          <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea>
+        </label>
+        <label class="bst-prompt-group">
+          <div class="bst-prompt-head">
+            <span class="bst-prompt-title">Seq: Connection</span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialConnection" title="Reset to default.">⟲</button>
+          </div>
+          <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
+        </label>
+        <label class="bst-prompt-group">
+          <div class="bst-prompt-head">
+            <span class="bst-prompt-title">Seq: Mood</span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialMood" title="Reset to default.">⟲</button>
+          </div>
+          <textarea data-k="promptTemplateSequentialMood" rows="6"></textarea>
+        </label>
+        <label class="bst-prompt-group">
+          <div class="bst-prompt-head">
+            <span class="bst-prompt-title">Seq: LastThought</span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-k="promptTemplateSequentialLastThought" title="Reset to default.">⟲</button>
+          </div>
+          <textarea data-k="promptTemplateSequentialLastThought" rows="6"></textarea>
+        </label>
       </div>
     </div>
   `;
@@ -1604,22 +1678,29 @@ export function openSettingsModal(input: {
     persistLive();
     input.onClearDiagnostics?.();
   });
-  modal.querySelector('[data-action="reset-prompts"]')?.addEventListener("click", () => {
-    input.settings.promptTemplateUnified = DEFAULT_UNIFIED_PROMPT_TEMPLATE;
-    input.settings.promptTemplateSequentialAffection = DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.affection;
-    input.settings.promptTemplateSequentialTrust = DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.trust;
-    input.settings.promptTemplateSequentialDesire = DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.desire;
-    input.settings.promptTemplateSequentialConnection = DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.connection;
-    input.settings.promptTemplateSequentialMood = DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.mood;
-    input.settings.promptTemplateSequentialLastThought = DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.lastThought;
-    set("promptTemplateUnified", input.settings.promptTemplateUnified);
-    set("promptTemplateSequentialAffection", input.settings.promptTemplateSequentialAffection);
-    set("promptTemplateSequentialTrust", input.settings.promptTemplateSequentialTrust);
-    set("promptTemplateSequentialDesire", input.settings.promptTemplateSequentialDesire);
-    set("promptTemplateSequentialConnection", input.settings.promptTemplateSequentialConnection);
-    set("promptTemplateSequentialMood", input.settings.promptTemplateSequentialMood);
-    set("promptTemplateSequentialLastThought", input.settings.promptTemplateSequentialLastThought);
-    persistLive();
+  const promptDefaults: Partial<Record<keyof BetterSimTrackerSettings, string>> = {
+    promptTemplateUnified: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
+    promptTemplateSequentialAffection: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.affection,
+    promptTemplateSequentialTrust: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.trust,
+    promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.desire,
+    promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.connection,
+    promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.mood,
+    promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.lastThought,
+  };
+
+  modal.querySelectorAll('[data-action="reset-prompt"]').forEach(node => {
+    node.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const target = event.currentTarget as HTMLElement | null;
+      const key = target?.getAttribute("data-k") as keyof BetterSimTrackerSettings | null;
+      if (!key) return;
+      const value = promptDefaults[key];
+      if (typeof value !== "string") return;
+      (input.settings as unknown as Record<string, unknown>)[key] = value;
+      set(key, value);
+      persistLive();
+    });
   });
 }
 
