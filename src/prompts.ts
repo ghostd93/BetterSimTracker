@@ -86,13 +86,101 @@ Keep it to one short sentence per character.
 
 {{basePrompt}}`;
 
+const buildNumericSequentialTemplate = (label: string, key: string): string => `{{envelope}}
+Current tracker state:
+{{currentLines}}
+
+Recent tracker snapshots:
+{{historyLines}}
+
+Task:
+- Propose incremental changes to ${label} from the recent messages.
+- Only update ${key} deltas. Ignore other stats.
+- Keep updates conservative and realistic.
+- It is valid to return 0 or negative deltas if the interaction is neutral or negative.
+- Do not reuse the same delta for all characters unless strongly justified by context.
+
+Return deltas only, each in range -{{maxDelta}}..{{maxDelta}}.
+
+Return STRICT JSON only:
+{
+  "characters": [
+    {
+      "name": "Character Name",
+      "confidence": 0.0,
+      "delta": {
+        "${key}": 0
+      }
+    }
+  ]
+}
+
+Rules:
+- confidence is 0..1 (0 low confidence, 1 high confidence).
+- include one entry for each character name exactly: {{characters}}.
+- omit fields for stats that are not requested.
+- output JSON only, no commentary.`;
+
 export const DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES: Record<StatKey, string> = {
-  affection: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
-  trust: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
-  desire: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
-  connection: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
-  mood: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
-  lastThought: DEFAULT_UNIFIED_PROMPT_TEMPLATE
+  affection: buildNumericSequentialTemplate("AFFECTION", "affection"),
+  trust: buildNumericSequentialTemplate("TRUST", "trust"),
+  desire: buildNumericSequentialTemplate("DESIRE", "desire"),
+  connection: buildNumericSequentialTemplate("CONNECTION", "connection"),
+  mood: `{{envelope}}
+Current tracker state:
+{{currentLines}}
+
+Recent tracker snapshots:
+{{historyLines}}
+
+Task:
+- Determine each character's current mood toward the user.
+- Choose one mood label from: {{moodOptions}}.
+- Keep updates conservative and realistic.
+
+Return STRICT JSON only:
+{
+  "characters": [
+    {
+      "name": "Character Name",
+      "confidence": 0.0,
+      "mood": "Neutral"
+    }
+  ]
+}
+
+Rules:
+- confidence is 0..1 (0 low confidence, 1 high confidence).
+- include one entry for each character name exactly: {{characters}}.
+- omit fields for stats that are not requested.
+- output JSON only, no commentary.`,
+  lastThought: `{{envelope}}
+Current tracker state:
+{{currentLines}}
+
+Recent tracker snapshots:
+{{historyLines}}
+
+Task:
+- Write a short internal thought (one sentence) each character has right now.
+- Keep it concise and grounded in the recent messages.
+
+Return STRICT JSON only:
+{
+  "characters": [
+    {
+      "name": "Character Name",
+      "confidence": 0.0,
+      "lastThought": ""
+    }
+  ]
+}
+
+Rules:
+- confidence is 0..1 (0 low confidence, 1 high confidence).
+- include one entry for each character name exactly: {{characters}}.
+- omit fields for stats that are not requested.
+- output JSON only, no commentary.`,
 };
 
 function commonEnvelope(userName: string, characters: string[], contextText: string): string {
@@ -204,8 +292,6 @@ export function buildUnifiedPrompt(
     textStats: textStats.length ? textStats.join(", ") : "none",
     maxDelta: String(safeMaxDelta),
     moodOptions: moodOptions.join(", "),
-    stat: "multiple",
-    statUpper: "MULTIPLE",
   });
 }
 
@@ -260,7 +346,5 @@ export function buildSequentialPrompt(
     textStats: textStats.length ? textStats.join(", ") : "none",
     maxDelta: String(safeMaxDelta),
     moodOptions: moodOptions.join(", "),
-    stat,
-    statUpper: stat.toUpperCase(),
   });
 }

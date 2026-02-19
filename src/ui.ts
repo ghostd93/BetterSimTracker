@@ -1,12 +1,6 @@
 import { STYLE_ID } from "./constants";
 import type { BetterSimTrackerSettings, ConnectionProfileOption, DeltaDebugRecord, StatValue, TrackerData } from "./types";
-import {
-  DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE,
-  DEFAULT_REPAIR_MOOD_TEMPLATE,
-  DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES,
-  DEFAULT_STRICT_RETRY_TEMPLATE,
-  DEFAULT_UNIFIED_PROMPT_TEMPLATE
-} from "./prompts";
+import { DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES, DEFAULT_UNIFIED_PROMPT_TEMPLATE } from "./prompts";
 
 const statLabels: Array<{ key: "affection" | "trust" | "desire" | "connection"; label: string }> = [
   { key: "affection", label: "Affection" },
@@ -1354,6 +1348,7 @@ export function openSettingsModal(input: {
     <div class="bst-settings-section">
       <h4>Prompts</h4>
       <div class="bst-help-line">Unified prompt is used for one-prompt extraction. Sequential mode uses per-stat prompts.</div>
+      <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
       <div class="bst-help-line">Placeholders you can use:</div>
       <ul class="bst-help-list">
         <li><code>{{envelope}}</code> — user/characters header + recent messages</li>
@@ -1366,15 +1361,9 @@ export function openSettingsModal(input: {
         <li><code>{{textStats}}</code> — requested text stats list</li>
         <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
         <li><code>{{moodOptions}}</code> — allowed mood labels</li>
-        <li><code>{{stat}}</code> — current stat (sequential only)</li>
-        <li><code>{{statUpper}}</code> — current stat uppercased (sequential only)</li>
-        <li><code>{{basePrompt}}</code> — original prompt inside repair/strict templates</li>
       </ul>
       <div class="bst-settings-grid">
         <label>Unified Prompt <textarea data-k="promptTemplateUnified" rows="10"></textarea></label>
-        <label>Strict Retry Prompt <textarea data-k="promptTemplateStrictRetry" rows="6"></textarea></label>
-        <label>Repair Mood Prompt <textarea data-k="promptTemplateRepairMood" rows="6"></textarea></label>
-        <label>Repair LastThought Prompt <textarea data-k="promptTemplateRepairLastThought" rows="6"></textarea></label>
         <label>Seq: Affection <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea></label>
         <label>Seq: Trust <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea></label>
         <label>Seq: Desire <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea></label>
@@ -1428,9 +1417,6 @@ export function openSettingsModal(input: {
   set("includeContextInDiagnostics", String(input.settings.includeContextInDiagnostics));
   set("includeGraphInDiagnostics", String(input.settings.includeGraphInDiagnostics));
   set("promptTemplateUnified", input.settings.promptTemplateUnified);
-  set("promptTemplateStrictRetry", input.settings.promptTemplateStrictRetry);
-  set("promptTemplateRepairMood", input.settings.promptTemplateRepairMood);
-  set("promptTemplateRepairLastThought", input.settings.promptTemplateRepairLastThought);
   set("promptTemplateSequentialAffection", input.settings.promptTemplateSequentialAffection);
   set("promptTemplateSequentialTrust", input.settings.promptTemplateSequentialTrust);
   set("promptTemplateSequentialDesire", input.settings.promptTemplateSequentialDesire);
@@ -1486,9 +1472,6 @@ export function openSettingsModal(input: {
       includeContextInDiagnostics: readBool("includeContextInDiagnostics"),
       includeGraphInDiagnostics: readBool("includeGraphInDiagnostics"),
       promptTemplateUnified: read("promptTemplateUnified") || input.settings.promptTemplateUnified,
-      promptTemplateStrictRetry: read("promptTemplateStrictRetry") || input.settings.promptTemplateStrictRetry,
-      promptTemplateRepairMood: read("promptTemplateRepairMood") || input.settings.promptTemplateRepairMood,
-      promptTemplateRepairLastThought: read("promptTemplateRepairLastThought") || input.settings.promptTemplateRepairLastThought,
       promptTemplateSequentialAffection: read("promptTemplateSequentialAffection") || input.settings.promptTemplateSequentialAffection,
       promptTemplateSequentialTrust: read("promptTemplateSequentialTrust") || input.settings.promptTemplateSequentialTrust,
       promptTemplateSequentialDesire: read("promptTemplateSequentialDesire") || input.settings.promptTemplateSequentialDesire,
@@ -1582,9 +1565,6 @@ export function openSettingsModal(input: {
     includeContextInDiagnostics: "Include extraction prompt/context text in diagnostics dumps (larger logs).",
     includeGraphInDiagnostics: "Include graph-open series payloads in diagnostics trace output.",
     promptTemplateUnified: "Unified prompt template used for all extraction runs.",
-    promptTemplateStrictRetry: "Wrapper template for strict JSON retries. Use {{basePrompt}} placeholder.",
-    promptTemplateRepairMood: "Repair template when mood is missing/invalid. Use {{basePrompt}} and {{moodOptions}}.",
-    promptTemplateRepairLastThought: "Repair template when lastThought is missing/invalid. Use {{basePrompt}}.",
     promptTemplateSequentialAffection: "Sequential prompt for Affection (per-stat extraction).",
     promptTemplateSequentialTrust: "Sequential prompt for Trust (per-stat extraction).",
     promptTemplateSequentialDesire: "Sequential prompt for Desire (per-stat extraction).",
@@ -1626,9 +1606,6 @@ export function openSettingsModal(input: {
   });
   modal.querySelector('[data-action="reset-prompts"]')?.addEventListener("click", () => {
     input.settings.promptTemplateUnified = DEFAULT_UNIFIED_PROMPT_TEMPLATE;
-    input.settings.promptTemplateStrictRetry = DEFAULT_STRICT_RETRY_TEMPLATE;
-    input.settings.promptTemplateRepairMood = DEFAULT_REPAIR_MOOD_TEMPLATE;
-    input.settings.promptTemplateRepairLastThought = DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE;
     input.settings.promptTemplateSequentialAffection = DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.affection;
     input.settings.promptTemplateSequentialTrust = DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.trust;
     input.settings.promptTemplateSequentialDesire = DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.desire;
@@ -1636,9 +1613,6 @@ export function openSettingsModal(input: {
     input.settings.promptTemplateSequentialMood = DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.mood;
     input.settings.promptTemplateSequentialLastThought = DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.lastThought;
     set("promptTemplateUnified", input.settings.promptTemplateUnified);
-    set("promptTemplateStrictRetry", input.settings.promptTemplateStrictRetry);
-    set("promptTemplateRepairMood", input.settings.promptTemplateRepairMood);
-    set("promptTemplateRepairLastThought", input.settings.promptTemplateRepairLastThought);
     set("promptTemplateSequentialAffection", input.settings.promptTemplateSequentialAffection);
     set("promptTemplateSequentialTrust", input.settings.promptTemplateSequentialTrust);
     set("promptTemplateSequentialDesire", input.settings.promptTemplateSequentialDesire);

@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.4.4] - 2026-02-19
+### Changed
+- Repair/strict prompts are now fixed and no longer editable in settings.
+- Sequential prompt defaults are stat-specific and no longer rely on stat placeholders.
+- Prompt editor help text updated to reflect current placeholders.
+
 ## [1.0.4.3] - 2026-02-18
 ### Added
 - Prompt placeholder reference list in settings to explain available macros.

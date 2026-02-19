@@ -50,9 +50,6 @@ export interface BetterSimTrackerSettings {
   includeContextInDiagnostics: boolean;
   includeGraphInDiagnostics: boolean;
   promptTemplateUnified: string;
-  promptTemplateStrictRetry: string;
-  promptTemplateRepairMood: string;
-  promptTemplateRepairLastThought: string;
   promptTemplateSequentialAffection: string;
   promptTemplateSequentialTrust: string;
   promptTemplateSequentialDesire: string;

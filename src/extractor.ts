@@ -77,21 +77,18 @@ function renderTemplate(template: string, values: Record<string, string>): strin
   return output;
 }
 
-function buildStrictJsonRetryPrompt(basePrompt: string, settings: BetterSimTrackerSettings): string {
-  const template = settings.promptTemplateStrictRetry?.trim() || DEFAULT_STRICT_RETRY_TEMPLATE;
-  return renderTemplate(template, { basePrompt });
+function buildStrictJsonRetryPrompt(basePrompt: string): string {
+  return renderTemplate(DEFAULT_STRICT_RETRY_TEMPLATE, { basePrompt });
 }
 
-function buildStatRepairRetryPrompt(basePrompt: string, stat: StatKey, settings: BetterSimTrackerSettings): string {
+function buildStatRepairRetryPrompt(basePrompt: string, stat: StatKey): string {
   if (stat === "mood") {
-    const template = settings.promptTemplateRepairMood?.trim() || DEFAULT_REPAIR_MOOD_TEMPLATE;
-    return renderTemplate(template, { basePrompt, moodOptions: moodOptions.join(", ") });
+    return renderTemplate(DEFAULT_REPAIR_MOOD_TEMPLATE, { basePrompt, moodOptions: moodOptions.join(", ") });
   }
   if (stat === "lastThought") {
-    const template = settings.promptTemplateRepairLastThought?.trim() || DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE;
-    return renderTemplate(template, { basePrompt });
+    return renderTemplate(DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE, { basePrompt });
   }
-  return buildStrictJsonRetryPrompt(basePrompt, settings);
+  return buildStrictJsonRetryPrompt(basePrompt);
 }
 
 function countMapValues(values: Record<string, unknown>): number {
@@ -265,7 +262,7 @@ export async function extractStatisticsParallel(input: {
       firstParseHadValues = firstParseHadValues && firstHasValues;
       let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
       if (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
-        const retryPrompt = buildStrictJsonRetryPrompt(prompt, settings);
+        const retryPrompt = buildStrictJsonRetryPrompt(prompt);
         attempts += 1;
         requestSeq += 1;
         retryUsed = true;
@@ -284,7 +281,7 @@ export async function extractStatisticsParallel(input: {
         retriesLeft > 0 &&
         settings.strictJsonRepair
       ) {
-        const repairPrompt = buildStatRepairRetryPrompt(prompt, statList[0], settings);
+        const repairPrompt = buildStatRepairRetryPrompt(prompt, statList[0]);
         attempts += 1;
         requestSeq += 1;
         retryUsed = true;
@@ -298,7 +295,7 @@ export async function extractStatisticsParallel(input: {
         }
       }
       while (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
-        const strictPrompt = buildStrictJsonRetryPrompt(prompt, settings);
+        const strictPrompt = buildStrictJsonRetryPrompt(prompt);
         attempts += 1;
         requestSeq += 1;
         retryUsed = true;
