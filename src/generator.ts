@@ -1,6 +1,8 @@
 import type { BetterSimTrackerSettings, GenerateRequestMeta } from "./types";
+import type { STContext } from "./types";
 import { Generator } from "sillytavern-utils-lib";
 import type { Message } from "sillytavern-utils-lib";
+import { getContext } from "./settings";
 
 interface GenerateResponse {
   content?: string;
@@ -47,11 +49,167 @@ function extractContentFromData(data: unknown): string {
   return extractContent(data as GenerateResponse);
 }
 
-async function generateViaGenerator(prompt: string, profileId: string): Promise<{ text: string; meta: GenerateRequestMeta }> {
+type TokenLimits = {
+  maxTokens: number;
+  truncationLength?: number;
+};
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return null;
+}
+
+function clampTokens(value: number): number {
+  const rounded = Math.round(value);
+  if (!Number.isFinite(rounded)) return 300;
+  return Math.max(1, Math.min(100000, rounded));
+}
+
+function extractTokenLimitsFromObject(obj: Record<string, unknown> | null): Partial<TokenLimits> {
+  if (!obj) return {};
+  const maxTokenKeys = ["max_new_tokens", "max_tokens", "maxTokens", "openai_max_tokens", "max_length", "genamt"];
+  const truncKeys = ["truncation_length", "openai_max_context", "max_context", "context_length", "max_context_length"];
+  let maxTokens: number | undefined;
+  let truncationLength: number | undefined;
+
+  for (const key of maxTokenKeys) {
+    const value = asNumber(obj[key]);
+    if (value != null && value > 0) {
+      maxTokens = clampTokens(value);
+      break;
+    }
+  }
+  for (const key of truncKeys) {
+    const value = asNumber(obj[key]);
+    if (value != null && value > 0) {
+      truncationLength = clampTokens(value);
+      break;
+    }
+  }
+
+  return { maxTokens, truncationLength };
+}
+
+function profileIdOf(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const id = String(
+    obj.id ??
+      obj.profileId ??
+      obj.value ??
+      obj.profile ??
+      "",
+  ).trim();
+  return id || null;
+}
+
+function collectProfiles(context: STContext | null): Record<string, unknown>[] {
+  const buckets: unknown[] = [];
+  const extSettings = context?.extensionSettings as Record<string, unknown> | undefined;
+  const extConn = extSettings?.connectionManager as Record<string, unknown> | undefined;
+  buckets.push(extConn?.profiles);
+
+  const cc = context?.chatCompletionSettings as Record<string, unknown> | undefined;
+  if (cc) buckets.push(cc.profiles, cc.profileList, cc.connections);
+
+  const globalObj = globalThis as Record<string, unknown>;
+  const globalExt = globalObj.extension_settings as Record<string, unknown> | undefined;
+  const globalConn = globalExt?.connectionManager as Record<string, unknown> | undefined;
+  buckets.push(
+    globalConn?.profiles,
+    globalObj.chat_completion_profiles,
+    globalObj.chatCompletionProfiles,
+    (globalObj.power_user as Record<string, unknown> | undefined)?.chat_completion_profiles,
+    (globalObj.power_user as Record<string, unknown> | undefined)?.chatCompletionProfiles,
+  );
+
+  const out: Record<string, unknown>[] = [];
+  for (const bucket of buckets) {
+    if (!Array.isArray(bucket)) continue;
+    for (const item of bucket) {
+      if (item && typeof item === "object") out.push(item as Record<string, unknown>);
+    }
+  }
+  return out;
+}
+
+function resolveProfileLimits(profileId: string, context: STContext | null): TokenLimits {
+  const fallbackMax = 300;
+  const profiles = collectProfiles(context);
+  let profile: Record<string, unknown> | null = null;
+  for (const candidate of profiles) {
+    if (profileIdOf(candidate) === profileId) {
+      profile = candidate;
+      break;
+    }
+  }
+
+  const fromProfile = extractTokenLimitsFromObject(profile);
+  const maxTokens = fromProfile.maxTokens ?? (() => {
+    const presetName = String(profile?.preset ?? "").trim();
+    const presetManager = context?.getPresetManager?.(typeof profile?.api === "string" ? (profile.api as string) : undefined);
+    const preset = presetName ? presetManager?.getCompletionPresetByName(presetName) : undefined;
+    const fromPreset = extractTokenLimitsFromObject(preset as Record<string, unknown> | null);
+    if (fromPreset.maxTokens) return fromPreset.maxTokens;
+
+    const mode = String(profile?.mode ?? profile?.type ?? "").toLowerCase();
+    if (mode.includes("tc") || mode.includes("text")) {
+      const tc = context?.textCompletionSettings as Record<string, unknown> | undefined;
+      const fromTc = extractTokenLimitsFromObject(tc ?? null);
+      if (fromTc.maxTokens) return fromTc.maxTokens;
+      const maxLength = asNumber(tc?.max_length);
+      if (maxLength && maxLength > 0) return clampTokens(maxLength);
+    }
+
+    const cc = context?.chatCompletionSettings as Record<string, unknown> | undefined;
+    const fromCc = extractTokenLimitsFromObject(cc ?? null);
+    if (fromCc.maxTokens) return fromCc.maxTokens;
+    const openaiMax = asNumber(cc?.openai_max_tokens);
+    if (openaiMax && openaiMax > 0) return clampTokens(openaiMax);
+
+    return fallbackMax;
+  })();
+
+  const truncationLength =
+    fromProfile.truncationLength ??
+    (() => {
+      const presetName = String(profile?.preset ?? "").trim();
+      const presetManager = context?.getPresetManager?.(typeof profile?.api === "string" ? (profile.api as string) : undefined);
+      const preset = presetName ? presetManager?.getCompletionPresetByName(presetName) : undefined;
+      const fromPreset = extractTokenLimitsFromObject(preset as Record<string, unknown> | null);
+      if (fromPreset.truncationLength) return fromPreset.truncationLength;
+
+      const mode = String(profile?.mode ?? profile?.type ?? "").toLowerCase();
+      if (mode.includes("tc") || mode.includes("text")) {
+        const tc = context?.textCompletionSettings as Record<string, unknown> | undefined;
+        const fromTc = extractTokenLimitsFromObject(tc ?? null);
+        if (fromTc.truncationLength) return fromTc.truncationLength;
+      }
+
+      const cc = context?.chatCompletionSettings as Record<string, unknown> | undefined;
+      const fromCc = extractTokenLimitsFromObject(cc ?? null);
+      if (fromCc.truncationLength) return fromCc.truncationLength;
+      const openaiContext = asNumber(cc?.openai_max_context);
+      if (openaiContext && openaiContext > 0) return clampTokens(openaiContext);
+
+      return undefined;
+    })();
+
+  return { maxTokens, truncationLength };
+}
+
+async function generateViaGenerator(prompt: string, profileId: string, limits: TokenLimits): Promise<{ text: string; meta: GenerateRequestMeta }> {
   const messages: Message[] = [{ role: "user", content: prompt }];
   const promptChars = prompt.length;
-  const maxTokens = 300;
+  const maxTokens = limits.maxTokens;
   const startedAt = Date.now();
+  const overridePayload = limits.truncationLength
+    ? { truncation_length: limits.truncationLength, max_new_tokens: maxTokens, max_tokens: maxTokens }
+    : { max_new_tokens: maxTokens, max_tokens: maxTokens };
 
   return new Promise((resolve, reject) => {
     const abortController = new AbortController();
@@ -60,7 +218,8 @@ async function generateViaGenerator(prompt: string, profileId: string): Promise<
         profileId,
         prompt: messages,
         maxTokens,
-        custom: { signal: abortController.signal }
+        custom: { signal: abortController.signal },
+        overridePayload
       },
       {
         abortController,
@@ -104,5 +263,7 @@ export async function generateJson(
   if (!profileId) {
     throw new Error("Please select a connection profile in BetterSimTracker settings.");
   }
-  return generateViaGenerator(prompt, profileId);
+  const context = getContext();
+  const limits = resolveProfileLimits(profileId, context);
+  return generateViaGenerator(prompt, profileId, limits);
 }

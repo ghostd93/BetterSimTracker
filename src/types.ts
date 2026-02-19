@@ -125,6 +125,10 @@ export interface STContext {
   extensionSettings?: Record<string, unknown>;
   chatMetadata?: Record<string, unknown>;
   chatCompletionSettings?: Record<string, unknown>;
+  textCompletionSettings?: Record<string, unknown>;
+  getPresetManager?: (apiId?: string) => {
+    getCompletionPresetByName: (name?: string) => Record<string, unknown> | undefined;
+  };
   csrf_token?: string;
 }
 
