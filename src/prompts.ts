@@ -20,23 +20,17 @@ export const moodOptions = [
   "Neutral"
 ];
 
-export const DEFAULT_UNIFIED_PROMPT_TEMPLATE = `{{envelope}}
-Current tracker state:
-{{currentLines}}
+export const DEFAULT_UNIFIED_PROMPT_INSTRUCTION = [
+  "- Propose incremental changes to tracker state from the recent messages.",
+  "- Do NOT rewrite absolute values; provide per-stat deltas.",
+  "- Keep updates conservative and realistic.",
+  "- It is valid to return 0 or negative deltas if the interaction is neutral or negative.",
+  "- Do not reuse the same delta for all stats unless strongly justified by context.",
+  "- Use recent messages first; use character cards only to disambiguate when context is unclear.",
+  "- Only increase desire if the relationship is explicitly romantic/sexual in the recent messages. If the relationship is non-romantic, desire must be 0 or negative. Do not infer romance from affectionate or playful behavior alone.",
+].join("\n");
 
-Recent tracker snapshots:
-{{historyLines}}
-
-Task:
-- Propose incremental changes to tracker state from the recent messages.
-- Do NOT rewrite absolute values; provide per-stat deltas.
-- Keep updates conservative and realistic.
-- It is valid to return 0 or negative deltas if the interaction is neutral or negative.
-- Do not reuse the same delta for all stats unless strongly justified by context.
-- Use recent messages first; use character cards only to disambiguate when context is unclear.
-- Only increase desire if the relationship is explicitly romantic/sexual in the recent messages. If the relationship is non-romantic, desire must be 0 or negative. Do not infer romance from affectionate or playful behavior alone.
-
-Numeric stats to update ({{numericStats}}):
+export const UNIFIED_PROMPT_PROTOCOL = `Numeric stats to update ({{numericStats}}):
 - Return deltas only, each in range -{{maxDelta}}..{{maxDelta}}.
 
 Text stats to update ({{textStats}}):
@@ -88,22 +82,7 @@ Keep it to one short sentence per character.
 
 {{basePrompt}}`;
 
-const buildNumericSequentialTemplate = (label: string, key: string): string => `{{envelope}}
-Current tracker state:
-{{currentLines}}
-
-Recent tracker snapshots:
-{{historyLines}}
-
-Task:
-- Propose incremental changes to ${label} from the recent messages.
-- Only update ${key} deltas. Ignore other stats.
-- Keep updates conservative and realistic.
-- It is valid to return 0 or negative deltas if the interaction is neutral or negative.
-- Do not reuse the same delta for all characters unless strongly justified by context.
-- Use recent messages first; use character cards only to disambiguate when context is unclear.
-
-Return deltas only, each in range -{{maxDelta}}..{{maxDelta}}.
+export const NUMERIC_PROMPT_PROTOCOL = (key: string): string => `Return deltas only, each in range -{{maxDelta}}..{{maxDelta}}.
 
 Return STRICT JSON only:
 {
@@ -124,62 +103,7 @@ Rules:
 - omit fields for stats that are not requested.
 - output JSON only, no commentary.`;
 
-const buildDesireSequentialTemplate = (): string => `{{envelope}}
-Current tracker state:
-{{currentLines}}
-
-Recent tracker snapshots:
-{{historyLines}}
-
-Task:
-- Propose incremental changes to DESIRE from the recent messages.
-- Only update desire deltas. Ignore other stats.
-- Keep updates conservative and realistic.
-- It is valid to return 0 or negative deltas if the interaction is neutral or negative.
-- Do not reuse the same delta for all characters unless strongly justified by context.
-- Use recent messages first; use character cards only to disambiguate when context is unclear.
-- Only increase desire if the relationship is explicitly romantic/sexual in the recent messages. If the relationship is non-romantic, desire must be 0 or negative. Do not infer romance from affectionate or playful behavior alone.
-
-Return deltas only, each in range -{{maxDelta}}..{{maxDelta}}.
-
-Return STRICT JSON only:
-{
-  "characters": [
-    {
-      "name": "Character Name",
-      "confidence": 0.0,
-      "delta": {
-        "desire": 0
-      }
-    }
-  ]
-}
-
-Rules:
-- confidence is 0..1 (0 low confidence, 1 high confidence).
-- include one entry for each character name exactly: {{characters}}.
-- omit fields for stats that are not requested.
-- output JSON only, no commentary.`;
-
-export const DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES: Record<StatKey, string> = {
-  affection: buildNumericSequentialTemplate("AFFECTION", "affection"),
-  trust: buildNumericSequentialTemplate("TRUST", "trust"),
-  desire: buildDesireSequentialTemplate(),
-  connection: buildNumericSequentialTemplate("CONNECTION", "connection"),
-  mood: `{{envelope}}
-Current tracker state:
-{{currentLines}}
-
-Recent tracker snapshots:
-{{historyLines}}
-
-Task:
-- Determine each character's current mood toward the user.
-- Choose one mood label from: {{moodOptions}}.
-- Keep updates conservative and realistic.
-- Use recent messages first; use character cards only to disambiguate when context is unclear.
-
-Return STRICT JSON only:
+export const MOOD_PROMPT_PROTOCOL = `Return STRICT JSON only:
 {
   "characters": [
     {
@@ -194,20 +118,9 @@ Rules:
 - confidence is 0..1 (0 low confidence, 1 high confidence).
 - include one entry for each character name exactly: {{characters}}.
 - omit fields for stats that are not requested.
-- output JSON only, no commentary.`,
-  lastThought: `{{envelope}}
-Current tracker state:
-{{currentLines}}
+- output JSON only, no commentary.`;
 
-Recent tracker snapshots:
-{{historyLines}}
-
-Task:
-- Write a short internal thought (one sentence) each character has right now.
-- Keep it concise and grounded in the recent messages.
-- Use recent messages first; use character cards only to disambiguate when context is unclear.
-
-Return STRICT JSON only:
+export const LAST_THOUGHT_PROMPT_PROTOCOL = `Return STRICT JSON only:
 {
   "characters": [
     {
@@ -222,7 +135,41 @@ Rules:
 - confidence is 0..1 (0 low confidence, 1 high confidence).
 - include one entry for each character name exactly: {{characters}}.
 - omit fields for stats that are not requested.
-- output JSON only, no commentary.`,
+- output JSON only, no commentary.`;
+
+const buildNumericInstruction = (label: string, key: string): string => [
+  `- Propose incremental changes to ${label} from the recent messages.`,
+  `- Only update ${key} deltas. Ignore other stats.`,
+  "- Keep updates conservative and realistic.",
+  "- It is valid to return 0 or negative deltas if the interaction is neutral or negative.",
+  "- Do not reuse the same delta for all characters unless strongly justified by context.",
+  "- Use recent messages first; use character cards only to disambiguate when context is unclear.",
+].join("\n");
+
+export const DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS: Record<StatKey, string> = {
+  affection: buildNumericInstruction("AFFECTION", "affection"),
+  trust: buildNumericInstruction("TRUST", "trust"),
+  desire: [
+    "- Propose incremental changes to DESIRE from the recent messages.",
+    "- Only update desire deltas. Ignore other stats.",
+    "- Keep updates conservative and realistic.",
+    "- It is valid to return 0 or negative deltas if the interaction is neutral or negative.",
+    "- Do not reuse the same delta for all characters unless strongly justified by context.",
+    "- Use recent messages first; use character cards only to disambiguate when context is unclear.",
+    "- Only increase desire if the relationship is explicitly romantic/sexual in the recent messages. If the relationship is non-romantic, desire must be 0 or negative. Do not infer romance from affectionate or playful behavior alone.",
+  ].join("\n"),
+  connection: buildNumericInstruction("CONNECTION", "connection"),
+  mood: [
+    "- Determine each character's current mood toward the user.",
+    "- Choose one mood label from: {{moodOptions}}.",
+    "- Keep updates conservative and realistic.",
+    "- Use recent messages first; use character cards only to disambiguate when context is unclear.",
+  ].join("\n"),
+  lastThought: [
+    "- Write a short internal thought (one sentence) each character has right now.",
+    "- Keep it concise and grounded in the recent messages.",
+    "- Use recent messages first; use character cards only to disambiguate when context is unclear.",
+  ].join("\n"),
 };
 
 function commonEnvelope(userName: string, characters: string[], contextText: string): string {
@@ -322,14 +269,28 @@ export function buildUnifiedPrompt(
   }).join("\n");
 
   const safeMaxDelta = Math.max(1, Math.round(Number(maxDeltaPerTurn) || 15));
-  const resolvedTemplate = template?.trim() ? template : DEFAULT_UNIFIED_PROMPT_TEMPLATE;
-  return renderTemplate(resolvedTemplate, {
+  const instruction = template?.trim() ? template : DEFAULT_UNIFIED_PROMPT_INSTRUCTION;
+  const assembled = [
+    "{{envelope}}",
+    "Current tracker state:",
+    "{{currentLines}}",
+    "",
+    "Recent tracker snapshots:",
+    "{{historyLines}}",
+    "",
+    "Task:",
+    "{{instruction}}",
+    "",
+    UNIFIED_PROMPT_PROTOCOL,
+  ].join("\n");
+  return renderTemplate(assembled, {
     envelope,
     userName,
     characters: characters.join(", "),
     contextText,
     currentLines,
     historyLines: historyLines || "- none",
+    instruction,
     numericStats: numericStats.length ? numericStats.join(", ") : "none",
     textStats: textStats.length ? textStats.join(", ") : "none",
     maxDelta: String(safeMaxDelta),
@@ -376,14 +337,35 @@ export function buildSequentialPrompt(
   }).join("\n");
 
   const safeMaxDelta = Math.max(1, Math.round(Number(maxDeltaPerTurn) || 15));
-  const resolvedTemplate = template?.trim() ? template : DEFAULT_UNIFIED_PROMPT_TEMPLATE;
-  return renderTemplate(resolvedTemplate, {
+  const instruction = template?.trim()
+    ? template
+    : DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS[stat] || DEFAULT_UNIFIED_PROMPT_INSTRUCTION;
+  const protocol = stat === "mood"
+    ? MOOD_PROMPT_PROTOCOL
+    : stat === "lastThought"
+      ? LAST_THOUGHT_PROMPT_PROTOCOL
+      : NUMERIC_PROMPT_PROTOCOL(stat);
+  const assembled = [
+    "{{envelope}}",
+    "Current tracker state:",
+    "{{currentLines}}",
+    "",
+    "Recent tracker snapshots:",
+    "{{historyLines}}",
+    "",
+    "Task:",
+    "{{instruction}}",
+    "",
+    protocol,
+  ].join("\n");
+  return renderTemplate(assembled, {
     envelope,
     userName,
     characters: characters.join(", "),
     contextText,
     currentLines,
     historyLines: historyLines || "- none",
+    instruction,
     numericStats: numericStats.length ? numericStats.join(", ") : "none",
     textStats: textStats.length ? textStats.join(", ") : "none",
     maxDelta: String(safeMaxDelta),

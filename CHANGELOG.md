@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.5.3] - 2026-02-19
+### Changed
+- Prompt editing now only affects the instruction section; protocol blocks are fixed and read-only.
+- Legacy full-template prompt settings are normalized to instruction-only on load.
+
 ## [1.0.5.2] - 2026-02-19
 ### Changed
 - Diagnostics request metadata now includes truncation length when available.

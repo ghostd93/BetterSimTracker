@@ -1,6 +1,13 @@
 import { STYLE_ID } from "./constants";
 import type { BetterSimTrackerSettings, ConnectionProfileOption, DeltaDebugRecord, StatValue, TrackerData } from "./types";
-import { DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES, DEFAULT_UNIFIED_PROMPT_TEMPLATE } from "./prompts";
+import {
+  DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
+  DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
+  LAST_THOUGHT_PROMPT_PROTOCOL,
+  MOOD_PROMPT_PROTOCOL,
+  NUMERIC_PROMPT_PROTOCOL,
+  UNIFIED_PROMPT_PROTOCOL,
+} from "./prompts";
 
 const statLabels: Array<{ key: "affection" | "trust" | "desire" | "connection"; label: string }> = [
   { key: "affection", label: "Affection" },
@@ -43,6 +50,15 @@ function toPercent(value: StatValue): number {
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function moodToEmojiEntity(moodRaw: string): string {
@@ -432,6 +448,22 @@ function ensureStyles(): void {
   flex-direction: column;
   gap: 6px;
   margin-bottom: 4px;
+}
+.bst-prompt-caption {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.bst-prompt-protocol {
+  margin: 0;
+  white-space: pre-wrap;
+  background: #0b1020;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 8px;
+  padding: 8px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(243,245,249,0.75);
 }
 .bst-prompt-head {
   display: flex;
@@ -1374,6 +1406,7 @@ export function openSettingsModal(input: {
     <div class="bst-settings-section">
       <h4>Prompts</h4>
       <div class="bst-help-line">Unified prompt is used for one-prompt extraction. Sequential mode uses per-stat prompts.</div>
+      <div class="bst-help-line">Only the instruction section is editable; protocol blocks are fixed for safety and consistency.</div>
       <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
       <div class="bst-help-line">Placeholders you can use:</div>
       <ul class="bst-help-list">
@@ -1394,49 +1427,70 @@ export function openSettingsModal(input: {
             <span class="bst-prompt-title">Unified Prompt</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateUnified" title="Reset to default.">⟲</button>
           </div>
-          <textarea data-k="promptTemplateUnified" rows="10"></textarea>
+          <div class="bst-prompt-caption">Instruction (editable)</div>
+          <textarea data-k="promptTemplateUnified" rows="8"></textarea>
+          <div class="bst-prompt-caption">Protocol (read-only)</div>
+          <pre class="bst-prompt-protocol">${escapeHtml(UNIFIED_PROMPT_PROTOCOL)}</pre>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Affection</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialAffection" title="Reset to default.">⟲</button>
           </div>
+          <div class="bst-prompt-caption">Instruction (editable)</div>
           <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea>
+          <div class="bst-prompt-caption">Protocol (read-only)</div>
+          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("affection"))}</pre>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Trust</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialTrust" title="Reset to default.">⟲</button>
           </div>
+          <div class="bst-prompt-caption">Instruction (editable)</div>
           <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea>
+          <div class="bst-prompt-caption">Protocol (read-only)</div>
+          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("trust"))}</pre>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Desire</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialDesire" title="Reset to default.">⟲</button>
           </div>
+          <div class="bst-prompt-caption">Instruction (editable)</div>
           <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea>
+          <div class="bst-prompt-caption">Protocol (read-only)</div>
+          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("desire"))}</pre>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Connection</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialConnection" title="Reset to default.">⟲</button>
           </div>
+          <div class="bst-prompt-caption">Instruction (editable)</div>
           <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
+          <div class="bst-prompt-caption">Protocol (read-only)</div>
+          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("connection"))}</pre>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: Mood</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialMood" title="Reset to default.">⟲</button>
           </div>
+          <div class="bst-prompt-caption">Instruction (editable)</div>
           <textarea data-k="promptTemplateSequentialMood" rows="6"></textarea>
+          <div class="bst-prompt-caption">Protocol (read-only)</div>
+          <pre class="bst-prompt-protocol">${escapeHtml(MOOD_PROMPT_PROTOCOL)}</pre>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
             <span class="bst-prompt-title">Seq: LastThought</span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialLastThought" title="Reset to default.">⟲</button>
           </div>
+          <div class="bst-prompt-caption">Instruction (editable)</div>
           <textarea data-k="promptTemplateSequentialLastThought" rows="6"></textarea>
+          <div class="bst-prompt-caption">Protocol (read-only)</div>
+          <pre class="bst-prompt-protocol">${escapeHtml(LAST_THOUGHT_PROMPT_PROTOCOL)}</pre>
         </label>
       </div>
     </div>
@@ -1660,13 +1714,13 @@ export function openSettingsModal(input: {
     debug: "Enable verbose diagnostics logging for troubleshooting.",
     includeContextInDiagnostics: "Include extraction prompt/context text in diagnostics dumps (larger logs).",
     includeGraphInDiagnostics: "Include graph-open series payloads in diagnostics trace output.",
-    promptTemplateUnified: "Unified prompt template used for all extraction runs.",
-    promptTemplateSequentialAffection: "Sequential prompt for Affection (per-stat extraction).",
-    promptTemplateSequentialTrust: "Sequential prompt for Trust (per-stat extraction).",
-    promptTemplateSequentialDesire: "Sequential prompt for Desire (per-stat extraction).",
-    promptTemplateSequentialConnection: "Sequential prompt for Connection (per-stat extraction).",
-    promptTemplateSequentialMood: "Sequential prompt for Mood (per-stat extraction).",
-    promptTemplateSequentialLastThought: "Sequential prompt for LastThought (per-stat extraction)."
+    promptTemplateUnified: "Unified prompt instruction (protocol block is fixed).",
+    promptTemplateSequentialAffection: "Sequential Affection instruction (protocol block is fixed).",
+    promptTemplateSequentialTrust: "Sequential Trust instruction (protocol block is fixed).",
+    promptTemplateSequentialDesire: "Sequential Desire instruction (protocol block is fixed).",
+    promptTemplateSequentialConnection: "Sequential Connection instruction (protocol block is fixed).",
+    promptTemplateSequentialMood: "Sequential Mood instruction (protocol block is fixed).",
+    promptTemplateSequentialLastThought: "Sequential LastThought instruction (protocol block is fixed)."
   };
   for (const [key, tooltip] of Object.entries(tooltips) as Array<[keyof BetterSimTrackerSettings, string]>) {
     const inputNode = modal.querySelector(`[data-k="${key}"]`) as HTMLElement | null;
@@ -1701,13 +1755,13 @@ export function openSettingsModal(input: {
     input.onClearDiagnostics?.();
   });
   const promptDefaults: Partial<Record<keyof BetterSimTrackerSettings, string>> = {
-    promptTemplateUnified: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
-    promptTemplateSequentialAffection: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.affection,
-    promptTemplateSequentialTrust: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.trust,
-    promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.desire,
-    promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.connection,
-    promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.mood,
-    promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES.lastThought,
+    promptTemplateUnified: DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
+    promptTemplateSequentialAffection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.affection,
+    promptTemplateSequentialTrust: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.trust,
+    promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.desire,
+    promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
+    promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
+    promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
   };
 
   modal.querySelectorAll('[data-action="reset-prompt"]').forEach(node => {

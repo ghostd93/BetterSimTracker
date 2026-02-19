@@ -145,7 +145,7 @@ Numeric scaling formula used by runtime:
 - `Strict JSON Repair`: retries if model output is invalid
 - `Auto Detect Active`: scene-based active character detection
 - `Inject Tracker Into Prompt`: uses current relationship state as hidden guidance
-- `Prompt Templates`: edit unified + per-stat sequential prompts (repair prompts are fixed)
+- `Prompt Templates`: edit unified + per-stat sequential prompt instructions (protocol blocks are fixed; repair prompts are fixed)
 - `Profile Token Limits`: extraction now respects profile max tokens and truncation length (when available)
 - `Max Tokens Override`: force max tokens for extraction (0 = auto)
 - `Context Size Override`: force truncation length for extraction (0 = auto)
@@ -167,8 +167,9 @@ Numeric scaling formula used by runtime:
 - `Inject Tracker Into Prompt`: inject hidden relationship state guidance into chat generation prompts.
 - `Auto Detect Active`: in group chat, tries to determine which characters are currently active in the scene.
 - `Activity Lookback`: recent-message window used for active character detection.
-- `Prompt Templates`: unified prompt for one-shot extraction, per-stat prompts for sequential mode.
+- `Prompt Templates`: unified prompt instruction for one-shot extraction, per-stat instructions for sequential mode.
   - Each prompt has a reset-to-default button.
+  - Protocol blocks (JSON shape, constraints) are fixed for safety and consistency.
   - Strict/repair prompts are fixed for safety and consistency.
 - `Profile Token Limits`: extraction uses the selected connection profile's max token and truncation limits when available. If missing, it falls back to the active preset values, and finally to a safe default.
 - `Max Tokens Override`: set a fixed token limit for extraction requests. Use `0` to keep profile/preset defaults.
@@ -276,7 +277,7 @@ Two editable prompt types are supported:
 - Per-stat prompts: used in sequential mode (`affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`).
 - Default desire prompt guardrail: only increase desire when the recent messages are explicitly romantic/sexual; non-romantic context should be 0 or negative.
 
-Each prompt can be reset to its default with the per-prompt reset button.
+Each prompt instruction can be reset to its default with the per-prompt reset button. Protocol blocks are read-only.
 
 Available placeholders:
 
