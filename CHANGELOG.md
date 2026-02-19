@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.18] - 2026-02-19
+### Changed
+- Removed hover translate on tracker cards to prevent layout jump.
+
 ## [1.0.6.17] - 2026-02-19
 ### Changed
 - Polished tracker cards (spacing, hover, inactive badge, ellipsis, last thought clamp).

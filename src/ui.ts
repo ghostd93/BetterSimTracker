@@ -215,11 +215,7 @@ function ensureStyles(): void {
   color: #fff;
   box-shadow: 0 8px 20px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.06) inset;
   padding: 11px 12px;
-  transition: transform .15s ease, box-shadow .15s ease;
-}
-.bst-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 24px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.08) inset;
+  transition: box-shadow .15s ease;
 }
 .bst-card-inactive {
   border-color: rgba(255,255,255,0.12);
