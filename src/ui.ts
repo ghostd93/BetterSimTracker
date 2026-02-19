@@ -442,6 +442,19 @@ function ensureStyles(): void {
   height: 30px;
   padding: 0;
   border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(10,14,22,0.9);
+}
+.bst-color-inputs input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+.bst-color-inputs input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+.bst-color-inputs input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: 4px;
 }
 .bst-quick-help {
   background: linear-gradient(135deg, rgba(10, 18, 32, 0.75), rgba(8, 12, 22, 0.75));
@@ -1940,6 +1953,22 @@ export function openSettingsModal(input: {
     const textInput = modal.querySelector('[data-k="accentColor"]') as HTMLInputElement | null;
     const colorInput = modal.querySelector('[data-k-color="accentColor"]') as HTMLInputElement | null;
     if (!textInput || !colorInput) return;
+    const fallback = "#ff5a6f";
+    const cssToHex = (value: string): string | null => {
+      const temp = document.createElement("span");
+      temp.style.color = value;
+      document.body.appendChild(temp);
+      const computed = getComputedStyle(temp).color;
+      temp.remove();
+      const match = computed.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+      if (!match) return null;
+      const r = Number(match[1]);
+      const g = Number(match[2]);
+      const b = Number(match[3]);
+      if ([r, g, b].some(n => Number.isNaN(n))) return null;
+      const toHex = (n: number): string => n.toString(16).padStart(2, "0");
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    };
     const normalizeHex = (value: string): string | null => {
       const v = value.trim();
       if (!v.startsWith("#")) return null;
@@ -1948,9 +1977,12 @@ export function openSettingsModal(input: {
     };
     const applyColor = (value: string): void => {
       const normalized = normalizeHex(value);
-      if (normalized) colorInput.value = normalized.length === 4
-        ? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
-        : normalized;
+      const hex = normalized
+        ? (normalized.length === 4
+          ? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
+          : normalized)
+        : cssToHex(value);
+      colorInput.value = hex ?? fallback;
     };
     applyColor(textInput.value);
     textInput.addEventListener("input", () => applyColor(textInput.value));

@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.14] - 2026-02-19
+### Changed
+- Fixed accent color picker to reflect saved non-hex colors on reopen.
+
 ## [1.0.6.13] - 2026-02-19
 ### Changed
 - Added accent color picker synced with hex input.
