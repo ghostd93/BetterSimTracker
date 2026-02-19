@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.5.5] - 2026-02-19
+### Changed
+- Main prompt prefix now includes stat meaning definitions.
+
 ## [1.0.5.4] - 2026-02-19
 ### Changed
 - Added a hidden, fixed main prompt prefix applied to all extraction prompts.
