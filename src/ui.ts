@@ -1514,14 +1514,7 @@ export function openSettingsModal(input: {
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-plug"></span>Connection &amp; Generation</h4>
       <div class="bst-settings-grid">
-        <div class="bst-section-divider">Connection</div>
         <label>Connection Profile <select data-k="connectionProfile">${profileOptionsHtml}</select></label>
-        <div class="bst-section-divider">Generation</div>
-      </div>
-    </div>
-    <div class="bst-settings-section">
-      <h4>Generation</h4>
-      <div class="bst-settings-grid">
         <label>Max Tokens Override <input data-k="maxTokensOverride" type="number" min="0" max="100000"></label>
         <label>Context Size Override <input data-k="truncationLengthOverride" type="number" min="0" max="200000"></label>
       </div>
@@ -1530,9 +1523,7 @@ export function openSettingsModal(input: {
       <h4><span class="bst-header-icon fa-solid fa-filter"></span>Extraction</h4>
       <div class="bst-settings-grid">
         <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
-        <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
         <label data-bst-row="maxConcurrentCalls">Max Concurrent Requests <input data-k="maxConcurrentCalls" type="number" min="1" max="8"></label>
-        <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
         <label data-bst-row="maxRetriesPerStat">Max Retries Per Stat <input data-k="maxRetriesPerStat" type="number" min="0" max="4"></label>
         <label>Max Delta Per Turn <input data-k="maxDeltaPerTurn" type="number" min="1" max="30"></label>
         <label>Confidence Dampening <input data-k="confidenceDampening" type="number" min="0" max="1" step="0.05"></label>

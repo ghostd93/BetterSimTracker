@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.11] - 2026-02-19
+### Changed
+- Removed duplicate Generation section and extra dividers.
+- Enforced input/checkbox grouping in Extraction.
+
 ## [1.0.6.10] - 2026-02-19
 ### Changed
 - Unified prompt subdrawer toggles and reset icons to Font Awesome.
