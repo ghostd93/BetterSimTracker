@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.5.2] - 2026-02-19
+### Changed
+- Diagnostics request metadata now includes truncation length when available.
+
 ## [1.0.5.1] - 2026-02-19
 ### Added
 - Optional inclusion of character card details in extraction prompts for disambiguation.

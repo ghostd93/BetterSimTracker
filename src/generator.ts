@@ -237,6 +237,7 @@ async function generateViaGenerator(prompt: string, profileId: string, limits: T
             profileId,
             promptChars,
             maxTokens,
+            truncationLength: limits.truncationLength,
             requestId: _requestId,
             durationMs,
             outputChars: 0,

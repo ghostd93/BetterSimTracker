@@ -65,6 +65,7 @@ export interface GenerateRequestMeta {
   profileId: string;
   promptChars: number;
   maxTokens: number;
+  truncationLength?: number;
   requestId?: string;
   durationMs: number;
   outputChars: number;
