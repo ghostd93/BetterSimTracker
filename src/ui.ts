@@ -31,6 +31,7 @@ export type TrackerUiState = {
   done: number;
   total: number;
   messageIndex: number | null;
+  stepLabel?: string | null;
 };
 
 type RenderEntry = {
@@ -163,10 +164,11 @@ function ensureStyles(): void {
 }
 .bst-loading {
   border: 1px solid rgba(255,255,255,0.16);
-  background: linear-gradient(180deg, rgba(23, 27, 38, 0.95), rgba(15, 18, 26, 0.95));
+  background: linear-gradient(165deg, color-mix(in srgb, var(--bst-card) 86%, #ffffff 14%), color-mix(in srgb, var(--bst-card) 70%, #000 30%));
   border-radius: 12px;
   color: #f3f5f9;
   padding: 10px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.04) inset;
 }
 .bst-loading-row {
   display: flex;
@@ -182,7 +184,7 @@ function ensureStyles(): void {
 .bst-loading-track {
   height: 8px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.18);
   overflow: hidden;
 }
 .bst-loading-fill {
@@ -190,6 +192,7 @@ function ensureStyles(): void {
   width: 0%;
   background: linear-gradient(90deg, var(--bst-accent), #ffd38f);
   transition: width 0.25s ease;
+  min-width: 2px;
 }
 .bst-loading-track-indeterminate .bst-loading-fill {
   width: 42%;
@@ -215,6 +218,7 @@ function ensureStyles(): void {
   color: #fff;
   box-shadow: 0 8px 20px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.06) inset;
   padding: 11px 12px;
+  transition: box-shadow .15s ease;
 }
 .bst-card-inactive {
   border-color: rgba(255,255,255,0.12);
@@ -224,27 +228,44 @@ function ensureStyles(): void {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(5, 7, 12, 0.43);
+  background: rgba(5, 7, 12, 0.30);
   pointer-events: none;
 }
 .bst-card-inactive .bst-state {
   background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.9);
+}
+.bst-inactive-icon {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.8;
+  display: inline-flex;
+  align-items: center;
+  transform: translateY(1px);
 }
 .bst-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 7px;
+  margin-bottom: 6px;
+  gap: 8px;
 }
 .bst-name {
   font-weight: 700;
   letter-spacing: 0.2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .bst-state {
   font-size: 12px;
   padding: 2px 8px;
   border-radius: 999px;
   background: rgba(255,255,255,0.14);
+  flex-shrink: 0;
 }
 .bst-actions {
   display: flex;
@@ -285,12 +306,12 @@ function ensureStyles(): void {
   border-color: color-mix(in srgb, var(--bst-accent) 78%, #ffffff 22%);
   background: color-mix(in srgb, var(--bst-accent) 33%, #131a28 67%);
 }
-.bst-row { margin: 7px 0; }
+.bst-row { margin: 5px 0; }
 .bst-label {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   opacity: 0.93;
 }
 .bst-track {
@@ -327,14 +348,22 @@ function ensureStyles(): void {
 .bst-delta-up { color: #94f7a8; }
 .bst-delta-down { color: #ff9ea8; }
 .bst-delta-flat { color: #d4d9e8; }
+.bst-delta-up::before { content: "▲ "; }
+.bst-delta-down::before { content: "▼ "; }
+.bst-delta-flat::before { content: "• "; }
 .bst-thought {
   margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.3;
   padding: 8px;
   border-radius: 10px;
   background: rgba(0,0,0,0.18);
   font-style: italic;
+  color: rgba(243,245,249,0.78);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .bst-root-collapsed .bst-body {
   display: none;
@@ -406,6 +435,16 @@ function ensureStyles(): void {
   border-radius: 8px;
   padding: 7px;
 }
+.bst-settings input:focus-visible,
+.bst-settings select:focus-visible,
+.bst-settings textarea:focus-visible {
+  outline: none;
+  border-color: rgba(56,189,248,0.9) !important;
+  box-shadow: 0 0 0 2px rgba(56,189,248,0.25);
+}
+.bst-settings label:focus-within {
+  color: #e6f6ff;
+}
 .bst-settings textarea {
   resize: vertical;
   min-height: 120px;
@@ -420,13 +459,156 @@ function ensureStyles(): void {
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(9, 12, 20, 0.45);
 }
+.bst-color-inputs {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+}
+.bst-color-inputs input[type="color"] {
+  width: 42px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(10,14,22,0.9);
+}
+.bst-color-inputs input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+.bst-color-inputs input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+.bst-color-inputs input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+.bst-quick-help {
+  background: linear-gradient(135deg, rgba(10, 18, 32, 0.75), rgba(8, 12, 22, 0.75));
+  border-color: rgba(56,189,248,0.25);
+  box-shadow: inset 0 0 0 1px rgba(56,189,248,0.12);
+}
+.bst-quick-help .bst-help-line,
+.bst-quick-help .bst-help-list {
+  opacity: 0.95;
+}
+.bst-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(18, 24, 36, 0.6), rgba(10, 14, 22, 0.6));
+  border: 1px solid rgba(255,255,255,0.08);
+  position: relative;
+  padding-left: 16px;
+}
+.bst-section-head::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(56,189,248,0.85), rgba(14,116,144,0.8));
+  box-shadow: 0 0 8px rgba(56,189,248,0.25);
+}
+.bst-section-head:hover {
+  background: linear-gradient(135deg, rgba(22, 30, 44, 0.75), rgba(12, 18, 28, 0.75));
+  border-color: rgba(255,255,255,0.16);
+}
+.bst-section-head:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.6);
+  outline-offset: 2px;
+}
 .bst-settings-section h4 {
-  margin: 0 0 10px 0;
+  margin: 0;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.4px;
   text-transform: uppercase;
   opacity: 0.9;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.bst-header-icon {
+  font-size: 12px;
+  opacity: 0.85;
+}
+.bst-section-toggle {
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  background: rgba(14,18,28,0.8);
+  color: #fff;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.bst-section-toggle:hover {
+  border-color: rgba(255,255,255,0.4);
+  background: rgba(20,26,38,0.9);
+}
+.bst-section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  line-height: 1;
+  font-size: 18px;
+  transition: transform .16s ease, color .16s ease;
+  color: rgba(243,245,249,0.9);
+  transform: rotate(0deg);
+}
+.bst-section-head:hover .bst-section-icon {
+  color: #ffffff;
+}
+.bst-section-collapsed .bst-section-icon {
+  transform: rotate(-90deg);
+}
+.bst-section-collapsed .bst-section-body {
+  display: none;
+}
+.bst-section-body {
+  margin-top: 10px;
+}
+.bst-section-divider {
+  position: relative;
+  margin: 10px 0 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+.bst-section-divider::before,
+.bst-section-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.2), rgba(255,255,255,0.06));
+}
+.bst-minmax {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px;
+  opacity: 0.65;
+}
+.bst-validation {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #fbbf24;
+  opacity: 0.95;
 }
 .bst-help-list {
   margin: 0;
@@ -439,6 +621,14 @@ function ensureStyles(): void {
 .bst-help-line {
   font-size: 12px;
   opacity: 0.9;
+}
+.bst-help-details {
+  margin: 6px 0 10px;
+}
+.bst-help-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.85;
 }
 .bst-prompts-stack {
   margin-top: 8px;
@@ -471,24 +661,74 @@ function ensureStyles(): void {
   justify-content: space-between;
   gap: 8px;
   font-size: 12px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(12,16,26,0.45);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.bst-prompt-body {
+  margin-top: 6px;
 }
 .bst-prompt-title {
   font-weight: 600;
   letter-spacing: 0.2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bst-prompt-icon {
+  font-size: 12px;
+  opacity: 0.85;
+}
+.bst-prompt-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 18px;
+  line-height: 1;
+  margin-left: auto;
+  color: rgba(243,245,249,0.9);
+  transition: transform .16s ease, color .16s ease;
+  transform: rotate(0deg);
+}
+.bst-prompt-head:hover .bst-prompt-toggle {
+  color: #ffffff;
+}
+.bst-prompt-group.collapsed .bst-prompt-toggle {
+  transform: rotate(-90deg);
+}
+.bst-prompt-group.collapsed .bst-prompt-body {
+  display: none;
 }
 .bst-prompt-reset {
   border: 1px solid rgba(255,255,255,0.25);
   border-radius: 8px;
   background: rgba(14,18,28,0.8);
   color: #fff;
-  padding: 4px 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   font-size: 12px;
   cursor: pointer;
   transition: border-color .16s ease, background-color .16s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .bst-prompt-reset:hover {
   border-color: rgba(255,255,255,0.45);
   background: rgba(20,26,38,0.9);
+}
+.bst-btn .bst-btn-icon-left {
+  margin-right: 6px;
+}
+.bst-open-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .bst-btn {
   border: 1px solid rgba(255,255,255,0.2);
@@ -593,12 +833,35 @@ function ensureStyles(): void {
   border-radius: 8px;
   padding: 4px 6px;
 }
+.bst-graph-window-select.active {
+  border-color: color-mix(in srgb, var(--bst-accent) 70%, #ffffff 30%);
+  box-shadow: 0 0 0 2px rgba(56,189,248,0.2);
+}
+.bst-graph-canvas {
+  position: relative;
+}
 .bst-graph-svg {
   width: 100%;
   height: 320px;
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 10px;
   background: #0d1220;
+}
+.bst-graph-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(8, 12, 20, 0.95);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: #f3f5f9;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.bst-graph-tooltip.visible {
+  opacity: 1;
 }
 .bst-graph-toggle {
   display: inline-flex;
@@ -893,14 +1156,17 @@ export function renderTracker(
       const ratio = Math.max(0, Math.min(1, done / total));
       const percent = Math.round(ratio * 100);
       const left = `stage ${Math.min(done + 1, total)}/${total}`;
-      let title = "Preparing tracker context";
+      let title = uiState.stepLabel ?? "Preparing tracker context";
       let subtitle = "Collecting recent messages and active characters.";
       if (done === 1) {
-        title = "Requesting relationship analysis";
+        title = uiState.stepLabel ?? "Requesting relationship analysis";
         subtitle = "Sending extraction prompt to backend/profile.";
       } else if (done >= 2) {
-        title = "Parsing and applying tracker update";
+        title = uiState.stepLabel ?? "Parsing and applying tracker update";
         subtitle = "Validating AI delta output and updating relationship state.";
+      }
+      if (uiState.stepLabel && uiState.stepLabel !== title) {
+        subtitle = uiState.stepLabel;
       }
       const loadingBox = document.createElement("div");
       loadingBox.className = "bst-loading";
@@ -966,10 +1232,10 @@ export function renderTracker(
       const connectionShort = toPercent(data.statistics.connection?.[name] ?? numericFallbackForStat("connection", settings));
       card.innerHTML = `
         <div class="bst-head">
-          <div class="bst-name">${name}</div>
+          <div class="bst-name" title="${name}">${name}</div>
           <div class="bst-actions">
             <button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> Graph</button>
-            <div class="bst-state">${isActive ? "Active" : settings.inactiveLabel}</div>
+            <div class="bst-state" title="${isActive ? "Active" : settings.inactiveLabel}">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>
           </div>
         </div>
         <div class="bst-collapsed-summary" title="Affection / Trust / Desire / Connection">
@@ -1149,6 +1415,16 @@ function buildPointCircles(values: number[], color: string, _stat: string, width
   }).join("");
 }
 
+function buildLastPointCircle(values: number[], color: string, width: number, height: number, pad = 24): string {
+  if (!values.length) return "";
+  const drawableW = Math.max(1, width - pad * 2);
+  const drawableH = Math.max(1, height - pad * 2);
+  const idx = values.length - 1;
+  const x = pad + (values.length === 1 ? drawableW / 2 : (drawableW * idx) / (values.length - 1));
+  const y = pad + ((100 - values[idx]) / 100) * drawableH;
+  return `<circle cx="${x}" cy="${y}" r="4.2" fill="${color}" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />`;
+}
+
 export function openGraphModal(input: {
   character: string;
   history: TrackerData[];
@@ -1226,7 +1502,7 @@ export function openGraphModal(input: {
     <div class="bst-graph-controls">
       <label class="bst-graph-toggle" title="Display history range">
         <span>History</span>
-        <select class="bst-graph-window-select" data-action="window">
+        <select class="bst-graph-window-select${windowPreference !== "all" ? " active" : ""}" data-action="window">
           <option value="30" ${windowPreference === "30" ? "selected" : ""}>30</option>
           <option value="60" ${windowPreference === "60" ? "selected" : ""}>60</option>
           <option value="120" ${windowPreference === "120" ? "selected" : ""}>120</option>
@@ -1239,12 +1515,13 @@ export function openGraphModal(input: {
         <span>Smoothed</span>
       </label>
     </div>
+    <div class="bst-graph-canvas">
     <svg class="bst-graph-svg" viewBox="0 0 ${width} ${height}" width="100%" height="320">
-      <line x1="24" y1="${height - 24 - ((height - 48) * 0.25)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.25)}" stroke="rgba(255,255,255,0.11)" stroke-width="1"></line>
-      <line x1="24" y1="${height - 24 - ((height - 48) * 0.5)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.5)}" stroke="rgba(255,255,255,0.11)" stroke-width="1"></line>
-      <line x1="24" y1="${height - 24 - ((height - 48) * 0.75)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.75)}" stroke="rgba(255,255,255,0.11)" stroke-width="1"></line>
-      <line x1="24" y1="${height - 24}" x2="${width - 24}" y2="${height - 24}" stroke="rgba(255,255,255,0.25)" stroke-width="1"></line>
-      <line x1="24" y1="24" x2="24" y2="${height - 24}" stroke="rgba(255,255,255,0.25)" stroke-width="1"></line>
+      <line x1="24" y1="${height - 24 - ((height - 48) * 0.25)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.25)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"></line>
+      <line x1="24" y1="${height - 24 - ((height - 48) * 0.5)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.5)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"></line>
+      <line x1="24" y1="${height - 24 - ((height - 48) * 0.75)}" x2="${width - 24}" y2="${height - 24 - ((height - 48) * 0.75)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"></line>
+      <line x1="24" y1="${height - 24}" x2="${width - 24}" y2="${height - 24}" stroke="rgba(255,255,255,0.18)" stroke-width="1"></line>
+      <line x1="24" y1="24" x2="24" y2="${height - 24}" stroke="rgba(255,255,255,0.18)" stroke-width="1"></line>
       <text x="8" y="${height - 24}" fill="rgba(255,255,255,0.75)" font-size="10">0</text>
       <text x="4" y="${height - 24 - ((height - 48) * 0.25)}" fill="rgba(255,255,255,0.75)" font-size="10">25</text>
       <text x="4" y="${height - 24 - ((height - 48) * 0.5)}" fill="rgba(255,255,255,0.75)" font-size="10">50</text>
@@ -1263,8 +1540,21 @@ export function openGraphModal(input: {
       ${trustDots}
       ${desireDots}
       ${connectionDots}
+      ${buildLastPointCircle(points.affection, "#ff6b81", width, height)}
+      ${buildLastPointCircle(points.trust, "#55d5ff", width, height)}
+      ${buildLastPointCircle(points.desire, "#ffb347", width, height)}
+      ${buildLastPointCircle(points.connection, connectionColor, width, height)}
+      <g id="bst-graph-hover" opacity="0">
+        <line id="bst-graph-hover-line" x1="0" y1="24" x2="0" y2="${height - 24}" stroke="rgba(255,255,255,0.25)" stroke-width="1"></line>
+        <circle id="bst-graph-hover-affection" r="3.8" fill="#ff6b81"></circle>
+        <circle id="bst-graph-hover-trust" r="3.8" fill="#55d5ff"></circle>
+        <circle id="bst-graph-hover-desire" r="3.8" fill="#ffb347"></circle>
+        <circle id="bst-graph-hover-connection" r="3.8" fill="${connectionColor}"></circle>
+      </g>
       ${snapshotCount === 0 ? `<text x="${Math.round(width / 2)}" y="${Math.round(height / 2)}" fill="rgba(255,255,255,0.65)" font-size="13" text-anchor="middle">No tracker history yet</text>` : ""}
     </svg>
+    <div class="bst-graph-tooltip" id="bst-graph-tooltip"></div>
+    </div>
     <div class="bst-graph-legend">
       <span><i class="bst-legend-dot" style="background:#ff6b81;"></i>Affection ${Math.round(latest.affection)}</span>
       <span><i class="bst-legend-dot" style="background:#55d5ff;"></i>Trust ${Math.round(latest.trust)}</span>
@@ -1273,6 +1563,74 @@ export function openGraphModal(input: {
     </div>
   `;
   document.body.appendChild(modal);
+
+  const svg = modal.querySelector(".bst-graph-svg") as SVGSVGElement | null;
+  const hoverGroup = modal.querySelector("#bst-graph-hover") as SVGGElement | null;
+  const hoverLine = modal.querySelector("#bst-graph-hover-line") as SVGLineElement | null;
+  const hoverDots = {
+    affection: modal.querySelector("#bst-graph-hover-affection") as SVGCircleElement | null,
+    trust: modal.querySelector("#bst-graph-hover-trust") as SVGCircleElement | null,
+    desire: modal.querySelector("#bst-graph-hover-desire") as SVGCircleElement | null,
+    connection: modal.querySelector("#bst-graph-hover-connection") as SVGCircleElement | null,
+  };
+  const tooltip = modal.querySelector("#bst-graph-tooltip") as HTMLDivElement | null;
+  const pointCount = points.affection.length;
+  if (svg && hoverGroup && hoverLine && tooltip && pointCount > 0) {
+    const pad = 24;
+    const drawableW = Math.max(1, width - pad * 2);
+    const drawableH = Math.max(1, height - pad * 2);
+    const xFor = (idx: number): number =>
+      pad + (pointCount === 1 ? drawableW / 2 : (drawableW * idx) / (pointCount - 1));
+    const yFor = (value: number): number => pad + ((100 - value) / 100) * drawableH;
+    const clampIndex = (idx: number): number => Math.max(0, Math.min(pointCount - 1, idx));
+      const updateHover = (clientX: number, clientY: number): void => {
+        const rect = svg.getBoundingClientRect();
+        const relX = clientX - rect.left;
+        const relY = clientY - rect.top;
+        const idx = clampIndex(Math.round(((relX - pad) / drawableW) * (pointCount - 1)));
+        const cx = xFor(idx);
+        const ay = yFor(points.affection[idx] ?? 0);
+        const ty = yFor(points.trust[idx] ?? 0);
+        const dy = yFor(points.desire[idx] ?? 0);
+        const cy = yFor(points.connection[idx] ?? 0);
+
+        hoverGroup.setAttribute("opacity", "1");
+        hoverLine.setAttribute("x1", String(cx));
+        hoverLine.setAttribute("x2", String(cx));
+        hoverDots.affection?.setAttribute("cx", String(cx));
+        hoverDots.affection?.setAttribute("cy", String(ay));
+        hoverDots.trust?.setAttribute("cx", String(cx));
+        hoverDots.trust?.setAttribute("cy", String(ty));
+        hoverDots.desire?.setAttribute("cx", String(cx));
+        hoverDots.desire?.setAttribute("cy", String(dy));
+        hoverDots.connection?.setAttribute("cx", String(cx));
+        hoverDots.connection?.setAttribute("cy", String(cy));
+
+        tooltip.classList.add("visible");
+        tooltip.innerHTML = `
+          <div><strong>Index:</strong> ${idx + 1}/${pointCount}</div>
+          <div>Affection: ${Math.round(points.affection[idx] ?? 0)}</div>
+          <div>Trust: ${Math.round(points.trust[idx] ?? 0)}</div>
+          <div>Desire: ${Math.round(points.desire[idx] ?? 0)}</div>
+          <div>Connection: ${Math.round(points.connection[idx] ?? 0)}</div>
+        `;
+        const canvas = modal.querySelector(".bst-graph-canvas") as HTMLElement;
+        const canvasRect = canvas.getBoundingClientRect();
+        const localX = clientX - canvasRect.left;
+        const localY = clientY - canvasRect.top;
+        const tooltipWidth = tooltip.offsetWidth || 140;
+        const tooltipHeight = tooltip.offsetHeight || 60;
+        const left = Math.min(canvasRect.width - tooltipWidth - 8, Math.max(8, localX + 12));
+        const top = Math.min(canvasRect.height - tooltipHeight - 8, Math.max(8, localY + 12));
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      };
+    svg.addEventListener("mousemove", event => updateHover(event.clientX, event.clientY));
+    svg.addEventListener("mouseleave", () => {
+      hoverGroup.setAttribute("opacity", "0");
+      tooltip.classList.remove("visible");
+    });
+  }
 
   modal.querySelector('[data-action="close"]')?.addEventListener("click", () => closeGraphModal());
   modal.querySelector('[data-action="toggle-smoothing"]')?.addEventListener("change", event => {
@@ -1339,8 +1697,8 @@ export function openSettingsModal(input: {
       </div>
       <button class="bst-btn bst-close-btn" data-action="close" title="Close settings" aria-label="Close settings">&times;</button>
     </div>
-    <div class="bst-settings-section">
-      <h4>Quick Help</h4>
+    <div class="bst-settings-section bst-quick-help">
+      <h4><span class="bst-header-icon fa-solid fa-circle-info"></span>Quick Help</h4>
       <div class="bst-help-line"><strong>Extraction mode:</strong> Unified = faster single request. Sequential = one request per stat (more robust, slower).</div>
       <ul class="bst-help-list">
         <li><strong>Affection:</strong> emotional warmth and care</li>
@@ -1351,37 +1709,33 @@ export function openSettingsModal(input: {
       <div class="bst-help-line"><strong>Mood</strong> is short-term tone. <strong>Last Thought</strong> is one brief internal line for continuity.</div>
     </div>
     <div class="bst-settings-section">
-      <h4>Connection</h4>
+      <h4><span class="bst-header-icon fa-solid fa-plug"></span>Connection &amp; Generation</h4>
       <div class="bst-settings-grid">
         <label>Connection Profile <select data-k="connectionProfile">${profileOptionsHtml}</select></label>
-      </div>
-    </div>
-    <div class="bst-settings-section">
-      <h4>Generation</h4>
-      <div class="bst-settings-grid">
-        <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
         <label>Max Tokens Override <input data-k="maxTokensOverride" type="number" min="0" max="100000"></label>
         <label>Context Size Override <input data-k="truncationLengthOverride" type="number" min="0" max="200000"></label>
-        <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
-        <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4>Extraction</h4>
+      <h4><span class="bst-header-icon fa-solid fa-filter"></span>Extraction</h4>
       <div class="bst-settings-grid">
-        <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
+        <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
         <label data-bst-row="maxConcurrentCalls">Max Concurrent Requests <input data-k="maxConcurrentCalls" type="number" min="1" max="8"></label>
-        <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
         <label data-bst-row="maxRetriesPerStat">Max Retries Per Stat <input data-k="maxRetriesPerStat" type="number" min="0" max="4"></label>
         <label>Max Delta Per Turn <input data-k="maxDeltaPerTurn" type="number" min="1" max="30"></label>
         <label>Confidence Dampening <input data-k="confidenceDampening" type="number" min="0" max="1" step="0.05"></label>
         <label>Mood Stickiness <input data-k="moodStickiness" type="number" min="0" max="1" step="0.05"></label>
-        <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
         <label data-bst-row="activityLookback">Activity Lookback <input data-k="activityLookback" type="number" min="1" max="25"></label>
+        <div class="bst-section-divider">Toggles</div>
+        <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
+        <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
+        <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
+        <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
+        <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4>Tracked Stats</h4>
+      <h4><span class="bst-header-icon fa-solid fa-chart-line"></span>Tracked Stats</h4>
       <div class="bst-settings-grid">
         <label class="bst-check"><input data-k="trackAffection" type="checkbox">Track Affection</label>
         <label class="bst-check"><input data-k="trackTrust" type="checkbox">Track Trust</label>
@@ -1392,110 +1746,139 @@ export function openSettingsModal(input: {
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4>Display</h4>
+      <h4><span class="bst-header-icon fa-solid fa-eye"></span>Display</h4>
       <div class="bst-settings-grid">
-        <label class="bst-check"><input data-k="showInactive" type="checkbox">Show Inactive</label>
         <label data-bst-row="inactiveLabel">Inactive Label <input data-k="inactiveLabel" type="text"></label>
-        <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
-        <label>Accent Color <input data-k="accentColor" type="text"></label>
+        <label>Accent Color
+          <div class="bst-color-inputs">
+            <input data-k-color="accentColor" type="color">
+          </div>
+        </label>
         <label>Card Opacity <input data-k="cardOpacity" type="number" min="0.1" max="1" step="0.01"></label>
         <label>Border Radius <input data-k="borderRadius" type="number" min="0" max="32"></label>
         <label>Font Size <input data-k="fontSize" type="number" min="10" max="22"></label>
+        <div class="bst-section-divider">Toggles</div>
+        <label class="bst-check"><input data-k="showInactive" type="checkbox">Show Inactive</label>
+        <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4>Prompts</h4>
-      <div class="bst-help-line">Unified prompt is used for one-prompt extraction. Sequential mode uses per-stat prompts.</div>
-      <div class="bst-help-line">Only the instruction section is editable; protocol blocks are fixed for safety and consistency.</div>
-      <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
-      <div class="bst-help-line">Placeholders you can use:</div>
-      <ul class="bst-help-list">
-        <li><code>{{envelope}}</code> — prebuilt header with user/characters + recent messages</li>
-        <li><code>{{userName}}</code> — current user name</li>
-        <li><code>{{characters}}</code> — comma-separated character names</li>
-        <li><code>{{contextText}}</code> — raw recent messages text</li>
-        <li><code>{{currentLines}}</code> — current tracker state lines</li>
-        <li><code>{{historyLines}}</code> — recent tracker snapshot lines</li>
-        <li><code>{{numericStats}}</code> — requested numeric stats list</li>
-        <li><code>{{textStats}}</code> — requested text stats list</li>
-        <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
-        <li><code>{{moodOptions}}</code> — allowed mood labels</li>
-      </ul>
+      <h4><span class="bst-header-icon fa-solid fa-pen-to-square"></span>Prompts</h4>
+            <details class="bst-help-details">
+        <summary>Prompt help</summary>
+        <div class="bst-help-line">Unified prompt is used for one-prompt extraction. Sequential mode uses per-stat prompts.</div>
+        <div class="bst-help-line">Only the instruction section is editable; protocol blocks are fixed for safety and consistency.</div>
+        <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
+        <div class="bst-help-line">Placeholders you can use:</div>
+        <ul class="bst-help-list">
+          <li><code>{{envelope}}</code> — prebuilt header with user/characters + recent messages</li>
+          <li><code>{{userName}}</code> — current user name</li>
+          <li><code>{{characters}}</code> — comma-separated character names</li>
+          <li><code>{{contextText}}</code> — raw recent messages text</li>
+          <li><code>{{currentLines}}</code> — current tracker state lines</li>
+          <li><code>{{historyLines}}</code> — recent tracker snapshot lines</li>
+          <li><code>{{numericStats}}</code> — requested numeric stats list</li>
+          <li><code>{{textStats}}</code> — requested text stats list</li>
+          <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
+          <li><code>{{moodOptions}}</code> — allowed mood labels</li>
+        </ul>
+      </details>
       <div class="bst-settings-grid bst-settings-grid-single bst-prompts-stack">
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Unified Prompt</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateUnified" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-layer-group"></span>Unified Prompt</span>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateUnified" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateUnified" rows="8"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(UNIFIED_PROMPT_PROTOCOL)}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateUnified" rows="8"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(UNIFIED_PROMPT_PROTOCOL)}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: Affection</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialAffection" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-heart"></span>Seq: Affection</span>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialAffection" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("affection"))}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("affection"))}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: Trust</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialTrust" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-shield-heart"></span>Seq: Trust</span>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialTrust" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("trust"))}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("trust"))}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: Desire</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialDesire" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-fire"></span>Seq: Desire</span>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialDesire" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("desire"))}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("desire"))}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: Connection</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialConnection" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-link"></span>Seq: Connection</span>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialConnection" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("connection"))}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("connection"))}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: Mood</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialMood" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-face-smile"></span>Seq: Mood</span>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialMood" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialMood" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(MOOD_PROMPT_PROTOCOL)}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialMood" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(MOOD_PROMPT_PROTOCOL)}</pre>
+          </div>
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title">Seq: LastThought</span>
-            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialLastThought" title="Reset to default.">⟲</button>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-brain"></span>Seq: LastThought</span>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialLastThought" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
-          <div class="bst-prompt-caption">Instruction (editable)</div>
-          <textarea data-k="promptTemplateSequentialLastThought" rows="6"></textarea>
-          <div class="bst-prompt-caption">Protocol (read-only)</div>
-          <pre class="bst-prompt-protocol">${escapeHtml(LAST_THOUGHT_PROMPT_PROTOCOL)}</pre>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable)</div>
+            <textarea data-k="promptTemplateSequentialLastThought" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(LAST_THOUGHT_PROMPT_PROTOCOL)}</pre>
+          </div>
         </label>
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4>Debug</h4>
+      <h4><span class="bst-header-icon fa-solid fa-bug"></span>Debug</h4>
       <div class="bst-settings-grid">
         <label class="bst-check"><input data-k="debug" type="checkbox">Debug</label>
       </div>
@@ -1505,10 +1888,21 @@ export function openSettingsModal(input: {
         <label class="bst-check" data-bst-row="includeGraphInDiagnostics"><input data-k="includeGraphInDiagnostics" type="checkbox">Include Graph Data In Diagnostics</label>
         </div>
         <div class="bst-debug-actions">
-          <button class="bst-btn bst-btn-soft bst-btn-icon" data-action="retrack" title="Retrack Last AI Message" aria-label="Retrack Last AI Message"><span aria-hidden="true">&#x21BB;</span></button>
-          <button class="bst-btn bst-btn-danger" data-action="clear-chat" title="Delete all tracker data for the currently open chat only.">Delete Tracker Data (Current Chat)</button>
-          <button class="bst-btn" data-action="dump-diagnostics" title="Collect and copy current diagnostics report to clipboard.">Dump Diagnostics</button>
-          <button class="bst-btn bst-btn-danger" data-action="clear-diagnostics" title="Clear stored diagnostics traces and last debug record for this chat scope.">Clear Diagnostics</button>
+          <button class="bst-btn bst-btn-soft bst-btn-icon" data-action="retrack" title="Retrack Last AI Message" aria-label="Retrack Last AI Message">
+            <span class="fa-solid fa-rotate-left" aria-hidden="true"></span>
+          </button>
+          <button class="bst-btn bst-btn-danger" data-action="clear-chat" title="Delete all tracker data for the currently open chat only.">
+            <span class="fa-solid fa-trash bst-btn-icon-left" aria-hidden="true"></span>
+            Delete Tracker Data (Current Chat)
+          </button>
+          <button class="bst-btn" data-action="dump-diagnostics" title="Collect and copy current diagnostics report to clipboard.">
+            <span class="fa-solid fa-file-export bst-btn-icon-left" aria-hidden="true"></span>
+            Dump Diagnostics
+          </button>
+          <button class="bst-btn bst-btn-danger" data-action="clear-diagnostics" title="Clear stored diagnostics traces and last debug record for this chat scope.">
+            <span class="fa-solid fa-broom bst-btn-icon-left" aria-hidden="true"></span>
+            Clear Diagnostics
+          </button>
         </div>
         <div style="margin-top:8px;font-size:12px;opacity:.9;">Latest Extraction Debug Record</div>
         <div class="bst-debug-box">${input.debugRecord ? JSON.stringify(input.debugRecord, null, 2) : "No debug record yet."}</div>
@@ -1518,6 +1912,198 @@ export function openSettingsModal(input: {
     </div>
   `;
   document.body.appendChild(modal);
+
+  const mergeConnectionAndGeneration = (): void => {
+    const sections = Array.from(modal.querySelectorAll(".bst-settings-section")) as HTMLElement[];
+    const connectionSection = sections.find(section => section.querySelector("h4")?.textContent?.trim() === "Connection & Generation");
+    const generationSection = sections.find(section => section.querySelector("h4")?.textContent?.trim() === "Generation");
+    if (!connectionSection || !generationSection) return;
+    const generationGrid = generationSection.querySelector(".bst-settings-grid");
+    if (!generationGrid) return;
+    const divider = document.createElement("div");
+    divider.className = "bst-section-divider";
+    divider.textContent = "Generation";
+    connectionSection.appendChild(divider);
+    connectionSection.appendChild(generationGrid);
+    generationSection.remove();
+  };
+  mergeConnectionAndGeneration();
+
+  const addMinMaxHints = (): void => {
+    const numberInputs = Array.from(modal.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
+    numberInputs.forEach(input => {
+      const minAttr = input.getAttribute("min");
+      const maxAttr = input.getAttribute("max");
+      if (minAttr === null && maxAttr === null) return;
+      const label = input.closest("label");
+      if (!label) return;
+      const existing = label.querySelector(".bst-minmax");
+      if (existing) return;
+      const span = document.createElement("span");
+      span.className = "bst-minmax";
+      const parts: string[] = [];
+      if (minAttr !== null && minAttr !== "") parts.push(`min ${minAttr}`);
+      if (maxAttr !== null && maxAttr !== "") parts.push(`max ${maxAttr}`);
+      span.textContent = parts.join(" · ");
+      label.appendChild(span);
+    });
+  };
+  addMinMaxHints();
+
+  const enforceNumberBounds = (): void => {
+    const numberInputs = Array.from(modal.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
+    numberInputs.forEach(input => {
+      const minAttr = input.getAttribute("min");
+      const maxAttr = input.getAttribute("max");
+      const min = minAttr !== null && minAttr !== "" ? Number(minAttr) : undefined;
+      const max = maxAttr !== null && maxAttr !== "" ? Number(maxAttr) : undefined;
+      if (min === undefined && max === undefined) return;
+      const label = input.closest("label");
+      if (!label) return;
+      let notice = label.querySelector(".bst-validation") as HTMLElement | null;
+      if (!notice) {
+        notice = document.createElement("span");
+        notice.className = "bst-validation";
+        notice.style.display = "none";
+        label.appendChild(notice);
+      }
+      let clearTimer: number | null = null;
+      let clampedThisFocus = false;
+      const clamp = (): void => {
+        if (input.value.trim() === "") return;
+        const raw = Number(input.value);
+        if (Number.isNaN(raw)) return;
+        let next = raw;
+        if (typeof min === "number") next = Math.max(min, next);
+        if (typeof max === "number") next = Math.min(max, next);
+        if (next !== raw) {
+          input.value = String(next);
+          clampedThisFocus = true;
+        }
+      };
+      input.addEventListener("input", clamp);
+      input.addEventListener("blur", () => {
+        clamp();
+        if (!clampedThisFocus) return;
+        const parts: string[] = [];
+        if (typeof min === "number") parts.push(`min ${min}`);
+        if (typeof max === "number") parts.push(`max ${max}`);
+        notice.textContent = `Allowed range: ${parts.join(" · ")}. Value adjusted.`;
+        notice.style.display = "block";
+        if (clearTimer !== null) window.clearTimeout(clearTimer);
+        clearTimer = window.setTimeout(() => {
+          notice.textContent = "";
+          notice.style.display = "none";
+        }, 1800);
+        clampedThisFocus = false;
+      });
+      input.addEventListener("focus", () => {
+        clampedThisFocus = false;
+      });
+    });
+  };
+  enforceNumberBounds();
+
+  const initSectionDrawers = (): void => {
+    const sectionIds: Record<string, string> = {
+      "Connection & Generation": "connection",
+      "Extraction": "extraction",
+      "Tracked Stats": "tracked-stats",
+      "Display": "display",
+      "Prompts": "prompts",
+      "Debug": "debug"
+    };
+    const sections = Array.from(modal.querySelectorAll(".bst-settings-section")) as HTMLElement[];
+    sections.forEach((section, index) => {
+      if (index === 0) return;
+      const header = section.querySelector("h4") as HTMLHeadingElement | null;
+      if (!header) return;
+      const label = header.textContent?.trim() ?? "";
+      const id = sectionIds[label] ?? label.toLowerCase().replace(/\s+/g, "-");
+      section.dataset.bstSection = id;
+      const head = document.createElement("div");
+      head.className = "bst-section-head";
+      head.setAttribute("role", "button");
+      head.setAttribute("tabindex", "0");
+      head.setAttribute("data-action", "toggle-section");
+      head.setAttribute("data-section", id);
+      head.setAttribute("aria-expanded", "true");
+      head.setAttribute("title", "Toggle section");
+      const icon = document.createElement("span");
+      icon.className = "bst-section-icon fa-solid fa-circle-chevron-down";
+      head.appendChild(header);
+      head.appendChild(icon);
+      section.insertBefore(head, section.firstChild);
+
+      const body = document.createElement("div");
+      body.className = "bst-section-body";
+      body.dataset.bstSectionBody = id;
+      while (section.childNodes.length > 1) {
+        body.appendChild(section.childNodes[1]);
+      }
+      section.appendChild(body);
+
+      const storageKey = `bst.section.${id}`;
+      const stored = localStorage.getItem(storageKey);
+      const defaultOpen = id === "extraction" || id === "display";
+      const collapsed = stored ? stored === "collapsed" : !defaultOpen;
+      if (collapsed) {
+        section.classList.add("bst-section-collapsed");
+        head.setAttribute("aria-expanded", "false");
+      }
+
+      const toggleSection = (event: Event): void => {
+        event.preventDefault();
+        event.stopPropagation();
+        const nextCollapsed = !section.classList.contains("bst-section-collapsed");
+        section.classList.toggle("bst-section-collapsed", nextCollapsed);
+        head.setAttribute("aria-expanded", nextCollapsed ? "false" : "true");
+        localStorage.setItem(storageKey, nextCollapsed ? "collapsed" : "expanded");
+      };
+      head.addEventListener("click", toggleSection);
+      head.addEventListener("keydown", event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        toggleSection(event);
+      });
+    });
+  };
+  initSectionDrawers();
+
+  const initPromptGroups = (): void => {
+    const groups = Array.from(modal.querySelectorAll(".bst-prompt-group")) as HTMLElement[];
+    groups.forEach(group => {
+      const head = group.querySelector(".bst-prompt-head") as HTMLElement | null;
+      if (!head) return;
+      group.classList.add("collapsed");
+      head.setAttribute("role", "button");
+      head.setAttribute("tabindex", "0");
+      const toggle = (event: Event): void => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest(".bst-prompt-reset")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        group.classList.toggle("collapsed");
+      };
+      head.addEventListener("click", toggle);
+      head.addEventListener("keydown", event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        toggle(event);
+      });
+    });
+  };
+  initPromptGroups();
+
+  const initAccentColorPicker = (): void => {
+    const colorInput = modal.querySelector('[data-k-color="accentColor"]') as HTMLInputElement | null;
+    if (!colorInput) return;
+    const fallback = input.settings.accentColor || "#ff5a6f";
+    colorInput.value = fallback;
+    colorInput.addEventListener("input", () => {
+      (input.settings as unknown as Record<string, unknown>).accentColor = colorInput.value;
+      persistLive();
+    });
+  };
+  initAccentColorPicker();
 
   const set = (key: keyof BetterSimTrackerSettings, value: string): void => {
     const node = modal.querySelector(`[data-k="${key}"]`) as HTMLInputElement | HTMLSelectElement | null;
@@ -1553,7 +2139,8 @@ export function openSettingsModal(input: {
   set("trackConnection", String(input.settings.trackConnection));
   set("trackMood", String(input.settings.trackMood));
   set("trackLastThought", String(input.settings.trackLastThought));
-  set("accentColor", input.settings.accentColor);
+  const accentInput = modal.querySelector('[data-k-color="accentColor"]') as HTMLInputElement | null;
+  if (accentInput) accentInput.value = input.settings.accentColor || "#ff5a6f";
   set("cardOpacity", String(input.settings.cardOpacity));
   set("borderRadius", String(input.settings.borderRadius));
   set("fontSize", String(input.settings.fontSize));
@@ -1784,3 +2371,4 @@ export function closeSettingsModal(): void {
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
 }
+
