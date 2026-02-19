@@ -215,6 +215,11 @@ function ensureStyles(): void {
   color: #fff;
   box-shadow: 0 8px 20px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.06) inset;
   padding: 11px 12px;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.bst-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.08) inset;
 }
 .bst-card-inactive {
   border-color: rgba(255,255,255,0.12);
@@ -229,27 +234,39 @@ function ensureStyles(): void {
 }
 .bst-card-inactive .bst-state {
   background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.9);
 }
 .bst-inactive-icon {
   margin-left: 6px;
   font-size: 12px;
   opacity: 0.8;
+  display: inline-flex;
+  align-items: center;
+  transform: translateY(1px);
 }
 .bst-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 7px;
+  margin-bottom: 6px;
+  gap: 8px;
 }
 .bst-name {
   font-weight: 700;
   letter-spacing: 0.2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .bst-state {
   font-size: 12px;
   padding: 2px 8px;
   border-radius: 999px;
   background: rgba(255,255,255,0.14);
+  flex-shrink: 0;
 }
 .bst-actions {
   display: flex;
@@ -290,7 +307,7 @@ function ensureStyles(): void {
   border-color: color-mix(in srgb, var(--bst-accent) 78%, #ffffff 22%);
   background: color-mix(in srgb, var(--bst-accent) 33%, #131a28 67%);
 }
-.bst-row { margin: 7px 0; }
+.bst-row { margin: 6px 0; }
 .bst-label {
   display: flex;
   justify-content: space-between;
@@ -334,12 +351,17 @@ function ensureStyles(): void {
 .bst-delta-flat { color: #d4d9e8; }
 .bst-thought {
   margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.3;
   padding: 8px;
   border-radius: 10px;
   background: rgba(0,0,0,0.18);
   font-style: italic;
+  color: rgba(243,245,249,0.78);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .bst-root-collapsed .bst-body {
   display: none;
@@ -1182,10 +1204,10 @@ export function renderTracker(
       const connectionShort = toPercent(data.statistics.connection?.[name] ?? numericFallbackForStat("connection", settings));
       card.innerHTML = `
         <div class="bst-head">
-          <div class="bst-name">${name}</div>
+          <div class="bst-name" title="${name}">${name}</div>
           <div class="bst-actions">
             <button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> Graph</button>
-            <div class="bst-state">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>
+            <div class="bst-state" title="${isActive ? "Active" : settings.inactiveLabel}">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>
           </div>
         </div>
         <div class="bst-collapsed-summary" title="Affection / Trust / Desire / Connection">
