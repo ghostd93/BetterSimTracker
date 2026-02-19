@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.4.2] - 2026-02-18
+### Added
+- Per-stat sequential prompt templates in settings, with a reset-to-defaults button.
+### Changed
+- Sequential extraction now uses per-stat templates instead of the unified prompt template.
+
 ## [1.0.4.1] - 2026-02-18
 ### Added
 - Prompt template editor in settings for unified and repair prompts, plus a reset-to-defaults button.

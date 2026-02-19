@@ -86,6 +86,15 @@ Keep it to one short sentence per character.
 
 {{basePrompt}}`;
 
+export const DEFAULT_SEQUENTIAL_PROMPT_TEMPLATES: Record<StatKey, string> = {
+  affection: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
+  trust: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
+  desire: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
+  connection: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
+  mood: DEFAULT_UNIFIED_PROMPT_TEMPLATE,
+  lastThought: DEFAULT_UNIFIED_PROMPT_TEMPLATE
+};
+
 function commonEnvelope(userName: string, characters: string[], contextText: string): string {
   return [
     `User: ${userName}`,
@@ -195,5 +204,63 @@ export function buildUnifiedPrompt(
     textStats: textStats.length ? textStats.join(", ") : "none",
     maxDelta: String(safeMaxDelta),
     moodOptions: moodOptions.join(", "),
+    stat: "multiple",
+    statUpper: "MULTIPLE",
+  });
+}
+
+export function buildSequentialPrompt(
+  stat: StatKey,
+  userName: string,
+  characters: string[],
+  contextText: string,
+  current: Statistics | null,
+  history: TrackerData[] = [],
+  maxDeltaPerTurn = 15,
+  template?: string,
+): string {
+  const envelope = commonEnvelope(userName, characters, contextText);
+  const numericStats = stat === "affection" || stat === "trust" || stat === "desire" || stat === "connection"
+    ? [stat]
+    : [];
+  const textStats = stat === "mood" || stat === "lastThought" ? [stat] : [];
+
+  const currentLines = characters.map(name => {
+    const affection = Number(current?.affection?.[name] ?? 50);
+    const trust = Number(current?.trust?.[name] ?? 50);
+    const desire = Number(current?.desire?.[name] ?? 50);
+    const connection = Number(current?.connection?.[name] ?? 50);
+    const mood = String(current?.mood?.[name] ?? "Neutral");
+    return `- ${name}: affection=${Math.max(0, Math.min(100, Math.round(affection)))}, trust=${Math.max(0, Math.min(100, Math.round(trust)))}, desire=${Math.max(0, Math.min(100, Math.round(desire)))}, connection=${Math.max(0, Math.min(100, Math.round(connection)))}, mood=${mood}`;
+  }).join("\n");
+
+  const historyLines = history.slice(0, 3).map((entry, idx) => {
+    const header = `Snapshot ${idx + 1} (newest-${idx}):`;
+    const rows = characters.map(name => {
+      const affection = Number(entry.statistics.affection?.[name] ?? 50);
+      const trust = Number(entry.statistics.trust?.[name] ?? 50);
+      const desire = Number(entry.statistics.desire?.[name] ?? 50);
+      const connection = Number(entry.statistics.connection?.[name] ?? 50);
+      const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
+      return `  - ${name}: affection=${Math.round(affection)}, trust=${Math.round(trust)}, desire=${Math.round(desire)}, connection=${Math.round(connection)}, mood=${mood}`;
+    }).join("\n");
+    return `${header}\n${rows}`;
+  }).join("\n");
+
+  const safeMaxDelta = Math.max(1, Math.round(Number(maxDeltaPerTurn) || 15));
+  const resolvedTemplate = template?.trim() ? template : DEFAULT_UNIFIED_PROMPT_TEMPLATE;
+  return renderTemplate(resolvedTemplate, {
+    envelope,
+    userName,
+    characters: characters.join(", "),
+    contextText,
+    currentLines,
+    historyLines: historyLines || "- none",
+    numericStats: numericStats.length ? numericStats.join(", ") : "none",
+    textStats: textStats.length ? textStats.join(", ") : "none",
+    maxDelta: String(safeMaxDelta),
+    moodOptions: moodOptions.join(", "),
+    stat,
+    statUpper: stat.toUpperCase(),
   });
 }
