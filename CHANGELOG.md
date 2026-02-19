@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.5] - 2026-02-19
+### Added
+- Editable per-stat prompt templates with per-prompt reset buttons.
+- Prompt placeholder documentation in settings and README.
+- Settings to override max tokens and context truncation length for extraction requests.
+### Changed
+- Sequential prompt defaults are stat-specific; strict/repair prompts are fixed.
+- Extraction now respects profile/preset token limits and truncation length.
+- Settings layout reorganized (quick help on top, connection/generation/extraction grouped).
+
 ## [1.0.4.13] - 2026-02-19
 ### Changed
 - Moved Quick Help to the top of settings.
