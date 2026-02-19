@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.5] - 2026-02-19
+### Changed
+- Centered and enlarged drawer angle icon.
+
 ## [1.0.6.4] - 2026-02-19
 ### Changed
 - Refined drawer header styling and icons; added spacing below headers.
