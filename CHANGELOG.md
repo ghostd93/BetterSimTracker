@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.6.2] - 2026-02-19
+### Changed
+- Merged Connection + Generation into a single drawer.
+- Drawer header bar now toggles; icon is a circular angle indicator.
+
 ## [1.0.6.1] - 2026-02-19
 ### Changed
 - Settings sections (except Quick Help) are collapsible and default to collapsed.
