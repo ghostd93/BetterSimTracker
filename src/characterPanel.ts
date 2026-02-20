@@ -17,6 +17,10 @@ type MoodImageSet = Partial<Record<MoodLabel, string>>;
 
 const moodLabelSet = new Set(moodOptions.map(label => label.toLowerCase()));
 const moodLabels = moodOptions as MoodLabel[];
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_WIDTH = 1024;
+const MAX_IMAGE_HEIGHT = 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 function notify(message: string, type: "info" | "success" | "warning" | "error" = "info"): void {
   const anyGlobal = globalThis as Record<string, unknown>;
@@ -48,6 +52,36 @@ function cssEscape(value: string): string {
     return globalThis.CSS.escape(value);
   }
   return value.replace(/["\\]/g, "\\$&");
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+async function validateImageFile(file: File): Promise<string | null> {
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+    return "Unsupported image format. Use PNG, JPG, or WebP.";
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return `Image too large. Max size is ${formatBytes(MAX_IMAGE_BYTES)}.`;
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Failed to load image."));
+      img.src = url;
+    });
+    if (img.width > MAX_IMAGE_WIDTH || img.height > MAX_IMAGE_HEIGHT) {
+      return `Image too large. Max dimensions are ${MAX_IMAGE_WIDTH}x${MAX_IMAGE_HEIGHT}px.`;
+    }
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+  return null;
 }
 
 function slugify(value: string): string {
@@ -127,51 +161,62 @@ function clampStat(value: string): number | null {
 }
 
 async function uploadMoodImage(context: STContext, characterName: string, mood: MoodLabel, file: File): Promise<string> {
-  const form = new FormData();
   const label = `bst_mood_${slugify(mood)}`;
-  form.append("name", characterName);
-  form.append("label", label);
-  form.append("spriteName", label);
-  form.append("file", file);
-
   const headers: Record<string, string> = {};
   if (context.csrf_token) {
     headers["X-CSRF-Token"] = context.csrf_token;
   }
 
-  const response = await fetch("/api/sprites/upload", {
-    method: "POST",
-    body: form,
-    headers
-  });
+  const fileFields = ["file", "avatar", "image", "sprite", "img"];
+  let lastStatus: number | null = null;
+  let lastError: string | null = null;
 
-  if (!response.ok) {
-    throw new Error(`Upload failed (${response.status})`);
+  for (const field of fileFields) {
+    const form = new FormData();
+    form.append("name", characterName);
+    form.append("label", label);
+    form.append("spriteName", label);
+    form.append(field, file);
+
+    const response = await fetch("/api/sprites/upload", {
+      method: "POST",
+      body: form,
+      headers
+    });
+
+    if (!response.ok) {
+      lastStatus = response.status;
+      lastError = `Upload failed (${response.status})`;
+      continue;
+    }
+
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+
+    if (typeof payload === "string" && payload.trim()) return payload.trim();
+
+    if (payload && typeof payload === "object") {
+      const obj = payload as Record<string, unknown>;
+      const candidate = String(
+        obj.url ??
+        obj.path ??
+        obj.file ??
+        obj.thumbnail ??
+        obj.relativePath ??
+        ""
+      ).trim();
+      if (candidate) return candidate;
+    }
+
+    lastError = "Upload succeeded but no file path returned.";
   }
 
-  let payload: unknown = null;
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
-  }
-
-  if (typeof payload === "string" && payload.trim()) return payload.trim();
-
-  if (payload && typeof payload === "object") {
-    const obj = payload as Record<string, unknown>;
-    const candidate = String(
-      obj.url ??
-      obj.path ??
-      obj.file ??
-      obj.thumbnail ??
-      obj.relativePath ??
-      ""
-    ).trim();
-    if (candidate) return candidate;
-  }
-
-  throw new Error("Upload succeeded but no file path returned.");
+  if (lastError) throw new Error(lastError + (lastStatus ? ` (status ${lastStatus})` : ""));
+  throw new Error("Upload failed.");
 }
 
 function countMoodImages(images: MoodImageSet | undefined): number {
@@ -252,6 +297,7 @@ function renderPanel(input: InitInput): void {
     <div class="bst-character-divider">Mood Images</div>
     <div class="bst-character-help">
       Upload one image per mood. All 15 must be set or the tracker will keep using emoji-only mood display.
+      Max ${formatBytes(MAX_IMAGE_BYTES)} and ${MAX_IMAGE_WIDTH}x${MAX_IMAGE_HEIGHT}px. PNG/JPG/WebP only.
     </div>
     ${partialSet ? `<div class="bst-character-warning">Mood image set incomplete (${moodCount}/15). Add the remaining images to activate.</div>` : ""}
     <div class="bst-character-moods">
@@ -329,6 +375,11 @@ function renderPanel(input: InitInput): void {
       const file = inputNode.files?.[0];
       inputNode.value = "";
       if (!mood || !file) return;
+      const validationError = await validateImageFile(file);
+      if (validationError) {
+        notify(validationError, "warning");
+        return;
+      }
       try {
         notify(`Uploading ${mood} image...`, "info");
         const url = await uploadMoodImage(context, characterName, mood, file);
