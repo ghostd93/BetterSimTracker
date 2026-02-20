@@ -153,6 +153,15 @@ Numeric scaling formula used by runtime:
 - `Context Size Override`: force truncation length for extraction (0 = auto)
 - `Include Character Cards in Extraction Prompt`: optional extra grounding when recent context is thin
 
+## Slash Commands
+
+- `/bst status`: show enabled stats, mode, injection, debug, and last tracked message index.
+- `/bst extract`: manual extraction on the latest AI message.
+- `/bst clear`: clear tracker data for the current chat.
+- `/bst toggle <stat>`: toggle `affection|trust|desire|connection|mood|lastThought`.
+- `/bst inject on|off`: toggle prompt injection.
+- `/bst debug on|off`: toggle debug mode.
+
 ## Settings Reference (Detailed)
 
 ### Extraction
