@@ -396,10 +396,11 @@ function ensureStyles(): void {
   align-items: center;
   gap: 14px;
   width: 100%;
+  justify-content: center;
 }
 .bst-mood-image {
-  width: clamp(56px, 12vw, 76px);
-  height: clamp(56px, 12vw, 76px);
+  width: clamp(64px, 11vw, 84px);
+  height: clamp(64px, 11vw, 84px);
   border-radius: clamp(12px, 3vw, 16px);
   object-fit: cover;
   justify-self: center;
@@ -445,14 +446,14 @@ function ensureStyles(): void {
 .bst-mood-bubble::after {
   content: "";
   position: absolute;
-  left: -6px;
-  top: 50%;
+  left: 26px;
+  bottom: -10px;
   width: 12px;
   height: 12px;
-  transform: translateY(-50%) rotate(45deg);
+  border-radius: 999px;
+  transform: none;
   background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08));
-  border-left: 1px solid rgba(255,255,255,0.22);
-  border-bottom: 1px solid rgba(255,255,255,0.22);
+  border: 1px solid rgba(255,255,255,0.22);
   box-shadow: 0 6px 12px rgba(0,0,0,0.22);
 }
 @media (max-width: 560px) {
@@ -461,6 +462,10 @@ function ensureStyles(): void {
     justify-items: center;
     gap: 10px;
   }
+  .bst-mood-image {
+    width: clamp(78px, 26vw, 110px);
+    height: clamp(78px, 26vw, 110px);
+  }
   .bst-mood-bubble {
     text-align: center;
     min-height: 52px;
@@ -468,8 +473,9 @@ function ensureStyles(): void {
   }
   .bst-mood-bubble::after {
     left: 50%;
-    top: -6px;
-    transform: translateX(-50%) rotate(45deg);
+    bottom: -10px;
+    top: auto;
+    transform: translateX(-50%);
   }
 }
 .bst-delta {
