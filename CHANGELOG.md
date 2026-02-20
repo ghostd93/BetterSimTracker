@@ -18,6 +18,7 @@ All notable changes to BetterSimTracker are documented here.
 - Checkbox spacing now matches the tracked stats layout.
 - Mood image bubble alignment refined for mobile and desktop.
 - Debug toggles now share the same checkbox grid layout as Tracked Stats.
+- Mood image bubble tail now uses circular dots (no diamond artifacts) and the image scales up on mobile.
 
 ## [1.0.9.11] - 2026-02-20
 ### Changed
