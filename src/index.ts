@@ -33,6 +33,7 @@ let lastActivityAnalysis: { allCharacterNames: string[]; activeCharacters: strin
 let chatGenerationInFlight = false;
 let chatGenerationSawCharacterRender = false;
 let chatGenerationStartLastAiIndex: number | null = null;
+let swipeGenerationActive = false;
 let slashCommandsRegistered = false;
 
 function getTraceStorageKey(context: STContext): string {
@@ -785,6 +786,7 @@ function registerEvents(context: STContext): void {
           swipeExtractionTimer = null;
         }
       }
+      swipeGenerationActive = type === "swipe";
       chatGenerationInFlight = true;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = getLastAiMessageIndex(context);
@@ -816,6 +818,18 @@ function registerEvents(context: STContext): void {
     chatGenerationInFlight = false;
     chatGenerationStartLastAiIndex = null;
     pushTrace("event.generation_ended");
+    if (swipeGenerationActive && pendingSwipeExtraction) {
+      const pending = pendingSwipeExtraction;
+      pendingSwipeExtraction = null;
+      if (swipeExtractionTimer !== null) {
+        window.clearTimeout(swipeExtractionTimer);
+        swipeExtractionTimer = null;
+      }
+      swipeGenerationActive = false;
+      scheduleExtraction(pending.reason, pending.messageIndex);
+      return;
+    }
+    swipeGenerationActive = false;
     if (pendingSwipeExtraction?.waitForGenerationEnd) {
       pendingSwipeExtraction = null;
       if (swipeExtractionTimer !== null) {
@@ -830,6 +844,7 @@ function registerEvents(context: STContext): void {
     chatGenerationInFlight = false;
     chatGenerationSawCharacterRender = false;
     chatGenerationStartLastAiIndex = null;
+    swipeGenerationActive = false;
     clearPendingSwipeExtraction();
     pushTrace("event.chat_changed");
     scheduleRefresh();
@@ -846,6 +861,9 @@ function registerEvents(context: STContext): void {
     source.on(events.CHARACTER_MESSAGE_RENDERED, () => {
       pushTrace("event.character_message_rendered");
       if (chatGenerationInFlight) {
+        if (swipeGenerationActive) {
+          chatGenerationSawCharacterRender = true;
+        }
         const currentLastAi = getLastAiMessageIndex(context);
         if (
           currentLastAi != null &&
@@ -888,6 +906,7 @@ function registerEvents(context: STContext): void {
       chatGenerationInFlight = false;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
+      swipeGenerationActive = false;
       clearPendingSwipeExtraction();
       pushTrace("event.chat_loaded");
       scheduleRefresh();
@@ -907,6 +926,7 @@ function registerEvents(context: STContext): void {
       chatGenerationInFlight = false;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
+      swipeGenerationActive = false;
       clearPendingSwipeExtraction();
       pushTrace("event.message_deleted");
       scheduleRefresh(60);
@@ -918,6 +938,7 @@ function registerEvents(context: STContext): void {
       chatGenerationInFlight = false;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
+      swipeGenerationActive = false;
       clearPendingSwipeExtraction();
       pushTrace("event.chat_deleted");
       scheduleRefresh(60);
