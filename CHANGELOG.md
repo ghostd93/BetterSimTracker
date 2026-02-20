@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.9.8] - 2026-02-20
+### Fixed
+- Character defaults panel no longer re-renders while editing, preventing text selection loss.
+and more...
+
 ## [1.0.9.7] - 2026-02-20
 ### Fixed
 - Sprite uploads now resolve the uploaded path via the sprites list endpoint.

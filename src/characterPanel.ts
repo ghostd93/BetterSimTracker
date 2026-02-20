@@ -213,7 +213,7 @@ export function initCharacterPanel(input: InitInput): void {
     }
     renderTimer = window.setTimeout(() => {
       renderTimer = null;
-      renderPanel(input);
+      renderPanel(input, false);
     }, 120);
   };
 
@@ -222,7 +222,7 @@ export function initCharacterPanel(input: InitInput): void {
   scheduleRender();
 }
 
-function renderPanel(input: InitInput): void {
+function renderPanel(input: InitInput, force = false): void {
   const context = input.getContext();
   const settings = input.getSettings();
   if (!context || !settings) return;
@@ -237,6 +237,11 @@ function renderPanel(input: InitInput): void {
     panel.id = PANEL_ID;
     panel.className = "bst-character-panel";
     container.appendChild(panel);
+  } else if (!force) {
+    const active = document.activeElement;
+    if (active && panel.contains(active)) {
+      return;
+    }
   }
 
   const nameInput = findNameInput(popup);
@@ -307,7 +312,7 @@ function renderPanel(input: InitInput): void {
 
   if (nameInput && !nameInput.dataset.bstListener) {
     nameInput.dataset.bstListener = "1";
-    nameInput.addEventListener("input", () => renderPanel(input));
+    nameInput.addEventListener("input", () => renderPanel(input, false));
   }
 
   panel.querySelectorAll<HTMLInputElement>("[data-bst-default]").forEach(node => {
@@ -375,7 +380,7 @@ function renderPanel(input: InitInput): void {
         input.saveSettings(context, next);
         input.onSettingsUpdated();
         notify(`${mood} image saved.`, "success");
-        renderPanel(input);
+        renderPanel(input, true);
       } catch (error) {
         notify(error instanceof Error ? error.message : "Mood image upload failed.", "error");
       }
@@ -402,7 +407,7 @@ function renderPanel(input: InitInput): void {
       input.setSettings(next);
       input.saveSettings(context, next);
       input.onSettingsUpdated();
-      renderPanel(input);
+      renderPanel(input, true);
     });
   });
 
@@ -416,6 +421,6 @@ function renderPanel(input: InitInput): void {
     input.setSettings(next);
     input.saveSettings(context, next);
     input.onSettingsUpdated();
-    renderPanel(input);
+    renderPanel(input, true);
   });
 }
