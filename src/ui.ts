@@ -443,19 +443,6 @@ function ensureStyles(): void {
   color: rgba(255,255,255,0.9);
   text-align: left;
 }
-.bst-mood-bubble::after {
-  content: "";
-  position: absolute;
-  left: 26px;
-  bottom: -10px;
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  transform: none;
-  background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08));
-  border: 1px solid rgba(255,255,255,0.22);
-  box-shadow: 0 6px 12px rgba(0,0,0,0.22);
-}
 @media (max-width: 560px) {
   .bst-mood-wrap--image {
     grid-template-columns: 1fr;
@@ -470,12 +457,6 @@ function ensureStyles(): void {
     text-align: center;
     min-height: 52px;
     max-width: 100%;
-  }
-  .bst-mood-bubble::after {
-    left: 50%;
-    bottom: -10px;
-    top: auto;
-    transform: translateX(-50%);
   }
 }
 .bst-delta {
