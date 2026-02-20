@@ -2216,7 +2216,7 @@ export function openSettingsModal(input: {
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-bug"></span>Debug</h4>
-      <div class="bst-check-grid bst-check-grid-single">
+      <div class="bst-check-grid">
         <label class="bst-check"><input data-k="debug" type="checkbox">Debug</label>
       </div>
       <div class="bst-check-grid" data-bst-row="debugFlags">
@@ -2225,12 +2225,10 @@ export function openSettingsModal(input: {
         <label class="bst-check"><input data-k="debugUi" type="checkbox">UI</label>
         <label class="bst-check"><input data-k="debugMoodImages" type="checkbox">Mood Images</label>
         <label class="bst-check"><input data-k="debugStorage" type="checkbox">Storage</label>
+        <label class="bst-check" data-bst-row="includeContextInDiagnostics"><input data-k="includeContextInDiagnostics" type="checkbox">Include Context In Diagnostics</label>
+        <label class="bst-check" data-bst-row="includeGraphInDiagnostics"><input data-k="includeGraphInDiagnostics" type="checkbox">Include Graph Data In Diagnostics</label>
       </div>
       <div data-bst-row="debugBody">
-        <div class="bst-check-grid">
-          <label class="bst-check" data-bst-row="includeContextInDiagnostics"><input data-k="includeContextInDiagnostics" type="checkbox">Include Context In Diagnostics</label>
-          <label class="bst-check" data-bst-row="includeGraphInDiagnostics"><input data-k="includeGraphInDiagnostics" type="checkbox">Include Graph Data In Diagnostics</label>
-        </div>
         <div class="bst-debug-actions">
           <button class="bst-btn bst-btn-soft bst-btn-icon" data-action="retrack" title="Retrack Last AI Message" aria-label="Retrack Last AI Message">
             <span class="fa-solid fa-rotate-left" aria-hidden="true"></span>
@@ -2628,10 +2626,10 @@ export function openSettingsModal(input: {
       debugFlagsRow.style.display = current.debug ? "grid" : "none";
     }
     if (contextDiagRow) {
-      contextDiagRow.style.display = current.debug ? "flex" : "none";
+      contextDiagRow.style.display = current.debug ? "" : "none";
     }
     if (graphDiagRow) {
-      graphDiagRow.style.display = current.debug ? "flex" : "none";
+      graphDiagRow.style.display = current.debug ? "" : "none";
     }
     if (injectPromptBlock) {
       injectPromptBlock.style.display = current.injectTrackerIntoPrompt ? "flex" : "none";
