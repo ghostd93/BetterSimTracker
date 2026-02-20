@@ -382,32 +382,27 @@ function ensureStyles(): void {
   box-shadow: 0 0 10px color-mix(in srgb, var(--bst-accent) 70%, #ffffff 30%);
   transition: width 0.5s ease;
 }
-.bst-mood { margin-top: 9px; }
-.bst-mood-emoji {
-  font-size: 22px;
-  line-height: 1;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35));
-}
+.bst-mood { margin-top: 7px; }
+.bst-mood-emoji { font-size: 18px; line-height: 1; }
 .bst-mood-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .bst-mood-image {
-  width: 54px;
-  height: 54px;
+  width: 56px;
+  height: 56px;
   border-radius: 14px;
   object-fit: cover;
   border: 2px solid color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 55%, #ffffff 45%);
   box-shadow: 0 10px 22px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.25);
 }
 .bst-mood-badge {
-  font-size: 12px;
-  padding: 4px 10px;
+  font-size: 11px;
+  padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.3);
-  background: rgba(255,255,255,0.14);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+  border: 1px solid rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.10);
 }
 .bst-mood-chip {
   display: inline-flex;
@@ -419,6 +414,34 @@ function ensureStyles(): void {
   background: color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 16%, rgba(255,255,255,0.12) 84%);
   border: 1px solid rgba(255,255,255,0.18);
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 6px 16px rgba(0,0,0,0.28);
+}
+.bst-mood-bubble {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 18%, rgba(255,255,255,0.18) 82%);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15), 0 8px 18px rgba(0,0,0,0.25);
+  font-size: 11px;
+  color: rgba(255,255,255,0.9);
+}
+.bst-mood-bubble::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 6px 6px 6px 0;
+  border-color: transparent rgba(255,255,255,0.22) transparent transparent;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
 }
 .bst-delta {
   font-size: 10px;
@@ -1494,7 +1517,9 @@ export function renderTracker(
             ${moodImage
               ? `<img class="bst-mood-image" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}">`
               : `<span class="bst-mood-chip"><span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span></span>`}
-            <span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>
+            ${moodImage
+              ? `<span class="bst-mood-bubble">${moodText} (${moodTrend})</span>`
+              : `<span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>`}
           </div>
         </div>` : ""}
         ${settings.showLastThought && data.statistics.lastThought?.[name] !== undefined ? `<div class="bst-thought">${String(data.statistics.lastThought?.[name] ?? "")}</div>` : ""}
