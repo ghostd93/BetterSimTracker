@@ -88,8 +88,8 @@ function slugify(value: string): string {
   return value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
     .slice(0, 40) || "mood";
 }
 
@@ -183,29 +183,20 @@ async function uploadMoodImage(context: STContext, characterName: string, mood: 
     throw new Error(`Upload failed (${response.status})`);
   }
 
-  let payload: unknown = null;
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
+  const spriteListResponse = await fetch(`/api/sprites/get?name=${encodeURIComponent(characterName)}`, {
+    method: "GET",
+    headers
+  });
+  if (!spriteListResponse.ok) {
+    throw new Error("Upload succeeded but sprite list could not be loaded.");
   }
 
-  if (typeof payload === "string" && payload.trim()) return payload.trim();
+  const sprites = await spriteListResponse.json() as Array<{ label?: string; path?: string }>;
+  const normalizedLabel = label.toLowerCase();
+  const match = sprites.find(sprite => String(sprite.label ?? "").toLowerCase() === normalizedLabel);
+  if (match?.path) return match.path;
 
-  if (payload && typeof payload === "object") {
-    const obj = payload as Record<string, unknown>;
-    const candidate = String(
-      obj.url ??
-      obj.path ??
-      obj.file ??
-      obj.thumbnail ??
-      obj.relativePath ??
-      ""
-    ).trim();
-    if (candidate) return candidate;
-  }
-
-  throw new Error("Upload succeeded but no file path returned.");
+  throw new Error("Upload succeeded but sprite was not found in list.");
 }
 
 function countMoodImages(images: MoodImageSet | undefined): number {
@@ -353,7 +344,9 @@ function renderPanel(input: InitInput): void {
       const mood = (button.dataset.mood ?? "").trim();
       if (!mood) return;
       const inputNode = panel!.querySelector(`input.bst-mood-input[data-mood="${cssEscape(mood)}"]`) as HTMLInputElement | null;
-      inputNode?.click();
+      if (inputNode) {
+        window.setTimeout(() => inputNode.click(), 0);
+      }
     });
   });
 
