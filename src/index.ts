@@ -21,6 +21,8 @@ let latestDataMessageIndex: number | null = null;
 let trackerUiState: TrackerUiState = { phase: "idle", done: 0, total: 0, messageIndex: null, stepLabel: null };
 let renderQueued = false;
 let extractionTimer: number | null = null;
+let swipeExtractionTimer: number | null = null;
+let pendingSwipeExtraction: { reason: string; messageIndex?: number } | null = null;
 let lastDebugRecord: DeltaDebugRecord | null = null;
 let refreshTimer: number | null = null;
 let lastPromptSyncSignature = "";
@@ -314,6 +316,29 @@ function scheduleExtraction(reason: string, targetMessageIndex?: number): void {
     pushTrace("extract.schedule.fire", { reason, targetMessageIndex: targetMessageIndex ?? null });
     void runExtraction(reason, targetMessageIndex);
   }, 180);
+}
+
+function scheduleSwipeExtraction(reason: string, targetMessageIndex?: number): void {
+  pendingSwipeExtraction = { reason, messageIndex: targetMessageIndex };
+  if (swipeExtractionTimer !== null) {
+    window.clearTimeout(swipeExtractionTimer);
+  }
+  swipeExtractionTimer = window.setTimeout(() => {
+    const pending = pendingSwipeExtraction;
+    pendingSwipeExtraction = null;
+    swipeExtractionTimer = null;
+    if (!pending) return;
+    pushTrace("extract.swipe.timeout", { reason: pending.reason, targetMessageIndex: pending.messageIndex ?? null });
+    scheduleExtraction(pending.reason, pending.messageIndex);
+  }, 2000);
+}
+
+function clearPendingSwipeExtraction(): void {
+  pendingSwipeExtraction = null;
+  if (swipeExtractionTimer !== null) {
+    window.clearTimeout(swipeExtractionTimer);
+    swipeExtractionTimer = null;
+  }
 }
 
 function setTrackerUi(context: STContext, next: TrackerUiState): void {
@@ -791,6 +816,7 @@ function registerEvents(context: STContext): void {
     chatGenerationInFlight = false;
     chatGenerationSawCharacterRender = false;
     chatGenerationStartLastAiIndex = null;
+    clearPendingSwipeExtraction();
     pushTrace("event.chat_changed");
     scheduleRefresh();
   });
@@ -818,6 +844,16 @@ function registerEvents(context: STContext): void {
           });
         }
       }
+      if (pendingSwipeExtraction) {
+        const pending = pendingSwipeExtraction;
+        pendingSwipeExtraction = null;
+        if (swipeExtractionTimer !== null) {
+          window.clearTimeout(swipeExtractionTimer);
+          swipeExtractionTimer = null;
+        }
+        pushTrace("extract.swipe.rendered", { reason: pending.reason, targetMessageIndex: pending.messageIndex ?? null });
+        scheduleExtraction(pending.reason, pending.messageIndex);
+      }
       if (trackerUiState.phase === "generating") {
         const currentLastAi = getLastAiMessageIndex(context);
         setTrackerUi(context, { ...trackerUiState, messageIndex: currentLastAi });
@@ -838,6 +874,7 @@ function registerEvents(context: STContext): void {
       chatGenerationInFlight = false;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
+      clearPendingSwipeExtraction();
       pushTrace("event.chat_loaded");
       scheduleRefresh();
     });
@@ -856,6 +893,7 @@ function registerEvents(context: STContext): void {
       chatGenerationInFlight = false;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
+      clearPendingSwipeExtraction();
       pushTrace("event.message_deleted");
       scheduleRefresh(60);
     });
@@ -866,6 +904,7 @@ function registerEvents(context: STContext): void {
       chatGenerationInFlight = false;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
+      clearPendingSwipeExtraction();
       pushTrace("event.chat_deleted");
       scheduleRefresh(60);
     });
@@ -888,7 +927,7 @@ function registerEvents(context: STContext): void {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.swipe", { event: key, messageIndex });
       scheduleRefresh();
-      scheduleExtraction(key, messageIndex ?? undefined);
+      scheduleSwipeExtraction(key, messageIndex ?? undefined);
     });
   }
 }
