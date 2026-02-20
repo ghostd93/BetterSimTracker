@@ -2414,6 +2414,15 @@ export function openSettingsModal(input: {
     }
     node.value = value;
   };
+  const setExtra = (key: string, value: string): void => {
+    const node = modal.querySelector(`[data-k="${key}"]`) as HTMLInputElement | HTMLSelectElement | null;
+    if (!node) return;
+    if (node instanceof HTMLInputElement && node.type === "checkbox") {
+      node.checked = value === "true";
+      return;
+    }
+    node.value = value;
+  };
 
   set("connectionProfile", input.settings.connectionProfile);
   set("sequentialExtraction", String(input.settings.sequentialExtraction));
@@ -2445,11 +2454,11 @@ export function openSettingsModal(input: {
   set("borderRadius", String(input.settings.borderRadius));
   set("fontSize", String(input.settings.fontSize));
   set("debug", String(input.settings.debug));
-  set("debugExtraction", String(input.settings.debugFlags?.extraction ?? true));
-  set("debugPrompts", String(input.settings.debugFlags?.prompts ?? true));
-  set("debugUi", String(input.settings.debugFlags?.ui ?? true));
-  set("debugMoodImages", String(input.settings.debugFlags?.moodImages ?? true));
-  set("debugStorage", String(input.settings.debugFlags?.storage ?? true));
+  setExtra("debugExtraction", String(input.settings.debugFlags?.extraction ?? true));
+  setExtra("debugPrompts", String(input.settings.debugFlags?.prompts ?? true));
+  setExtra("debugUi", String(input.settings.debugFlags?.ui ?? true));
+  setExtra("debugMoodImages", String(input.settings.debugFlags?.moodImages ?? true));
+  setExtra("debugStorage", String(input.settings.debugFlags?.storage ?? true));
   set("includeContextInDiagnostics", String(input.settings.includeContextInDiagnostics));
   set("includeGraphInDiagnostics", String(input.settings.includeGraphInDiagnostics));
   set("promptTemplateUnified", input.settings.promptTemplateUnified);
@@ -2464,10 +2473,17 @@ export function openSettingsModal(input: {
   const collectSettings = (): BetterSimTrackerSettings => {
     const read = (k: keyof BetterSimTrackerSettings): string =>
       ((modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "").trim();
+    const readExtra = (k: string): string =>
+      ((modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "").trim();
     const readBool = (k: keyof BetterSimTrackerSettings): boolean => {
       const node = modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null;
       if (node instanceof HTMLInputElement && node.type === "checkbox") return node.checked;
       return read(k) === "true";
+    };
+    const readBoolExtra = (k: string): boolean => {
+      const node = modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null;
+      if (node instanceof HTMLInputElement && node.type === "checkbox") return node.checked;
+      return readExtra(k) === "true";
     };
     const readNumber = (k: keyof BetterSimTrackerSettings, fallback: number, min?: number, max?: number): number => {
       const n = Number(read(k));
@@ -2510,11 +2526,11 @@ export function openSettingsModal(input: {
       fontSize: readNumber("fontSize", input.settings.fontSize, 10, 22),
       debug: readBool("debug"),
       debugFlags: {
-        extraction: readBool("debugExtraction"),
-        prompts: readBool("debugPrompts"),
-        ui: readBool("debugUi"),
-        moodImages: readBool("debugMoodImages"),
-        storage: readBool("debugStorage"),
+        extraction: readBoolExtra("debugExtraction"),
+        prompts: readBoolExtra("debugPrompts"),
+        ui: readBoolExtra("debugUi"),
+        moodImages: readBoolExtra("debugMoodImages"),
+        storage: readBoolExtra("debugStorage"),
       },
       includeContextInDiagnostics: readBool("includeContextInDiagnostics"),
       includeGraphInDiagnostics: readBool("includeGraphInDiagnostics"),
