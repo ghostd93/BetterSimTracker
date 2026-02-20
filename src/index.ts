@@ -22,7 +22,7 @@ let trackerUiState: TrackerUiState = { phase: "idle", done: 0, total: 0, message
 let renderQueued = false;
 let extractionTimer: number | null = null;
 let swipeExtractionTimer: number | null = null;
-let pendingSwipeExtraction: { reason: string; messageIndex?: number } | null = null;
+let pendingSwipeExtraction: { reason: string; messageIndex?: number; waitForGenerationEnd?: boolean } | null = null;
 let lastDebugRecord: DeltaDebugRecord | null = null;
 let refreshTimer: number | null = null;
 let lastPromptSyncSignature = "";
@@ -319,7 +319,7 @@ function scheduleExtraction(reason: string, targetMessageIndex?: number): void {
 }
 
 function scheduleSwipeExtraction(reason: string, targetMessageIndex?: number): void {
-  pendingSwipeExtraction = { reason, messageIndex: targetMessageIndex };
+  pendingSwipeExtraction = { reason, messageIndex: targetMessageIndex, waitForGenerationEnd: false };
   if (swipeExtractionTimer !== null) {
     window.clearTimeout(swipeExtractionTimer);
   }
@@ -327,10 +327,10 @@ function scheduleSwipeExtraction(reason: string, targetMessageIndex?: number): v
     const pending = pendingSwipeExtraction;
     pendingSwipeExtraction = null;
     swipeExtractionTimer = null;
-    if (!pending) return;
+    if (!pending || pending.waitForGenerationEnd) return;
     pushTrace("extract.swipe.timeout", { reason: pending.reason, targetMessageIndex: pending.messageIndex ?? null });
     scheduleExtraction(pending.reason, pending.messageIndex);
-  }, 2000);
+  }, 2500);
 }
 
 function clearPendingSwipeExtraction(): void {
@@ -778,6 +778,13 @@ function registerEvents(context: STContext): void {
         pushTrace("event.generation_started_ignored", { reason: dryRun ? "dry_run" : "quiet_generation", type, dryRun });
         return;
       }
+      if (type === "swipe" && pendingSwipeExtraction) {
+        pendingSwipeExtraction.waitForGenerationEnd = true;
+        if (swipeExtractionTimer !== null) {
+          window.clearTimeout(swipeExtractionTimer);
+          swipeExtractionTimer = null;
+        }
+      }
       chatGenerationInFlight = true;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = getLastAiMessageIndex(context);
@@ -809,6 +816,13 @@ function registerEvents(context: STContext): void {
     chatGenerationInFlight = false;
     chatGenerationStartLastAiIndex = null;
     pushTrace("event.generation_ended");
+    if (pendingSwipeExtraction?.waitForGenerationEnd) {
+      pendingSwipeExtraction = null;
+      if (swipeExtractionTimer !== null) {
+        window.clearTimeout(swipeExtractionTimer);
+        swipeExtractionTimer = null;
+      }
+    }
     scheduleExtraction("GENERATION_ENDED");
   });
 
@@ -844,7 +858,7 @@ function registerEvents(context: STContext): void {
           });
         }
       }
-      if (pendingSwipeExtraction) {
+      if (pendingSwipeExtraction && !pendingSwipeExtraction.waitForGenerationEnd) {
         const pending = pendingSwipeExtraction;
         pendingSwipeExtraction = null;
         if (swipeExtractionTimer !== null) {
