@@ -1,6 +1,7 @@
 import { STYLE_ID } from "./constants";
 import type { BetterSimTrackerSettings, ConnectionProfileOption, DeltaDebugRecord, StatValue, TrackerData } from "./types";
 import {
+  DEFAULT_INJECTION_PROMPT_TEMPLATE,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
   LAST_THOUGHT_PROMPT_PROTOCOL,
@@ -743,6 +744,18 @@ function ensureStyles(): void {
 .bst-prompt-reset:hover {
   border-color: rgba(255,255,255,0.45);
   background: rgba(20,26,38,0.9);
+}
+.bst-injection-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+.bst-prompt-inline .bst-prompt-head {
+  border-radius: 14px 14px 0 0;
+}
+.bst-prompt-inline .bst-prompt-body {
+  border-radius: 0 0 14px 14px;
 }
 .bst-btn .bst-btn-icon-left {
   margin-right: 6px;
@@ -1757,6 +1770,29 @@ export function openSettingsModal(input: {
         <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
         <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
         <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
+        <div class="bst-section-divider" data-bst-row="injectPromptDivider">Injection Prompt</div>
+        <div class="bst-injection-prompt" data-bst-row="injectPromptBlock">
+          <div class="bst-help-line">Shown only when Inject Tracker Into Prompt is enabled.</div>
+          <div class="bst-help-line">Placeholders you can use:</div>
+          <ul class="bst-help-list">
+            <li><code>{{header}}</code> — privacy + usage rules header</li>
+            <li><code>{{statSemantics}}</code> — enabled stat meanings</li>
+            <li><code>{{behaviorBands}}</code> — low/medium/high behavior bands</li>
+            <li><code>{{reactRules}}</code> — how-to-react rules</li>
+            <li><code>{{priorityRules}}</code> — priority rules block</li>
+            <li><code>{{lines}}</code> — per-character state lines</li>
+          </ul>
+          <div class="bst-prompt-group bst-prompt-inline">
+            <div class="bst-prompt-head">
+              <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-wand-magic-sparkles"></span>Injection Prompt</span>
+              <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateInjection" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+            </div>
+            <div class="bst-prompt-body">
+              <div class="bst-prompt-caption">Template (editable)</div>
+              <textarea data-k="promptTemplateInjection" rows="8"></textarea>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="bst-settings-section">
@@ -2179,6 +2215,7 @@ export function openSettingsModal(input: {
   set("promptTemplateSequentialConnection", input.settings.promptTemplateSequentialConnection);
   set("promptTemplateSequentialMood", input.settings.promptTemplateSequentialMood);
   set("promptTemplateSequentialLastThought", input.settings.promptTemplateSequentialLastThought);
+  set("promptTemplateInjection", input.settings.promptTemplateInjection);
 
   const collectSettings = (): BetterSimTrackerSettings => {
     const read = (k: keyof BetterSimTrackerSettings): string =>
@@ -2236,7 +2273,8 @@ export function openSettingsModal(input: {
       promptTemplateSequentialDesire: read("promptTemplateSequentialDesire") || input.settings.promptTemplateSequentialDesire,
       promptTemplateSequentialConnection: read("promptTemplateSequentialConnection") || input.settings.promptTemplateSequentialConnection,
       promptTemplateSequentialMood: read("promptTemplateSequentialMood") || input.settings.promptTemplateSequentialMood,
-      promptTemplateSequentialLastThought: read("promptTemplateSequentialLastThought") || input.settings.promptTemplateSequentialLastThought
+      promptTemplateSequentialLastThought: read("promptTemplateSequentialLastThought") || input.settings.promptTemplateSequentialLastThought,
+      promptTemplateInjection: read("promptTemplateInjection") || input.settings.promptTemplateInjection
     };
   };
 
@@ -2248,6 +2286,8 @@ export function openSettingsModal(input: {
     const debugBodyRow = modal.querySelector('[data-bst-row="debugBody"]') as HTMLElement | null;
     const contextDiagRow = modal.querySelector('[data-bst-row="includeContextInDiagnostics"]') as HTMLElement | null;
     const graphDiagRow = modal.querySelector('[data-bst-row="includeGraphInDiagnostics"]') as HTMLElement | null;
+    const injectPromptBlock = modal.querySelector('[data-bst-row="injectPromptBlock"]') as HTMLElement | null;
+    const injectPromptDivider = modal.querySelector('[data-bst-row="injectPromptDivider"]') as HTMLElement | null;
     const current = collectSettings();
     if (maxConcurrentRow) {
       maxConcurrentRow.style.display = current.sequentialExtraction ? "flex" : "none";
@@ -2277,6 +2317,12 @@ export function openSettingsModal(input: {
     }
     if (graphDiagRow) {
       graphDiagRow.style.display = current.debug ? "flex" : "none";
+    }
+    if (injectPromptBlock) {
+      injectPromptBlock.style.display = current.injectTrackerIntoPrompt ? "flex" : "none";
+    }
+    if (injectPromptDivider) {
+      injectPromptDivider.style.display = current.injectTrackerIntoPrompt ? "block" : "none";
     }
   };
 
@@ -2326,6 +2372,7 @@ export function openSettingsModal(input: {
     debug: "Enable verbose diagnostics logging for troubleshooting.",
     includeContextInDiagnostics: "Include extraction prompt/context text in diagnostics dumps (larger logs).",
     includeGraphInDiagnostics: "Include graph-open series payloads in diagnostics trace output.",
+    promptTemplateInjection: "Template for injected relationship state guidance (used only when injection is enabled).",
     promptTemplateUnified: "Unified prompt instruction (protocol block is fixed).",
     promptTemplateSequentialAffection: "Sequential Affection instruction (protocol block is fixed).",
     promptTemplateSequentialTrust: "Sequential Trust instruction (protocol block is fixed).",
@@ -2374,6 +2421,7 @@ export function openSettingsModal(input: {
     promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
     promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
     promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
+    promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
   };
 
   modal.querySelectorAll('[data-action="reset-prompt"]').forEach(node => {

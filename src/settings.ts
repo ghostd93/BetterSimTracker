@@ -1,5 +1,6 @@
 import { EXTENSION_KEY } from "./constants";
 import {
+  DEFAULT_INJECTION_PROMPT_TEMPLATE,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
 } from "./prompts";
@@ -49,7 +50,8 @@ export const defaultSettings: BetterSimTrackerSettings = {
   promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.desire,
   promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
   promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
-  promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought
+  promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
+  promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE
 };
 
 const extractInstructionBlock = (raw: string): string => {
@@ -358,5 +360,6 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     promptTemplateSequentialConnection: normalizeInstruction(input.promptTemplateSequentialConnection, defaultSettings.promptTemplateSequentialConnection).slice(0, 20000),
     promptTemplateSequentialMood: normalizeInstruction(input.promptTemplateSequentialMood, defaultSettings.promptTemplateSequentialMood).slice(0, 20000),
     promptTemplateSequentialLastThought: normalizeInstruction(input.promptTemplateSequentialLastThought, defaultSettings.promptTemplateSequentialLastThought).slice(0, 20000),
+    promptTemplateInjection: normalizeInstruction(input.promptTemplateInjection, defaultSettings.promptTemplateInjection).slice(0, 20000),
   };
 }

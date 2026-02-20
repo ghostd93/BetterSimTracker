@@ -59,6 +59,7 @@ export interface BetterSimTrackerSettings {
   promptTemplateSequentialConnection: string;
   promptTemplateSequentialMood: string;
   promptTemplateSequentialLastThought: string;
+  promptTemplateInjection: string;
 }
 
 export interface GenerateRequestMeta {
