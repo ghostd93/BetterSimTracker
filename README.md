@@ -330,6 +330,7 @@ If all mood images are set, tracker cards display the image with a thought bubbl
 If something looks wrong:
 
 1. Enable `Debug`.
+2. Use the debug category toggles to limit logs to the area you need.
 2. Reproduce the issue once.
 3. Click `Dump Diagnostics`.
 4. Share the diagnostics output.
