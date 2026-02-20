@@ -2,7 +2,7 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [Unreleased]
+## [1.0.9] - 2026-02-20
 ### Added
 - Slash commands for status, extract, clear, toggles, injection, and debug.
 
