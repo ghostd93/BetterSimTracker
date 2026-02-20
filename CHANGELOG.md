@@ -4,14 +4,13 @@ All notable changes to BetterSimTracker are documented here.
 
 ## [Unreleased]
 ### Added
- - Injection prompt template is now editable and shown under Extraction when injection is enabled.
+- Injection prompt template is now editable and shown under Extraction when injection is enabled.
+- Stop button shown in tracker progress card to cancel extraction.
 ### Changed
 - Prompt protocols now define confidence as self-assessed certainty in the extracted update.
 ### Fixed
 - Tracked stats toggles now affect cards, graph, and injected prompt content.
 - Disabled stats no longer appear in summaries or graph tooltips.
-- Stop button now cancels all remaining tracker extraction stages.
-### Removed
 
 ## [1.0.7] - 2026-02-19
 ### Added

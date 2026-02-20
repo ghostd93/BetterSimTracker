@@ -257,6 +257,10 @@ function queueRender(): void {
       });
     }, messageIndex => {
       void runExtraction("manual_refresh", messageIndex);
+    }, () => {
+      if (!isExtracting) return;
+      const canceled = cancelActiveGenerations();
+      pushTrace("extract.cancel", { canceled, source: "ui" });
     });
   });
 }
@@ -752,19 +756,6 @@ function registerEvents(context: STContext): void {
       setTrackerUi(context, { phase: "generating", done: 0, total: 0, messageIndex: targetIndex, stepLabel: "Generating AI response" });
       queueRender();
       queuePromptSync(context);
-    });
-  }
-
-  const stopEvent =
-    events.GENERATION_STOPPED ??
-    events.GENERATION_ABORTED ??
-    events.GENERATION_CANCELLED ??
-    events.GENERATION_STOP;
-  if (stopEvent) {
-    source.on(stopEvent, () => {
-      if (!isExtracting) return;
-      const canceled = cancelActiveGenerations();
-      pushTrace("extract.cancel", { canceled });
     });
   }
 
