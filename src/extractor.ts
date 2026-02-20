@@ -108,6 +108,15 @@ export async function extractStatisticsParallel(input: {
   const stats = enabledStats(settings);
   const output = emptyStatistics();
   let debugRecord: DeltaDebugRecord | null = null;
+  let cancelled = false;
+
+  const isAbortError = (error: unknown): boolean =>
+    error instanceof DOMException && error.name === "AbortError";
+  const checkCancelled = (): void => {
+    if (cancelled) {
+      throw new DOMException("Request aborted by user", "AbortError");
+    }
+  };
 
   if (!stats.length || !activeCharacters.length) return { statistics: output, debug: debugRecord };
 
@@ -229,6 +238,7 @@ export async function extractStatisticsParallel(input: {
     };
 
     const runOneStat = async (statList: StatKey[]): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
+      checkCancelled();
       const statLabel = statList.length === 1 ? statList[0] : "stats";
       const prompt = settings.sequentialExtraction && statList.length === 1
         ? buildSequentialPrompt(
@@ -328,6 +338,7 @@ export async function extractStatisticsParallel(input: {
       const promptByStat: Array<{ stat: StatKey; prompt: string }> = [];
       const worker = async (): Promise<void> => {
         while (queue.length) {
+          if (cancelled) return;
           const stat = queue.shift();
           if (!stat) return;
           const one = await runOneStat([stat]);
@@ -380,10 +391,18 @@ export async function extractStatisticsParallel(input: {
       }
     };
   } catch (error) {
-    console.error("[BetterSimTracker] Unified extraction failed:", error);
+    if (isAbortError(error)) {
+      cancelled = true;
+    } else {
+      console.error("[BetterSimTracker] Unified extraction failed:", error);
+    }
   } finally {
     const done = settings.sequentialExtraction ? Math.max(1, stats.length * 3) : 3;
     onProgress?.(done, done, "Finalizing");
+  }
+
+  if (cancelled) {
+    throw new DOMException("Request aborted by user", "AbortError");
   }
 
   if (!settings.trackMood) {

@@ -16,6 +16,7 @@ function extractContent(payload: GenerateResponse): string {
 }
 
 const generator = new Generator();
+const activeAbortControllers = new Set<AbortController>();
 
 function normalizeProfileId(settings: BetterSimTrackerSettings): string | undefined {
   const raw = settings.connectionProfile?.trim();
@@ -221,6 +222,10 @@ async function generateViaGenerator(prompt: string, profileId: string, limits: T
 
   return new Promise((resolve, reject) => {
     const abortController = new AbortController();
+    activeAbortControllers.add(abortController);
+    abortController.signal.addEventListener("abort", () => {
+      activeAbortControllers.delete(abortController);
+    });
     generator.generateRequest(
       {
         profileId,
@@ -232,6 +237,7 @@ async function generateViaGenerator(prompt: string, profileId: string, limits: T
       {
         abortController,
         onFinish: (_requestId: string, data: unknown, error: unknown) => {
+          activeAbortControllers.delete(abortController);
           const durationMs = Date.now() - startedAt;
           const baseMeta: GenerateRequestMeta = {
             profileId,
@@ -275,4 +281,11 @@ export async function generateJson(
   const context = getContext();
   const limits = resolveProfileLimits(profileId, context, settings);
   return generateViaGenerator(prompt, profileId, limits);
+}
+
+export function cancelActiveGenerations(): number {
+  const controllers = Array.from(activeAbortControllers);
+  controllers.forEach(controller => controller.abort());
+  activeAbortControllers.clear();
+  return controllers.length;
 }
