@@ -388,15 +388,16 @@ function ensureStyles(): void {
   display: inline-flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 .bst-mood-wrap--image {
   justify-content: center;
   width: 100%;
 }
 .bst-mood-image {
-  width: 74px;
-  height: 74px;
-  border-radius: 18px;
+  width: clamp(52px, 14vw, 78px);
+  height: clamp(52px, 14vw, 78px);
+  border-radius: clamp(12px, 3vw, 18px);
   object-fit: cover;
   border: 2px solid color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 55%, #ffffff 45%);
   box-shadow: 0 12px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.25);
@@ -424,30 +425,44 @@ function ensureStyles(): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 160px;
-  max-width: 62%;
-  min-height: 58px;
+  min-width: min(220px, 70%);
+  max-width: min(520px, 78%);
+  min-height: 56px;
   padding: 10px 16px;
-  border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.3);
-  background: color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 18%, rgba(255,255,255,0.18) 82%);
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15), 0 8px 18px rgba(0,0,0,0.25);
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.28);
+  background: color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 14%, rgba(255,255,255,0.16) 86%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 10px 20px rgba(0,0,0,0.26);
   font-size: 12px;
   color: rgba(255,255,255,0.9);
   text-align: left;
 }
+.bst-mood-bubble::before,
 .bst-mood-bubble::after {
   content: "";
   position: absolute;
-  left: 16px;
-  bottom: -8px;
-  transform: none;
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 8px 8px 0 8px;
-  border-color: rgba(255,255,255,0.22) transparent transparent transparent;
-  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
+  left: 26px;
+  bottom: -12px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 14%, rgba(255,255,255,0.16) 86%);
+  box-shadow: 0 6px 10px rgba(0,0,0,0.22);
+}
+.bst-mood-bubble::after {
+  left: 8px;
+  bottom: -20px;
+  width: 8px;
+  height: 8px;
+  opacity: 0.9;
+}
+@media (max-width: 560px) {
+  .bst-mood-wrap--image { justify-content: flex-start; }
+  .bst-mood-bubble {
+    min-width: 140px;
+    max-width: 100%;
+    min-height: 48px;
+  }
 }
 .bst-delta {
   font-size: 10px;
@@ -1521,7 +1536,7 @@ export function renderTracker(
           `;
         }).join("")}
         ${moodText !== "" ? `
-        <div class="bst-mood" title="${moodText} (${moodTrend})">
+        <div class="bst-mood${moodImage ? " bst-mood-has-image" : ""}" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap ${moodImage ? "bst-mood-wrap--image" : "bst-mood-wrap--emoji"}">
             ${moodImage
               ? `<img class="bst-mood-image" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}">`
@@ -1533,7 +1548,7 @@ export function renderTracker(
                 : `<span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>`}
           </div>
         </div>` : ""}
-        ${settings.showLastThought && data.statistics.lastThought?.[name] !== undefined ? `<div class="bst-thought">${String(data.statistics.lastThought?.[name] ?? "")}</div>` : ""}
+        ${settings.showLastThought && data.statistics.lastThought?.[name] !== undefined && !moodImage ? `<div class="bst-thought">${String(data.statistics.lastThought?.[name] ?? "")}</div>` : ""}
         ${enabledNumeric.length === 0 && moodText === "" && !(settings.showLastThought && data.statistics.lastThought?.[name] !== undefined) ? `<div class="bst-empty">No stats recorded.</div>` : ""}
         </div>
       `;
