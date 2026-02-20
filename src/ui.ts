@@ -557,6 +557,7 @@ function ensureStyles(): void {
 }
 .bst-settings-subtitle { margin: 0 0 12px 0; opacity: 0.78; font-size: 12px; }
 .bst-settings-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bst-settings-grid-compact { gap: 8px; }
 .bst-settings-grid-single { grid-template-columns: minmax(0, 1fr); }
 .bst-settings label { font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
 .bst-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
@@ -2012,11 +2013,13 @@ export function openSettingsModal(input: {
         <label>Mood Stickiness <input data-k="moodStickiness" type="number" min="0" max="1" step="0.05"></label>
         <label data-bst-row="activityLookback">Activity Lookback <input data-k="activityLookback" type="number" min="1" max="25"></label>
         <div class="bst-section-divider">Toggles</div>
-        <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
-        <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
-        <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
-        <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
-        <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
+        <div class="bst-settings-grid bst-settings-grid-compact">
+          <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
+          <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
+          <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
+          <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
+          <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
+        </div>
         <div class="bst-section-divider" data-bst-row="injectPromptDivider">Injection Prompt</div>
         <div class="bst-injection-prompt" data-bst-row="injectPromptBlock">
           <div class="bst-help-line">Shown only when Inject Tracker Into Prompt is enabled.</div>
@@ -2044,7 +2047,7 @@ export function openSettingsModal(input: {
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-chart-line"></span>Tracked Stats</h4>
-      <div class="bst-settings-grid">
+      <div class="bst-settings-grid bst-settings-grid-compact">
         <label class="bst-check"><input data-k="trackAffection" type="checkbox">Track Affection</label>
         <label class="bst-check"><input data-k="trackTrust" type="checkbox">Track Trust</label>
         <label class="bst-check"><input data-k="trackDesire" type="checkbox">Track Desire</label>
@@ -2066,8 +2069,10 @@ export function openSettingsModal(input: {
         <label>Border Radius <input data-k="borderRadius" type="number" min="0" max="32"></label>
         <label>Font Size <input data-k="fontSize" type="number" min="10" max="22"></label>
         <div class="bst-section-divider">Toggles</div>
-        <label class="bst-check"><input data-k="showInactive" type="checkbox">Show Inactive</label>
-        <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
+        <div class="bst-settings-grid bst-settings-grid-compact">
+          <label class="bst-check"><input data-k="showInactive" type="checkbox">Show Inactive</label>
+          <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
+        </div>
       </div>
     </div>
     <div class="bst-settings-section">
@@ -2187,10 +2192,10 @@ export function openSettingsModal(input: {
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-bug"></span>Debug</h4>
-      <div class="bst-settings-grid" style="margin-bottom:6px;">
+      <div class="bst-settings-grid bst-settings-grid-compact">
         <label class="bst-check"><input data-k="debug" type="checkbox">Debug</label>
       </div>
-      <div class="bst-settings-grid" data-bst-row="debugFlags">
+      <div class="bst-settings-grid bst-settings-grid-compact" data-bst-row="debugFlags">
         <label class="bst-check"><input data-k="debugExtraction" type="checkbox">Extraction</label>
         <label class="bst-check"><input data-k="debugPrompts" type="checkbox">Prompts</label>
         <label class="bst-check"><input data-k="debugUi" type="checkbox">UI</label>
@@ -2198,7 +2203,7 @@ export function openSettingsModal(input: {
         <label class="bst-check"><input data-k="debugStorage" type="checkbox">Storage</label>
       </div>
       <div data-bst-row="debugBody">
-        <div class="bst-settings-grid" style="margin-bottom:6px;">
+        <div class="bst-settings-grid bst-settings-grid-compact">
           <label class="bst-check" data-bst-row="includeContextInDiagnostics"><input data-k="includeContextInDiagnostics" type="checkbox">Include Context In Diagnostics</label>
           <label class="bst-check" data-bst-row="includeGraphInDiagnostics"><input data-k="includeGraphInDiagnostics" type="checkbox">Include Graph Data In Diagnostics</label>
         </div>
