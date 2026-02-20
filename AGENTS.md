@@ -6,7 +6,7 @@ This is the required checklist for every change.
 1. Update version:
    - package.json
    - manifest.json
-2. Update CHANGELOG.md:
+2. Update CHANGELOG.md for every code change (fix, change, add):
    - Move items into Added / Changed / Fixed / Removed
    - Keep [Unreleased] at the top
    - If it’s a release, add "And more..." as the final line in that release block
