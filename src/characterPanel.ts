@@ -167,56 +167,45 @@ async function uploadMoodImage(context: STContext, characterName: string, mood: 
     headers["X-CSRF-Token"] = context.csrf_token;
   }
 
-  const fileFields = ["file", "avatar", "image", "sprite", "img"];
-  let lastStatus: number | null = null;
-  let lastError: string | null = null;
+  const form = new FormData();
+  form.append("name", characterName);
+  form.append("label", label);
+  form.append("spriteName", label);
+  form.append("avatar", file);
 
-  for (const field of fileFields) {
-    const form = new FormData();
-    form.append("name", characterName);
-    form.append("label", label);
-    form.append("spriteName", label);
-    form.append(field, file);
+  const response = await fetch("/api/sprites/upload", {
+    method: "POST",
+    body: form,
+    headers
+  });
 
-    const response = await fetch("/api/sprites/upload", {
-      method: "POST",
-      body: form,
-      headers
-    });
-
-    if (!response.ok) {
-      lastStatus = response.status;
-      lastError = `Upload failed (${response.status})`;
-      continue;
-    }
-
-    let payload: unknown = null;
-    try {
-      payload = await response.json();
-    } catch {
-      payload = null;
-    }
-
-    if (typeof payload === "string" && payload.trim()) return payload.trim();
-
-    if (payload && typeof payload === "object") {
-      const obj = payload as Record<string, unknown>;
-      const candidate = String(
-        obj.url ??
-        obj.path ??
-        obj.file ??
-        obj.thumbnail ??
-        obj.relativePath ??
-        ""
-      ).trim();
-      if (candidate) return candidate;
-    }
-
-    lastError = "Upload succeeded but no file path returned.";
+  if (!response.ok) {
+    throw new Error(`Upload failed (${response.status})`);
   }
 
-  if (lastError) throw new Error(lastError + (lastStatus ? ` (status ${lastStatus})` : ""));
-  throw new Error("Upload failed.");
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (typeof payload === "string" && payload.trim()) return payload.trim();
+
+  if (payload && typeof payload === "object") {
+    const obj = payload as Record<string, unknown>;
+    const candidate = String(
+      obj.url ??
+      obj.path ??
+      obj.file ??
+      obj.thumbnail ??
+      obj.relativePath ??
+      ""
+    ).trim();
+    if (candidate) return candidate;
+  }
+
+  throw new Error("Upload succeeded but no file path returned.");
 }
 
 function countMoodImages(images: MoodImageSet | undefined): number {
@@ -312,8 +301,8 @@ function renderPanel(input: InitInput): void {
             </div>
             <div class="bst-mood-label">${safeLabel}</div>
             <div class="bst-mood-actions">
-              <button class="bst-btn bst-btn-soft bst-mood-upload" data-action="upload" data-mood="${safeLabel}">Upload</button>
-              <button class="bst-btn bst-btn-danger bst-mood-clear" data-action="clear" data-mood="${safeLabel}">Clear</button>
+              <button type="button" class="bst-btn bst-btn-soft bst-mood-upload" data-action="upload" data-mood="${safeLabel}">Upload</button>
+              <button type="button" class="bst-btn bst-btn-danger bst-mood-clear" data-action="clear" data-mood="${safeLabel}">Clear</button>
               <input class="bst-mood-input" type="file" accept="image/*" data-mood="${safeLabel}">
             </div>
           </div>
@@ -321,7 +310,7 @@ function renderPanel(input: InitInput): void {
       }).join("")}
     </div>
     <div class="bst-character-actions">
-      <button class="bst-btn bst-btn-danger" data-action="clear-all">Clear All Mood Images</button>
+      <button type="button" class="bst-btn bst-btn-danger" data-action="clear-all">Clear All Mood Images</button>
     </div>
   `;
 
