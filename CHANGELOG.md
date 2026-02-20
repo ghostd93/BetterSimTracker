@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.9.9] - 2026-02-20
+### Fixed
+- Character defaults panel no longer re-renders while selecting text inside the panel.
+and more...
+
 ## [1.0.9.8] - 2026-02-20
 ### Fixed
 - Character defaults panel no longer re-renders while editing, preventing text selection loss.
