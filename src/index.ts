@@ -251,6 +251,7 @@ function queueRender(): void {
         character: characterName,
         history,
         accentColor: settings.accentColor,
+        settings,
         debug: settings.debug
       });
     }, messageIndex => {

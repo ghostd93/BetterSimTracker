@@ -13,15 +13,34 @@ function numeric(value: unknown): number | null {
   return clamp(n);
 }
 
-function buildPrompt(data: TrackerData): string {
+function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): string {
   const names = data.activeCharacters;
+  const numericKeys: Array<{
+    key: "affection" | "trust" | "desire" | "connection";
+    label: string;
+    enabled: boolean;
+  }> = [
+    { key: "affection", label: "affection", enabled: settings.trackAffection },
+    { key: "trust", label: "trust", enabled: settings.trackTrust },
+    { key: "desire", label: "desire", enabled: settings.trackDesire },
+    { key: "connection", label: "connection", enabled: settings.trackConnection },
+  ];
+  const enabledNumeric = numericKeys.filter(entry => entry.enabled);
+  const includeMood = settings.trackMood;
+
+  if (enabledNumeric.length === 0 && !includeMood) return "";
+
   const lines = names.map(name => {
-    const affection = numeric(data.statistics.affection?.[name] ?? 50) ?? 50;
-    const trust = numeric(data.statistics.trust?.[name] ?? 50) ?? 50;
-    const desire = numeric(data.statistics.desire?.[name] ?? 50) ?? 50;
-    const connection = numeric(data.statistics.connection?.[name] ?? 50) ?? 50;
-    const mood = String(data.statistics.mood?.[name] ?? "Neutral").trim() || "Neutral";
-    return `- ${name}: affection ${affection}, trust ${trust}, desire ${desire}, connection ${connection}, mood ${mood}`;
+    const parts: string[] = [];
+    for (const stat of enabledNumeric) {
+      const value = numeric(data.statistics[stat.key]?.[name] ?? 50) ?? 50;
+      parts.push(`${stat.label} ${value}`);
+    }
+    if (includeMood) {
+      const mood = String(data.statistics.mood?.[name] ?? "Neutral").trim() || "Neutral";
+      parts.push(`mood ${mood}`);
+    }
+    return `- ${name}: ${parts.join(", ")}`;
   });
 
   return [
@@ -34,26 +53,29 @@ function buildPrompt(data: TrackerData): string {
     "Treat as soft state: do not quote numbers directly; express them through tone, wording, initiative, boundaries, and choices.",
     "",
     "Stat semantics:",
-    "- affection: emotional warmth, fondness, care toward the user",
-    "- trust: perceived safety/reliability; willingness to be vulnerable",
-    "- desire: physical/romantic attraction and flirt/sexual tension",
-    "- connection: felt closeness/bond depth and emotional attunement",
-    "- mood: immediate emotional tone for this turn",
+    ...enabledNumeric.map(stat => {
+      if (stat.key === "affection") return "- affection: emotional warmth, fondness, care toward the user";
+      if (stat.key === "trust") return "- trust: perceived safety/reliability; willingness to be vulnerable";
+      if (stat.key === "desire") return "- desire: physical/romantic attraction and flirt/sexual tension";
+      return "- connection: felt closeness/bond depth and emotional attunement";
+    }),
+    ...(includeMood ? ["- mood: immediate emotional tone for this turn"] : []),
     "",
-    "Behavior bands:",
-    "- 0-30 low: guarded, distant, skeptical, defensive, cold, or avoidant",
-    "- 31-60 medium: mixed/uncertain, polite but measured, cautious openness",
-    "- 61-100 high: warm, open, engaged, proactive, intimate (where appropriate)",
-    "",
-    "How to react:",
-    "- low trust -> avoid deep vulnerability; require proof/consistency",
-    "- high trust -> share more, accept reassurance, collaborate",
-    "- low affection -> limited warmth; less caring language",
-    "- high affection -> caring language, concern, emotional support",
-    "- low desire -> little/no flirtation; keep distance",
-    "- high desire -> increased flirtation/attraction cues (respect context and consent)",
-    "- low connection -> conversations stay surface-level",
-    "- high connection -> personal references, emotional continuity, deeper empathy",
+    ...(enabledNumeric.length
+      ? [
+          "Behavior bands:",
+          "- 0-30 low: guarded, distant, skeptical, defensive, cold, or avoidant",
+          "- 31-60 medium: mixed/uncertain, polite but measured, cautious openness",
+          "- 61-100 high: warm, open, engaged, proactive, intimate (where appropriate)",
+          "",
+          "How to react:",
+          ...(settings.trackTrust ? ["- low trust -> avoid deep vulnerability; require proof/consistency", "- high trust -> share more, accept reassurance, collaborate"] : []),
+          ...(settings.trackAffection ? ["- low affection -> limited warmth; less caring language", "- high affection -> caring language, concern, emotional support"] : []),
+          ...(settings.trackDesire ? ["- low desire -> little/no flirtation; keep distance", "- high desire -> increased flirtation/attraction cues (respect context and consent)"] : []),
+          ...(settings.trackConnection ? ["- low connection -> conversations stay surface-level", "- high connection -> personal references, emotional continuity, deeper empathy"] : []),
+          "",
+        ]
+      : []),
     "",
     "Priority rules:",
     "- mood modulates delivery now; relationship stats define longer-term pattern",
@@ -118,9 +140,9 @@ export async function syncPromptInjection(input: {
     return;
   }
 
-  const prompt = buildPrompt(data);
+  const prompt = buildPrompt(data, settings);
   lastInjectedPrompt = prompt;
-  setExtensionPrompt(INJECT_KEY, prompt, inChat, 0, true, systemRole);
+  setExtensionPrompt(INJECT_KEY, prompt, inChat, 0, Boolean(prompt), systemRole);
 }
 
 export function getLastInjectedPrompt(): string {
