@@ -251,7 +251,7 @@ Behavior notes:
 - `Track Mood`
 - `Track Last Thought`
 
-You can disable any metric you do not want extracted. Disabled stats are hidden from cards, graphs, and prompt injection.
+You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only enabled stats.
 
 ### Display
 

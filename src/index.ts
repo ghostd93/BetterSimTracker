@@ -606,7 +606,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       return;
     }
 
-    const merged = mergeStatisticsWithFallback(extracted, previous?.statistics ?? null);
+    const merged = mergeStatisticsWithFallback(extracted, previous?.statistics ?? null, settings);
 
     latestData = {
       timestamp: Date.now(),

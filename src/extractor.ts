@@ -405,10 +405,6 @@ export async function extractStatisticsParallel(input: {
     throw new DOMException("Request aborted by user", "AbortError");
   }
 
-  if (!settings.trackMood) {
-    output.mood = Object.fromEntries(activeCharacters.map(name => [name, settings.defaultMood]));
-  }
-
   for (const key of STAT_KEYS) {
     if (!output[key]) output[key] = {};
   }
