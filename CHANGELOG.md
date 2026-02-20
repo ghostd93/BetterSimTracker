@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Fixed
+- Mood labels now fall back to Neutral when the model returns a label outside the allowed list.
+
 ## [1.1.0.1] - 2026-02-20
 ### Fixed
 - Custom prompt templates now persist when edited.
