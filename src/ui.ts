@@ -9,15 +9,28 @@ import {
   UNIFIED_PROMPT_PROTOCOL,
 } from "./prompts";
 
-const statLabels: Array<{ key: "affection" | "trust" | "desire" | "connection"; label: string }> = [
-  { key: "affection", label: "Affection" },
-  { key: "trust", label: "Trust" },
-  { key: "desire", label: "Desire" },
-  { key: "connection", label: "Connection" }
+type NumericStatKey = "affection" | "trust" | "desire" | "connection";
+
+const NUMERIC_STAT_DEFS: Array<{ key: NumericStatKey; label: string; short: string; color: string }> = [
+  { key: "affection", label: "Affection", short: "A", color: "#ff6b81" },
+  { key: "trust", label: "Trust", short: "T", color: "#55d5ff" },
+  { key: "desire", label: "Desire", short: "D", color: "#ffb347" },
+  { key: "connection", label: "Connection", short: "C", color: "#9cff8f" }
 ];
 
+function isNumericStatTracked(key: NumericStatKey, settings: BetterSimTrackerSettings): boolean {
+  if (key === "affection") return settings.trackAffection;
+  if (key === "trust") return settings.trackTrust;
+  if (key === "desire") return settings.trackDesire;
+  return settings.trackConnection;
+}
+
+function getEnabledNumericStats(settings: BetterSimTrackerSettings): typeof NUMERIC_STAT_DEFS {
+  return NUMERIC_STAT_DEFS.filter(def => isNumericStatTracked(def.key, settings));
+}
+
 function numericFallbackForStat(
-  key: "affection" | "trust" | "desire" | "connection",
+  key: NumericStatKey,
   settings: BetterSimTrackerSettings,
 ): number {
   if (key === "affection") return settings.defaultAffection;
@@ -364,6 +377,15 @@ function ensureStyles(): void {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.bst-empty {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: rgba(243,245,249,0.68);
+  background: rgba(0,0,0,0.16);
+  border: 1px dashed rgba(255,255,255,0.18);
 }
 .bst-root-collapsed .bst-body {
   display: none;
@@ -1201,13 +1223,14 @@ export function renderTracker(
     }
 
     const activeSet = new Set(data.activeCharacters.map(normalizeName));
+    const enabledNumeric = getEnabledNumericStats(settings);
     const hasAnyStatFor = (name: string): boolean =>
-      data.statistics.affection?.[name] !== undefined ||
-      data.statistics.trust?.[name] !== undefined ||
-      data.statistics.desire?.[name] !== undefined ||
-      data.statistics.connection?.[name] !== undefined ||
-      data.statistics.mood?.[name] !== undefined ||
-      data.statistics.lastThought?.[name] !== undefined;
+      (settings.trackAffection && data.statistics.affection?.[name] !== undefined) ||
+      (settings.trackTrust && data.statistics.trust?.[name] !== undefined) ||
+      (settings.trackDesire && data.statistics.desire?.[name] !== undefined) ||
+      (settings.trackConnection && data.statistics.connection?.[name] !== undefined) ||
+      (settings.trackMood && data.statistics.mood?.[name] !== undefined) ||
+      (settings.trackLastThought && data.statistics.lastThought?.[name] !== undefined);
     const forceAllInGroup = isGroupChat;
     const displayPool =
       (forceAllInGroup || settings.showInactive) && allCharacters.length > 0
@@ -1220,16 +1243,17 @@ export function renderTracker(
       if (!isActive && !settings.showInactive) continue;
 
       const previousData = findPreviousData(entry.messageIndex);
-      const moodText = String(data.statistics.mood?.[name] ?? "Neutral");
-      const prevMood = String(previousData?.statistics.mood?.[name] ?? moodText);
+      const moodText = settings.trackMood ? String(data.statistics.mood?.[name] ?? "Neutral") : "Neutral";
+      const prevMood = settings.trackMood ? String(previousData?.statistics.mood?.[name] ?? moodText) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
       const card = document.createElement("div");
       card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;
       card.style.setProperty("--bst-card-local", palette[name] ?? colorFromName(name));
-      const affectionShort = toPercent(data.statistics.affection?.[name] ?? numericFallbackForStat("affection", settings));
-      const trustShort = toPercent(data.statistics.trust?.[name] ?? numericFallbackForStat("trust", settings));
-      const desireShort = toPercent(data.statistics.desire?.[name] ?? numericFallbackForStat("desire", settings));
-      const connectionShort = toPercent(data.statistics.connection?.[name] ?? numericFallbackForStat("connection", settings));
+      const collapsedSummary = enabledNumeric.map(def => {
+        const value = toPercent(data.statistics[def.key]?.[name] ?? numericFallbackForStat(def.key, settings));
+        return `<span>${def.short} ${value}%</span>`;
+      }).join("");
+      const showCollapsedMood = settings.trackMood;
       card.innerHTML = `
         <div class="bst-head">
           <div class="bst-name" title="${name}">${name}</div>
@@ -1238,15 +1262,13 @@ export function renderTracker(
             <div class="bst-state" title="${isActive ? "Active" : settings.inactiveLabel}">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>
           </div>
         </div>
-        <div class="bst-collapsed-summary" title="Affection / Trust / Desire / Connection">
-          <span>A ${affectionShort}%</span>
-          <span>T ${trustShort}%</span>
-          <span>D ${desireShort}%</span>
-          <span>C ${connectionShort}%</span>
-          <span class="bst-collapsed-mood" title="${moodText}">${moodToEmojiEntity(moodText)}</span>
-        </div>
+        ${enabledNumeric.length || showCollapsedMood ? `
+        <div class="bst-collapsed-summary" title="Tracked stats">
+          ${collapsedSummary || ""}
+          ${showCollapsedMood ? `<span class="bst-collapsed-mood" title="${moodText}">${moodToEmojiEntity(moodText)}</span>` : ""}
+        </div>` : ""}
         <div class="bst-body">
-        ${statLabels.map(({ key, label }) => {
+        ${enabledNumeric.map(({ key, label }) => {
           const value = toPercent(data.statistics[key]?.[name] ?? numericFallbackForStat(key, settings));
           const prevValue = toPercent(previousData?.statistics[key]?.[name] ?? value);
           const delta = Math.round(value - prevValue);
@@ -1259,13 +1281,15 @@ export function renderTracker(
             </div>
           `;
         }).join("")}
+        ${settings.trackMood ? `
         <div class="bst-mood" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap">
             <span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span>
             <span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>
           </div>
-        </div>
-        ${settings.showLastThought ? `<div class="bst-thought">${String(data.statistics.lastThought?.[name] ?? "")}</div>` : ""}
+        </div>` : ""}
+        ${settings.trackLastThought && settings.showLastThought ? `<div class="bst-thought">${String(data.statistics.lastThought?.[name] ?? "")}</div>` : ""}
+        ${enabledNumeric.length === 0 && !settings.trackMood && !(settings.trackLastThought && settings.showLastThought) ? `<div class="bst-empty">No tracked stats enabled.</div>` : ""}
         </div>
       `;
       root.appendChild(card);
@@ -1281,7 +1305,7 @@ export function removeTrackerUI(): void {
   closeGraphModal();
 }
 
-function statValue(entry: TrackerData, stat: "affection" | "trust" | "desire" | "connection", character: string): number {
+function statValue(entry: TrackerData, stat: NumericStatKey, character: string): number {
   const raw = Number(entry.statistics[stat]?.[character] ?? 0);
   if (Number.isNaN(raw)) return 0;
   return Math.max(0, Math.min(100, raw));
@@ -1298,10 +1322,19 @@ function hasCharacterSnapshot(entry: TrackerData, character: string): boolean {
   );
 }
 
+function hasNumericSnapshotForSettings(entry: TrackerData, character: string, settings: BetterSimTrackerSettings): boolean {
+  return (
+    (settings.trackAffection && entry.statistics.affection?.[character] !== undefined) ||
+    (settings.trackTrust && entry.statistics.trust?.[character] !== undefined) ||
+    (settings.trackDesire && entry.statistics.desire?.[character] !== undefined) ||
+    (settings.trackConnection && entry.statistics.connection?.[character] !== undefined)
+  );
+}
+
 function buildStatSeries(
   timeline: TrackerData[],
   character: string,
-  stat: "affection" | "trust" | "desire" | "connection",
+  stat: NumericStatKey,
 ): number[] {
   let carry = 50;
   return timeline.map(item => {
@@ -1429,6 +1462,7 @@ export function openGraphModal(input: {
   character: string;
   history: TrackerData[];
   accentColor: string;
+  settings: BetterSimTrackerSettings;
   debug?: boolean;
 }): void {
   ensureStyles();
@@ -1442,47 +1476,52 @@ export function openGraphModal(input: {
   const modal = document.createElement("div");
   modal.className = "bst-graph-modal";
 
+  const enabledNumeric = getEnabledNumericStats(input.settings);
   const timeline = [...input.history]
     .filter(item => Number.isFinite(item.timestamp))
     .sort((a, b) => a.timestamp - b.timestamp)
-    .filter(item => hasCharacterSnapshot(item, input.character));
+    .filter(item => hasNumericSnapshotForSettings(item, input.character, input.settings));
   const rawSnapshotCount = timeline.length;
   const windowPreference = getGraphWindowPreference();
   const windowSize = windowPreference === "all" ? null : Number(windowPreference);
   const windowedTimeline = windowSize ? timeline.slice(-windowSize) : timeline;
   const renderedTimeline = downsampleTimeline(windowedTimeline, 140);
-  const points = {
-    affection: buildStatSeries(renderedTimeline, input.character, "affection"),
-    trust: buildStatSeries(renderedTimeline, input.character, "trust"),
-    desire: buildStatSeries(renderedTimeline, input.character, "desire"),
-    connection: buildStatSeries(renderedTimeline, input.character, "connection"),
-  };
+  const points: Partial<Record<NumericStatKey, number[]>> = {};
+  for (const def of enabledNumeric) {
+    points[def.key] = buildStatSeries(renderedTimeline, input.character, def.key);
+  }
 
   const width = 780;
   const height = 320;
   let smoothing = getGraphSmoothingPreference();
-  const lineSeries = {
-    affection: smoothing ? smoothSeries(points.affection, 3) : points.affection,
-    trust: smoothing ? smoothSeries(points.trust, 3) : points.trust,
-    desire: smoothing ? smoothSeries(points.desire, 3) : points.desire,
-    connection: smoothing ? smoothSeries(points.connection, 3) : points.connection,
-  };
-  const affectionLine = buildPolyline(lineSeries.affection, width, height);
-  const trustLine = buildPolyline(lineSeries.trust, width, height);
-  const desireLine = buildPolyline(lineSeries.desire, width, height);
-  const connectionLine = buildPolyline(lineSeries.connection, width, height);
-  const affectionDots = buildPointCircles(points.affection, "#ff6b81", "affection", width, height);
-  const trustDots = buildPointCircles(points.trust, "#55d5ff", "trust", width, height);
-  const desireDots = buildPointCircles(points.desire, "#ffb347", "desire", width, height);
   const connectionColor = input.accentColor || "#9cff8f";
-  const connectionDots = buildPointCircles(points.connection, connectionColor, "connection", width, height);
-  const latest = {
-    affection: points.affection.at(-1) ?? 0,
-    trust: points.trust.at(-1) ?? 0,
-    desire: points.desire.at(-1) ?? 0,
-    connection: points.connection.at(-1) ?? 0,
+  const buildSeriesFrom = (defs: typeof NUMERIC_STAT_DEFS, seriesSource: Partial<Record<NumericStatKey, number[]>>) => {
+    const series: Partial<Record<NumericStatKey, number[]>> = {};
+    for (const def of defs) {
+      const values = seriesSource[def.key] ?? [];
+      series[def.key] = smoothing ? smoothSeries(values, 3) : values;
+    }
+    return series;
   };
-  const snapshotCount = renderedTimeline.length;
+  const lineSeries = buildSeriesFrom(enabledNumeric, points);
+  const lineMarkup = enabledNumeric.map(def => {
+    const color = def.key === "connection" ? connectionColor : def.color;
+    const line = buildPolyline(lineSeries[def.key] ?? [], width, height);
+    return line ? `<polyline points="${line}" fill="none" stroke="${color}" stroke-width="2.5"></polyline>` : "";
+  }).join("");
+  const dotsMarkup = enabledNumeric.map(def => {
+    const color = def.key === "connection" ? connectionColor : def.color;
+    return buildPointCircles(points[def.key] ?? [], color, def.key, width, height);
+  }).join("");
+  const lastPointMarkup = enabledNumeric.map(def => {
+    const color = def.key === "connection" ? connectionColor : def.color;
+    return buildLastPointCircle(points[def.key] ?? [], color, width, height);
+  }).join("");
+  const latest: Partial<Record<NumericStatKey, number>> = {};
+  for (const def of enabledNumeric) {
+    latest[def.key] = points[def.key]?.at(-1) ?? 0;
+  }
+  const snapshotCount = enabledNumeric.length ? (points[enabledNumeric[0].key]?.length ?? 0) : 0;
 
   if (input.debug) {
     console.log("[BetterSimTracker] graph-open", {
@@ -1532,34 +1571,32 @@ export function openGraphModal(input: {
       <text x="${Math.round(width / 2)}" y="${height - 8}" fill="rgba(255,255,255,0.72)" font-size="10" text-anchor="middle">${Math.max(1, Math.ceil(snapshotCount / 2))}</text>
       <text x="${width - 24}" y="${height - 8}" fill="rgba(255,255,255,0.72)" font-size="10" text-anchor="end">${Math.max(1, snapshotCount)}</text>
       <text x="${width - 24}" y="26" fill="rgba(255,255,255,0.72)" font-size="10" text-anchor="end">X: Chat Timeline</text>
-      <polyline points="${affectionLine}" fill="none" stroke="#ff6b81" stroke-width="2.5"></polyline>
-      <polyline points="${trustLine}" fill="none" stroke="#55d5ff" stroke-width="2.5"></polyline>
-      <polyline points="${desireLine}" fill="none" stroke="#ffb347" stroke-width="2.5"></polyline>
-      <polyline points="${connectionLine}" fill="none" stroke="${connectionColor}" stroke-width="2.5"></polyline>
-      ${affectionDots}
-      ${trustDots}
-      ${desireDots}
-      ${connectionDots}
-      ${buildLastPointCircle(points.affection, "#ff6b81", width, height)}
-      ${buildLastPointCircle(points.trust, "#55d5ff", width, height)}
-      ${buildLastPointCircle(points.desire, "#ffb347", width, height)}
-      ${buildLastPointCircle(points.connection, connectionColor, width, height)}
+      ${enabledNumeric.length ? lineMarkup : ""}
+      ${enabledNumeric.length ? dotsMarkup : ""}
+      ${enabledNumeric.length ? lastPointMarkup : ""}
       <g id="bst-graph-hover" opacity="0">
         <line id="bst-graph-hover-line" x1="0" y1="24" x2="0" y2="${height - 24}" stroke="rgba(255,255,255,0.25)" stroke-width="1"></line>
-        <circle id="bst-graph-hover-affection" r="3.8" fill="#ff6b81"></circle>
-        <circle id="bst-graph-hover-trust" r="3.8" fill="#55d5ff"></circle>
-        <circle id="bst-graph-hover-desire" r="3.8" fill="#ffb347"></circle>
-        <circle id="bst-graph-hover-connection" r="3.8" fill="${connectionColor}"></circle>
+        ${enabledNumeric.map(def => {
+          const color = def.key === "connection" ? connectionColor : def.color;
+          return `<circle id="bst-graph-hover-${def.key}" r="3.8" fill="${color}"></circle>`;
+        }).join("")}
       </g>
-      ${snapshotCount === 0 ? `<text x="${Math.round(width / 2)}" y="${Math.round(height / 2)}" fill="rgba(255,255,255,0.65)" font-size="13" text-anchor="middle">No tracker history yet</text>` : ""}
+      ${enabledNumeric.length === 0 && snapshotCount === 0
+        ? `<text x="${Math.round(width / 2)}" y="${Math.round(height / 2)}" fill="rgba(255,255,255,0.65)" font-size="13" text-anchor="middle">No tracked numeric stats enabled</text>`
+        : enabledNumeric.length > 0 && snapshotCount === 0
+          ? `<text x="${Math.round(width / 2)}" y="${Math.round(height / 2)}" fill="rgba(255,255,255,0.65)" font-size="13" text-anchor="middle">No tracker history yet</text>`
+          : ""}
     </svg>
     <div class="bst-graph-tooltip" id="bst-graph-tooltip"></div>
     </div>
     <div class="bst-graph-legend">
-      <span><i class="bst-legend-dot" style="background:#ff6b81;"></i>Affection ${Math.round(latest.affection)}</span>
-      <span><i class="bst-legend-dot" style="background:#55d5ff;"></i>Trust ${Math.round(latest.trust)}</span>
-      <span><i class="bst-legend-dot" style="background:#ffb347;"></i>Desire ${Math.round(latest.desire)}</span>
-      <span><i class="bst-legend-dot" style="background:${connectionColor};"></i>Connection ${Math.round(latest.connection)}</span>
+      ${enabledNumeric.length
+        ? enabledNumeric.map(def => {
+            const color = def.key === "connection" ? connectionColor : def.color;
+            const value = Math.round(latest[def.key] ?? 0);
+            return `<span><i class="bst-legend-dot" style="background:${color};"></i>${def.label} ${value}</span>`;
+          }).join("")
+        : `<span class="bst-graph-legend-empty">No tracked stats enabled. Turn on a stat to show the graph.</span>`}
     </div>
   `;
   document.body.appendChild(modal);
@@ -1567,14 +1604,12 @@ export function openGraphModal(input: {
   const svg = modal.querySelector(".bst-graph-svg") as SVGSVGElement | null;
   const hoverGroup = modal.querySelector("#bst-graph-hover") as SVGGElement | null;
   const hoverLine = modal.querySelector("#bst-graph-hover-line") as SVGLineElement | null;
-  const hoverDots = {
-    affection: modal.querySelector("#bst-graph-hover-affection") as SVGCircleElement | null,
-    trust: modal.querySelector("#bst-graph-hover-trust") as SVGCircleElement | null,
-    desire: modal.querySelector("#bst-graph-hover-desire") as SVGCircleElement | null,
-    connection: modal.querySelector("#bst-graph-hover-connection") as SVGCircleElement | null,
-  };
+  const hoverDots: Partial<Record<NumericStatKey, SVGCircleElement | null>> = {};
+  for (const def of enabledNumeric) {
+    hoverDots[def.key] = modal.querySelector(`#bst-graph-hover-${def.key}`) as SVGCircleElement | null;
+  }
   const tooltip = modal.querySelector("#bst-graph-tooltip") as HTMLDivElement | null;
-  const pointCount = points.affection.length;
+  const pointCount = enabledNumeric.length ? (points[enabledNumeric[0].key]?.length ?? 0) : 0;
   if (svg && hoverGroup && hoverLine && tooltip && pointCount > 0) {
     const pad = 24;
     const drawableW = Math.max(1, width - pad * 2);
@@ -1583,36 +1618,26 @@ export function openGraphModal(input: {
       pad + (pointCount === 1 ? drawableW / 2 : (drawableW * idx) / (pointCount - 1));
     const yFor = (value: number): number => pad + ((100 - value) / 100) * drawableH;
     const clampIndex = (idx: number): number => Math.max(0, Math.min(pointCount - 1, idx));
-      const updateHover = (clientX: number, clientY: number): void => {
+    const updateHover = (clientX: number, clientY: number): void => {
         const rect = svg.getBoundingClientRect();
         const relX = clientX - rect.left;
-        const relY = clientY - rect.top;
         const idx = clampIndex(Math.round(((relX - pad) / drawableW) * (pointCount - 1)));
         const cx = xFor(idx);
-        const ay = yFor(points.affection[idx] ?? 0);
-        const ty = yFor(points.trust[idx] ?? 0);
-        const dy = yFor(points.desire[idx] ?? 0);
-        const cy = yFor(points.connection[idx] ?? 0);
 
         hoverGroup.setAttribute("opacity", "1");
         hoverLine.setAttribute("x1", String(cx));
         hoverLine.setAttribute("x2", String(cx));
-        hoverDots.affection?.setAttribute("cx", String(cx));
-        hoverDots.affection?.setAttribute("cy", String(ay));
-        hoverDots.trust?.setAttribute("cx", String(cx));
-        hoverDots.trust?.setAttribute("cy", String(ty));
-        hoverDots.desire?.setAttribute("cx", String(cx));
-        hoverDots.desire?.setAttribute("cy", String(dy));
-        hoverDots.connection?.setAttribute("cx", String(cx));
-        hoverDots.connection?.setAttribute("cy", String(cy));
+        for (const def of enabledNumeric) {
+          const series = points[def.key] ?? [];
+          const value = series[idx] ?? 0;
+          hoverDots[def.key]?.setAttribute("cx", String(cx));
+          hoverDots[def.key]?.setAttribute("cy", String(yFor(value)));
+        }
 
         tooltip.classList.add("visible");
         tooltip.innerHTML = `
           <div><strong>Index:</strong> ${idx + 1}/${pointCount}</div>
-          <div>Affection: ${Math.round(points.affection[idx] ?? 0)}</div>
-          <div>Trust: ${Math.round(points.trust[idx] ?? 0)}</div>
-          <div>Desire: ${Math.round(points.desire[idx] ?? 0)}</div>
-          <div>Connection: ${Math.round(points.connection[idx] ?? 0)}</div>
+          ${enabledNumeric.map(def => `<div>${def.label}: ${Math.round((points[def.key]?.[idx] ?? 0))}</div>`).join("")}
         `;
         const canvas = modal.querySelector(".bst-graph-canvas") as HTMLElement;
         const canvasRect = canvas.getBoundingClientRect();

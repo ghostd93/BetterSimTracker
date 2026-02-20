@@ -14,6 +14,11 @@ All notable changes to BetterSimTracker are documented here.
 - Graph tooltip positioning and accent picker sync on reopen.
 - And more...
 
+## [Unreleased]
+### Changed
+- Tracked stats toggles now affect cards, graph, and injected prompt content.
+- Disabled stats no longer appear in summaries or graph tooltips.
+
 ## [1.0.6.20] - 2026-02-19
 ### Changed
 - Graph tooltip now follows cursor within canvas.
