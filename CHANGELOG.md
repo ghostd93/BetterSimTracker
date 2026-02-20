@@ -5,6 +5,8 @@ All notable changes to BetterSimTracker are documented here.
 ## [Unreleased]
 ### Fixed
 - Added debug logging for mood image upload/delete to help diagnose sprite list issues.
+### Changed
+- Restyled mood image/emoji display in tracker cards with larger images and a distinct emoji chip.
 
 ## [1.0.9.11] - 2026-02-20
 ### Changed
