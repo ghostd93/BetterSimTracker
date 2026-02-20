@@ -17,6 +17,7 @@ All notable changes to BetterSimTracker are documented here.
 - Debug toggle groups now use consistent grid spacing across the settings modal.
 - Checkbox spacing now matches the tracked stats layout.
 - Mood image bubble alignment refined for mobile and desktop.
+- Debug toggles now share the same checkbox grid layout as Tracked Stats.
 
 ## [1.0.9.11] - 2026-02-20
 ### Changed
