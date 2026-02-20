@@ -6,12 +6,15 @@ All notable changes to BetterSimTracker are documented here.
 
 ## [1.1.0] - 2026-02-20
 ### Added
-- Per-character mood image sets in advanced character defaults, with full upload/delete support.
+- Per-character defaults panel in Advanced Character Definitions, including mood image sets with full upload/delete support.
 - Granular debug toggles (Extraction, Prompts, UI, Mood Images, Storage) to reduce console noise.
 ### Changed
 - Mood display now supports image + thought bubble presentation when a full mood image set is present.
+- Tracker UI and settings modal styling refined for consistency and mobile responsiveness.
 ### Fixed
-- Mood image handling is more reliable and mobile layout is improved.
+- Mood image upload pipeline (field names, sprite matching, path resolution) and deletion reliability.
+- Character defaults panel no longer re-renders while editing/selecting.
+- Debug/diagnostics toggles visibility, spacing, and persistence.
 and more...
 
 ## [1.0.9.11] - 2026-02-20
