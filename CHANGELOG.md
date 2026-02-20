@@ -5,6 +5,8 @@ All notable changes to BetterSimTracker are documented here.
 ## [Unreleased]
 ### Changed
 - Mood image display now shows a larger, centered image with a thought bubble (last thought), while emoji-only view stays unchanged.
+### Fixed
+- Mood image bubbles now replace the last thought line and fit on mobile layouts.
 ### Added
 - Granular debug toggles (Extraction, Prompts, UI, Mood Images, Storage) to reduce console noise.
 ### Fixed
