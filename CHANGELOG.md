@@ -8,6 +8,7 @@ All notable changes to BetterSimTracker are documented here.
 - Stop button shown in tracker progress card to cancel extraction.
 ### Changed
 - Prompt protocols now define confidence as self-assessed certainty in the extracted update.
+- Tracked stat toggles now affect only future extractions; historical cards and graphs keep recorded data.
 ### Fixed
 - Tracked stats toggles now affect cards, graph, and injected prompt content.
 - Disabled stats no longer appear in summaries or graph tooltips.

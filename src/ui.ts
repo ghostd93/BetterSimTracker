@@ -19,25 +19,16 @@ const NUMERIC_STAT_DEFS: Array<{ key: NumericStatKey; label: string; short: stri
   { key: "connection", label: "Connection", short: "C", color: "#9cff8f" }
 ];
 
-function isNumericStatTracked(key: NumericStatKey, settings: BetterSimTrackerSettings): boolean {
-  if (key === "affection") return settings.trackAffection;
-  if (key === "trust") return settings.trackTrust;
-  if (key === "desire") return settings.trackDesire;
-  return settings.trackConnection;
+function hasNumericValue(entry: TrackerData, key: NumericStatKey, name: string): boolean {
+  return entry.statistics[key]?.[name] !== undefined;
 }
 
-function getEnabledNumericStats(settings: BetterSimTrackerSettings): typeof NUMERIC_STAT_DEFS {
-  return NUMERIC_STAT_DEFS.filter(def => isNumericStatTracked(def.key, settings));
+function getNumericStatsForCharacter(entry: TrackerData, name: string): typeof NUMERIC_STAT_DEFS {
+  return NUMERIC_STAT_DEFS.filter(def => hasNumericValue(entry, def.key, name));
 }
 
-function numericFallbackForStat(
-  key: NumericStatKey,
-  settings: BetterSimTrackerSettings,
-): number {
-  if (key === "affection") return settings.defaultAffection;
-  if (key === "trust") return settings.defaultTrust;
-  if (key === "desire") return settings.defaultDesire;
-  return settings.defaultConnection;
+function getNumericStatsForHistory(history: TrackerData[], name: string): typeof NUMERIC_STAT_DEFS {
+  return NUMERIC_STAT_DEFS.filter(def => history.some(entry => hasNumericValue(entry, def.key, name)));
 }
 
 export type TrackerUiState = {
@@ -1264,14 +1255,13 @@ export function renderTracker(
     }
 
     const activeSet = new Set(data.activeCharacters.map(normalizeName));
-    const enabledNumeric = getEnabledNumericStats(settings);
     const hasAnyStatFor = (name: string): boolean =>
-      (settings.trackAffection && data.statistics.affection?.[name] !== undefined) ||
-      (settings.trackTrust && data.statistics.trust?.[name] !== undefined) ||
-      (settings.trackDesire && data.statistics.desire?.[name] !== undefined) ||
-      (settings.trackConnection && data.statistics.connection?.[name] !== undefined) ||
-      (settings.trackMood && data.statistics.mood?.[name] !== undefined) ||
-      (settings.trackLastThought && data.statistics.lastThought?.[name] !== undefined);
+      data.statistics.affection?.[name] !== undefined ||
+      data.statistics.trust?.[name] !== undefined ||
+      data.statistics.desire?.[name] !== undefined ||
+      data.statistics.connection?.[name] !== undefined ||
+      data.statistics.mood?.[name] !== undefined ||
+      data.statistics.lastThought?.[name] !== undefined;
     const forceAllInGroup = isGroupChat;
     const displayPool =
       (forceAllInGroup || settings.showInactive) && allCharacters.length > 0
@@ -1284,17 +1274,18 @@ export function renderTracker(
       if (!isActive && !settings.showInactive) continue;
 
       const previousData = findPreviousData(entry.messageIndex);
-      const moodText = settings.trackMood ? String(data.statistics.mood?.[name] ?? "Neutral") : "Neutral";
-      const prevMood = settings.trackMood ? String(previousData?.statistics.mood?.[name] ?? moodText) : moodText;
+      const enabledNumeric = getNumericStatsForCharacter(data, name);
+      const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
+      const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
       const card = document.createElement("div");
       card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;
       card.style.setProperty("--bst-card-local", palette[name] ?? colorFromName(name));
       const collapsedSummary = enabledNumeric.map(def => {
-        const value = toPercent(data.statistics[def.key]?.[name] ?? numericFallbackForStat(def.key, settings));
+        const value = toPercent(data.statistics[def.key]?.[name] ?? 0);
         return `<span>${def.short} ${value}%</span>`;
       }).join("");
-      const showCollapsedMood = settings.trackMood;
+      const showCollapsedMood = moodText !== "";
       card.innerHTML = `
         <div class="bst-head">
           <div class="bst-name" title="${name}">${name}</div>
@@ -1310,8 +1301,9 @@ export function renderTracker(
         </div>` : ""}
         <div class="bst-body">
         ${enabledNumeric.map(({ key, label }) => {
-          const value = toPercent(data.statistics[key]?.[name] ?? numericFallbackForStat(key, settings));
-          const prevValue = toPercent(previousData?.statistics[key]?.[name] ?? value);
+          const value = toPercent(data.statistics[key]?.[name] ?? 0);
+          const prevValueRaw = previousData?.statistics[key]?.[name];
+          const prevValue = toPercent(prevValueRaw ?? value);
           const delta = Math.round(value - prevValue);
           const deltaClass = delta > 0 ? "bst-delta bst-delta-up" : delta < 0 ? "bst-delta bst-delta-down" : "bst-delta bst-delta-flat";
           const showDelta = latestAiIndex != null && entry.messageIndex === latestAiIndex;
@@ -1322,15 +1314,15 @@ export function renderTracker(
             </div>
           `;
         }).join("")}
-        ${settings.trackMood ? `
+        ${moodText !== "" ? `
         <div class="bst-mood" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap">
             <span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span>
             <span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>
           </div>
         </div>` : ""}
-        ${settings.trackLastThought && settings.showLastThought ? `<div class="bst-thought">${String(data.statistics.lastThought?.[name] ?? "")}</div>` : ""}
-        ${enabledNumeric.length === 0 && !settings.trackMood && !(settings.trackLastThought && settings.showLastThought) ? `<div class="bst-empty">No tracked stats enabled.</div>` : ""}
+        ${settings.showLastThought && data.statistics.lastThought?.[name] !== undefined ? `<div class="bst-thought">${String(data.statistics.lastThought?.[name] ?? "")}</div>` : ""}
+        ${enabledNumeric.length === 0 && moodText === "" && !(settings.showLastThought && data.statistics.lastThought?.[name] !== undefined) ? `<div class="bst-empty">No stats recorded.</div>` : ""}
         </div>
       `;
       root.appendChild(card);
@@ -1363,12 +1355,12 @@ function hasCharacterSnapshot(entry: TrackerData, character: string): boolean {
   );
 }
 
-function hasNumericSnapshotForSettings(entry: TrackerData, character: string, settings: BetterSimTrackerSettings): boolean {
+function hasNumericSnapshot(entry: TrackerData, character: string): boolean {
   return (
-    (settings.trackAffection && entry.statistics.affection?.[character] !== undefined) ||
-    (settings.trackTrust && entry.statistics.trust?.[character] !== undefined) ||
-    (settings.trackDesire && entry.statistics.desire?.[character] !== undefined) ||
-    (settings.trackConnection && entry.statistics.connection?.[character] !== undefined)
+    entry.statistics.affection?.[character] !== undefined ||
+    entry.statistics.trust?.[character] !== undefined ||
+    entry.statistics.desire?.[character] !== undefined ||
+    entry.statistics.connection?.[character] !== undefined
   );
 }
 
@@ -1517,11 +1509,11 @@ export function openGraphModal(input: {
   const modal = document.createElement("div");
   modal.className = "bst-graph-modal";
 
-  const enabledNumeric = getEnabledNumericStats(input.settings);
+  const enabledNumeric = getNumericStatsForHistory(input.history, input.character);
   const timeline = [...input.history]
     .filter(item => Number.isFinite(item.timestamp))
     .sort((a, b) => a.timestamp - b.timestamp)
-    .filter(item => hasNumericSnapshotForSettings(item, input.character, input.settings));
+    .filter(item => hasNumericSnapshot(item, input.character));
   const rawSnapshotCount = timeline.length;
   const windowPreference = getGraphWindowPreference();
   const windowSize = windowPreference === "all" ? null : Number(windowPreference);
@@ -1623,7 +1615,7 @@ export function openGraphModal(input: {
         }).join("")}
       </g>
       ${enabledNumeric.length === 0 && snapshotCount === 0
-        ? `<text x="${Math.round(width / 2)}" y="${Math.round(height / 2)}" fill="rgba(255,255,255,0.65)" font-size="13" text-anchor="middle">No tracked numeric stats enabled</text>`
+        ? `<text x="${Math.round(width / 2)}" y="${Math.round(height / 2)}" fill="rgba(255,255,255,0.65)" font-size="13" text-anchor="middle">No numeric stats recorded</text>`
         : enabledNumeric.length > 0 && snapshotCount === 0
           ? `<text x="${Math.round(width / 2)}" y="${Math.round(height / 2)}" fill="rgba(255,255,255,0.65)" font-size="13" text-anchor="middle">No tracker history yet</text>`
           : ""}
@@ -1637,7 +1629,7 @@ export function openGraphModal(input: {
             const value = Math.round(latest[def.key] ?? 0);
             return `<span><i class="bst-legend-dot" style="background:${color};"></i>${def.label} ${value}</span>`;
           }).join("")
-        : `<span class="bst-graph-legend-empty">No tracked stats enabled. Turn on a stat to show the graph.</span>`}
+        : `<span class="bst-graph-legend-empty">No numeric stats recorded for this character.</span>`}
     </div>
   `;
   document.body.appendChild(modal);

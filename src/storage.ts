@@ -1,6 +1,6 @@
 import { EXTENSION_KEY, STAT_KEYS } from "./constants";
 import { isTrackableAiMessage } from "./messageFilter";
-import type { ChatMessage, STContext, Statistics, TrackerData } from "./types";
+import type { BetterSimTrackerSettings, ChatMessage, STContext, StatKey, Statistics, TrackerData } from "./types";
 const CHAT_STATE_KEY = `${EXTENSION_KEY}:chat`;
 
 function createEmptyStatistics(): Statistics {
@@ -392,13 +392,28 @@ export function writeTrackerDataToMessage(
 export function mergeStatisticsWithFallback(
   incoming: Statistics,
   previous: Statistics | null,
+  settings?: BetterSimTrackerSettings,
 ): Statistics {
   const merged = createEmptyStatistics();
+  const enabled = settings
+    ? (() => {
+        const list: StatKey[] = [];
+        if (settings.trackAffection) list.push("affection");
+        if (settings.trackTrust) list.push("trust");
+        if (settings.trackDesire) list.push("desire");
+        if (settings.trackConnection) list.push("connection");
+        if (settings.trackMood) list.push("mood");
+        if (settings.trackLastThought) list.push("lastThought");
+        return new Set<StatKey>(list);
+      })()
+    : null;
 
   for (const stat of STAT_KEYS) {
     const nextValues = incoming[stat] ?? {};
     const prevValues = previous?.[stat] ?? {};
-    merged[stat] = { ...prevValues, ...nextValues };
+    merged[stat] = enabled && !enabled.has(stat)
+      ? { ...nextValues }
+      : { ...prevValues, ...nextValues };
   }
 
   return merged;
