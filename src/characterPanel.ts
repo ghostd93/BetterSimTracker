@@ -242,6 +242,14 @@ function renderPanel(input: InitInput, force = false): void {
     if (active && panel.contains(active)) {
       return;
     }
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const anchor = selection.anchorNode;
+      const focus = selection.focusNode;
+      if ((anchor && panel.contains(anchor)) || (focus && panel.contains(focus))) {
+        return;
+      }
+    }
   }
 
   const nameInput = findNameInput(popup);
