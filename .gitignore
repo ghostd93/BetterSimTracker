@@ -10,4 +10,6 @@ node_modules/
 # OS/editor noise
 .DS_Store
 Thumbs.db
-# Local workflow instructions\nAGENTS.md\n
+
+# Local workflow instructions
+AGENTS.md
