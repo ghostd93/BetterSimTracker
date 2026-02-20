@@ -70,7 +70,7 @@ Return STRICT JSON only:
 }
 
 Rules:
-- confidence is 0..1 (0 low confidence, 1 high confidence).
+- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.
 - include one entry for each character name exactly: {{characters}}.
 - omit fields for stats that are not requested.
 - output JSON only, no commentary.`;
@@ -112,7 +112,7 @@ Return STRICT JSON only:
 }
 
 Rules:
-- confidence is 0..1 (0 low confidence, 1 high confidence).
+- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.
 - include one entry for each character name exactly: {{characters}}.
 - omit fields for stats that are not requested.
 - output JSON only, no commentary.`;
@@ -129,7 +129,7 @@ export const MOOD_PROMPT_PROTOCOL = `Return STRICT JSON only:
 }
 
 Rules:
-- confidence is 0..1 (0 low confidence, 1 high confidence).
+- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.
 - include one entry for each character name exactly: {{characters}}.
 - omit fields for stats that are not requested.
 - output JSON only, no commentary.`;
@@ -146,7 +146,7 @@ export const LAST_THOUGHT_PROMPT_PROTOCOL = `Return STRICT JSON only:
 }
 
 Rules:
-- confidence is 0..1 (0 low confidence, 1 high confidence).
+- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.
 - include one entry for each character name exactly: {{characters}}.
 - omit fields for stats that are not requested.
 - output JSON only, no commentary.`;
