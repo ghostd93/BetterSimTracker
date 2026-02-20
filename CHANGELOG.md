@@ -3,6 +3,8 @@
 All notable changes to BetterSimTracker are documented here.
 
 ## [Unreleased]
+
+## [1.0.8] - 2026-02-20
 ### Added
 - Injection prompt template is now editable and shown under Extraction when injection is enabled.
 - Stop button shown in tracker progress card to cancel extraction.
@@ -12,6 +14,7 @@ All notable changes to BetterSimTracker are documented here.
 ### Fixed
 - Tracked stats toggles now affect cards, graph, and injected prompt content.
 - Disabled stats no longer appear in summaries or graph tooltips.
+And more...
 
 ## [1.0.7] - 2026-02-19
 ### Added
