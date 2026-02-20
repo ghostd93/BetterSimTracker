@@ -8,6 +8,7 @@ import { discoverConnectionProfiles, getActiveConnectionProfileId, getContext, g
 import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLatestTrackerDataWithIndexBefore, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getRecentTrackerHistoryEntries, getTrackerDataFromMessage, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
 import type { BetterSimTrackerSettings, DeltaDebugRecord, STContext, TrackerData } from "./types";
 import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
+import { cancelActiveGenerations } from "./generator";
 
 let settings: BetterSimTrackerSettings | null = null;
 let isExtracting = false;
@@ -624,6 +625,11 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     });
     logDebug(settings, `Extraction finished (${reason})`);
   } catch (error) {
+    const isAbortError = error instanceof DOMException && error.name === "AbortError";
+    if (isAbortError) {
+      pushTrace("extract.cancelled", { reason });
+      return;
+    }
     pushTrace("extract.error", {
       reason,
       message: error instanceof Error ? error.message : String(error)
@@ -746,6 +752,19 @@ function registerEvents(context: STContext): void {
       setTrackerUi(context, { phase: "generating", done: 0, total: 0, messageIndex: targetIndex, stepLabel: "Generating AI response" });
       queueRender();
       queuePromptSync(context);
+    });
+  }
+
+  const stopEvent =
+    events.GENERATION_STOPPED ??
+    events.GENERATION_ABORTED ??
+    events.GENERATION_CANCELLED ??
+    events.GENERATION_STOP;
+  if (stopEvent) {
+    source.on(stopEvent, () => {
+      if (!isExtracting) return;
+      const canceled = cancelActiveGenerations();
+      pushTrace("extract.cancel", { canceled });
     });
   }
 
