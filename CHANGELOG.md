@@ -3,23 +3,16 @@
 All notable changes to BetterSimTracker are documented here.
 
 ## [Unreleased]
-### Changed
-- Mood image display now shows a larger, centered image with a thought bubble (last thought), while emoji-only view stays unchanged.
+
+## [1.1.0] - 2026-02-20
 ### Added
+- Per-character mood image sets in advanced character defaults, with full upload/delete support.
 - Granular debug toggles (Extraction, Prompts, UI, Mood Images, Storage) to reduce console noise.
+### Changed
+- Mood display now supports image + thought bubble presentation when a full mood image set is present.
 ### Fixed
-- Mood image bubbles now replace the last thought line and fit on mobile layouts.
-- Added debug logging for mood image upload/delete to help diagnose sprite list issues.
-- Debug category toggles now only appear when Debug is enabled.
-- Debug toggle inputs now persist correctly in settings.
-- Debug diagnostics rows now align and spacing matches other settings.
-- Checkbox rows now use consistent compact spacing across settings.
-- Debug toggle groups now use consistent grid spacing across the settings modal.
-- Checkbox spacing now matches the tracked stats layout.
-- Mood image bubble alignment refined for mobile and desktop.
-- Debug toggles now share the same checkbox grid layout as Tracked Stats.
-- Mood image bubble tail now uses circular dots (no diamond artifacts) and the image scales up on mobile.
-- Removed the mood bubble tail indicator.
+- Mood image handling is more reliable and mobile layout is improved.
+and more...
 
 ## [1.0.9.11] - 2026-02-20
 ### Changed
