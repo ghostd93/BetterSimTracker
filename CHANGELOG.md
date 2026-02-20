@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.9.5] - 2026-02-20
+### Fixed
+- Hard-block mood image uploads that exceed size/dimension limits or unsupported formats.
+and more...
+
+## [1.0.9.4] - 2026-02-20
+### Fixed
+- Mood image upload retries multiple file field names to match ST upload expectations.
+and more...
+
 ## [1.0.9.3] - 2026-02-20
 ### Fixed
 - Character defaults panel now resolves character name from context when input is missing.
