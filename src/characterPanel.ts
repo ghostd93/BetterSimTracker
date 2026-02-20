@@ -93,6 +93,10 @@ function slugify(value: string): string {
     .slice(0, 40) || "mood";
 }
 
+function moodSpriteName(mood: MoodLabel): string {
+  return `bst_mood_${slugify(mood)}`;
+}
+
 function normalizeMoodLabel(raw: string): MoodLabel | null {
   const key = raw.trim().toLowerCase();
   if (!key) return null;
@@ -183,7 +187,7 @@ async function fetchSpriteList(headers: Record<string, string>, characterName: s
 }
 
 async function uploadMoodImage(context: STContext, characterName: string, mood: MoodLabel, file: File): Promise<string> {
-  const label = `bst_mood_${slugify(mood)}`;
+  const label = moodSpriteName(mood);
   const headers: Record<string, string> = {};
   if (context.csrf_token) {
     headers["X-CSRF-Token"] = context.csrf_token;
@@ -218,6 +222,24 @@ async function uploadMoodImage(context: STContext, characterName: string, mood: 
   }
 
   throw new Error("Upload succeeded but sprite was not found in list.");
+}
+
+async function deleteMoodImage(context: STContext, characterName: string, mood: MoodLabel): Promise<void> {
+  const spriteName = moodSpriteName(mood);
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (context.csrf_token) {
+    headers["X-CSRF-Token"] = context.csrf_token;
+  }
+
+  const response = await fetch("/api/sprites/delete", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ name: characterName, label: spriteName, spriteName })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete ${mood} image (${response.status}).`);
+  }
 }
 
 function countMoodImages(images: MoodImageSet | undefined): number {
@@ -422,34 +444,72 @@ function renderPanel(input: InitInput, force = false): void {
       const moodRaw = button.dataset.mood ?? "";
       const mood = normalizeMoodLabel(moodRaw);
       if (!mood) return;
-      const next = withUpdatedDefaults(settings, characterName, current => {
-        const copy = { ...current };
-        const existing = { ...((copy.moodImages as MoodImageSet | undefined) ?? {}) };
-        delete existing[mood];
-        if (Object.keys(existing).length) {
-          copy.moodImages = existing;
-        } else {
-          delete copy.moodImages;
-        }
-        return copy;
-      });
-      input.setSettings(next);
-      input.saveSettings(context, next);
-      input.onSettingsUpdated();
-      renderPanel(input, true);
+      deleteMoodImage(context, characterName, mood)
+        .then(() => {
+          const next = withUpdatedDefaults(settings, characterName, current => {
+            const copy = { ...current };
+            const existing = { ...((copy.moodImages as MoodImageSet | undefined) ?? {}) };
+            delete existing[mood];
+            if (Object.keys(existing).length) {
+              copy.moodImages = existing;
+            } else {
+              delete copy.moodImages;
+            }
+            return copy;
+          });
+          input.setSettings(next);
+          input.saveSettings(context, next);
+          input.onSettingsUpdated();
+          renderPanel(input, true);
+        })
+        .catch(error => {
+          notify(error instanceof Error ? error.message : "Failed to delete image.", "error");
+        });
     });
   });
 
   panel.querySelector<HTMLButtonElement>("[data-action='clear-all']")?.addEventListener("click", event => {
     event.preventDefault();
-    const next = withUpdatedDefaults(settings, characterName, current => {
-      const copy = { ...current };
-      delete copy.moodImages;
-      return copy;
-    });
-    input.setSettings(next);
-    input.saveSettings(context, next);
-    input.onSettingsUpdated();
-    renderPanel(input, true);
+    const existing = (defaults.moodImages as MoodImageSet | undefined) ?? {};
+    const moods = Object.keys(existing)
+      .map(label => normalizeMoodLabel(label))
+      .filter((label): label is MoodLabel => Boolean(label));
+    if (!moods.length) return;
+    Promise.allSettled(moods.map(mood => deleteMoodImage(context, characterName, mood)))
+      .then(results => {
+        const failed: MoodLabel[] = [];
+        results.forEach((result, index) => {
+          if (result.status === "rejected") {
+            failed.push(moods[index]);
+          }
+        });
+        const next = withUpdatedDefaults(settings, characterName, current => {
+          const copy = { ...current };
+          if (failed.length === 0) {
+            delete copy.moodImages;
+            return copy;
+          }
+          const existingImages = (copy.moodImages as MoodImageSet | undefined) ?? {};
+          const remaining: MoodImageSet = {};
+          failed.forEach(mood => {
+            if (existingImages[mood]) {
+              remaining[mood] = existingImages[mood];
+            }
+          });
+          if (Object.keys(remaining).length) {
+            copy.moodImages = remaining;
+          } else {
+            delete copy.moodImages;
+          }
+          return copy;
+        });
+        input.setSettings(next);
+        input.saveSettings(context, next);
+        input.onSettingsUpdated();
+        if (failed.length) {
+          notify(`Failed to delete ${failed.length} image(s).`, "warning");
+        }
+        renderPanel(input, true);
+      });
   });
 }
