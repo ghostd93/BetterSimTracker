@@ -12,7 +12,9 @@ All notable changes to BetterSimTracker are documented here.
 - Added debug logging for mood image upload/delete to help diagnose sprite list issues.
 - Debug category toggles now only appear when Debug is enabled.
 - Debug toggle inputs now persist correctly in settings.
+- Checkbox rows now use consistent compact spacing across settings.
 - Debug diagnostics rows now align and spacing matches other settings.
+- Checkbox rows now use consistent compact spacing across settings.
 
 ## [1.0.9.11] - 2026-02-20
 ### Changed
