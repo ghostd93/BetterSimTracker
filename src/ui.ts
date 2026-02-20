@@ -559,6 +559,9 @@ function ensureStyles(): void {
 .bst-settings-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bst-settings-grid-compact { gap: 8px; }
 .bst-settings-grid-single { grid-template-columns: minmax(0, 1fr); }
+.bst-check-grid { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bst-check-grid-single { grid-template-columns: minmax(0, 1fr); }
+.bst-check-grid .bst-check { margin: 0; }
 .bst-settings label { font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
 .bst-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
 .bst-check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--bst-accent); }
@@ -1204,6 +1207,10 @@ function ensureStyles(): void {
   .bst-settings-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+  .bst-check-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
   }
   .bst-settings label {
     font-size: 13px;
@@ -2013,7 +2020,7 @@ export function openSettingsModal(input: {
         <label>Mood Stickiness <input data-k="moodStickiness" type="number" min="0" max="1" step="0.05"></label>
         <label data-bst-row="activityLookback">Activity Lookback <input data-k="activityLookback" type="number" min="1" max="25"></label>
         <div class="bst-section-divider">Toggles</div>
-        <div class="bst-settings-grid bst-settings-grid-compact">
+        <div class="bst-check-grid">
           <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
           <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
           <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
@@ -2047,7 +2054,7 @@ export function openSettingsModal(input: {
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-chart-line"></span>Tracked Stats</h4>
-      <div class="bst-settings-grid bst-settings-grid-compact">
+      <div class="bst-check-grid">
         <label class="bst-check"><input data-k="trackAffection" type="checkbox">Track Affection</label>
         <label class="bst-check"><input data-k="trackTrust" type="checkbox">Track Trust</label>
         <label class="bst-check"><input data-k="trackDesire" type="checkbox">Track Desire</label>
@@ -2069,7 +2076,7 @@ export function openSettingsModal(input: {
         <label>Border Radius <input data-k="borderRadius" type="number" min="0" max="32"></label>
         <label>Font Size <input data-k="fontSize" type="number" min="10" max="22"></label>
         <div class="bst-section-divider">Toggles</div>
-        <div class="bst-settings-grid bst-settings-grid-compact">
+        <div class="bst-check-grid">
           <label class="bst-check"><input data-k="showInactive" type="checkbox">Show Inactive</label>
           <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
         </div>
@@ -2192,10 +2199,10 @@ export function openSettingsModal(input: {
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-bug"></span>Debug</h4>
-      <div class="bst-settings-grid bst-settings-grid-compact">
+      <div class="bst-check-grid bst-check-grid-single">
         <label class="bst-check"><input data-k="debug" type="checkbox">Debug</label>
       </div>
-      <div class="bst-settings-grid bst-settings-grid-compact" data-bst-row="debugFlags">
+      <div class="bst-check-grid" data-bst-row="debugFlags">
         <label class="bst-check"><input data-k="debugExtraction" type="checkbox">Extraction</label>
         <label class="bst-check"><input data-k="debugPrompts" type="checkbox">Prompts</label>
         <label class="bst-check"><input data-k="debugUi" type="checkbox">UI</label>
@@ -2203,7 +2210,7 @@ export function openSettingsModal(input: {
         <label class="bst-check"><input data-k="debugStorage" type="checkbox">Storage</label>
       </div>
       <div data-bst-row="debugBody">
-        <div class="bst-settings-grid bst-settings-grid-compact">
+        <div class="bst-check-grid">
           <label class="bst-check" data-bst-row="includeContextInDiagnostics"><input data-k="includeContextInDiagnostics" type="checkbox">Include Context In Diagnostics</label>
           <label class="bst-check" data-bst-row="includeGraphInDiagnostics"><input data-k="includeGraphInDiagnostics" type="checkbox">Include Graph Data In Diagnostics</label>
         </div>
@@ -2601,9 +2608,7 @@ export function openSettingsModal(input: {
       debugBodyRow.style.display = current.debug ? "block" : "none";
     }
     if (debugFlagsRow) {
-      debugFlagsRow.style.display = current.debug ? "flex" : "none";
-      debugFlagsRow.style.flexDirection = "column";
-      debugFlagsRow.style.gap = "4px";
+      debugFlagsRow.style.display = current.debug ? "grid" : "none";
     }
     if (contextDiagRow) {
       contextDiagRow.style.display = current.debug ? "flex" : "none";
