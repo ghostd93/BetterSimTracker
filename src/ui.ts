@@ -382,27 +382,43 @@ function ensureStyles(): void {
   box-shadow: 0 0 10px color-mix(in srgb, var(--bst-accent) 70%, #ffffff 30%);
   transition: width 0.5s ease;
 }
-.bst-mood { margin-top: 7px; }
-.bst-mood-emoji { font-size: 18px; line-height: 1; }
+.bst-mood { margin-top: 9px; }
+.bst-mood-emoji {
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35));
+}
 .bst-mood-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 .bst-mood-image {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
   object-fit: cover;
-  border: 1px solid rgba(255,255,255,0.2);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.3);
+  border: 2px solid color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 55%, #ffffff 45%);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.25);
 }
 .bst-mood-badge {
-  font-size: 11px;
-  padding: 2px 8px;
+  font-size: 12px;
+  padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.22);
-  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.14);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+}
+.bst-mood-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 16%, rgba(255,255,255,0.12) 84%);
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 6px 16px rgba(0,0,0,0.28);
 }
 .bst-delta {
   font-size: 10px;
@@ -1474,10 +1490,10 @@ export function renderTracker(
         }).join("")}
         ${moodText !== "" ? `
         <div class="bst-mood" title="${moodText} (${moodTrend})">
-          <div class="bst-mood-wrap">
+          <div class="bst-mood-wrap ${moodImage ? "bst-mood-wrap--image" : "bst-mood-wrap--emoji"}">
             ${moodImage
               ? `<img class="bst-mood-image" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}">`
-              : `<span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span>`}
+              : `<span class="bst-mood-chip"><span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span></span>`}
             <span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>
           </div>
         </div>` : ""}
