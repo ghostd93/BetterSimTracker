@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.9.10] - 2026-02-20
+### Fixed
+- Mood image uploads now detect the newly added sprite even when labels differ.
+and more...
+
 ## [1.0.9.9] - 2026-02-20
 ### Fixed
 - Character defaults panel no longer re-renders while selecting text inside the panel.
