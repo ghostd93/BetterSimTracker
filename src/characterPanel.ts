@@ -185,12 +185,12 @@ async function fetchSpriteList(
     headers
   });
   if (!response.ok) {
-    logDebug(settings, "sprites.get failed", { status: response.status, characterName });
+    logDebug(settings, "moodImages", "sprites.get failed", { status: response.status, characterName });
     throw new Error("Upload succeeded but sprite list could not be loaded.");
   }
   const data = await response.json();
   const list = normalizeSpriteList(data);
-  logDebug(settings, "sprites.get ok", { characterName, count: list.length });
+  logDebug(settings, "moodImages", "sprites.get ok", { characterName, count: list.length });
   return list;
 }
 
@@ -208,7 +208,7 @@ async function uploadMoodImage(
   }
 
   const beforeSprites = await fetchSpriteList(headers, characterName, settings).catch(() => []);
-  logDebug(settings, "sprites.upload start", { characterName, mood, label, beforeCount: beforeSprites.length });
+  logDebug(settings, "moodImages", "sprites.upload start", { characterName, mood, label, beforeCount: beforeSprites.length });
   const form = new FormData();
   form.append("name", characterName);
   form.append("label", label);
@@ -222,27 +222,27 @@ async function uploadMoodImage(
   });
 
   if (!response.ok) {
-    logDebug(settings, "sprites.upload failed", { status: response.status, characterName, mood, label });
+    logDebug(settings, "moodImages", "sprites.upload failed", { status: response.status, characterName, mood, label });
     throw new Error(`Upload failed (${response.status})`);
   }
 
-  logDebug(settings, "sprites.upload ok", { characterName, mood, label });
+  logDebug(settings, "moodImages", "sprites.upload ok", { characterName, mood, label });
   const sprites = await fetchSpriteList(headers, characterName, settings);
   const normalizedLabel = label.toLowerCase();
   const match = sprites.find(sprite => String(sprite.label ?? "").toLowerCase() === normalizedLabel);
   if (match?.path) {
-    logDebug(settings, "sprites.match label", { characterName, mood, label, path: match.path });
+    logDebug(settings, "moodImages", "sprites.match label", { characterName, mood, label, path: match.path });
     return match.path;
   }
 
   const beforePaths = new Set(beforeSprites.map(sprite => sprite.path).filter(Boolean) as string[]);
   const added = sprites.filter(sprite => sprite.path && !beforePaths.has(sprite.path));
   if (added.length === 1 && added[0].path) {
-    logDebug(settings, "sprites.match added", { characterName, mood, label, path: added[0].path });
+    logDebug(settings, "moodImages", "sprites.match added", { characterName, mood, label, path: added[0].path });
     return added[0].path;
   }
 
-  logDebug(settings, "sprites.match failed", {
+  logDebug(settings, "moodImages", "sprites.match failed", {
     characterName,
     mood,
     label,
@@ -264,7 +264,7 @@ async function deleteMoodImage(
     headers["X-CSRF-Token"] = context.csrf_token;
   }
 
-  logDebug(settings, "sprites.delete start", { characterName, mood, spriteName });
+  logDebug(settings, "moodImages", "sprites.delete start", { characterName, mood, spriteName });
   const response = await fetch("/api/sprites/delete", {
     method: "POST",
     headers,
@@ -272,10 +272,10 @@ async function deleteMoodImage(
   });
 
   if (!response.ok) {
-    logDebug(settings, "sprites.delete failed", { status: response.status, characterName, mood, spriteName });
+    logDebug(settings, "moodImages", "sprites.delete failed", { status: response.status, characterName, mood, spriteName });
     throw new Error(`Failed to delete ${mood} image (${response.status}).`);
   }
-  logDebug(settings, "sprites.delete ok", { characterName, mood, spriteName });
+  logDebug(settings, "moodImages", "sprites.delete ok", { characterName, mood, spriteName });
 }
 
 function countMoodImages(images: MoodImageSet | undefined): number {

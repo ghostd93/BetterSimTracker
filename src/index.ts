@@ -86,7 +86,7 @@ function pushTrace(event: string, details?: Record<string, unknown>): void {
     const capped = persisted.slice(-1000);
     writeTraceLines(context, capped);
   }
-  logDebug(settings, event, details ?? {});
+  logDebug(settings, "ui", event, details ?? {});
 }
 
 function getDebugScopeKey(context: STContext): string {
@@ -579,7 +579,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       contextText = `${contextText}${buildCharacterCardsContext(context, activeCharacters)}`.trim();
     }
 
-    logDebug(settings, `Extraction started (${reason})`, {
+    logDebug(settings, "extraction", `Extraction started (${reason})`, {
       activeCharacters,
       allCharacterNames,
       runId
@@ -632,7 +632,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       savedMessageIndex: lastIndex,
       activeCharacters: activeCharacters.length
     });
-    logDebug(settings, `Extraction finished (${reason})`);
+    logDebug(settings, "extraction", `Extraction finished (${reason})`);
   } catch (error) {
     const isAbortError = error instanceof DOMException && error.name === "AbortError";
     if (isAbortError) {

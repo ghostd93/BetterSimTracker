@@ -5,7 +5,7 @@ import {
   DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
   moodOptions,
 } from "./prompts";
-import type { BetterSimTrackerSettings, CharacterDefaults, ConnectionProfileOption, MoodLabel, STContext } from "./types";
+import type { BetterSimTrackerSettings, CharacterDefaults, ConnectionProfileOption, DebugFlags, MoodLabel, STContext } from "./types";
 
 export const defaultSettings: BetterSimTrackerSettings = {
   enabled: true,
@@ -43,6 +43,13 @@ export const defaultSettings: BetterSimTrackerSettings = {
   defaultConnection: 50,
   defaultMood: "Neutral",
   debug: false,
+  debugFlags: {
+    extraction: true,
+    prompts: true,
+    ui: true,
+    moodImages: true,
+    storage: true,
+  },
   includeContextInDiagnostics: false,
   includeGraphInDiagnostics: true,
   promptTemplateUnified: DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
@@ -151,8 +158,14 @@ export function saveSettings(
   void persistViaSillyTavernModule(clean);
 }
 
-export function logDebug(settings: BetterSimTrackerSettings, ...args: unknown[]): void {
+export function logDebug(
+  settings: BetterSimTrackerSettings,
+  category: keyof DebugFlags | null,
+  ...args: unknown[]
+): void {
   if (!settings.debug) return;
+  const flags = settings.debugFlags;
+  if (category && flags && flags[category] === false) return;
   console.log("[BetterSimTracker]", ...args);
 }
 
@@ -353,6 +366,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     defaultConnection: clampInt(input.defaultConnection, defaultSettings.defaultConnection, 0, 100),
     defaultMood: asText(input.defaultMood, defaultSettings.defaultMood).slice(0, 80),
     debug: asBool(input.debug, defaultSettings.debug),
+    debugFlags: sanitizeDebugFlags(input.debugFlags),
     includeContextInDiagnostics: asBool(input.includeContextInDiagnostics, defaultSettings.includeContextInDiagnostics),
     includeGraphInDiagnostics: asBool(input.includeGraphInDiagnostics, defaultSettings.includeGraphInDiagnostics),
     promptTemplateUnified: normalizeInstruction(input.promptTemplateUnified, defaultSettings.promptTemplateUnified).slice(0, 20000),
@@ -392,6 +406,17 @@ function sanitizeMoodImages(raw: unknown): Partial<Record<MoodLabel, string>> | 
     out[label] = trimmed;
   }
   return Object.keys(out).length ? out : null;
+}
+
+function sanitizeDebugFlags(input: unknown): DebugFlags {
+  const base = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  return {
+    extraction: asBool(base.extraction, defaultSettings.debugFlags.extraction),
+    prompts: asBool(base.prompts, defaultSettings.debugFlags.prompts),
+    ui: asBool(base.ui, defaultSettings.debugFlags.ui),
+    moodImages: asBool(base.moodImages, defaultSettings.debugFlags.moodImages),
+    storage: asBool(base.storage, defaultSettings.debugFlags.storage),
+  };
 }
 
 function sanitizeCharacterDefaults(raw: unknown): Record<string, CharacterDefaults> {
