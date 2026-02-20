@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.9.11] - 2026-02-20
+### Changed
+- Clearing mood images now deletes the sprite files on disk via ST's delete endpoint.
+and more...
+
 ## [1.0.9.10] - 2026-02-20
 ### Fixed
 - Mood image uploads now detect the newly added sprite even when labels differ.
