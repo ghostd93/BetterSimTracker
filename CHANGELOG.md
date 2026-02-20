@@ -2,6 +2,17 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Added
+### Changed
+- Tracked stats toggles now affect cards, graph, and injected prompt content.
+- Disabled stats no longer appear in summaries or graph tooltips.
+- Prompt protocols now define confidence as self-assessed certainty in the extracted update.
+- Stop button now cancels in-flight tracker extraction requests.
+- Injection prompt template is now editable and shown under Extraction when injection is enabled.
+### Fixed
+### Removed
+
 ## [1.0.7] - 2026-02-19
 ### Added
 - Graph hover tooltip and latest-point emphasis.
@@ -12,15 +23,7 @@ All notable changes to BetterSimTracker are documented here.
 - Tracker card polish (spacing, inactive badge, last thought clamp, delta arrows).
 ### Fixed
 - Graph tooltip positioning and accent picker sync on reopen.
-- And more...
-
-## [Unreleased]
-### Changed
-- Tracked stats toggles now affect cards, graph, and injected prompt content.
-- Disabled stats no longer appear in summaries or graph tooltips.
-- Prompt protocols now define confidence as self-assessed certainty in the extracted update.
-- Stop button now cancels in-flight tracker extraction requests.
-- Injection prompt template is now editable and shown under Extraction when injection is enabled.
+And more...
 
 ## [1.0.6.20] - 2026-02-19
 ### Changed
