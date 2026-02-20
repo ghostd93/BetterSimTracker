@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.9.6] - 2026-02-20
+### Fixed
+- Sprite uploads now use the correct ST multer field name.
+- Upload buttons no longer require double click in some browsers.
+and more...
+
 ## [1.0.9.5] - 2026-02-20
 ### Fixed
 - Hard-block mood image uploads that exceed size/dimension limits or unsupported formats.
