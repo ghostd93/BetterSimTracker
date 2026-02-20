@@ -215,7 +215,16 @@ function renderPanel(input: InitInput): void {
   }
 
   const nameInput = findNameInput(popup);
-  const characterName = nameInput?.value.trim() ?? "";
+  const nameFromInput = nameInput?.value.trim() ?? "";
+  const contextCharacter = typeof context.characterId === "number"
+    ? context.characters?.[context.characterId]
+    : null;
+  const characterName =
+    nameFromInput ||
+    contextCharacter?.name?.trim() ||
+    context.name2?.trim() ||
+    context.name1?.trim() ||
+    "";
   if (!characterName) {
     panel.innerHTML = `
       <div class="bst-character-title">BetterSimTracker</div>

@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [1.0.9.3] - 2026-02-20
+### Fixed
+- Character defaults panel now resolves character name from context when input is missing.
+and more...
+
+## [1.0.9.2] - 2026-02-20
+### Fixed
+- Guarded settings UI localStorage writes to avoid quota crashes.
+and more...
+
 ## [1.0.9.1] - 2026-02-20
 ### Added
 - Per-character defaults panel in character advanced definition, including mood image uploads.
