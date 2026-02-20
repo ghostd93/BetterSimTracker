@@ -19,6 +19,9 @@ This is the required checklist for every change.
    - dist build
 6. Push dev.
 
+## Exception
+- If the only change is a changelog formatting/category correction, do NOT bump version and do NOT rebuild.
+
 ## Release
 1. Merge dev -> main
 2. Tag release
