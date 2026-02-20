@@ -2633,9 +2633,12 @@ export function openSettingsModal(input: {
     syncExtractionVisibility();
   };
 
-  modal.querySelectorAll("input, select").forEach(node => {
+  modal.querySelectorAll("input, select, textarea").forEach(node => {
     node.addEventListener("change", persistLive);
     if (node instanceof HTMLInputElement && node.type === "number") {
+      node.addEventListener("input", persistLive);
+    }
+    if (node instanceof HTMLTextAreaElement) {
       node.addEventListener("input", persistLive);
     }
   });
