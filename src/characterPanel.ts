@@ -1,4 +1,5 @@
 import { moodOptions } from "./prompts";
+import { logDebug } from "./settings";
 import type { BetterSimTrackerSettings, MoodLabel, STContext } from "./types";
 
 const PANEL_ID = "bst-character-panel";
@@ -174,26 +175,40 @@ function normalizeSpriteList(data: unknown): Array<{ label?: string; path?: stri
   return [];
 }
 
-async function fetchSpriteList(headers: Record<string, string>, characterName: string): Promise<Array<{ label?: string; path?: string }>> {
+async function fetchSpriteList(
+  headers: Record<string, string>,
+  characterName: string,
+  settings: BetterSimTrackerSettings,
+): Promise<Array<{ label?: string; path?: string }>> {
   const response = await fetch(`/api/sprites/get?name=${encodeURIComponent(characterName)}`, {
     method: "GET",
     headers
   });
   if (!response.ok) {
+    logDebug(settings, "sprites.get failed", { status: response.status, characterName });
     throw new Error("Upload succeeded but sprite list could not be loaded.");
   }
   const data = await response.json();
-  return normalizeSpriteList(data);
+  const list = normalizeSpriteList(data);
+  logDebug(settings, "sprites.get ok", { characterName, count: list.length });
+  return list;
 }
 
-async function uploadMoodImage(context: STContext, characterName: string, mood: MoodLabel, file: File): Promise<string> {
+async function uploadMoodImage(
+  context: STContext,
+  settings: BetterSimTrackerSettings,
+  characterName: string,
+  mood: MoodLabel,
+  file: File,
+): Promise<string> {
   const label = moodSpriteName(mood);
   const headers: Record<string, string> = {};
   if (context.csrf_token) {
     headers["X-CSRF-Token"] = context.csrf_token;
   }
 
-  const beforeSprites = await fetchSpriteList(headers, characterName).catch(() => []);
+  const beforeSprites = await fetchSpriteList(headers, characterName, settings).catch(() => []);
+  logDebug(settings, "sprites.upload start", { characterName, mood, label, beforeCount: beforeSprites.length });
   const form = new FormData();
   form.append("name", characterName);
   form.append("label", label);
@@ -207,30 +222,49 @@ async function uploadMoodImage(context: STContext, characterName: string, mood: 
   });
 
   if (!response.ok) {
+    logDebug(settings, "sprites.upload failed", { status: response.status, characterName, mood, label });
     throw new Error(`Upload failed (${response.status})`);
   }
 
-  const sprites = await fetchSpriteList(headers, characterName);
+  logDebug(settings, "sprites.upload ok", { characterName, mood, label });
+  const sprites = await fetchSpriteList(headers, characterName, settings);
   const normalizedLabel = label.toLowerCase();
   const match = sprites.find(sprite => String(sprite.label ?? "").toLowerCase() === normalizedLabel);
-  if (match?.path) return match.path;
+  if (match?.path) {
+    logDebug(settings, "sprites.match label", { characterName, mood, label, path: match.path });
+    return match.path;
+  }
 
   const beforePaths = new Set(beforeSprites.map(sprite => sprite.path).filter(Boolean) as string[]);
   const added = sprites.filter(sprite => sprite.path && !beforePaths.has(sprite.path));
   if (added.length === 1 && added[0].path) {
+    logDebug(settings, "sprites.match added", { characterName, mood, label, path: added[0].path });
     return added[0].path;
   }
 
+  logDebug(settings, "sprites.match failed", {
+    characterName,
+    mood,
+    label,
+    afterCount: sprites.length,
+    addedCount: added.length
+  });
   throw new Error("Upload succeeded but sprite was not found in list.");
 }
 
-async function deleteMoodImage(context: STContext, characterName: string, mood: MoodLabel): Promise<void> {
+async function deleteMoodImage(
+  context: STContext,
+  settings: BetterSimTrackerSettings,
+  characterName: string,
+  mood: MoodLabel,
+): Promise<void> {
   const spriteName = moodSpriteName(mood);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (context.csrf_token) {
     headers["X-CSRF-Token"] = context.csrf_token;
   }
 
+  logDebug(settings, "sprites.delete start", { characterName, mood, spriteName });
   const response = await fetch("/api/sprites/delete", {
     method: "POST",
     headers,
@@ -238,8 +272,10 @@ async function deleteMoodImage(context: STContext, characterName: string, mood: 
   });
 
   if (!response.ok) {
+    logDebug(settings, "sprites.delete failed", { status: response.status, characterName, mood, spriteName });
     throw new Error(`Failed to delete ${mood} image (${response.status}).`);
   }
+  logDebug(settings, "sprites.delete ok", { characterName, mood, spriteName });
 }
 
 function countMoodImages(images: MoodImageSet | undefined): number {
@@ -420,7 +456,7 @@ function renderPanel(input: InitInput, force = false): void {
       }
       try {
         notify(`Uploading ${mood} image...`, "info");
-        const url = await uploadMoodImage(context, characterName, mood, file);
+        const url = await uploadMoodImage(context, settings, characterName, mood, file);
         const next = withUpdatedDefaults(settings, characterName, current => {
           const copy = { ...current };
           const existing = (copy.moodImages as MoodImageSet | undefined) ?? {};
@@ -444,7 +480,7 @@ function renderPanel(input: InitInput, force = false): void {
       const moodRaw = button.dataset.mood ?? "";
       const mood = normalizeMoodLabel(moodRaw);
       if (!mood) return;
-      deleteMoodImage(context, characterName, mood)
+      deleteMoodImage(context, settings, characterName, mood)
         .then(() => {
           const next = withUpdatedDefaults(settings, characterName, current => {
             const copy = { ...current };
@@ -475,7 +511,7 @@ function renderPanel(input: InitInput, force = false): void {
       .map(label => normalizeMoodLabel(label))
       .filter((label): label is MoodLabel => Boolean(label));
     if (!moods.length) return;
-    Promise.allSettled(moods.map(mood => deleteMoodImage(context, characterName, mood)))
+    Promise.allSettled(moods.map(mood => deleteMoodImage(context, settings, characterName, mood)))
       .then(results => {
         const failed: MoodLabel[] = [];
         results.forEach((result, index) => {
