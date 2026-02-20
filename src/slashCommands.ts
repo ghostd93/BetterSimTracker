@@ -1,10 +1,12 @@
 import type { BetterSimTrackerSettings, STContext, StatKey } from "./types";
 
 type SlashRegister = (name: string, handler: (args: string) => void | Promise<void>, options?: Record<string, unknown>) => void;
+type SlashRegisterObject = (command: Record<string, unknown>) => void;
 
-type SlashCommandApi = {
-  register: SlashRegister;
-};
+type ParserApi =
+  | { kind: "parser"; addCommand: SlashRegisterObject }
+  | { kind: "fn"; register: SlashRegister }
+  | { kind: "object"; register: SlashRegisterObject };
 
 type SlashCommandDeps = {
   getContext: () => STContext | null;
@@ -22,23 +24,56 @@ type SlashCommandDeps = {
 
 const COMMAND_PREFIX = "/bst";
 
-function getSlashCommandApi(): SlashCommandApi | null {
+function getSlashCommandApi(): ParserApi | null {
   const anyGlobal = globalThis as unknown as Record<string, unknown>;
+  const parser = (anyGlobal.SlashCommandParser as { addCommandObject?: SlashRegisterObject; addCommand?: SlashRegister | SlashRegisterObject; registerCommand?: SlashRegister | SlashRegisterObject } | undefined);
+  if (parser?.addCommandObject) {
+    return { kind: "parser", addCommand: parser.addCommandObject.bind(parser) };
+  }
   const registerSlashCommand = anyGlobal.registerSlashCommand;
   if (typeof registerSlashCommand === "function") {
-    return { register: registerSlashCommand as SlashRegister };
+    return { kind: "fn", register: registerSlashCommand as SlashRegister };
   }
   const registerSlashCommandHandler = anyGlobal.registerSlashCommandHandler;
   if (typeof registerSlashCommandHandler === "function") {
-    return { register: registerSlashCommandHandler as SlashRegister };
+    return { kind: "fn", register: registerSlashCommandHandler as SlashRegister };
   }
-  const parser = (anyGlobal.SlashCommandParser as { addCommand?: SlashRegister } | undefined);
   if (parser?.addCommand) {
-    return { register: parser.addCommand.bind(parser) };
+    const addCommand = parser.addCommand.bind(parser);
+    if (addCommand.length <= 1) {
+      return { kind: "object", register: addCommand as SlashRegisterObject };
+    }
+    return { kind: "fn", register: addCommand as SlashRegister };
   }
-  const manager = (anyGlobal.slashCommandManager as { register?: SlashRegister } | undefined);
+  if (parser?.registerCommand) {
+    const registerCommand = parser.registerCommand.bind(parser);
+    if (registerCommand.length <= 1) {
+      return { kind: "object", register: registerCommand as SlashRegisterObject };
+    }
+    return { kind: "fn", register: registerCommand as SlashRegister };
+  }
+  const lowerParser = (anyGlobal.slashCommandParser as { addCommand?: SlashRegister | SlashRegisterObject; registerCommand?: SlashRegister | SlashRegisterObject } | undefined);
+  if (lowerParser?.addCommand) {
+    const addCommand = lowerParser.addCommand.bind(lowerParser);
+    if (addCommand.length <= 1) {
+      return { kind: "object", register: addCommand as SlashRegisterObject };
+    }
+    return { kind: "fn", register: addCommand as SlashRegister };
+  }
+  if (lowerParser?.registerCommand) {
+    const registerCommand = lowerParser.registerCommand.bind(lowerParser);
+    if (registerCommand.length <= 1) {
+      return { kind: "object", register: registerCommand as SlashRegisterObject };
+    }
+    return { kind: "fn", register: registerCommand as SlashRegister };
+  }
+  const manager = (anyGlobal.slashCommandManager as { register?: SlashRegister | SlashRegisterObject } | undefined);
   if (manager?.register) {
-    return { register: manager.register.bind(manager) };
+    const register = manager.register.bind(manager);
+    if (register.length <= 1) {
+      return { kind: "object", register: register as SlashRegisterObject };
+    }
+    return { kind: "fn", register: register as SlashRegister };
   }
   return null;
 }
@@ -92,8 +127,56 @@ function updateSetting(settings: BetterSimTrackerSettings, key: StatKey, next: b
   return copy;
 }
 
-function registerCommand(api: SlashCommandApi, name: string, handler: (args: string) => void | Promise<void>, help?: string): void {
+function coerceArgs(raw: unknown): string {
+  if (Array.isArray(raw)) return raw.join(" ");
+  if (raw == null) return "";
+  return String(raw);
+}
+
+function makeSlashCommandObject(
+  name: string,
+  handler: (args: string) => void | Promise<void>,
+  help?: string,
+  aliases?: string[],
+  returns?: string,
+): Record<string, unknown> {
+  const callback = (namedArgs: unknown, unnamedArgs: unknown): unknown => {
+    const raw = coerceArgs(unnamedArgs);
+    void handler(raw);
+    return "";
+  };
+  return {
+    name,
+    helpString: help,
+    aliases,
+    returns,
+    callback,
+    handler: callback,
+    purgeFromMessage: true,
+  };
+}
+
+function registerCommand(
+  api: ParserApi,
+  name: string,
+  handler: (args: string) => void | Promise<void>,
+  help?: string,
+  aliases?: string[],
+  returns?: string,
+): void {
   const options = help ? { help } : undefined;
+  if (api.kind === "parser") {
+    const anyGlobal = globalThis as unknown as Record<string, unknown>;
+    const SlashCommand = anyGlobal.SlashCommand as { fromProps?: (props: Record<string, unknown>) => Record<string, unknown> } | undefined;
+    const commandObj = makeSlashCommandObject(name, handler, help, aliases, returns);
+    const built = SlashCommand?.fromProps ? SlashCommand.fromProps(commandObj) : commandObj;
+    api.addCommand(built);
+    return;
+  }
+  if (api.kind === "object") {
+    api.register(makeSlashCommandObject(name, handler, help, aliases, returns));
+    return;
+  }
   try {
     api.register(name, handler, options);
     return;
@@ -120,11 +203,9 @@ function renderHelp(): string {
 }
 
 export function registerSlashCommands(deps: SlashCommandDeps): void {
-  const api = getSlashCommandApi();
-  if (!api) {
-    console.warn("[BetterSimTracker] Slash command API not available.");
-    return;
-  }
+  const attemptRegister = (): boolean => {
+    const api = getSlashCommandApi();
+    if (!api) return false;
 
   const withContext = (): { context: STContext; settings: BetterSimTrackerSettings } | null => {
     const context = deps.getContext();
@@ -242,11 +323,30 @@ export function registerSlashCommands(deps: SlashCommandDeps): void {
     notify(`Unknown subcommand "${sub}". ${renderHelp()}`, "warning");
   };
 
-  registerCommand(api, "bst", handleBst, "BetterSimTracker commands. Use '/bst help' for usage.");
-  registerCommand(api, "bst-status", () => handleStatus(), "Show tracker status.");
-  registerCommand(api, "bst-extract", () => handleExtract(), "Extract stats for latest AI message.");
-  registerCommand(api, "bst-clear", () => handleClear(), "Clear tracker data for current chat.");
-  registerCommand(api, "bst-toggle", raw => handleToggle(parseArgs(raw)), "Toggle a tracked stat.");
-  registerCommand(api, "bst-inject", raw => handleInject(parseArgs(raw)), "Toggle prompt injection.");
-  registerCommand(api, "bst-debug", raw => handleDebug(parseArgs(raw)), "Toggle debug mode.");
+    registerCommand(api, "bst", handleBst, "BetterSimTracker commands. Use '/bst help' for usage.", undefined, "tracker command");
+    registerCommand(api, "bst-status", () => handleStatus(), "Show tracker status.", undefined, "status text");
+    registerCommand(api, "bst-extract", () => handleExtract(), "Extract stats for latest AI message.", undefined, "queued");
+    registerCommand(api, "bst-clear", () => handleClear(), "Clear tracker data for current chat.", undefined, "cleared");
+    registerCommand(api, "bst-toggle", raw => handleToggle(parseArgs(raw)), "Toggle a tracked stat.", undefined, "toggled");
+    registerCommand(api, "bst-inject", raw => handleInject(parseArgs(raw)), "Toggle prompt injection.", undefined, "toggled");
+    registerCommand(api, "bst-debug", raw => handleDebug(parseArgs(raw)), "Toggle debug mode.", undefined, "toggled");
+    return true;
+  };
+
+  let attempts = 0;
+  const retry = (): void => {
+    attempts += 1;
+    if (attemptRegister()) {
+      if (deps.getSettings()?.debug) {
+        notify("Slash commands registered.", "success");
+      }
+      return;
+    }
+    if (attempts >= 60) {
+      console.warn("[BetterSimTracker] Slash command API not available.");
+      return;
+    }
+    setTimeout(retry, 500);
+  };
+  retry();
 }

@@ -844,6 +844,7 @@ function registerEvents(context: STContext): void {
     source.on(events.APP_READY, () => {
       pushTrace("event.app_ready");
       scheduleRefresh();
+      ensureSlashCommandsRegistered();
     });
   }
 
