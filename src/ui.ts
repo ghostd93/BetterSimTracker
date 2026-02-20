@@ -2187,7 +2187,7 @@ export function openSettingsModal(input: {
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-bug"></span>Debug</h4>
-      <div class="bst-settings-grid">
+      <div class="bst-settings-grid" style="margin-bottom:6px;">
         <label class="bst-check"><input data-k="debug" type="checkbox">Debug</label>
       </div>
       <div class="bst-settings-grid" data-bst-row="debugFlags">
@@ -2198,9 +2198,9 @@ export function openSettingsModal(input: {
         <label class="bst-check"><input data-k="debugStorage" type="checkbox">Storage</label>
       </div>
       <div data-bst-row="debugBody">
-        <div class="bst-settings-grid">
-        <label class="bst-check" data-bst-row="includeContextInDiagnostics"><input data-k="includeContextInDiagnostics" type="checkbox">Include Context In Diagnostics</label>
-        <label class="bst-check" data-bst-row="includeGraphInDiagnostics"><input data-k="includeGraphInDiagnostics" type="checkbox">Include Graph Data In Diagnostics</label>
+        <div class="bst-settings-grid" style="margin-bottom:6px;">
+          <label class="bst-check" data-bst-row="includeContextInDiagnostics"><input data-k="includeContextInDiagnostics" type="checkbox">Include Context In Diagnostics</label>
+          <label class="bst-check" data-bst-row="includeGraphInDiagnostics"><input data-k="includeGraphInDiagnostics" type="checkbox">Include Graph Data In Diagnostics</label>
         </div>
         <div class="bst-debug-actions">
           <button class="bst-btn bst-btn-soft bst-btn-icon" data-action="retrack" title="Retrack Last AI Message" aria-label="Retrack Last AI Message">
