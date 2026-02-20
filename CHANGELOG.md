@@ -2,10 +2,6 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [Unreleased]
-### Fixed
-- Custom prompt templates now persist when edited.
-
 ## [1.1.0] - 2026-02-20
 ### Added
 - Per-character defaults panel in Advanced Character Definitions, including mood image sets with full upload/delete support.
