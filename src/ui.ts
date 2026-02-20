@@ -1205,6 +1205,14 @@ function ensureStyles(): void {
   document.head.appendChild(style);
 }
 
+function safeSetLocalStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore quota errors
+  }
+}
+
 function findMessageContainer(messageIndex: number | null): HTMLElement | null {
   if (messageIndex == null) return null;
   const selectors = [
@@ -1564,7 +1572,7 @@ function getGraphSmoothingPreference(): boolean {
 
 function setGraphSmoothingPreference(enabled: boolean): void {
   try {
-    localStorage.setItem(GRAPH_SMOOTH_KEY, enabled ? "1" : "0");
+    safeSetLocalStorage(GRAPH_SMOOTH_KEY, enabled ? "1" : "0");
   } catch {
     // ignore
   }
@@ -1582,7 +1590,7 @@ function getGraphWindowPreference(): GraphWindow {
 
 function setGraphWindowPreference(windowSize: GraphWindow): void {
   try {
-    localStorage.setItem(GRAPH_WINDOW_KEY, windowSize);
+    safeSetLocalStorage(GRAPH_WINDOW_KEY, windowSize);
   } catch {
     // ignore
   }
@@ -2291,7 +2299,7 @@ export function openSettingsModal(input: {
         const nextCollapsed = !section.classList.contains("bst-section-collapsed");
         section.classList.toggle("bst-section-collapsed", nextCollapsed);
         head.setAttribute("aria-expanded", nextCollapsed ? "false" : "true");
-        localStorage.setItem(storageKey, nextCollapsed ? "collapsed" : "expanded");
+        safeSetLocalStorage(storageKey, nextCollapsed ? "collapsed" : "expanded");
       };
       head.addEventListener("click", toggleSection);
       head.addEventListener("keydown", event => {
