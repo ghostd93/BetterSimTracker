@@ -17,7 +17,8 @@ This is the required checklist for every change.
    - Code changes
    - Version + changelog + README (if needed)
    - dist build
-6. Push dev.
+6. Before pushing, send the latest [Unreleased] changelog section for review.
+7. Push dev.
 
 ## Exception
 - If the only change is a changelog formatting/category correction, do NOT bump version and do NOT rebuild.
