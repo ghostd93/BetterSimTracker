@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Added
+- Slash commands for status, extract, clear, toggles, injection, and debug.
+
 ## [1.0.8] - 2026-02-20
 ### Added
 - Injection prompt template is now editable and shown under Extraction when injection is enabled.

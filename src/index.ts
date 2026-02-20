@@ -9,6 +9,7 @@ import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLates
 import type { BetterSimTrackerSettings, DeltaDebugRecord, STContext, TrackerData } from "./types";
 import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
 import { cancelActiveGenerations } from "./generator";
+import { registerSlashCommands } from "./slashCommands";
 
 let settings: BetterSimTrackerSettings | null = null;
 let isExtracting = false;
@@ -29,6 +30,7 @@ let lastActivityAnalysis: { allCharacterNames: string[]; activeCharacters: strin
 let chatGenerationInFlight = false;
 let chatGenerationSawCharacterRender = false;
 let chatGenerationStartLastAiIndex: number | null = null;
+let slashCommandsRegistered = false;
 
 function getTraceStorageKey(context: STContext): string {
   return `${getDebugScopeKey(context)}:trace`;
@@ -905,20 +907,7 @@ function openSettings(): void {
     onRetrack: () => {
       void runExtraction("manual_refresh");
     },
-    onClearCurrentChat: () => {
-      const activeContext = getSafeContext();
-      if (!activeContext) return;
-      clearTrackerDataForCurrentChat(activeContext);
-      clearDebugRecord(activeContext);
-      debugTrace = [];
-      latestData = null;
-      latestDataMessageIndex = null;
-      lastDebugRecord = null;
-      trackerUiState = { phase: "idle", done: 0, total: 0, messageIndex: null };
-      activeContext.saveChatDebounced?.();
-      void activeContext.saveChat?.();
-      refreshFromStoredData();
-    },
+    onClearCurrentChat: () => clearCurrentChat(),
     onDumpDiagnostics: () => {
       const activeContext = getSafeContext();
       if (!activeContext || !settings) return;
@@ -1069,6 +1058,39 @@ function exposeWindowApi(): void {
   };
 }
 
+function clearCurrentChat(): void {
+  const activeContext = getSafeContext();
+  if (!activeContext) return;
+  clearTrackerDataForCurrentChat(activeContext);
+  clearDebugRecord(activeContext);
+  debugTrace = [];
+  latestData = null;
+  latestDataMessageIndex = null;
+  lastDebugRecord = null;
+  trackerUiState = { phase: "idle", done: 0, total: 0, messageIndex: null };
+  activeContext.saveChatDebounced?.();
+  void activeContext.saveChat?.();
+  refreshFromStoredData();
+}
+
+function ensureSlashCommandsRegistered(): void {
+  if (slashCommandsRegistered) return;
+  slashCommandsRegistered = true;
+  registerSlashCommands({
+    getContext: () => getSafeContext(),
+    getSettings: () => settings,
+    setSettings: next => { settings = next; },
+    getLatestMessageIndex: () => latestDataMessageIndex,
+    isExtracting: () => isExtracting,
+    runExtraction: (reason, messageIndex) => runExtraction(reason, messageIndex),
+    refreshFromStoredData,
+    clearCurrentChat,
+    queuePromptSync,
+    saveSettings: (context, next) => saveSettings(context, next),
+    pushTrace
+  });
+}
+
 async function init(): Promise<void> {
   const context = getSafeContext();
   if (!context) {
@@ -1091,6 +1113,7 @@ async function init(): Promise<void> {
   setTimeout(() => refreshFromStoredData(), 3000);
   setTimeout(() => refreshFromStoredData(), 6000);
   exposeWindowApi();
+  ensureSlashCommandsRegistered();
 }
 
 if (document.readyState === "loading") {
