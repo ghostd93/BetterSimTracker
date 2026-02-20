@@ -961,6 +961,11 @@ function registerEvents(context: STContext): void {
     source.on(eventName, (payload: unknown) => {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.swipe", { event: key, messageIndex });
+      if (context && trackerUiState.phase !== "generating") {
+        const targetIndex = getGenerationTargetMessageIndex(context);
+        setTrackerUi(context, { phase: "generating", done: 0, total: 0, messageIndex: targetIndex, stepLabel: "Generating AI response" });
+        queueRender();
+      }
       scheduleRefresh();
       scheduleSwipeExtraction(key, messageIndex ?? undefined);
     });
