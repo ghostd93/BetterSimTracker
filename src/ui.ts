@@ -8,6 +8,7 @@ import {
   MOOD_PROMPT_PROTOCOL,
   NUMERIC_PROMPT_PROTOCOL,
   UNIFIED_PROMPT_PROTOCOL,
+  moodOptions,
 } from "./prompts";
 
 type NumericStatKey = "affection" | "trust" | "desire" | "connection";
@@ -18,6 +19,10 @@ const NUMERIC_STAT_DEFS: Array<{ key: NumericStatKey; label: string; short: stri
   { key: "desire", label: "Desire", short: "D", color: "#ffb347" },
   { key: "connection", label: "Connection", short: "C", color: "#9cff8f" }
 ];
+
+const MOOD_LABELS = moodOptions;
+const MOOD_LABEL_LOOKUP = new Map(MOOD_LABELS.map(label => [label.toLowerCase(), label]));
+const MOOD_LABELS_BY_LENGTH = [...MOOD_LABELS].sort((a, b) => b.length - a.length);
 
 function hasNumericValue(entry: TrackerData, key: NumericStatKey, name: string): boolean {
   return entry.statistics[key]?.[name] !== undefined;
@@ -90,6 +95,33 @@ function moodBadgeColor(moodRaw: string): string {
   if (mood.includes("content") || mood.includes("hopeful") || mood.includes("playful")) return "rgba(89, 185, 255, 0.24)";
   if (mood.includes("frustrated") || mood.includes("angry") || mood.includes("sad") || mood.includes("lonely")) return "rgba(255, 120, 136, 0.25)";
   return "rgba(255,255,255,0.12)";
+}
+
+function normalizeMoodLabel(moodRaw: string): string | null {
+  const cleaned = moodRaw.trim().toLowerCase();
+  if (!cleaned) return null;
+  const exact = MOOD_LABEL_LOOKUP.get(cleaned);
+  if (exact) return exact;
+  for (const label of MOOD_LABELS_BY_LENGTH) {
+    const needle = label.toLowerCase();
+    if (cleaned.includes(needle)) return label;
+  }
+  return null;
+}
+
+function hasCompleteMoodSet(images: Record<string, string> | undefined): boolean {
+  if (!images) return false;
+  return MOOD_LABELS.every(label => typeof images[label] === "string" && images[label].trim().length > 0);
+}
+
+function getMoodImageUrl(settings: BetterSimTrackerSettings, characterName: string, moodRaw: string): string | null {
+  const entry = settings.characterDefaults?.[characterName];
+  const moodImages = entry?.moodImages as Record<string, string> | undefined;
+  if (!moodImages || !hasCompleteMoodSet(moodImages)) return null;
+  const label = normalizeMoodLabel(moodRaw);
+  if (!label) return null;
+  const url = moodImages[label];
+  return url && url.trim() ? url.trim() : null;
 }
 
 function formatDelta(value: number): string {
@@ -355,7 +387,15 @@ function ensureStyles(): void {
 .bst-mood-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+}
+.bst-mood-image {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.2);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.3);
 }
 .bst-mood-badge {
   font-size: 11px;
@@ -964,6 +1004,115 @@ function ensureStyles(): void {
   border-radius: 999px;
   display: inline-block;
 }
+.bst-character-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(155deg, rgba(19,24,36,0.78), rgba(14,18,28,0.95));
+  color: #f1f3f8;
+  display: grid;
+  gap: 10px;
+}
+.bst-character-title {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+.bst-character-sub {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.bst-character-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.bst-character-grid label {
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bst-character-panel input[type="text"],
+.bst-character-panel input[type="number"] {
+  background: rgba(16,20,30,0.7);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #f4f7ff;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.bst-character-panel input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--bst-accent) 70%, #ffffff 30%);
+  outline-offset: 1px;
+}
+.bst-character-wide {
+  grid-column: 1 / -1;
+}
+.bst-character-divider {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.bst-character-help {
+  font-size: 11px;
+  opacity: 0.75;
+}
+.bst-character-warning {
+  font-size: 11px;
+  color: #ffb3bd;
+}
+.bst-character-moods {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+.bst-mood-slot {
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(12,16,24,0.7);
+  display: grid;
+  gap: 6px;
+}
+.bst-mood-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: rgba(255,255,255,0.6);
+  overflow: hidden;
+}
+.bst-mood-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.bst-mood-label {
+  font-size: 11px;
+  font-weight: 600;
+}
+.bst-mood-actions {
+  display: grid;
+  gap: 6px;
+}
+.bst-mood-actions .bst-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.bst-mood-input {
+  display: none;
+}
+.bst-character-actions {
+  display: flex;
+  justify-content: flex-end;
+}
 @media (max-width: 820px) {
   .bst-mini-btn {
     min-height: 30px;
@@ -1278,6 +1427,7 @@ export function renderTracker(
       const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
+      const moodImage = moodText ? getMoodImageUrl(settings, name, moodText) : null;
       const card = document.createElement("div");
       card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;
       card.style.setProperty("--bst-card-local", palette[name] ?? colorFromName(name));
@@ -1317,7 +1467,9 @@ export function renderTracker(
         ${moodText !== "" ? `
         <div class="bst-mood" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap">
-            <span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span>
+            ${moodImage
+              ? `<img class="bst-mood-image" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}">`
+              : `<span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span>`}
             <span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>
           </div>
         </div>` : ""}

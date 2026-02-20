@@ -3,6 +3,22 @@ import { STAT_KEYS } from "./constants";
 export type StatKey = (typeof STAT_KEYS)[number];
 export type NumericStatKey = "affection" | "trust" | "desire" | "connection";
 export type TextStatKey = "mood" | "lastThought";
+export type MoodLabel =
+  | "Happy"
+  | "Sad"
+  | "Angry"
+  | "Excited"
+  | "Confused"
+  | "In Love"
+  | "Shy"
+  | "Playful"
+  | "Serious"
+  | "Lonely"
+  | "Hopeful"
+  | "Anxious"
+  | "Content"
+  | "Frustrated"
+  | "Neutral";
 
 export type StatValue = number | string;
 export type CharacterStatMap = Record<string, StatValue>;
@@ -60,6 +76,18 @@ export interface BetterSimTrackerSettings {
   promptTemplateSequentialMood: string;
   promptTemplateSequentialLastThought: string;
   promptTemplateInjection: string;
+  characterDefaults: Record<string, CharacterDefaults>;
+}
+
+export type MoodImageSet = Partial<Record<MoodLabel, string>>;
+
+export interface CharacterDefaults {
+  affection?: number;
+  trust?: number;
+  desire?: number;
+  connection?: number;
+  mood?: string;
+  moodImages?: MoodImageSet;
 }
 
 export interface GenerateRequestMeta {

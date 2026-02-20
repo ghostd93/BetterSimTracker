@@ -3,8 +3,9 @@ import {
   DEFAULT_INJECTION_PROMPT_TEMPLATE,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
+  moodOptions,
 } from "./prompts";
-import type { BetterSimTrackerSettings, ConnectionProfileOption, STContext } from "./types";
+import type { BetterSimTrackerSettings, CharacterDefaults, ConnectionProfileOption, MoodLabel, STContext } from "./types";
 
 export const defaultSettings: BetterSimTrackerSettings = {
   enabled: true,
@@ -51,7 +52,8 @@ export const defaultSettings: BetterSimTrackerSettings = {
   promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
   promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
   promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
-  promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE
+  promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
+  characterDefaults: {}
 };
 
 const extractInstructionBlock = (raw: string): string => {
@@ -361,5 +363,56 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     promptTemplateSequentialMood: normalizeInstruction(input.promptTemplateSequentialMood, defaultSettings.promptTemplateSequentialMood).slice(0, 20000),
     promptTemplateSequentialLastThought: normalizeInstruction(input.promptTemplateSequentialLastThought, defaultSettings.promptTemplateSequentialLastThought).slice(0, 20000),
     promptTemplateInjection: normalizeInstruction(input.promptTemplateInjection, defaultSettings.promptTemplateInjection).slice(0, 20000),
+    characterDefaults: sanitizeCharacterDefaults(input.characterDefaults),
   };
+}
+
+const normalizedMoodMap = (() => {
+  const map = new Map<string, MoodLabel>();
+  for (const label of moodOptions) {
+    map.set(label.toLowerCase(), label as MoodLabel);
+  }
+  return map;
+})();
+
+function normalizeMoodLabel(raw: string): MoodLabel | null {
+  const key = raw.trim().toLowerCase();
+  return normalizedMoodMap.get(key) ?? null;
+}
+
+function sanitizeMoodImages(raw: unknown): Partial<Record<MoodLabel, string>> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const out: Partial<Record<MoodLabel, string>> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== "string") continue;
+    const label = normalizeMoodLabel(key);
+    if (!label) continue;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    out[label] = trimmed;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function sanitizeCharacterDefaults(raw: unknown): Record<string, CharacterDefaults> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, CharacterDefaults> = {};
+  for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+    const key = typeof name === "string" ? name.trim() : "";
+    if (!key) continue;
+    if (!value || typeof value !== "object") continue;
+    const obj = value as Record<string, unknown>;
+    const entry: CharacterDefaults = {};
+    if (obj.affection !== undefined) entry.affection = clampInt(obj.affection, defaultSettings.defaultAffection, 0, 100);
+    if (obj.trust !== undefined) entry.trust = clampInt(obj.trust, defaultSettings.defaultTrust, 0, 100);
+    if (obj.desire !== undefined) entry.desire = clampInt(obj.desire, defaultSettings.defaultDesire, 0, 100);
+    if (obj.connection !== undefined) entry.connection = clampInt(obj.connection, defaultSettings.defaultConnection, 0, 100);
+    if (obj.mood !== undefined) entry.mood = asText(obj.mood, defaultSettings.defaultMood).slice(0, 80);
+    const moodImages = sanitizeMoodImages(obj.moodImages);
+    if (moodImages) entry.moodImages = moodImages;
+    if (Object.keys(entry).length) {
+      out[key] = entry;
+    }
+  }
+  return out;
 }
