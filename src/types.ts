@@ -66,6 +66,7 @@ export interface BetterSimTrackerSettings {
   defaultConnection: number;
   defaultMood: string;
   debug: boolean;
+  debugFlags: DebugFlags;
   includeContextInDiagnostics: boolean;
   includeGraphInDiagnostics: boolean;
   promptTemplateUnified: string;
@@ -77,6 +78,14 @@ export interface BetterSimTrackerSettings {
   promptTemplateSequentialLastThought: string;
   promptTemplateInjection: string;
   characterDefaults: Record<string, CharacterDefaults>;
+}
+
+export interface DebugFlags {
+  extraction: boolean;
+  prompts: boolean;
+  ui: boolean;
+  moodImages: boolean;
+  storage: boolean;
 }
 
 export type MoodImageSet = Partial<Record<MoodLabel, string>>;

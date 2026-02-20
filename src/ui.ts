@@ -2175,6 +2175,13 @@ export function openSettingsModal(input: {
       <div class="bst-settings-grid">
         <label class="bst-check"><input data-k="debug" type="checkbox">Debug</label>
       </div>
+      <div class="bst-settings-grid">
+        <label class="bst-check"><input data-k="debugExtraction" type="checkbox">Extraction</label>
+        <label class="bst-check"><input data-k="debugPrompts" type="checkbox">Prompts</label>
+        <label class="bst-check"><input data-k="debugUi" type="checkbox">UI</label>
+        <label class="bst-check"><input data-k="debugMoodImages" type="checkbox">Mood Images</label>
+        <label class="bst-check"><input data-k="debugStorage" type="checkbox">Storage</label>
+      </div>
       <div data-bst-row="debugBody">
         <div class="bst-settings-grid">
         <label class="bst-check" data-bst-row="includeContextInDiagnostics"><input data-k="includeContextInDiagnostics" type="checkbox">Include Context In Diagnostics</label>
@@ -2438,6 +2445,11 @@ export function openSettingsModal(input: {
   set("borderRadius", String(input.settings.borderRadius));
   set("fontSize", String(input.settings.fontSize));
   set("debug", String(input.settings.debug));
+  set("debugExtraction", String(input.settings.debugFlags?.extraction ?? true));
+  set("debugPrompts", String(input.settings.debugFlags?.prompts ?? true));
+  set("debugUi", String(input.settings.debugFlags?.ui ?? true));
+  set("debugMoodImages", String(input.settings.debugFlags?.moodImages ?? true));
+  set("debugStorage", String(input.settings.debugFlags?.storage ?? true));
   set("includeContextInDiagnostics", String(input.settings.includeContextInDiagnostics));
   set("includeGraphInDiagnostics", String(input.settings.includeGraphInDiagnostics));
   set("promptTemplateUnified", input.settings.promptTemplateUnified);
@@ -2497,6 +2509,13 @@ export function openSettingsModal(input: {
       borderRadius: readNumber("borderRadius", input.settings.borderRadius, 0, 32),
       fontSize: readNumber("fontSize", input.settings.fontSize, 10, 22),
       debug: readBool("debug"),
+      debugFlags: {
+        extraction: readBool("debugExtraction"),
+        prompts: readBool("debugPrompts"),
+        ui: readBool("debugUi"),
+        moodImages: readBool("debugMoodImages"),
+        storage: readBool("debugStorage"),
+      },
       includeContextInDiagnostics: readBool("includeContextInDiagnostics"),
       includeGraphInDiagnostics: readBool("includeGraphInDiagnostics"),
       promptTemplateUnified: read("promptTemplateUnified") || input.settings.promptTemplateUnified,
