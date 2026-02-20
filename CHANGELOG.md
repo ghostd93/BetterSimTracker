@@ -15,6 +15,11 @@ All notable changes to BetterSimTracker are documented here.
 - Debug/diagnostics toggles visibility, spacing, and persistence.
 and more...
 
+## [1.1.0.1] - 2026-02-20
+### Fixed
+- Custom prompt templates now persist when edited.
+and more...
+
 ## [1.0.9.11] - 2026-02-20
 ### Changed
 - Clearing mood images now deletes the sprite files on disk via ST's delete endpoint.
