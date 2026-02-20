@@ -18,6 +18,7 @@ All notable changes to BetterSimTracker are documented here.
 ### Changed
 - Tracked stats toggles now affect cards, graph, and injected prompt content.
 - Disabled stats no longer appear in summaries or graph tooltips.
+- Prompt protocols now define confidence as self-assessed certainty in the extracted update.
 
 ## [1.0.6.20] - 2026-02-19
 ### Changed
