@@ -6,7 +6,7 @@ All notable changes to BetterSimTracker are documented here.
 ### Fixed
 - Added debug logging for mood image upload/delete to help diagnose sprite list issues.
 ### Changed
-- Mood image display now shows the image plus a bubble label, while emoji-only view stays unchanged.
+- Mood image display now shows a larger, centered image with a thought bubble (last thought), while emoji-only view stays unchanged.
 
 ## [1.0.9.11] - 2026-02-20
 ### Changed
