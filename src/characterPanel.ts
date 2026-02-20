@@ -160,6 +160,28 @@ function clampStat(value: string): number | null {
   return Math.max(0, Math.min(100, Math.round(num)));
 }
 
+function normalizeSpriteList(data: unknown): Array<{ label?: string; path?: string }> {
+  if (Array.isArray(data)) return data as Array<{ label?: string; path?: string }>;
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    if (Array.isArray(record.sprites)) return record.sprites as Array<{ label?: string; path?: string }>;
+    if (Array.isArray(record.data)) return record.data as Array<{ label?: string; path?: string }>;
+  }
+  return [];
+}
+
+async function fetchSpriteList(headers: Record<string, string>, characterName: string): Promise<Array<{ label?: string; path?: string }>> {
+  const response = await fetch(`/api/sprites/get?name=${encodeURIComponent(characterName)}`, {
+    method: "GET",
+    headers
+  });
+  if (!response.ok) {
+    throw new Error("Upload succeeded but sprite list could not be loaded.");
+  }
+  const data = await response.json();
+  return normalizeSpriteList(data);
+}
+
 async function uploadMoodImage(context: STContext, characterName: string, mood: MoodLabel, file: File): Promise<string> {
   const label = `bst_mood_${slugify(mood)}`;
   const headers: Record<string, string> = {};
@@ -167,6 +189,7 @@ async function uploadMoodImage(context: STContext, characterName: string, mood: 
     headers["X-CSRF-Token"] = context.csrf_token;
   }
 
+  const beforeSprites = await fetchSpriteList(headers, characterName).catch(() => []);
   const form = new FormData();
   form.append("name", characterName);
   form.append("label", label);
@@ -183,18 +206,16 @@ async function uploadMoodImage(context: STContext, characterName: string, mood: 
     throw new Error(`Upload failed (${response.status})`);
   }
 
-  const spriteListResponse = await fetch(`/api/sprites/get?name=${encodeURIComponent(characterName)}`, {
-    method: "GET",
-    headers
-  });
-  if (!spriteListResponse.ok) {
-    throw new Error("Upload succeeded but sprite list could not be loaded.");
-  }
-
-  const sprites = await spriteListResponse.json() as Array<{ label?: string; path?: string }>;
+  const sprites = await fetchSpriteList(headers, characterName);
   const normalizedLabel = label.toLowerCase();
   const match = sprites.find(sprite => String(sprite.label ?? "").toLowerCase() === normalizedLabel);
   if (match?.path) return match.path;
+
+  const beforePaths = new Set(beforeSprites.map(sprite => sprite.path).filter(Boolean) as string[]);
+  const added = sprites.filter(sprite => sprite.path && !beforePaths.has(sprite.path));
+  if (added.length === 1 && added[0].path) {
+    return added[0].path;
+  }
 
   throw new Error("Upload succeeded but sprite was not found in list.");
 }
