@@ -559,9 +559,18 @@ function ensureStyles(): void {
 .bst-settings-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bst-settings-grid-compact { gap: 8px; }
 .bst-settings-grid-single { grid-template-columns: minmax(0, 1fr); }
-.bst-check-grid { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bst-check-grid {
+  display: grid;
+  column-gap: 22px;
+  row-gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .bst-check-grid-single { grid-template-columns: minmax(0, 1fr); }
-.bst-check-grid .bst-check { margin: 0; }
+.bst-check-grid .bst-check {
+  margin: 0;
+  align-items: center;
+  min-height: 26px;
+}
 .bst-settings label { font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
 .bst-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
 .bst-check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--bst-accent); }
