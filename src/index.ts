@@ -790,7 +790,10 @@ function registerEvents(context: STContext): void {
       chatGenerationInFlight = true;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = getLastAiMessageIndex(context);
-      const targetIndex = getGenerationTargetMessageIndex(context);
+      const baseTargetIndex = getGenerationTargetMessageIndex(context);
+      const targetIndex = type === "swipe"
+        ? (getLastAiMessageIndex(context) ?? baseTargetIndex)
+        : baseTargetIndex;
       pushTrace("event.generation_started", { targetIndex, type, startLastAiIndex: chatGenerationStartLastAiIndex });
       setTrackerUi(context, { phase: "generating", done: 0, total: 0, messageIndex: targetIndex, stepLabel: "Generating AI response" });
       queueRender();
@@ -962,7 +965,8 @@ function registerEvents(context: STContext): void {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.swipe", { event: key, messageIndex });
       if (context && trackerUiState.phase !== "generating") {
-        const targetIndex = getGenerationTargetMessageIndex(context);
+        const baseTargetIndex = getGenerationTargetMessageIndex(context);
+        const targetIndex = getLastAiMessageIndex(context) ?? baseTargetIndex;
         setTrackerUi(context, { phase: "generating", done: 0, total: 0, messageIndex: targetIndex, stepLabel: "Generating AI response" });
         queueRender();
       }
