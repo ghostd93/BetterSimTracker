@@ -1,12 +1,6 @@
 import type { BetterSimTrackerSettings, STContext, StatKey } from "./types";
 
-type SlashRegister = (name: string, handler: (args: string) => void | Promise<void>, options?: Record<string, unknown>) => void;
 type SlashRegisterObject = (command: Record<string, unknown>) => void;
-
-type ParserApi =
-  | { kind: "parser"; addCommand: SlashRegisterObject }
-  | { kind: "fn"; register: SlashRegister }
-  | { kind: "object"; register: SlashRegisterObject };
 
 type SlashCommandDeps = {
   getContext: () => STContext | null;
@@ -23,60 +17,6 @@ type SlashCommandDeps = {
 };
 
 const COMMAND_PREFIX = "/bst";
-
-function getSlashCommandApi(): ParserApi | null {
-  const anyGlobal = globalThis as unknown as Record<string, unknown>;
-  const parser = (anyGlobal.SlashCommandParser as { addCommandObject?: SlashRegisterObject; addCommand?: SlashRegister | SlashRegisterObject; registerCommand?: SlashRegister | SlashRegisterObject } | undefined);
-  if (parser?.addCommandObject) {
-    return { kind: "parser", addCommand: parser.addCommandObject.bind(parser) };
-  }
-  const registerSlashCommand = anyGlobal.registerSlashCommand;
-  if (typeof registerSlashCommand === "function") {
-    return { kind: "fn", register: registerSlashCommand as SlashRegister };
-  }
-  const registerSlashCommandHandler = anyGlobal.registerSlashCommandHandler;
-  if (typeof registerSlashCommandHandler === "function") {
-    return { kind: "fn", register: registerSlashCommandHandler as SlashRegister };
-  }
-  if (parser?.addCommand) {
-    const addCommand = parser.addCommand.bind(parser);
-    if (addCommand.length <= 1) {
-      return { kind: "object", register: addCommand as SlashRegisterObject };
-    }
-    return { kind: "fn", register: addCommand as SlashRegister };
-  }
-  if (parser?.registerCommand) {
-    const registerCommand = parser.registerCommand.bind(parser);
-    if (registerCommand.length <= 1) {
-      return { kind: "object", register: registerCommand as SlashRegisterObject };
-    }
-    return { kind: "fn", register: registerCommand as SlashRegister };
-  }
-  const lowerParser = (anyGlobal.slashCommandParser as { addCommand?: SlashRegister | SlashRegisterObject; registerCommand?: SlashRegister | SlashRegisterObject } | undefined);
-  if (lowerParser?.addCommand) {
-    const addCommand = lowerParser.addCommand.bind(lowerParser);
-    if (addCommand.length <= 1) {
-      return { kind: "object", register: addCommand as SlashRegisterObject };
-    }
-    return { kind: "fn", register: addCommand as SlashRegister };
-  }
-  if (lowerParser?.registerCommand) {
-    const registerCommand = lowerParser.registerCommand.bind(lowerParser);
-    if (registerCommand.length <= 1) {
-      return { kind: "object", register: registerCommand as SlashRegisterObject };
-    }
-    return { kind: "fn", register: registerCommand as SlashRegister };
-  }
-  const manager = (anyGlobal.slashCommandManager as { register?: SlashRegister | SlashRegisterObject } | undefined);
-  if (manager?.register) {
-    const register = manager.register.bind(manager);
-    if (register.length <= 1) {
-      return { kind: "object", register: register as SlashRegisterObject };
-    }
-    return { kind: "fn", register: register as SlashRegister };
-  }
-  return null;
-}
 
 function notify(message: string, type: "info" | "success" | "warning" | "error" = "info"): void {
   const anyGlobal = globalThis as unknown as Record<string, unknown>;
@@ -133,63 +73,6 @@ function coerceArgs(raw: unknown): string {
   return String(raw);
 }
 
-function makeSlashCommandObject(
-  name: string,
-  handler: (args: string) => void | Promise<void>,
-  help?: string,
-  aliases?: string[],
-  returns?: string,
-): Record<string, unknown> {
-  const callback = (namedArgs: unknown, unnamedArgs: unknown): unknown => {
-    const raw = coerceArgs(unnamedArgs);
-    void handler(raw);
-    return "";
-  };
-  return {
-    name,
-    helpString: help,
-    aliases,
-    returns,
-    callback,
-    handler: callback,
-    purgeFromMessage: true,
-  };
-}
-
-function registerCommand(
-  api: ParserApi,
-  name: string,
-  handler: (args: string) => void | Promise<void>,
-  help?: string,
-  aliases?: string[],
-  returns?: string,
-): void {
-  const options = help ? { help } : undefined;
-  if (api.kind === "parser") {
-    const anyGlobal = globalThis as unknown as Record<string, unknown>;
-    const SlashCommand = anyGlobal.SlashCommand as { fromProps?: (props: Record<string, unknown>) => Record<string, unknown> } | undefined;
-    const commandObj = makeSlashCommandObject(name, handler, help, aliases, returns);
-    const built = SlashCommand?.fromProps ? SlashCommand.fromProps(commandObj) : commandObj;
-    api.addCommand(built);
-    return;
-  }
-  if (api.kind === "object") {
-    api.register(makeSlashCommandObject(name, handler, help, aliases, returns));
-    return;
-  }
-  try {
-    api.register(name, handler, options);
-    return;
-  } catch {
-    // ignore
-  }
-  try {
-    api.register(name, handler);
-  } catch {
-    // ignore
-  }
-}
-
 function renderHelp(): string {
   return [
     "Commands:",
@@ -204,8 +87,13 @@ function renderHelp(): string {
 
 export function registerSlashCommands(deps: SlashCommandDeps): void {
   const attemptRegister = (): boolean => {
-    const api = getSlashCommandApi();
-    if (!api) return false;
+    const context = deps.getContext();
+    if (!context) return false;
+    const anyContext = context as unknown as Record<string, unknown>;
+    const SlashCommandParser = anyContext.SlashCommandParser as { addCommandObject?: SlashRegisterObject } | undefined;
+    const SlashCommand = anyContext.SlashCommand as { fromProps?: (props: Record<string, unknown>) => Record<string, unknown> } | undefined;
+    const ARGUMENT_TYPE = anyContext.ARGUMENT_TYPE as { STRING?: string } | undefined;
+    if (!SlashCommandParser?.addCommandObject || !SlashCommand?.fromProps) return false;
 
   const withContext = (): { context: STContext; settings: BetterSimTrackerSettings } | null => {
     const context = deps.getContext();
@@ -306,30 +194,43 @@ export function registerSlashCommands(deps: SlashCommandDeps): void {
     notify(`Debug ${value}.`, "success");
   };
 
-  const handleBst = async (rawArgs: string): Promise<void> => {
-    const args = parseArgs(rawArgs);
+  const handleBst = async (_args: Record<string, unknown>, rawValue: string): Promise<string> => {
+    const args = parseArgs(rawValue);
     const sub = (args.shift() ?? "").toLowerCase();
     deps.pushTrace?.("slash", { command: sub || "help" });
     if (!sub || sub === "help") {
       notify(renderHelp());
-      return;
+      return "";
     }
-    if (sub === "status") return handleStatus();
-    if (sub === "extract") return handleExtract();
-    if (sub === "clear") return handleClear();
-    if (sub === "toggle") return handleToggle(args);
-    if (sub === "inject") return handleInject(args);
-    if (sub === "debug") return handleDebug(args);
+    if (sub === "status") return String(handleStatus() ?? "");
+    if (sub === "extract") return String(await handleExtract() ?? "");
+    if (sub === "clear") return String(handleClear() ?? "");
+    if (sub === "toggle") return String(handleToggle(args) ?? "");
+    if (sub === "inject") return String(handleInject(args) ?? "");
+    if (sub === "debug") return String(handleDebug(args) ?? "");
     notify(`Unknown subcommand "${sub}". ${renderHelp()}`, "warning");
+    return "";
   };
 
-    registerCommand(api, "bst", handleBst, "BetterSimTracker commands. Use '/bst help' for usage.", undefined, "tracker command");
-    registerCommand(api, "bst-status", () => handleStatus(), "Show tracker status.", undefined, "status text");
-    registerCommand(api, "bst-extract", () => handleExtract(), "Extract stats for latest AI message.", undefined, "queued");
-    registerCommand(api, "bst-clear", () => handleClear(), "Clear tracker data for current chat.", undefined, "cleared");
-    registerCommand(api, "bst-toggle", raw => handleToggle(parseArgs(raw)), "Toggle a tracked stat.", undefined, "toggled");
-    registerCommand(api, "bst-inject", raw => handleInject(parseArgs(raw)), "Toggle prompt injection.", undefined, "toggled");
-    registerCommand(api, "bst-debug", raw => handleDebug(parseArgs(raw)), "Toggle debug mode.", undefined, "toggled");
+    const returns = ARGUMENT_TYPE?.STRING ?? "string";
+    const addCommandObject = SlashCommandParser.addCommandObject.bind(SlashCommandParser);
+    const fromProps = SlashCommand.fromProps.bind(SlashCommand);
+    const add = (name: string, callback: (args: Record<string, unknown>, value: string) => Promise<string> | string, help?: string): void => {
+      addCommandObject(fromProps({
+        name,
+        callback,
+        helpString: help,
+        returns,
+      }));
+    };
+
+    add("bst", handleBst, "BetterSimTracker commands. Use /bst help.");
+    add("bst-status", async () => { handleStatus(); return ""; }, "Show tracker status.");
+    add("bst-extract", async () => { await handleExtract(); return ""; }, "Extract stats for latest AI message.");
+    add("bst-clear", async () => { handleClear(); return ""; }, "Clear tracker data for current chat.");
+    add("bst-toggle", async (_args, raw) => { handleToggle(parseArgs(raw)); return ""; }, "Toggle a tracked stat.");
+    add("bst-inject", async (_args, raw) => { handleInject(parseArgs(raw)); return ""; }, "Toggle prompt injection.");
+    add("bst-debug", async (_args, raw) => { handleDebug(parseArgs(raw)); return ""; }, "Toggle debug mode.");
     return true;
   };
 
