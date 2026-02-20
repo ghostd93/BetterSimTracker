@@ -382,20 +382,24 @@ function ensureStyles(): void {
   box-shadow: 0 0 10px color-mix(in srgb, var(--bst-accent) 70%, #ffffff 30%);
   transition: width 0.5s ease;
 }
-.bst-mood { margin-top: 7px; }
+.bst-mood { margin-top: 10px; }
 .bst-mood-emoji { font-size: 18px; line-height: 1; }
 .bst-mood-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+}
+.bst-mood-wrap--image {
+  justify-content: center;
+  width: 100%;
 }
 .bst-mood-image {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
+  width: 74px;
+  height: 74px;
+  border-radius: 18px;
   object-fit: cover;
   border: 2px solid color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 55%, #ffffff 45%);
-  box-shadow: 0 10px 22px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.25);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.25);
 }
 .bst-mood-badge {
   font-size: 11px;
@@ -420,27 +424,29 @@ function ensureStyles(): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 64px;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 18px;
+  min-width: 160px;
+  max-width: 62%;
+  min-height: 58px;
+  padding: 10px 16px;
+  border-radius: 20px;
   border: 1px solid rgba(255,255,255,0.3);
   background: color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 18%, rgba(255,255,255,0.18) 82%);
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15), 0 8px 18px rgba(0,0,0,0.25);
-  font-size: 11px;
+  font-size: 12px;
   color: rgba(255,255,255,0.9);
+  text-align: left;
 }
 .bst-mood-bubble::after {
   content: "";
   position: absolute;
-  left: -6px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: 16px;
+  bottom: -8px;
+  transform: none;
   width: 0;
   height: 0;
   border-style: solid;
-  border-width: 6px 6px 6px 0;
-  border-color: transparent rgba(255,255,255,0.22) transparent transparent;
+  border-width: 8px 8px 0 8px;
+  border-color: rgba(255,255,255,0.22) transparent transparent transparent;
   filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
 }
 .bst-delta {
@@ -1475,6 +1481,9 @@ export function renderTracker(
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
       const moodImage = moodText ? getMoodImageUrl(settings, name, moodText) : null;
+      const lastThoughtText = settings.showLastThought && data.statistics.lastThought?.[name] !== undefined
+        ? String(data.statistics.lastThought?.[name] ?? "")
+        : "";
       const card = document.createElement("div");
       card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;
       card.style.setProperty("--bst-card-local", palette[name] ?? colorFromName(name));
@@ -1517,9 +1526,11 @@ export function renderTracker(
             ${moodImage
               ? `<img class="bst-mood-image" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}">`
               : `<span class="bst-mood-chip"><span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span></span>`}
-            ${moodImage
-              ? `<span class="bst-mood-bubble">${moodText} (${moodTrend})</span>`
-              : `<span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>`}
+            ${moodImage && lastThoughtText
+              ? `<span class="bst-mood-bubble">${escapeHtml(lastThoughtText)}</span>`
+              : moodImage
+                ? ""
+                : `<span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>`}
           </div>
         </div>` : ""}
         ${settings.showLastThought && data.statistics.lastThought?.[name] !== undefined ? `<div class="bst-thought">${String(data.statistics.lastThought?.[name] ?? "")}</div>` : ""}
