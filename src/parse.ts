@@ -1,3 +1,4 @@
+import { moodOptions } from "./prompts";
 import type { NumericStatKey, StatKey, StatValue } from "./types";
 import type { Statistics } from "./types";
 
@@ -47,6 +48,21 @@ function coerceText(value: unknown): string | null {
   return trimmed.slice(0, 200);
 }
 
+const MOOD_LABEL_LOOKUP = new Map(moodOptions.map(label => [label.toLowerCase(), label]));
+const MOOD_LABELS_BY_LENGTH = [...moodOptions].sort((a, b) => b.length - a.length);
+
+function normalizeMoodLabel(value: string): string {
+  const cleaned = value.trim().toLowerCase();
+  if (!cleaned) return "Neutral";
+  const exact = MOOD_LABEL_LOOKUP.get(cleaned);
+  if (exact) return exact;
+  for (const label of MOOD_LABELS_BY_LENGTH) {
+    const needle = label.toLowerCase();
+    if (cleaned.includes(needle)) return label;
+  }
+  return "Neutral";
+}
+
 export function parseStatResponse(
   stat: StatKey,
   rawText: string,
@@ -66,7 +82,9 @@ export function parseStatResponse(
 
     if (stat === "mood" || stat === "lastThought") {
       const text = coerceText(rawValue);
-      if (text !== null) result[character] = text;
+      if (text !== null) {
+        result[character] = stat === "mood" ? normalizeMoodLabel(text) : text;
+      }
       continue;
     }
 
@@ -143,7 +161,7 @@ export function parseUnifiedStatResponse(
     }
     if (enabledSet.has("mood")) {
       const v = coerceText(row.mood);
-      if (v !== null) output.mood[name] = v;
+      if (v !== null) output.mood[name] = normalizeMoodLabel(v);
     }
     if (enabledSet.has("lastThought")) {
       const v = coerceText(row.lastThought);
@@ -237,7 +255,7 @@ export function parseUnifiedDeltaResponse(
     }
     if (enabledSet.has("mood")) {
       const v = coerceText(row.mood);
-      if (v !== null) result.mood[name] = v;
+      if (v !== null) result.mood[name] = normalizeMoodLabel(v);
     }
     if (enabledSet.has("lastThought")) {
       const v = coerceText(row.lastThought);
