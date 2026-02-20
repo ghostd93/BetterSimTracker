@@ -135,6 +135,7 @@ Numeric scaling formula used by runtime:
 
 - Tracker ignores generated-media/system image messages (for example SD image posts).
 - Tracker progress should appear only for valid AI tracking targets.
+- Tracker progress includes a Stop button to cancel extraction.
 - On reload, tracker state is restored from saved chat metadata/message data.
 
 ## Settings Overview

@@ -195,6 +195,25 @@ function ensureStyles(): void {
   font-size: 11px;
   opacity: 0.82;
 }
+.bst-loading-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+.bst-loading-stop {
+  min-width: 120px;
+  padding: 8px 16px;
+  font-weight: 600;
+}
+.bst-btn-danger {
+  border-color: rgba(255,99,99,0.45);
+  background: rgba(255,72,72,0.18);
+  color: #fff;
+}
+.bst-btn-danger:hover {
+  border-color: rgba(255,120,120,0.7);
+  background: rgba(255,72,72,0.3);
+}
 .bst-loading-track {
   height: 8px;
   border-radius: 999px;
@@ -1093,6 +1112,7 @@ export function renderTracker(
   latestAiIndex: number | null,
   onOpenGraph?: (characterName: string) => void,
   onRetrackMessage?: (messageIndex: number) => void,
+  onCancelExtraction?: () => void,
 ): void {
   ensureStyles();
   const palette = allocateCharacterColors(allCharacters);
@@ -1166,6 +1186,11 @@ export function renderTracker(
           collapse.innerHTML = nextCollapsed ? "&#9656; Expand all" : "&#9662; Collapse all";
           return;
         }
+        const cancel = target?.closest('[data-bst-action="cancel-extraction"]') as HTMLElement | null;
+        if (cancel) {
+          onCancelExtraction?.();
+          return;
+        }
       });
     }
     root.classList.toggle("bst-root-collapsed", collapsedTrackerMessages.has(entry.messageIndex));
@@ -1212,6 +1237,9 @@ export function renderTracker(
         </div>
         <div class="bst-loading-track"><div class="bst-loading-fill" style="width:${Math.round(ratio * 100)}%"></div></div>
         <div class="bst-loading-sub">${subtitle}</div>
+        <div class="bst-loading-actions">
+          <button class="bst-btn bst-btn-danger bst-loading-stop" data-bst-action="cancel-extraction">Stop</button>
+        </div>
       `;
       root.appendChild(loadingBox);
       continue;

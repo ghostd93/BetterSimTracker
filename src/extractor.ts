@@ -1,5 +1,5 @@
 import { STAT_KEYS } from "./constants";
-import { generateJson, getGenerationCancelToken } from "./generator";
+import { generateJson } from "./generator";
 import { parseUnifiedDeltaResponse } from "./parse";
 import {
   DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE,
@@ -109,13 +109,11 @@ export async function extractStatisticsParallel(input: {
   const output = emptyStatistics();
   let debugRecord: DeltaDebugRecord | null = null;
   let cancelled = false;
-  const cancelToken = getGenerationCancelToken();
 
   const isAbortError = (error: unknown): boolean =>
     error instanceof DOMException && error.name === "AbortError";
   const checkCancelled = (): void => {
-    if (cancelled || cancelToken !== getGenerationCancelToken()) {
-      cancelled = true;
+    if (cancelled) {
       throw new DOMException("Request aborted by user", "AbortError");
     }
   };
@@ -266,7 +264,6 @@ export async function extractStatisticsParallel(input: {
       tickProgress(`Requesting ${statLabel}`);
       attempts += 1;
       requestSeq += 1;
-      checkCancelled();
       let rawResponse = await generateJson(prompt, settings);
       requestMetas.push({ ...rawResponse.meta, statList, attempt: requestSeq, retryType: "initial" });
       let raw = rawResponse.text;
@@ -281,7 +278,6 @@ export async function extractStatisticsParallel(input: {
         requestSeq += 1;
         retryUsed = true;
         retriesLeft -= 1;
-        checkCancelled();
         const retryResponse = await generateJson(retryPrompt, settings);
         requestMetas.push({ ...retryResponse.meta, statList, attempt: requestSeq, retryType: "strict" });
         const retryParsed = parseUnifiedDeltaResponse(retryResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
@@ -301,7 +297,6 @@ export async function extractStatisticsParallel(input: {
         requestSeq += 1;
         retryUsed = true;
         retriesLeft -= 1;
-        checkCancelled();
         const repairResponse = await generateJson(repairPrompt, settings);
         requestMetas.push({ ...repairResponse.meta, statList, attempt: requestSeq, retryType: "repair" });
         const repairParsed = parseUnifiedDeltaResponse(repairResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
@@ -316,7 +311,6 @@ export async function extractStatisticsParallel(input: {
         requestSeq += 1;
         retryUsed = true;
         retriesLeft -= 1;
-        checkCancelled();
         const strictResponse = await generateJson(strictPrompt, settings);
         requestMetas.push({ ...strictResponse.meta, statList, attempt: requestSeq, retryType: "strict_loop" });
         const strictParsed = parseUnifiedDeltaResponse(strictResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
@@ -344,7 +338,7 @@ export async function extractStatisticsParallel(input: {
       const promptByStat: Array<{ stat: StatKey; prompt: string }> = [];
       const worker = async (): Promise<void> => {
         while (queue.length) {
-          checkCancelled();
+          if (cancelled) return;
           const stat = queue.shift();
           if (!stat) return;
           const one = await runOneStat([stat]);
