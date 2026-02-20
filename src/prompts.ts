@@ -44,6 +44,22 @@ export const DEFAULT_UNIFIED_PROMPT_INSTRUCTION = [
   "- Only increase desire if the relationship is explicitly romantic/sexual in the recent messages. If the relationship is non-romantic, desire must be 0 or negative. Do not infer romance from affectionate or playful behavior alone.",
 ].join("\n");
 
+export const DEFAULT_INJECTION_PROMPT_TEMPLATE = [
+  "{{header}}",
+  "",
+  "Stat semantics:",
+  "{{statSemantics}}",
+  "",
+  "{{behaviorBands}}",
+  "",
+  "{{reactRules}}",
+  "",
+  "Priority rules:",
+  "{{priorityRules}}",
+  "",
+  "{{lines}}"
+].join("\n");
+
 export const UNIFIED_PROMPT_PROTOCOL = `Numeric stats to update ({{numericStats}}):
 - Return deltas only, each in range -{{maxDelta}}..{{maxDelta}}.
 
