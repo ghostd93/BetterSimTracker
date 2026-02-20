@@ -323,7 +323,7 @@ Direct key path:
 
 If no advanced defaults are present, tracker baseline falls back to contextual inference.
 
-If all mood images are set, tracker cards display the image with a label bubble. Otherwise, the mood row stays emoji-only.
+If all mood images are set, tracker cards display the image with a thought bubble (last thought). Otherwise, the mood row stays emoji-only.
 
 ## Troubleshooting
 
