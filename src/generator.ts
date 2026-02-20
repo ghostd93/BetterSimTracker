@@ -17,6 +17,7 @@ function extractContent(payload: GenerateResponse): string {
 
 const generator = new Generator();
 const activeAbortControllers = new Set<AbortController>();
+let generationCancelToken = 0;
 
 function normalizeProfileId(settings: BetterSimTrackerSettings): string | undefined {
   const raw = settings.connectionProfile?.trim();
@@ -287,5 +288,10 @@ export function cancelActiveGenerations(): number {
   const controllers = Array.from(activeAbortControllers);
   controllers.forEach(controller => controller.abort());
   activeAbortControllers.clear();
+  generationCancelToken += 1;
   return controllers.length;
+}
+
+export function getGenerationCancelToken(): number {
+  return generationCancelToken;
 }
