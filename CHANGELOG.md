@@ -6,6 +6,7 @@ All notable changes to BetterSimTracker are documented here.
 ### Fixed
 - Mood labels now fall back to Neutral when the model returns a label outside the allowed list.
 - Swipes now wait for the new message render before extraction starts.
+- Swipe now shows the waiting state immediately.
 
 ## [1.1.0.1] - 2026-02-20
 ### Fixed
