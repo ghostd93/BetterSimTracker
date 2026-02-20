@@ -10,6 +10,7 @@ import type { BetterSimTrackerSettings, DeltaDebugRecord, STContext, TrackerData
 import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
 import { cancelActiveGenerations } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
+import { initCharacterPanel } from "./characterPanel";
 
 let settings: BetterSimTrackerSettings | null = null;
 let isExtracting = false;
@@ -392,7 +393,9 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
     const extFromCharacter = character?.extensions as Record<string, unknown> | undefined;
     const extFromData = character?.data?.extensions as Record<string, unknown> | undefined;
     const own = ((extFromCharacter?.bettersimtracker ?? extFromData?.bettersimtracker) as Record<string, unknown> | undefined);
-    const defaults = (own?.defaults as Record<string, unknown> | undefined) ?? {};
+    const defaultsFromExtensions = (own?.defaults as Record<string, unknown> | undefined) ?? {};
+    const defaultsFromSettings = (s.characterDefaults?.[name] as Record<string, unknown> | undefined) ?? {};
+    const defaults = { ...defaultsFromSettings, ...defaultsFromExtensions };
     const hasAnyExplicitDefaults =
       defaults.affection !== undefined ||
       defaults.trust !== undefined ||
@@ -1113,6 +1116,13 @@ async function init(): Promise<void> {
   setTimeout(() => refreshFromStoredData(), 1500);
   setTimeout(() => refreshFromStoredData(), 3000);
   setTimeout(() => refreshFromStoredData(), 6000);
+  initCharacterPanel({
+    getContext: () => getSafeContext(),
+    getSettings: () => settings,
+    setSettings: next => { settings = next; },
+    saveSettings: (ctx, next) => saveSettings(ctx, next),
+    onSettingsUpdated: () => refreshFromStoredData()
+  });
   exposeWindowApi();
   ensureSlashCommandsRegistered();
 }
