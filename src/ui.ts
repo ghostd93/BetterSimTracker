@@ -2190,7 +2190,7 @@ export function openSettingsModal(input: {
       <div class="bst-settings-grid">
         <label class="bst-check"><input data-k="debug" type="checkbox">Debug</label>
       </div>
-      <div class="bst-settings-grid">
+      <div class="bst-settings-grid" data-bst-row="debugFlags">
         <label class="bst-check"><input data-k="debugExtraction" type="checkbox">Extraction</label>
         <label class="bst-check"><input data-k="debugPrompts" type="checkbox">Prompts</label>
         <label class="bst-check"><input data-k="debugUi" type="checkbox">UI</label>
@@ -2566,6 +2566,7 @@ export function openSettingsModal(input: {
     const lookbackRow = modal.querySelector('[data-bst-row="activityLookback"]') as HTMLElement | null;
     const inactiveLabelRow = modal.querySelector('[data-bst-row="inactiveLabel"]') as HTMLElement | null;
     const debugBodyRow = modal.querySelector('[data-bst-row="debugBody"]') as HTMLElement | null;
+    const debugFlagsRow = modal.querySelector('[data-bst-row="debugFlags"]') as HTMLElement | null;
     const contextDiagRow = modal.querySelector('[data-bst-row="includeContextInDiagnostics"]') as HTMLElement | null;
     const graphDiagRow = modal.querySelector('[data-bst-row="includeGraphInDiagnostics"]') as HTMLElement | null;
     const injectPromptBlock = modal.querySelector('[data-bst-row="injectPromptBlock"]') as HTMLElement | null;
@@ -2593,6 +2594,11 @@ export function openSettingsModal(input: {
     }
     if (debugBodyRow) {
       debugBodyRow.style.display = current.debug ? "block" : "none";
+    }
+    if (debugFlagsRow) {
+      debugFlagsRow.style.display = current.debug ? "flex" : "none";
+      debugFlagsRow.style.flexDirection = "column";
+      debugFlagsRow.style.gap = "4px";
     }
     if (contextDiagRow) {
       contextDiagRow.style.display = current.debug ? "flex" : "none";
