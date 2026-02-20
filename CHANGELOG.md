@@ -9,6 +9,8 @@ All notable changes to BetterSimTracker are documented here.
 - Mood image display now shows a larger, centered image with a thought bubble (last thought), while emoji-only view stays unchanged.
 ### Added
 - Granular debug toggles (Extraction, Prompts, UI, Mood Images, Storage) to reduce console noise.
+### Fixed
+- Debug toggle inputs now persist correctly in settings.
 
 ## [1.0.9.11] - 2026-02-20
 ### Changed
