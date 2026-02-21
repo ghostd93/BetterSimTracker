@@ -19,6 +19,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Prompt templates (unified + per-stat) with per-prompt reset
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
 - Interactive ST expression framing editor with live preview (global + per-character override)
+- Global framing preview selector includes only characters that have ST expression sprites
 - Strong diagnostics/debug dump for bug reports
 - Mobile-friendly settings and graph modals
 
@@ -265,6 +266,7 @@ Behavior notes:
 - `Track Mood`
 - `Track Last Thought`
 - `Mood Source` (`BST mood images` or `ST expressions`)
+- `Preview Character` selector (global): includes only characters with ST expressions and drives global framing preview
 - `Adjust ST Expression Framing` button (opens interactive zoom/X/Y preview editor when `Mood Source = ST expressions`)
 
 You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only enabled stats.
@@ -337,12 +339,14 @@ Optional per-character mood source keys:
   - `positionX`
   - `positionY`
   - UI path: enable `Advanced image options (override global)` and use `Adjust ST Expression Framing`
+  - Character defaults framing preview uses one of that character's ST expression sprites
 
 If no advanced defaults are present, tracker baseline falls back to contextual inference.
 
 Mood images are optional per label; missing images fall back to emoji.  
 When source is `st_expressions`, tracker maps mood to expression and uses the character sprite if found; missing mappings/sprites also fall back to emoji.
 For `st_expressions`, tracker uses face-focused framing (top-centered crop) to better match portrait-style sprites.
+If no ST expression sprites are available, framing editor opens in notice-only mode with guidance to add at least one expression sprite.
 
 ## Troubleshooting
 
