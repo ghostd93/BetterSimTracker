@@ -17,7 +17,20 @@ export async function fetchExpressionSpritePaths(characterName: string): Promise
   if (!response.ok) return [];
   const data = await response.json();
   const sprites = toSpriteList(data);
+  const hasBstPrefix = (value: string): boolean => /^bst[_-]/i.test(value.trim());
+  const baseName = (value: string): string => {
+    const normalized = value.replace(/\\/g, "/");
+    const last = normalized.split("/").pop() ?? normalized;
+    return last.trim().toLowerCase();
+  };
+  const isBstSprite = (entry: SpriteEntry): boolean => {
+    const label = String(entry.label ?? "").trim().toLowerCase();
+    const path = String(entry.path ?? "").trim().toLowerCase();
+    if (!path) return false;
+    return hasBstPrefix(label) || hasBstPrefix(baseName(path));
+  };
   const paths = sprites
+    .filter(entry => !isBstSprite(entry))
     .map(item => String(item.path ?? "").trim())
     .filter(path => Boolean(path));
   return Array.from(new Set(paths));
