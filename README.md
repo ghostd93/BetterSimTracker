@@ -18,6 +18,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Prompt injection (optional) for behavior consistency
 - Prompt templates (unified + per-stat) with per-prompt reset
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
+- Interactive ST expression framing editor with live preview (global + per-character override)
 - Strong diagnostics/debug dump for bug reports
 - Mobile-friendly settings and graph modals
 
@@ -264,8 +265,7 @@ Behavior notes:
 - `Track Mood`
 - `Track Last Thought`
 - `Mood Source` (`BST mood images` or `ST expressions`)
-- `ST Expression Zoom` (global framing zoom, shown when `Mood Source = ST expressions`)
-- `ST Expression Position X/Y` (global crop position, shown when `Mood Source = ST expressions`)
+- `Adjust ST Expression Framing` button (opens interactive zoom/X/Y preview editor when `Mood Source = ST expressions`)
 
 You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only enabled stats.
 
@@ -336,6 +336,7 @@ Optional per-character mood source keys:
   - `zoom`
   - `positionX`
   - `positionY`
+  - UI path: enable `Advanced image options (override global)` and use `Adjust ST Expression Framing`
 
 If no advanced defaults are present, tracker baseline falls back to contextual inference.
 
