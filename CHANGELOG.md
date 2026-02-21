@@ -2,40 +2,20 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [Unreleased]
+## [1.2.0] - 2026-02-21
 ### Added
-- Mood advanced settings under Tracked Stats with global mood source selection (`BST mood images` or `ST expressions`).
-- Global editable mood-to-ST-expression map in settings for `ST expressions` mood source.
-- Optional per-character mood source override and per-mood expression mapping in the character defaults panel.
-- Global ST expression image framing controls (zoom, X position, Y position) in Mood Advanced Settings.
-- Optional per-character ST expression image framing override (advanced image options) in character defaults.
+- ST expressions mood workflow with global/per-character mood-to-expression mapping and character-level mood-source controls.
+- Interactive ST expression framing tools in both global settings and character defaults, including preview modal support.
 ### Changed
-- Mood rendering now supports partial mood image sets (missing labels fall back to emoji instead of requiring all 15 images).
-- ST expression mood source now resolves sprites from character expression assets, with emoji fallback when mapping or sprite is missing.
-- ST expression mood images now use face-focused framing (top-centered crop) for more consistent portrait presentation.
-- Replaced numeric ST expression framing fields with an interactive `Adjust ST Expression Framing` editor in both Settings and character defaults.
-- ST expression framing adjustments (zoom, X, Y) now update and persist live while you adjust in the preview editor.
-- Global ST framing editor now includes a `Preview Character` selector inside the framing modal (below preview), filtered to characters that actually have ST expression sprites.
-- Global preview candidate scanning now skips characters currently resolved to `BST mood images`.
-- Sprite scanning for preview candidates now ignores BST-uploaded mood sprites using `bst_` prefix.
-- Character-default framing editor now previews one of that character's own ST expression sprites.
-- Per-character mood expression mapping placeholders now inherit from the global map (then built-in defaults).
-- If no ST expression sprites are available, framing editor now opens in notice-only mode with centered guidance text and close action.
-- Framer preview and tracker cards now use the same zoom-aware pan calculation for ST expression framing.
-- ST expression framing is now applied directly on mood images via inline transform/object-position styles for stronger rendering consistency.
-- Settings modal section drawers now default to collapsed.
+- ST expression framing and preview flow were rebuilt for live, immediate updates while adjusting controls.
+- Settings modal section drawers now default to collapsed for faster navigation in large settings screens.
+- Mood image handling now supports partial sets with emoji fallback when a mood image is unavailable.
 ### Fixed
-- Blocked setting per-character mood source to `ST expressions` when that character has no ST expression sprites.
-- Fixed ST expression framing positioning so X/Y movement works at `zoom=1.0` and remains usable at higher zoom levels.
-- Existing tracker cards now re-render immediately when settings/framer values are saved, so framing updates are visible live.
-- Mood-to-expression mapping now resolves mood keys case-insensitively, so legacy/custom map keys are still applied.
-- Prevented late/stale extraction progress callbacks from re-entering `extracting` UI state after extraction already finished (fixes stuck progress + non-working Stop button in that stale state).
-- Extraction now retries transient transport failures (with short backoff) that can happen right after AI generation ends.
-- Extraction no longer treats non-abort request failures as successful completion.
-- Failed first extraction in a chat no longer commits provisional baseline values as if they were tracked results.
-- Automatic extraction triggered after AI generation now waits 2 seconds before starting, reducing immediate post-generation API failures.
-- First post-generation extraction run now forces sequential request concurrency to 1 when no prior tracker snapshot exists.
-- Character card header in extraction context now uses ASCII (`Character Card - ...`) to avoid encoding artifacts in model prompts.
+- Tracker cards now apply framer zoom/position changes reliably, including existing rendered cards.
+- ST expression mood-source selection is blocked for characters with no expression sprites.
+- Mood mapping resolution is now case-insensitive for legacy/custom keys.
+- Post-generation extraction stability improved (delayed kickoff, safer first-run request behavior, and transport-failure handling).
+And more...
 
 ## [1.1.1] - 2026-02-21
 ### Fixed
