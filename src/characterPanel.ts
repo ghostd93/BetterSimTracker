@@ -1,6 +1,13 @@
 import { moodOptions } from "./prompts";
 import { logDebug } from "./settings";
-import type { BetterSimTrackerSettings, MoodExpressionMap, MoodLabel, MoodSource, STContext } from "./types";
+import type {
+  BetterSimTrackerSettings,
+  MoodExpressionMap,
+  MoodLabel,
+  MoodSource,
+  StExpressionImageOptions,
+  STContext,
+} from "./types";
 
 const PANEL_ID = "bst-character-panel";
 const NAME_INPUT_SELECTORS = ["#character_name_pole", "#character_name", "input[name='name']"];
@@ -129,6 +136,28 @@ function normalizeMoodSource(raw: string): MoodSource | null {
 
 function sanitizeExpressionValue(raw: string): string {
   return raw.trim().slice(0, 80);
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function parseNumber(raw: string): number | null {
+  const n = Number(raw);
+  if (Number.isNaN(n) || !Number.isFinite(n)) return null;
+  return n;
+}
+
+function sanitizeStExpressionImageOptions(raw: unknown, fallback: StExpressionImageOptions): StExpressionImageOptions | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const zoomRaw = Number(obj.zoom);
+  const xRaw = Number(obj.positionX);
+  const yRaw = Number(obj.positionY);
+  const zoom = Number.isFinite(zoomRaw) ? clampNumber(zoomRaw, 0.5, 3) : fallback.zoom;
+  const positionX = Number.isFinite(xRaw) ? clampNumber(xRaw, 0, 100) : fallback.positionX;
+  const positionY = Number.isFinite(yRaw) ? clampNumber(yRaw, 0, 100) : fallback.positionY;
+  return { zoom, positionX, positionY };
 }
 
 function findPopup(): HTMLElement | null {
@@ -381,6 +410,14 @@ function renderPanel(input: InitInput, force = false): void {
   const moodCount = countMoodImages(moodImages);
   const moodSourceOverride = normalizeMoodSource(String(defaults.moodSource ?? ""));
   const moodExpressionMap = (defaults.moodExpressionMap as MoodExpressionMap | undefined) ?? {};
+  const globalStImageDefaults: StExpressionImageOptions = {
+    zoom: settings.stExpressionImageZoom,
+    positionX: settings.stExpressionImagePositionX,
+    positionY: settings.stExpressionImagePositionY,
+  };
+  const stExpressionImageOptionsOverride = sanitizeStExpressionImageOptions(defaults.stExpressionImageOptions, globalStImageDefaults);
+  const hasStExpressionImageOverride = Boolean(stExpressionImageOptionsOverride);
+  const stExpressionImageOptions = stExpressionImageOptionsOverride ?? globalStImageDefaults;
 
   panel.innerHTML = `
     <div class="bst-character-title">BetterSimTracker Defaults</div>
@@ -420,6 +457,26 @@ function renderPanel(input: InitInput, force = false): void {
           </label>
         `;
       }).join("")}
+    </div>
+    <div class="bst-character-divider">ST Expression Image Options</div>
+    <div class="bst-character-help">
+      Optional per-character override for expression image framing.
+      Used only when mood source resolves to ST expressions.
+    </div>
+    <label class="bst-character-check">
+      <input type="checkbox" data-bst-st-image-override ${hasStExpressionImageOverride ? "checked" : ""}>
+      <span>Advanced image options (override global)</span>
+    </label>
+    <div class="bst-character-grid bst-character-grid-three" data-bst-st-image-options style="display:${hasStExpressionImageOverride ? "grid" : "none"};">
+      <label>Zoom
+        <input type="number" min="0.5" max="3" step="0.05" data-bst-st-image="zoom" value="${hasStExpressionImageOverride ? stExpressionImageOptions.zoom : ""}" placeholder="${globalStImageDefaults.zoom}">
+      </label>
+      <label>Position X (%)
+        <input type="number" min="0" max="100" step="1" data-bst-st-image="positionX" value="${hasStExpressionImageOverride ? stExpressionImageOptions.positionX : ""}" placeholder="${globalStImageDefaults.positionX}">
+      </label>
+      <label>Position Y (%)
+        <input type="number" min="0" max="100" step="1" data-bst-st-image="positionY" value="${hasStExpressionImageOverride ? stExpressionImageOptions.positionY : ""}" placeholder="${globalStImageDefaults.positionY}">
+      </label>
     </div>
     <div class="bst-character-divider">Mood Images</div>
     <div class="bst-character-help">
@@ -510,6 +567,57 @@ function renderPanel(input: InitInput, force = false): void {
         } else {
           delete copy.moodExpressionMap;
         }
+        return copy;
+      });
+      input.setSettings(next);
+      input.saveSettings(context, next);
+      input.onSettingsUpdated();
+    });
+  });
+
+  const stImageOverrideToggle = panel.querySelector<HTMLInputElement>("[data-bst-st-image-override]");
+  const stImageOptionsBlock = panel.querySelector<HTMLElement>("[data-bst-st-image-options]");
+  stImageOverrideToggle?.addEventListener("change", () => {
+    const enabled = stImageOverrideToggle.checked;
+    if (stImageOptionsBlock) {
+      stImageOptionsBlock.style.display = enabled ? "grid" : "none";
+    }
+    const next = withUpdatedDefaults(settings, characterName, current => {
+      const copy = { ...current };
+      if (!enabled) {
+        delete copy.stExpressionImageOptions;
+      } else {
+        copy.stExpressionImageOptions = {
+          zoom: globalStImageDefaults.zoom,
+          positionX: globalStImageDefaults.positionX,
+          positionY: globalStImageDefaults.positionY,
+        };
+      }
+      return copy;
+    });
+    input.setSettings(next);
+    input.saveSettings(context, next);
+    input.onSettingsUpdated();
+  });
+
+  panel.querySelectorAll<HTMLInputElement>("[data-bst-st-image]").forEach(node => {
+    node.addEventListener("change", () => {
+      if (!stImageOverrideToggle?.checked) return;
+      const key = (node.dataset.bstStImage ?? "").trim();
+      if (!["zoom", "positionX", "positionY"].includes(key)) return;
+      const raw = parseNumber(node.value);
+      const next = withUpdatedDefaults(settings, characterName, current => {
+        const copy = { ...current };
+        const base = sanitizeStExpressionImageOptions(copy.stExpressionImageOptions, globalStImageDefaults) ?? globalStImageDefaults;
+        const updated = { ...base };
+        if (key === "zoom") {
+          updated.zoom = clampNumber(raw ?? base.zoom, 0.5, 3);
+        } else if (key === "positionX") {
+          updated.positionX = clampNumber(raw ?? base.positionX, 0, 100);
+        } else if (key === "positionY") {
+          updated.positionY = clampNumber(raw ?? base.positionY, 0, 100);
+        }
+        copy.stExpressionImageOptions = updated;
         return copy;
       });
       input.setSettings(next);
