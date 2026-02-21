@@ -95,6 +95,12 @@ function countMapValues(values: Record<string, unknown>): number {
   return Object.keys(values).length;
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise(resolve => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 export async function extractStatisticsParallel(input: {
   settings: BetterSimTrackerSettings;
   userName: string;
@@ -227,6 +233,34 @@ export async function extractStatisticsParallel(input: {
       progressDone = Math.min(progressTotal, progressDone + 1);
       onProgress?.(progressDone, progressTotal, label);
     };
+    const callGenerate = async (
+      prompt: string,
+      statList: StatKey[],
+      retryType: string,
+    ): Promise<{ text: string; meta: GenerateRequestMeta }> => {
+      const retryDelaysMs = [350, 1200];
+      let lastError: unknown = null;
+      for (let attemptIndex = 0; attemptIndex <= retryDelaysMs.length; attemptIndex += 1) {
+        attempts += 1;
+        requestSeq += 1;
+        try {
+          const response = await generateJson(prompt, settings);
+          const type = attemptIndex === 0 ? retryType : `${retryType}_transport_retry_${attemptIndex}`;
+          requestMetas.push({ ...response.meta, statList, attempt: requestSeq, retryType: type });
+          return response;
+        } catch (error) {
+          if (isAbortError(error)) throw error;
+          lastError = error;
+          if (attemptIndex >= retryDelaysMs.length) {
+            throw error;
+          }
+          // Some providers transiently reject immediate follow-up requests after main generation.
+          await wait(retryDelaysMs[attemptIndex]);
+          checkCancelled();
+        }
+      }
+      throw (lastError ?? new Error("Generation failed"));
+    };
 
     const getSequentialTemplate = (stat: StatKey): string => {
       if (stat === "affection") return settings.promptTemplateSequentialAffection || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.affection;
@@ -259,13 +293,10 @@ export async function extractStatisticsParallel(input: {
             previousStatistics,
             history,
             settings.maxDeltaPerTurn,
-            settings.promptTemplateUnified,
-          );
+          settings.promptTemplateUnified,
+        );
       tickProgress(`Requesting ${statLabel}`);
-      attempts += 1;
-      requestSeq += 1;
-      let rawResponse = await generateJson(prompt, settings);
-      requestMetas.push({ ...rawResponse.meta, statList, attempt: requestSeq, retryType: "initial" });
+      let rawResponse = await callGenerate(prompt, statList, "initial");
       let raw = rawResponse.text;
       tickProgress(`Parsing ${statLabel}`);
       let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList, settings.maxDeltaPerTurn);
@@ -274,12 +305,9 @@ export async function extractStatisticsParallel(input: {
       let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
       if (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
         const retryPrompt = buildStrictJsonRetryPrompt(prompt);
-        attempts += 1;
-        requestSeq += 1;
         retryUsed = true;
         retriesLeft -= 1;
-        const retryResponse = await generateJson(retryPrompt, settings);
-        requestMetas.push({ ...retryResponse.meta, statList, attempt: requestSeq, retryType: "strict" });
+        const retryResponse = await callGenerate(retryPrompt, statList, "strict");
         const retryParsed = parseUnifiedDeltaResponse(retryResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(retryParsed, statList)) {
           raw = retryResponse.text;
@@ -293,12 +321,9 @@ export async function extractStatisticsParallel(input: {
         settings.strictJsonRepair
       ) {
         const repairPrompt = buildStatRepairRetryPrompt(prompt, statList[0]);
-        attempts += 1;
-        requestSeq += 1;
         retryUsed = true;
         retriesLeft -= 1;
-        const repairResponse = await generateJson(repairPrompt, settings);
-        requestMetas.push({ ...repairResponse.meta, statList, attempt: requestSeq, retryType: "repair" });
+        const repairResponse = await callGenerate(repairPrompt, statList, "repair");
         const repairParsed = parseUnifiedDeltaResponse(repairResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(repairParsed, statList)) {
           raw = repairResponse.text;
@@ -307,12 +332,9 @@ export async function extractStatisticsParallel(input: {
       }
       while (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
         const strictPrompt = buildStrictJsonRetryPrompt(prompt);
-        attempts += 1;
-        requestSeq += 1;
         retryUsed = true;
         retriesLeft -= 1;
-        const strictResponse = await generateJson(strictPrompt, settings);
-        requestMetas.push({ ...strictResponse.meta, statList, attempt: requestSeq, retryType: "strict_loop" });
+        const strictResponse = await callGenerate(strictPrompt, statList, "strict_loop");
         const strictParsed = parseUnifiedDeltaResponse(strictResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(strictParsed, statList)) {
           raw = strictResponse.text;
@@ -395,6 +417,7 @@ export async function extractStatisticsParallel(input: {
       cancelled = true;
     } else {
       console.error("[BetterSimTracker] Unified extraction failed:", error);
+      throw error;
     }
   } finally {
     const done = settings.sequentialExtraction ? Math.max(1, stats.length * 3) : 3;
