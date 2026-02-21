@@ -33,7 +33,6 @@ const PREVIEW_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
     <circle cx="452" cy="78" r="34" fill="rgba(255,255,255,0.12)"/>
   </svg>`,
 )}`;
-const MIN_ZOOM_FOR_POSITIONING = 1.05;
 
 export type OpenStExpressionFrameEditorInput = {
   title?: string;
@@ -81,12 +80,8 @@ export function sanitizeStExpressionFrame(
   return { zoom, positionX, positionY };
 }
 
-function withPositioningHeadroom(frame: StExpressionImageOptions): StExpressionImageOptions {
-  const offCenter = frame.positionX !== 50 || frame.positionY !== 50;
-  if (offCenter && frame.zoom < MIN_ZOOM_FOR_POSITIONING) {
-    return { ...frame, zoom: MIN_ZOOM_FOR_POSITIONING };
-  }
-  return frame;
+function computeZoomPanOffset(position: number, zoom: number): number {
+  return round((50 - position) * (zoom - 1), 2);
 }
 
 export function formatStExpressionFrameSummary(value: StExpressionImageOptions): string {
@@ -213,8 +208,10 @@ function ensureEditorStyles(): void {
 }
 .${MODAL_CLASS} .bst-st-frame-preview-frame {
   --bst-st-frame-zoom: 1.2;
-  --bst-st-frame-origin-x: 50%;
-  --bst-st-frame-origin-y: 20%;
+  --bst-st-frame-pos-x: 50%;
+  --bst-st-frame-pos-y: 20%;
+  --bst-st-frame-pan-x: 0%;
+  --bst-st-frame-pan-y: 0%;
   width: min(240px, 44vw);
   aspect-ratio: 1 / 1;
   border-radius: 16px;
@@ -227,9 +224,9 @@ function ensureEditorStyles(): void {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center center;
-  transform: scale(var(--bst-st-frame-zoom));
-  transform-origin: var(--bst-st-frame-origin-x) var(--bst-st-frame-origin-y);
+  object-position: var(--bst-st-frame-pos-x) var(--bst-st-frame-pos-y);
+  transform: translate(var(--bst-st-frame-pan-x), var(--bst-st-frame-pan-y)) scale(var(--bst-st-frame-zoom));
+  transform-origin: center center;
   display: block;
 }
 .${MODAL_CLASS} .bst-st-frame-controls {
@@ -462,11 +459,15 @@ export function openStExpressionFrameEditor(input: OpenStExpressionFrameEditorIn
   applyPreviewCharacter();
 
   const applyCurrent = (notify: boolean): void => {
-    current = withPositioningHeadroom(sanitizeStExpressionFrame(current, fallback));
+    current = sanitizeStExpressionFrame(current, fallback);
     if (previewFrame) {
+      const panX = computeZoomPanOffset(current.positionX, current.zoom);
+      const panY = computeZoomPanOffset(current.positionY, current.zoom);
       previewFrame.style.setProperty("--bst-st-frame-zoom", current.zoom.toFixed(2));
-      previewFrame.style.setProperty("--bst-st-frame-origin-x", `${current.positionX.toFixed(2)}%`);
-      previewFrame.style.setProperty("--bst-st-frame-origin-y", `${current.positionY.toFixed(2)}%`);
+      previewFrame.style.setProperty("--bst-st-frame-pos-x", `${current.positionX.toFixed(2)}%`);
+      previewFrame.style.setProperty("--bst-st-frame-pos-y", `${current.positionY.toFixed(2)}%`);
+      previewFrame.style.setProperty("--bst-st-frame-pan-x", `${panX.toFixed(2)}%`);
+      previewFrame.style.setProperty("--bst-st-frame-pan-y", `${panY.toFixed(2)}%`);
     }
     if (zoomRange) zoomRange.value = current.zoom.toFixed(2);
     if (xRange) xRange.value = String(current.positionX);
