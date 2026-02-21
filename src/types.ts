@@ -19,6 +19,7 @@ export type MoodLabel =
   | "Content"
   | "Frustrated"
   | "Neutral";
+export type MoodSource = "bst_images" | "st_expressions";
 
 export type StatValue = number | string;
 export type CharacterStatMap = Record<string, StatValue>;
@@ -56,6 +57,7 @@ export interface BetterSimTrackerSettings {
   trackConnection: boolean;
   trackMood: boolean;
   trackLastThought: boolean;
+  moodSource: MoodSource;
   accentColor: string;
   cardOpacity: number;
   borderRadius: number;
@@ -89,6 +91,7 @@ export interface DebugFlags {
 }
 
 export type MoodImageSet = Partial<Record<MoodLabel, string>>;
+export type MoodExpressionMap = Partial<Record<MoodLabel, string>>;
 
 export interface CharacterDefaults {
   affection?: number;
@@ -96,6 +99,8 @@ export interface CharacterDefaults {
   desire?: number;
   connection?: number;
   mood?: string;
+  moodSource?: MoodSource;
+  moodExpressionMap?: MoodExpressionMap;
   moodImages?: MoodImageSet;
 }
 

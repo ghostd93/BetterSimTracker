@@ -1,5 +1,14 @@
 import { STYLE_ID } from "./constants";
-import type { BetterSimTrackerSettings, ConnectionProfileOption, DeltaDebugRecord, StatValue, TrackerData } from "./types";
+import { logDebug } from "./settings";
+import type {
+  BetterSimTrackerSettings,
+  ConnectionProfileOption,
+  DeltaDebugRecord,
+  MoodLabel,
+  MoodSource,
+  StatValue,
+  TrackerData,
+} from "./types";
 import {
   DEFAULT_INJECTION_PROMPT_TEMPLATE,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
@@ -23,6 +32,33 @@ const NUMERIC_STAT_DEFS: Array<{ key: NumericStatKey; label: string; short: stri
 const MOOD_LABELS = moodOptions;
 const MOOD_LABEL_LOOKUP = new Map(MOOD_LABELS.map(label => [label.toLowerCase(), label]));
 const MOOD_LABELS_BY_LENGTH = [...MOOD_LABELS].sort((a, b) => b.length - a.length);
+const DEFAULT_MOOD_EXPRESSION_MAP: Record<MoodLabel, string> = {
+  "Happy": "joy",
+  "Sad": "sadness",
+  "Angry": "anger",
+  "Excited": "excitement",
+  "Confused": "confusion",
+  "In Love": "love",
+  "Shy": "nervousness",
+  "Playful": "amusement",
+  "Serious": "neutral",
+  "Lonely": "grief",
+  "Hopeful": "optimism",
+  "Anxious": "nervousness",
+  "Content": "relief",
+  "Frustrated": "annoyance",
+  "Neutral": "neutral",
+};
+
+type SpriteEntry = { label?: string; path?: string };
+type CachedExpressionSprites = {
+  fetchedAt: number;
+  byLabel: Record<string, string[]>;
+};
+
+const ST_EXPRESSION_CACHE_TTL_MS = 60_000;
+const stExpressionCache = new Map<string, CachedExpressionSprites>();
+const stExpressionFetchInFlight = new Set<string>();
 
 function hasNumericValue(entry: TrackerData, key: NumericStatKey, name: string): boolean {
   return entry.statistics[key]?.[name] !== undefined;
@@ -109,19 +145,128 @@ function normalizeMoodLabel(moodRaw: string): string | null {
   return null;
 }
 
-function hasCompleteMoodSet(images: Record<string, string> | undefined): boolean {
-  if (!images) return false;
-  return MOOD_LABELS.every(label => typeof images[label] === "string" && images[label].trim().length > 0);
+function normalizeMoodSource(raw: unknown): MoodSource {
+  return raw === "st_expressions" ? "st_expressions" : "bst_images";
 }
 
-function getMoodImageUrl(settings: BetterSimTrackerSettings, characterName: string, moodRaw: string): string | null {
-  const entry = settings.characterDefaults?.[characterName];
-  const moodImages = entry?.moodImages as Record<string, string> | undefined;
-  if (!moodImages || !hasCompleteMoodSet(moodImages)) return null;
-  const label = normalizeMoodLabel(moodRaw);
-  if (!label) return null;
-  const url = moodImages[label];
-  return url && url.trim() ? url.trim() : null;
+function getResolvedMoodSource(settings: BetterSimTrackerSettings, characterName: string): MoodSource {
+  const fallback = normalizeMoodSource(settings.moodSource);
+  const entry = settings.characterDefaults?.[characterName] as Record<string, unknown> | undefined;
+  if (!entry) return fallback;
+  const override = normalizeMoodSource(entry.moodSource);
+  if (entry.moodSource === "bst_images" || entry.moodSource === "st_expressions") return override;
+  return fallback;
+}
+
+function toSpriteList(data: unknown): SpriteEntry[] {
+  if (Array.isArray(data)) return data as SpriteEntry[];
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    if (Array.isArray(record.sprites)) return record.sprites as SpriteEntry[];
+    if (Array.isArray(record.data)) return record.data as SpriteEntry[];
+  }
+  return [];
+}
+
+function sanitizeExpressionLabel(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function buildExpressionSpriteCache(list: SpriteEntry[]): CachedExpressionSprites {
+  const byLabel: Record<string, string[]> = {};
+  for (const item of list) {
+    const label = sanitizeExpressionLabel(String(item.label ?? ""));
+    const path = String(item.path ?? "").trim();
+    if (!label || !path) continue;
+    if (!Array.isArray(byLabel[label])) byLabel[label] = [];
+    byLabel[label].push(path);
+  }
+  return { fetchedAt: Date.now(), byLabel };
+}
+
+function cacheKeyForCharacter(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function getCachedExpressionSpriteUrl(characterName: string, expressionLabel: string): string | null {
+  const cache = stExpressionCache.get(cacheKeyForCharacter(characterName));
+  if (!cache) return null;
+  const list = cache.byLabel[sanitizeExpressionLabel(expressionLabel)];
+  if (!Array.isArray(list) || list.length === 0) return null;
+  const first = list[0];
+  return first && first.trim() ? first.trim() : null;
+}
+
+function isExpressionCacheStale(characterName: string): boolean {
+  const cache = stExpressionCache.get(cacheKeyForCharacter(characterName));
+  if (!cache) return true;
+  return Date.now() - cache.fetchedAt > ST_EXPRESSION_CACHE_TTL_MS;
+}
+
+function scheduleExpressionSpriteFetch(
+  characterName: string,
+  settings: BetterSimTrackerSettings,
+  onRerender?: () => void,
+): void {
+  const key = cacheKeyForCharacter(characterName);
+  if (!key || stExpressionFetchInFlight.has(key)) return;
+  stExpressionFetchInFlight.add(key);
+  fetch(`/api/sprites/get?name=${encodeURIComponent(characterName)}`, { method: "GET" })
+    .then(response => {
+      if (!response.ok) throw new Error(`status_${response.status}`);
+      return response.json();
+    })
+    .then(data => {
+      const list = toSpriteList(data);
+      stExpressionCache.set(key, buildExpressionSpriteCache(list));
+      logDebug(settings, "moodImages", "st.expressions.cache.update", { characterName, count: list.length });
+      onRerender?.();
+    })
+    .catch(error => {
+      logDebug(settings, "moodImages", "st.expressions.cache.error", {
+        characterName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    })
+    .finally(() => {
+      stExpressionFetchInFlight.delete(key);
+    });
+}
+
+function getMappedExpressionLabel(settings: BetterSimTrackerSettings, characterName: string, moodLabel: MoodLabel): string {
+  const entry = settings.characterDefaults?.[characterName] as Record<string, unknown> | undefined;
+  const rawMap = entry?.moodExpressionMap as Record<string, unknown> | undefined;
+  const override = rawMap && typeof rawMap[moodLabel] === "string"
+    ? String(rawMap[moodLabel]).trim()
+    : "";
+  if (override) return override;
+  return DEFAULT_MOOD_EXPRESSION_MAP[moodLabel] ?? "neutral";
+}
+
+function getMoodImageUrl(
+  settings: BetterSimTrackerSettings,
+  characterName: string,
+  moodRaw: string,
+  onRerender?: () => void,
+): string | null {
+  const entry = settings.characterDefaults?.[characterName] as Record<string, unknown> | undefined;
+  const normalizedMood = (normalizeMoodLabel(moodRaw) ?? "Neutral") as MoodLabel;
+  const source = getResolvedMoodSource(settings, characterName);
+
+  if (source === "bst_images") {
+    const moodImages = entry?.moodImages as Record<string, string> | undefined;
+    const url = moodImages?.[normalizedMood];
+    return typeof url === "string" && url.trim() ? url.trim() : null;
+  }
+
+  const expression = getMappedExpressionLabel(settings, characterName, normalizedMood);
+  const cachedUrl = getCachedExpressionSpriteUrl(characterName, expression);
+  if (cachedUrl) return cachedUrl;
+  if (isExpressionCacheStale(characterName)) {
+    scheduleExpressionSpriteFetch(characterName, settings, onRerender);
+  }
+  logDebug(settings, "moodImages", "st.expressions.missing", { characterName, mood: normalizedMood, expression });
+  return null;
 }
 
 function formatDelta(value: number): string {
@@ -561,6 +706,7 @@ function ensureStyles(): void {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .bst-check-grid-single { grid-template-columns: minmax(0, 1fr); }
+.bst-mood-advanced-settings { margin-top: 8px; }
 .bst-check-grid .bst-check {
   margin: 0;
   align-items: center;
@@ -1103,7 +1249,8 @@ function ensureStyles(): void {
   gap: 4px;
 }
 .bst-character-panel input[type="text"],
-.bst-character-panel input[type="number"] {
+.bst-character-panel input[type="number"],
+.bst-character-panel select {
   background: rgba(16,20,30,0.7);
   border: 1px solid rgba(255,255,255,0.18);
   color: #f4f7ff;
@@ -1127,6 +1274,16 @@ function ensureStyles(): void {
 .bst-character-help {
   font-size: 11px;
   opacity: 0.75;
+}
+.bst-character-map {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.bst-character-map-row {
+  font-size: 11px;
+  display: grid;
+  gap: 4px;
 }
 .bst-character-warning {
   font-size: 11px;
@@ -1333,6 +1490,7 @@ export function renderTracker(
   onOpenGraph?: (characterName: string) => void,
   onRetrackMessage?: (messageIndex: number) => void,
   onCancelExtraction?: () => void,
+  onRequestRerender?: () => void,
 ): void {
   ensureStyles();
   const palette = allocateCharacterColors(allCharacters);
@@ -1507,7 +1665,7 @@ export function renderTracker(
       const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
-      const moodImage = moodText ? getMoodImageUrl(settings, name, moodText) : null;
+      const moodImage = moodText ? getMoodImageUrl(settings, name, moodText, onRequestRerender) : null;
       const lastThoughtText = settings.showLastThought && data.statistics.lastThought?.[name] !== undefined
         ? String(data.statistics.lastThought?.[name] ?? "")
         : "";
@@ -2066,6 +2224,18 @@ export function openSettingsModal(input: {
         <label class="bst-check"><input data-k="trackMood" type="checkbox">Track Mood</label>
         <label class="bst-check"><input data-k="trackLastThought" type="checkbox">Track Last Thought</label>
       </div>
+      <div data-bst-row="moodAdvancedBlock" class="bst-mood-advanced-settings">
+        <div class="bst-section-divider">Mood Advanced Settings</div>
+        <div class="bst-settings-grid bst-settings-grid-single">
+          <label>Mood Source
+            <select data-k="moodSource">
+              <option value="bst_images">BST mood images</option>
+              <option value="st_expressions">ST expressions</option>
+            </select>
+          </label>
+        </div>
+        <div class="bst-help-line">Emoji is always fallback if the selected source has no image.</div>
+      </div>
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-eye"></span>Display</h4>
@@ -2477,6 +2647,7 @@ export function openSettingsModal(input: {
   set("trackConnection", String(input.settings.trackConnection));
   set("trackMood", String(input.settings.trackMood));
   set("trackLastThought", String(input.settings.trackLastThought));
+  set("moodSource", input.settings.moodSource);
   const accentInput = modal.querySelector('[data-k-color="accentColor"]') as HTMLInputElement | null;
   if (accentInput) accentInput.value = input.settings.accentColor || "#ff5a6f";
   set("cardOpacity", String(input.settings.cardOpacity));
@@ -2549,6 +2720,7 @@ export function openSettingsModal(input: {
       trackConnection: readBool("trackConnection"),
       trackMood: readBool("trackMood"),
       trackLastThought: readBool("trackLastThought"),
+      moodSource: read("moodSource") === "st_expressions" ? "st_expressions" : "bst_images",
       accentColor: read("accentColor") || input.settings.accentColor,
       cardOpacity: readNumber("cardOpacity", input.settings.cardOpacity, 0.1, 1),
       borderRadius: readNumber("borderRadius", input.settings.borderRadius, 0, 32),
@@ -2585,6 +2757,7 @@ export function openSettingsModal(input: {
     const graphDiagRow = modal.querySelector('[data-bst-row="includeGraphInDiagnostics"]') as HTMLElement | null;
     const injectPromptBlock = modal.querySelector('[data-bst-row="injectPromptBlock"]') as HTMLElement | null;
     const injectPromptDivider = modal.querySelector('[data-bst-row="injectPromptDivider"]') as HTMLElement | null;
+    const moodAdvancedBlock = modal.querySelector('[data-bst-row="moodAdvancedBlock"]') as HTMLElement | null;
     const current = collectSettings();
     if (maxConcurrentRow) {
       maxConcurrentRow.style.display = current.sequentialExtraction ? "flex" : "none";
@@ -2623,6 +2796,9 @@ export function openSettingsModal(input: {
     }
     if (injectPromptDivider) {
       injectPromptDivider.style.display = current.injectTrackerIntoPrompt ? "block" : "none";
+    }
+    if (moodAdvancedBlock) {
+      moodAdvancedBlock.style.display = current.trackMood ? "block" : "none";
     }
   };
 
@@ -2665,6 +2841,7 @@ export function openSettingsModal(input: {
     trackConnection: "Enable Connection stat extraction and updates.",
     trackMood: "Enable mood extraction and mood display updates.",
     trackLastThought: "Enable hidden short internal thought extraction.",
+    moodSource: "Choose where mood images come from: BetterSimTracker uploads or SillyTavern expression sprites.",
     showInactive: "Show tracker cards for inactive/off-screen characters.",
     inactiveLabel: "Text label shown on cards for inactive characters.",
     showLastThought: "Show extracted last thought text inside tracker cards.",

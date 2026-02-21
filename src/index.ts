@@ -267,6 +267,8 @@ function queueRender(): void {
       if (!isExtracting) return;
       const canceled = cancelActiveGenerations();
       pushTrace("extract.cancel", { canceled, source: "ui" });
+    }, () => {
+      queueRender();
     });
   });
 }
@@ -1063,6 +1065,7 @@ function openSettings(): void {
           includeCharacterCardsInPrompt: currentSettings.includeCharacterCardsInPrompt,
           autoDetectActive: currentSettings.autoDetectActive,
           activityLookback: currentSettings.activityLookback,
+          moodSource: currentSettings.moodSource,
           strictJsonRepair: currentSettings.strictJsonRepair,
           maxRetriesPerStat: currentSettings.maxRetriesPerStat
         },
