@@ -175,6 +175,10 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function computeZoomPanOffset(position: number, zoom: number): number {
+  return Math.round((50 - position) * (zoom - 1) * 100) / 100;
+}
+
 function toNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const parsed = Number(value);
@@ -290,14 +294,21 @@ function scheduleExpressionSpriteFetch(
 function getMappedExpressionLabel(settings: BetterSimTrackerSettings, characterName: string, moodLabel: MoodLabel): string {
   const entry = settings.characterDefaults?.[characterName] as Record<string, unknown> | undefined;
   const rawCharacterMap = entry?.moodExpressionMap as Record<string, unknown> | undefined;
-  const characterOverride = rawCharacterMap && typeof rawCharacterMap[moodLabel] === "string"
-    ? String(rawCharacterMap[moodLabel]).trim()
-    : "";
+  const readMappedValue = (map: Record<string, unknown> | undefined): string => {
+    if (!map) return "";
+    const direct = map[moodLabel];
+    if (typeof direct === "string" && direct.trim()) return direct.trim();
+    for (const [key, value] of Object.entries(map)) {
+      if (typeof value !== "string" || !value.trim()) continue;
+      const normalized = normalizeMoodLabel(key);
+      if (normalized === moodLabel) return value.trim();
+    }
+    return "";
+  };
+  const characterOverride = readMappedValue(rawCharacterMap);
   if (characterOverride) return characterOverride;
   const rawGlobalMap = settings.moodExpressionMap as Record<string, unknown> | undefined;
-  const globalOverride = rawGlobalMap && typeof rawGlobalMap[moodLabel] === "string"
-    ? String(rawGlobalMap[moodLabel]).trim()
-    : "";
+  const globalOverride = readMappedValue(rawGlobalMap);
   if (globalOverride) return globalOverride;
   return DEFAULT_MOOD_EXPRESSION_MAP[moodLabel] ?? "neutral";
 }
@@ -624,9 +635,8 @@ function ensureStyles(): void {
   display: block;
 }
 .bst-mood-image--st-expression {
-  object-position: var(--bst-st-expression-pos-x) var(--bst-st-expression-pos-y);
-  transform: scale(var(--bst-st-expression-zoom));
-  transform-origin: var(--bst-st-expression-pos-x) var(--bst-st-expression-pos-y);
+  object-position: center center;
+  transform-origin: center center;
 }
 .bst-mood-badge {
   font-size: 11px;
@@ -1776,9 +1786,11 @@ export function renderTracker(
       const lastThoughtText = settings.showLastThought && data.statistics.lastThought?.[name] !== undefined
         ? String(data.statistics.lastThought?.[name] ?? "")
         : "";
-      const stExpressionStyle = (() => {
+      const stExpressionImageStyle = (() => {
         if (!stExpressionImageOptions) return "";
-        return ` style="--bst-st-expression-zoom:${stExpressionImageOptions.zoom.toFixed(2)};--bst-st-expression-pos-x:${stExpressionImageOptions.positionX.toFixed(2)}%;--bst-st-expression-pos-y:${stExpressionImageOptions.positionY.toFixed(2)}%;"`;
+        const panX = computeZoomPanOffset(stExpressionImageOptions.positionX, stExpressionImageOptions.zoom);
+        const panY = computeZoomPanOffset(stExpressionImageOptions.positionY, stExpressionImageOptions.zoom);
+        return ` style="object-position:${stExpressionImageOptions.positionX.toFixed(2)}% ${stExpressionImageOptions.positionY.toFixed(2)}% !important;transform:translate(${panX.toFixed(2)}%, ${panY.toFixed(2)}%) scale(${stExpressionImageOptions.zoom.toFixed(2)}) !important;transform-origin:center center !important;"`;
       })();
       const card = document.createElement("div");
       card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;
@@ -1820,7 +1832,7 @@ export function renderTracker(
         <div class="bst-mood${moodImage ? " bst-mood-has-image" : ""}" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap ${moodImage ? "bst-mood-wrap--image" : "bst-mood-wrap--emoji"}">
             ${moodImage
-              ? `<span class="bst-mood-image-frame${moodSource === "st_expressions" ? " bst-mood-image-frame--st-expression" : ""}"${stExpressionStyle}><img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}"></span>`
+              ? `<span class="bst-mood-image-frame${moodSource === "st_expressions" ? " bst-mood-image-frame--st-expression" : ""}"><img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}"${stExpressionImageStyle}></span>`
               : `<span class="bst-mood-chip"><span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span></span>`}
             ${moodImage && lastThoughtText
               ? `<span class="bst-mood-bubble">${escapeHtml(lastThoughtText)}</span>`

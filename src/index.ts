@@ -777,6 +777,7 @@ function refreshFromStoredData(): void {
       if (!settings || !context) return;
       settings = { ...settings, ...patch };
       saveSettings(context, settings);
+      queueRender();
       refreshFromStoredData();
     },
     onOpenModal: () => openSettings()
@@ -1022,6 +1023,7 @@ function openSettings(): void {
       if (!activeContext) return;
       settings = next;
       saveSettings(activeContext, settings);
+      queueRender();
       refreshFromStoredData();
     },
     onRetrack: () => {
