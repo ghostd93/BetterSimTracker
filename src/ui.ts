@@ -20,6 +20,12 @@ import {
   UNIFIED_PROMPT_PROTOCOL,
   moodOptions,
 } from "./prompts";
+import {
+  closeStExpressionFrameEditor,
+  formatStExpressionFrameSummary,
+  openStExpressionFrameEditor,
+  sanitizeStExpressionFrame,
+} from "./stExpressionFrameEditor";
 
 type NumericStatKey = "affection" | "trust" | "desire" | "connection";
 
@@ -771,6 +777,14 @@ function ensureStyles(): void {
 }
 .bst-check-grid-single { grid-template-columns: minmax(0, 1fr); }
 .bst-mood-advanced-settings { margin-top: 8px; }
+.bst-st-expression-control {
+  display: grid;
+  gap: 8px;
+}
+.bst-st-expression-summary {
+  margin: 0;
+  opacity: 0.82;
+}
 .bst-check-grid .bst-check {
   margin: 0;
   align-items: center;
@@ -1321,6 +1335,10 @@ function ensureStyles(): void {
   gap: 8px;
   font-size: 12px;
 }
+.bst-character-st-tools {
+  display: grid;
+  gap: 8px;
+}
 .bst-character-panel input[type="text"],
 .bst-character-panel input[type="number"],
 .bst-character-panel select {
@@ -1347,6 +1365,9 @@ function ensureStyles(): void {
 .bst-character-help {
   font-size: 11px;
   opacity: 0.75;
+}
+.bst-character-help-compact {
+  margin: 0;
 }
 .bst-character-map {
   display: grid;
@@ -1815,6 +1836,7 @@ export function removeTrackerUI(): void {
   document.getElementById(STYLE_ID)?.remove();
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
+  closeStExpressionFrameEditor();
   closeGraphModal();
 }
 
@@ -2319,16 +2341,12 @@ export function openSettingsModal(input: {
         </div>
         <div data-bst-row="stExpressionImageOptions">
           <div class="bst-help-line">ST expression framing (global): zoom and crop position for expression sprites.</div>
-          <div class="bst-settings-grid">
-            <label>Expression Zoom
-              <input data-k="stExpressionImageZoom" type="number" min="0.5" max="3" step="0.05">
-            </label>
-            <label>Position X (%)
-              <input data-k="stExpressionImagePositionX" type="number" min="0" max="100" step="1">
-            </label>
-            <label>Position Y (%)
-              <input data-k="stExpressionImagePositionY" type="number" min="0" max="100" step="1">
-            </label>
+          <div class="bst-st-expression-control">
+            <button type="button" class="bst-btn bst-btn-soft" data-action="open-global-st-framing">Adjust ST Expression Framing</button>
+            <div class="bst-help-line bst-st-expression-summary" data-bst-row="stExpressionImageSummary"></div>
+            <input data-k="stExpressionImageZoom" type="hidden">
+            <input data-k="stExpressionImagePositionX" type="hidden">
+            <input data-k="stExpressionImagePositionY" type="hidden">
           </div>
         </div>
         <div class="bst-help-line">Emoji is always fallback if the selected source has no image.</div>
@@ -2770,6 +2788,27 @@ export function openSettingsModal(input: {
   set("promptTemplateSequentialLastThought", input.settings.promptTemplateSequentialLastThought);
   set("promptTemplateInjection", input.settings.promptTemplateInjection);
 
+  const initialGlobalStExpressionFrame = getGlobalStExpressionImageOptions(input.settings);
+  const readGlobalStExpressionFrame = (): StExpressionImageOptions => {
+    const zoomNode = modal.querySelector('[data-k="stExpressionImageZoom"]') as HTMLInputElement | null;
+    const positionXNode = modal.querySelector('[data-k="stExpressionImagePositionX"]') as HTMLInputElement | null;
+    const positionYNode = modal.querySelector('[data-k="stExpressionImagePositionY"]') as HTMLInputElement | null;
+    return sanitizeStExpressionFrame(
+      {
+        zoom: Number(zoomNode?.value ?? initialGlobalStExpressionFrame.zoom),
+        positionX: Number(positionXNode?.value ?? initialGlobalStExpressionFrame.positionX),
+        positionY: Number(positionYNode?.value ?? initialGlobalStExpressionFrame.positionY),
+      },
+      initialGlobalStExpressionFrame,
+    );
+  };
+  const updateGlobalStExpressionSummary = (): void => {
+    const summaryNode = modal.querySelector('[data-bst-row="stExpressionImageSummary"]') as HTMLElement | null;
+    if (!summaryNode) return;
+    summaryNode.textContent = `Current framing: ${formatStExpressionFrameSummary(readGlobalStExpressionFrame())}`;
+  };
+  updateGlobalStExpressionSummary();
+
   const collectSettings = (): BetterSimTrackerSettings => {
     const read = (k: keyof BetterSimTrackerSettings): string =>
       ((modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "").trim();
@@ -2913,8 +2952,25 @@ export function openSettingsModal(input: {
     const next = collectSettings();
     input.settings = next;
     input.onSave(next);
+    updateGlobalStExpressionSummary();
     syncExtractionVisibility();
   };
+
+  modal.querySelector('[data-action="open-global-st-framing"]')?.addEventListener("click", () => {
+    openStExpressionFrameEditor({
+      title: "Adjust ST Expression Framing",
+      description: "Global framing used when mood source is ST expressions.",
+      initial: readGlobalStExpressionFrame(),
+      fallback: DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS,
+      onChange: next => {
+        set("stExpressionImageZoom", String(next.zoom));
+        set("stExpressionImagePositionX", String(next.positionX));
+        set("stExpressionImagePositionY", String(next.positionY));
+        updateGlobalStExpressionSummary();
+        persistLive();
+      },
+    });
+  });
 
   modal.querySelectorAll("input, select, textarea").forEach(node => {
     node.addEventListener("change", persistLive);
@@ -3031,6 +3087,7 @@ export function openSettingsModal(input: {
 }
 
 export function closeSettingsModal(): void {
+  closeStExpressionFrameEditor();
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
 }
