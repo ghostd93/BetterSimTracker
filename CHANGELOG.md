@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Added
+- Mood advanced settings under Tracked Stats with global mood source selection (`BST mood images` or `ST expressions`).
+- Optional per-character mood source override and per-mood expression mapping in the character defaults panel.
+### Changed
+- Mood rendering now supports partial mood image sets (missing labels fall back to emoji instead of requiring all 15 images).
+- ST expression mood source now resolves sprites from character expression assets, with emoji fallback when mapping or sprite is missing.
+
 ## [1.1.1] - 2026-02-21
 ### Fixed
 - Mood labels now fall back to Neutral when the model returns a label outside the allowed list.
