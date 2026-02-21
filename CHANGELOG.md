@@ -14,10 +14,12 @@ All notable changes to BetterSimTracker are documented here.
 - ST expression mood images now use face-focused framing (top-centered crop) for more consistent portrait presentation.
 - Replaced numeric ST expression framing fields with an interactive `Adjust ST Expression Framing` editor in both Settings and character defaults.
 - ST expression framing adjustments (zoom, X, Y) now update and persist live while you adjust in the preview editor.
-- Global ST framing editor now includes a `Preview Character` selector filtered to characters that actually have ST expression sprites.
+- Global ST framing editor now includes a `Preview Character` selector inside the framing modal (below preview), filtered to characters that actually have ST expression sprites.
+- Global preview candidate scanning now skips characters currently resolved to `BST mood images`.
 - Character-default framing editor now previews one of that character's own ST expression sprites.
 - If no ST expression sprites are available, framing editor now opens in notice-only mode with centered guidance text and close action.
 ### Fixed
+- Blocked setting per-character mood source to `ST expressions` when that character has no ST expression sprites.
 - Prevented late/stale extraction progress callbacks from re-entering `extracting` UI state after extraction already finished (fixes stuck progress + non-working Stop button in that stale state).
 - Extraction now retries transient transport failures (with short backoff) that can happen right after AI generation ends.
 - Extraction no longer treats non-abort request failures as successful completion.
