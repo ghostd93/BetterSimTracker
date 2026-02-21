@@ -270,7 +270,7 @@ Behavior notes:
 - `Mood Source` (`BST mood images` or `ST expressions`)
 - `Preview Character` selector (inside framing modal, below preview): includes only characters with ST expressions and drives global framing preview
 - `Adjust ST Expression Framing` button (opens interactive zoom/X/Y preview editor when `Mood Source = ST expressions`)
-  - X/Y positioning range scales with zoom for full frame control at higher zoom levels
+  - X/Y positioning works on both axes with zoom-aware framing for full frame control at higher zoom levels
 
 You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only enabled stats.
 
