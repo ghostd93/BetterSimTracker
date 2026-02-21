@@ -14,6 +14,9 @@ All notable changes to BetterSimTracker are documented here.
 - ST expression mood images now use face-focused framing (top-centered crop) for more consistent portrait presentation.
 ### Fixed
 - Prevented late/stale extraction progress callbacks from re-entering `extracting` UI state after extraction already finished (fixes stuck progress + non-working Stop button in that stale state).
+- Extraction now retries transient transport failures (with short backoff) that can happen right after AI generation ends.
+- Extraction no longer treats non-abort request failures as successful completion.
+- Failed first extraction in a chat no longer commits provisional baseline values as if they were tracked results.
 
 ## [1.1.1] - 2026-02-21
 ### Fixed
