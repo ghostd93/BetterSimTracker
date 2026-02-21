@@ -17,6 +17,7 @@ All notable changes to BetterSimTracker are documented here.
 - Extraction now retries transient transport failures (with short backoff) that can happen right after AI generation ends.
 - Extraction no longer treats non-abort request failures as successful completion.
 - Failed first extraction in a chat no longer commits provisional baseline values as if they were tracked results.
+- Automatic extraction triggered after AI generation now waits 2 seconds before starting, reducing immediate post-generation API failures.
 
 ## [1.1.1] - 2026-02-21
 ### Fixed
