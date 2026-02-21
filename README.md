@@ -332,6 +332,7 @@ If no advanced defaults are present, tracker baseline falls back to contextual i
 
 Mood images are optional per label; missing images fall back to emoji.  
 When source is `st_expressions`, tracker maps mood to expression and uses the character sprite if found; missing mappings/sprites also fall back to emoji.
+For `st_expressions`, tracker uses face-focused framing (top-centered crop) to better match portrait-style sprites.
 
 ## Troubleshooting
 
