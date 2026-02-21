@@ -5,6 +5,7 @@ All notable changes to BetterSimTracker are documented here.
 ## [Unreleased]
 ### Added
 - Mood advanced settings under Tracked Stats with global mood source selection (`BST mood images` or `ST expressions`).
+- Global editable mood-to-ST-expression map in settings for `ST expressions` mood source.
 - Optional per-character mood source override and per-mood expression mapping in the character defaults panel.
 - Global ST expression image framing controls (zoom, X position, Y position) in Mood Advanced Settings.
 - Optional per-character ST expression image framing override (advanced image options) in character defaults.
@@ -18,11 +19,12 @@ All notable changes to BetterSimTracker are documented here.
 - Global preview candidate scanning now skips characters currently resolved to `BST mood images`.
 - Sprite scanning for preview candidates now ignores BST-uploaded mood sprites using `bst_` prefix.
 - Character-default framing editor now previews one of that character's own ST expression sprites.
+- Per-character mood expression mapping placeholders now inherit from the global map (then built-in defaults).
 - If no ST expression sprites are available, framing editor now opens in notice-only mode with centered guidance text and close action.
 - Framer X/Y movement now scales with zoom so higher zoom levels still allow full positioning range.
 ### Fixed
 - Blocked setting per-character mood source to `ST expressions` when that character has no ST expression sprites.
-- Fixed ST expression framing X-axis movement by applying zoom-aware transform origin in both tracker cards and framer preview.
+- Fixed ST expression framing positioning so X/Y movement works at `zoom=1.0` and remains usable at higher zoom levels.
 - Prevented late/stale extraction progress callbacks from re-entering `extracting` UI state after extraction already finished (fixes stuck progress + non-working Stop button in that stale state).
 - Extraction now retries transient transport failures (with short backoff) that can happen right after AI generation ends.
 - Extraction no longer treats non-abort request failures as successful completion.
