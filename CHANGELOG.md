@@ -6,6 +6,8 @@ All notable changes to BetterSimTracker are documented here.
 ### Added
 - Mood advanced settings under Tracked Stats with global mood source selection (`BST mood images` or `ST expressions`).
 - Optional per-character mood source override and per-mood expression mapping in the character defaults panel.
+- Global ST expression image framing controls (zoom, X position, Y position) in Mood Advanced Settings.
+- Optional per-character ST expression image framing override (advanced image options) in character defaults.
 ### Changed
 - Mood rendering now supports partial mood image sets (missing labels fall back to emoji instead of requiring all 15 images).
 - ST expression mood source now resolves sprites from character expression assets, with emoji fallback when mapping or sprite is missing.

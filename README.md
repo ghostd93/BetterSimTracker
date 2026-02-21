@@ -261,6 +261,8 @@ Behavior notes:
 - `Track Mood`
 - `Track Last Thought`
 - `Mood Source` (`BST mood images` or `ST expressions`)
+- `ST Expression Zoom` (global framing zoom, shown when `Mood Source = ST expressions`)
+- `ST Expression Position X/Y` (global crop position, shown when `Mood Source = ST expressions`)
 
 You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only enabled stats.
 
@@ -327,6 +329,10 @@ Optional per-character mood source keys:
 
 - `moodSource`: `bst_images` or `st_expressions`
 - `moodExpressionMap`: mood label to ST expression label map (per mood, optional)
+- `stExpressionImageOptions`: optional framing override for ST expressions:
+  - `zoom`
+  - `positionX`
+  - `positionY`
 
 If no advanced defaults are present, tracker baseline falls back to contextual inference.
 
