@@ -1,6 +1,6 @@
 import { moodOptions } from "./prompts";
 import { logDebug } from "./settings";
-import type { BetterSimTrackerSettings, MoodLabel, STContext } from "./types";
+import type { BetterSimTrackerSettings, MoodExpressionMap, MoodLabel, MoodSource, STContext } from "./types";
 
 const PANEL_ID = "bst-character-panel";
 const NAME_INPUT_SELECTORS = ["#character_name_pole", "#character_name", "input[name='name']"];
@@ -18,6 +18,23 @@ type MoodImageSet = Partial<Record<MoodLabel, string>>;
 
 const moodLabelSet = new Set(moodOptions.map(label => label.toLowerCase()));
 const moodLabels = moodOptions as MoodLabel[];
+const DEFAULT_MOOD_EXPRESSION_MAP: Record<MoodLabel, string> = {
+  "Happy": "joy",
+  "Sad": "sadness",
+  "Angry": "anger",
+  "Excited": "excitement",
+  "Confused": "confusion",
+  "In Love": "love",
+  "Shy": "nervousness",
+  "Playful": "amusement",
+  "Serious": "neutral",
+  "Lonely": "grief",
+  "Hopeful": "optimism",
+  "Anxious": "nervousness",
+  "Content": "relief",
+  "Frustrated": "annoyance",
+  "Neutral": "neutral",
+};
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_WIDTH = 1024;
 const MAX_IMAGE_HEIGHT = 1024;
@@ -103,6 +120,15 @@ function normalizeMoodLabel(raw: string): MoodLabel | null {
   if (!key) return null;
   if (moodLabelSet.has(key)) return moodOptions.find(label => label.toLowerCase() === key) as MoodLabel;
   return null;
+}
+
+function normalizeMoodSource(raw: string): MoodSource | null {
+  if (raw === "bst_images" || raw === "st_expressions") return raw;
+  return null;
+}
+
+function sanitizeExpressionValue(raw: string): string {
+  return raw.trim().slice(0, 80);
 }
 
 function findPopup(): HTMLElement | null {
@@ -353,12 +379,12 @@ function renderPanel(input: InitInput, force = false): void {
   const defaults = getDefaults(settings, characterName);
   const moodImages = (defaults.moodImages as MoodImageSet | undefined) ?? {};
   const moodCount = countMoodImages(moodImages);
-  const allSet = moodCount === moodLabels.length;
-  const partialSet = moodCount > 0 && !allSet;
+  const moodSourceOverride = normalizeMoodSource(String(defaults.moodSource ?? ""));
+  const moodExpressionMap = (defaults.moodExpressionMap as MoodExpressionMap | undefined) ?? {};
 
   panel.innerHTML = `
     <div class="bst-character-title">BetterSimTracker Defaults</div>
-    <div class="bst-character-sub">Per-character defaults and mood images.</div>
+    <div class="bst-character-sub">Per-character defaults and optional mood source overrides.</div>
     <div class="bst-character-grid">
       <label>Affection Default <input type="number" min="0" max="100" step="1" data-bst-default="affection" value="${defaults.affection ?? ""}"></label>
       <label>Trust Default <input type="number" min="0" max="100" step="1" data-bst-default="trust" value="${defaults.trust ?? ""}"></label>
@@ -366,12 +392,41 @@ function renderPanel(input: InitInput, force = false): void {
       <label>Connection Default <input type="number" min="0" max="100" step="1" data-bst-default="connection" value="${defaults.connection ?? ""}"></label>
       <label class="bst-character-wide">Mood Default <input type="text" data-bst-default="mood" value="${defaults.mood ?? ""}" placeholder="Neutral"></label>
     </div>
+    <div class="bst-character-divider">Mood Source Override</div>
+    <div class="bst-character-grid">
+      <label class="bst-character-wide">Mood Source
+        <select data-bst-default="moodSource">
+          <option value="">Use global setting</option>
+          <option value="bst_images" ${moodSourceOverride === "bst_images" ? "selected" : ""}>BST mood images</option>
+          <option value="st_expressions" ${moodSourceOverride === "st_expressions" ? "selected" : ""}>ST expressions</option>
+        </select>
+      </label>
+    </div>
+    <div class="bst-character-divider">Mood to ST Expression Map</div>
+    <div class="bst-character-help">
+      Optional per-character overrides. Leave empty to use built-in defaults.
+      Used only when source is ST expressions.
+    </div>
+    <div class="bst-character-map">
+      ${moodLabels.map(label => {
+        const safeLabel = escapeHtml(label);
+        const value = typeof moodExpressionMap[label] === "string" ? moodExpressionMap[label] ?? "" : "";
+        const safeValue = value ? escapeHtml(value) : "";
+        const safePlaceholder = escapeHtml(DEFAULT_MOOD_EXPRESSION_MAP[label]);
+        return `
+          <label class="bst-character-map-row">
+            <span>${safeLabel}</span>
+            <input type="text" data-bst-mood-map="${safeLabel}" value="${safeValue}" placeholder="${safePlaceholder}">
+          </label>
+        `;
+      }).join("")}
+    </div>
     <div class="bst-character-divider">Mood Images</div>
     <div class="bst-character-help">
-      Upload one image per mood. All 15 must be set or the tracker will keep using emoji-only mood display.
+      Upload one image per mood label. Missing images fall back to emoji.
       Max ${formatBytes(MAX_IMAGE_BYTES)} and ${MAX_IMAGE_WIDTH}x${MAX_IMAGE_HEIGHT}px. PNG/JPG/WebP only.
     </div>
-    ${partialSet ? `<div class="bst-character-warning">Mood image set incomplete (${moodCount}/15). Add the remaining images to activate.</div>` : ""}
+    <div class="bst-character-help">Configured mood images: ${moodCount}/${moodLabels.length}</div>
     <div class="bst-character-moods">
       ${moodLabels.map(label => {
         const url = moodImages[label] ?? "";
@@ -402,7 +457,7 @@ function renderPanel(input: InitInput, force = false): void {
     nameInput.addEventListener("input", () => renderPanel(input, false));
   }
 
-  panel.querySelectorAll<HTMLInputElement>("[data-bst-default]").forEach(node => {
+  panel.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-bst-default]").forEach(node => {
     node.addEventListener("change", () => {
       const key = node.dataset.bstDefault ?? "";
       const value = node.value;
@@ -414,6 +469,13 @@ function renderPanel(input: InitInput, force = false): void {
           } else {
             copy.mood = value.trim().slice(0, 80);
           }
+        } else if (key === "moodSource") {
+          const source = normalizeMoodSource(value);
+          if (!source) {
+            delete copy.moodSource;
+          } else {
+            copy.moodSource = source;
+          }
         } else {
           const num = clampStat(value);
           if (num == null) {
@@ -421,6 +483,32 @@ function renderPanel(input: InitInput, force = false): void {
           } else {
             copy[key] = num;
           }
+        }
+        return copy;
+      });
+      input.setSettings(next);
+      input.saveSettings(context, next);
+      input.onSettingsUpdated();
+    });
+  });
+
+  panel.querySelectorAll<HTMLInputElement>("[data-bst-mood-map]").forEach(node => {
+    node.addEventListener("change", () => {
+      const mood = normalizeMoodLabel(node.dataset.bstMoodMap ?? "");
+      if (!mood) return;
+      const expression = sanitizeExpressionValue(node.value);
+      const next = withUpdatedDefaults(settings, characterName, current => {
+        const copy = { ...current };
+        const map = { ...((copy.moodExpressionMap as MoodExpressionMap | undefined) ?? {}) };
+        if (!expression) {
+          delete map[mood];
+        } else {
+          map[mood] = expression;
+        }
+        if (Object.keys(map).length) {
+          copy.moodExpressionMap = map;
+        } else {
+          delete copy.moodExpressionMap;
         }
         return copy;
       });

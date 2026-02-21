@@ -5,7 +5,16 @@ import {
   DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
   moodOptions,
 } from "./prompts";
-import type { BetterSimTrackerSettings, CharacterDefaults, ConnectionProfileOption, DebugFlags, MoodLabel, STContext } from "./types";
+import type {
+  BetterSimTrackerSettings,
+  CharacterDefaults,
+  ConnectionProfileOption,
+  DebugFlags,
+  MoodExpressionMap,
+  MoodLabel,
+  MoodSource,
+  STContext,
+} from "./types";
 
 export const defaultSettings: BetterSimTrackerSettings = {
   enabled: true,
@@ -33,6 +42,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   trackConnection: true,
   trackMood: true,
   trackLastThought: true,
+  moodSource: "bst_images",
   accentColor: "#ff5a6f",
   cardOpacity: 0.92,
   borderRadius: 14,
@@ -327,6 +337,11 @@ function asText(value: unknown, fallback: string): string {
   return trimmed || fallback;
 }
 
+function sanitizeMoodSource(raw: unknown, fallback: MoodSource): MoodSource {
+  if (raw === "bst_images" || raw === "st_expressions") return raw;
+  return fallback;
+}
+
 export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): BetterSimTrackerSettings {
   return {
     ...defaultSettings,
@@ -356,6 +371,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     trackConnection: asBool(input.trackConnection, defaultSettings.trackConnection),
     trackMood: asBool(input.trackMood, defaultSettings.trackMood),
     trackLastThought: asBool(input.trackLastThought, defaultSettings.trackLastThought),
+    moodSource: sanitizeMoodSource(input.moodSource, defaultSettings.moodSource),
     accentColor: asText(input.accentColor, defaultSettings.accentColor),
     cardOpacity: clampNumber(input.cardOpacity, defaultSettings.cardOpacity, 0.1, 1),
     borderRadius: clampInt(input.borderRadius, defaultSettings.borderRadius, 0, 32),
@@ -408,6 +424,20 @@ function sanitizeMoodImages(raw: unknown): Partial<Record<MoodLabel, string>> | 
   return Object.keys(out).length ? out : null;
 }
 
+function sanitizeMoodExpressionMap(raw: unknown): MoodExpressionMap | null {
+  if (!raw || typeof raw !== "object") return null;
+  const out: MoodExpressionMap = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== "string") continue;
+    const label = normalizeMoodLabel(key);
+    if (!label) continue;
+    const expression = value.trim().slice(0, 80);
+    if (!expression) continue;
+    out[label] = expression;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function sanitizeDebugFlags(input: unknown): DebugFlags {
   const base = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   return {
@@ -433,6 +463,9 @@ function sanitizeCharacterDefaults(raw: unknown): Record<string, CharacterDefaul
     if (obj.desire !== undefined) entry.desire = clampInt(obj.desire, defaultSettings.defaultDesire, 0, 100);
     if (obj.connection !== undefined) entry.connection = clampInt(obj.connection, defaultSettings.defaultConnection, 0, 100);
     if (obj.mood !== undefined) entry.mood = asText(obj.mood, defaultSettings.defaultMood).slice(0, 80);
+    if (obj.moodSource !== undefined) entry.moodSource = sanitizeMoodSource(obj.moodSource, defaultSettings.moodSource);
+    const moodExpressionMap = sanitizeMoodExpressionMap(obj.moodExpressionMap);
+    if (moodExpressionMap) entry.moodExpressionMap = moodExpressionMap;
     const moodImages = sanitizeMoodImages(obj.moodImages);
     if (moodImages) entry.moodImages = moodImages;
     if (Object.keys(entry).length) {
