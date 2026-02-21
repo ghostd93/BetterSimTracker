@@ -273,6 +273,7 @@ Behavior notes:
 - `Adjust ST Expression Framing` button (opens interactive zoom/X/Y preview editor when `Mood Source = ST expressions`)
   - X/Y positioning works at all zoom levels (including `1.0`) with zoom-aware framing behavior at higher zoom levels
   - Framer preview and tracker cards use the same positioning math, so preview framing matches tracker rendering
+  - If X/Y is off-center at very low zoom, framing auto-lifts to a small minimum zoom so positioning remains visible
 
 You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only enabled stats.
 

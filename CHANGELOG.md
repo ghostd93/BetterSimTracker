@@ -26,6 +26,8 @@ All notable changes to BetterSimTracker are documented here.
 ### Fixed
 - Blocked setting per-character mood source to `ST expressions` when that character has no ST expression sprites.
 - Fixed ST expression framing positioning so X/Y movement works at `zoom=1.0` and remains usable at higher zoom levels.
+- Restored direct transform-origin framing mapping to remove zoom-position dead zones and keep tracker/framer alignment.
+- Added low-zoom positioning headroom so off-center X/Y framing still produces visible changes at very low zoom.
 - Prevented late/stale extraction progress callbacks from re-entering `extracting` UI state after extraction already finished (fixes stuck progress + non-working Stop button in that stale state).
 - Extraction now retries transient transport failures (with short backoff) that can happen right after AI generation ends.
 - Extraction no longer treats non-abort request failures as successful completion.
