@@ -1,5 +1,11 @@
 import { moodOptions } from "./prompts";
 import { logDebug } from "./settings";
+import {
+  closeStExpressionFrameEditor,
+  formatStExpressionFrameSummary,
+  openStExpressionFrameEditor,
+  sanitizeStExpressionFrame,
+} from "./stExpressionFrameEditor";
 import type {
   BetterSimTrackerSettings,
   MoodExpressionMap,
@@ -140,12 +146,6 @@ function sanitizeExpressionValue(raw: string): string {
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-function parseNumber(raw: string): number | null {
-  const n = Number(raw);
-  if (Number.isNaN(n) || !Number.isFinite(n)) return null;
-  return n;
 }
 
 function sanitizeStExpressionImageOptions(raw: unknown, fallback: StExpressionImageOptions): StExpressionImageOptions | null {
@@ -467,16 +467,13 @@ function renderPanel(input: InitInput, force = false): void {
       <input type="checkbox" data-bst-st-image-override ${hasStExpressionImageOverride ? "checked" : ""}>
       <span>Advanced image options (override global)</span>
     </label>
-    <div class="bst-character-grid bst-character-grid-three" data-bst-st-image-options style="display:${hasStExpressionImageOverride ? "grid" : "none"};">
-      <label>Zoom
-        <input type="number" min="0.5" max="3" step="0.05" data-bst-st-image="zoom" value="${hasStExpressionImageOverride ? stExpressionImageOptions.zoom : ""}" placeholder="${globalStImageDefaults.zoom}">
-      </label>
-      <label>Position X (%)
-        <input type="number" min="0" max="100" step="1" data-bst-st-image="positionX" value="${hasStExpressionImageOverride ? stExpressionImageOptions.positionX : ""}" placeholder="${globalStImageDefaults.positionX}">
-      </label>
-      <label>Position Y (%)
-        <input type="number" min="0" max="100" step="1" data-bst-st-image="positionY" value="${hasStExpressionImageOverride ? stExpressionImageOptions.positionY : ""}" placeholder="${globalStImageDefaults.positionY}">
-      </label>
+    <div class="bst-character-grid" data-bst-st-image-options style="display:${hasStExpressionImageOverride ? "grid" : "none"};">
+      <div class="bst-character-wide bst-character-st-tools">
+        <button type="button" class="bst-btn bst-btn-soft" data-action="open-st-image-editor">Adjust ST Expression Framing</button>
+        <div class="bst-character-help bst-character-help-compact" data-bst-st-image-summary>
+          Current override: ${formatStExpressionFrameSummary(stExpressionImageOptions)}
+        </div>
+      </div>
     </div>
     <div class="bst-character-divider">Mood Images</div>
     <div class="bst-character-help">
@@ -577,12 +574,24 @@ function renderPanel(input: InitInput, force = false): void {
 
   const stImageOverrideToggle = panel.querySelector<HTMLInputElement>("[data-bst-st-image-override]");
   const stImageOptionsBlock = panel.querySelector<HTMLElement>("[data-bst-st-image-options]");
+  const stImageSummaryNode = panel.querySelector<HTMLElement>("[data-bst-st-image-summary]");
+  const setStImageSummary = (value: StExpressionImageOptions): void => {
+    if (!stImageSummaryNode) return;
+    stImageSummaryNode.textContent = `Current override: ${formatStExpressionFrameSummary(value)}`;
+  };
+  if (hasStExpressionImageOverride) {
+    setStImageSummary(stExpressionImageOptions);
+  }
   stImageOverrideToggle?.addEventListener("change", () => {
     const enabled = stImageOverrideToggle.checked;
     if (stImageOptionsBlock) {
       stImageOptionsBlock.style.display = enabled ? "grid" : "none";
     }
-    const next = withUpdatedDefaults(settings, characterName, current => {
+    if (!enabled) {
+      closeStExpressionFrameEditor();
+    }
+    const liveSettings = input.getSettings() ?? settings;
+    const next = withUpdatedDefaults(liveSettings, characterName, current => {
       const copy = { ...current };
       if (!enabled) {
         delete copy.stExpressionImageOptions;
@@ -600,29 +609,31 @@ function renderPanel(input: InitInput, force = false): void {
     input.onSettingsUpdated();
   });
 
-  panel.querySelectorAll<HTMLInputElement>("[data-bst-st-image]").forEach(node => {
-    node.addEventListener("change", () => {
-      if (!stImageOverrideToggle?.checked) return;
-      const key = (node.dataset.bstStImage ?? "").trim();
-      if (!["zoom", "positionX", "positionY"].includes(key)) return;
-      const raw = parseNumber(node.value);
-      const next = withUpdatedDefaults(settings, characterName, current => {
-        const copy = { ...current };
-        const base = sanitizeStExpressionImageOptions(copy.stExpressionImageOptions, globalStImageDefaults) ?? globalStImageDefaults;
-        const updated = { ...base };
-        if (key === "zoom") {
-          updated.zoom = clampNumber(raw ?? base.zoom, 0.5, 3);
-        } else if (key === "positionX") {
-          updated.positionX = clampNumber(raw ?? base.positionX, 0, 100);
-        } else if (key === "positionY") {
-          updated.positionY = clampNumber(raw ?? base.positionY, 0, 100);
-        }
-        copy.stExpressionImageOptions = updated;
-        return copy;
-      });
-      input.setSettings(next);
-      input.saveSettings(context, next);
-      input.onSettingsUpdated();
+  panel.querySelector('[data-action="open-st-image-editor"]')?.addEventListener("click", () => {
+    if (!stImageOverrideToggle?.checked) return;
+    const liveSettings = input.getSettings() ?? settings;
+    const liveDefaults = getDefaults(liveSettings, characterName);
+    const liveOverride = sanitizeStExpressionImageOptions(liveDefaults.stExpressionImageOptions, globalStImageDefaults);
+    const initialFrame = liveOverride ?? globalStImageDefaults;
+    openStExpressionFrameEditor({
+      title: `${characterName}: ST Expression Framing`,
+      description: "Per-character framing override used when this character resolves to ST expressions.",
+      initial: initialFrame,
+      fallback: globalStImageDefaults,
+      onChange: nextFrame => {
+        if (!stImageOverrideToggle?.checked) return;
+        const sanitized = sanitizeStExpressionFrame(nextFrame, globalStImageDefaults);
+        setStImageSummary(sanitized);
+        const currentSettings = input.getSettings() ?? settings;
+        const next = withUpdatedDefaults(currentSettings, characterName, current => {
+          const copy = { ...current };
+          copy.stExpressionImageOptions = sanitized;
+          return copy;
+        });
+        input.setSettings(next);
+        input.saveSettings(context, next);
+        input.onSettingsUpdated();
+      },
     });
   });
 
