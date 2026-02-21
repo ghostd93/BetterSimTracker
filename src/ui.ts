@@ -25,7 +25,6 @@ import {
   formatStExpressionFrameSummary,
   openStExpressionFrameEditor,
   sanitizeStExpressionFrame,
-  toZoomAdjustedFramePosition,
 } from "./stExpressionFrameEditor";
 import { fetchFirstExpressionSprite } from "./stExpressionSprites";
 
@@ -73,6 +72,7 @@ const DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS: StExpressionImageOptions = {
   positionX: 50,
   positionY: 20,
 };
+const MIN_ST_EXPRESSION_POSITIONING_ZOOM = 1.05;
 
 function hasNumericValue(entry: TrackerData, key: NumericStatKey, name: string): boolean {
   return entry.statistics[key]?.[name] !== undefined;
@@ -614,8 +614,8 @@ function ensureStyles(): void {
 }
 .bst-mood-image-frame--st-expression {
   --bst-st-expression-zoom: 1.2;
-  --bst-st-expression-pos-x: 50%;
-  --bst-st-expression-pos-y: 20%;
+  --bst-st-expression-origin-x: 50%;
+  --bst-st-expression-origin-y: 20%;
 }
 .bst-mood-image {
   width: 100%;
@@ -625,9 +625,9 @@ function ensureStyles(): void {
   display: block;
 }
 .bst-mood-image--st-expression {
-  object-position: var(--bst-st-expression-pos-x) var(--bst-st-expression-pos-y);
+  object-position: center center;
   transform: scale(var(--bst-st-expression-zoom));
-  transform-origin: center center;
+  transform-origin: var(--bst-st-expression-origin-x) var(--bst-st-expression-origin-y);
 }
 .bst-mood-badge {
   font-size: 11px;
@@ -1779,9 +1779,11 @@ export function renderTracker(
         : "";
       const stExpressionStyle = (() => {
         if (!stExpressionImageOptions) return "";
-        const x = toZoomAdjustedFramePosition(stExpressionImageOptions.positionX, stExpressionImageOptions.zoom);
-        const y = toZoomAdjustedFramePosition(stExpressionImageOptions.positionY, stExpressionImageOptions.zoom);
-        return ` style="--bst-st-expression-zoom:${stExpressionImageOptions.zoom.toFixed(2)};--bst-st-expression-pos-x:${x.toFixed(2)}%;--bst-st-expression-pos-y:${y.toFixed(2)}%;"`;
+        const offCenter = stExpressionImageOptions.positionX !== 50 || stExpressionImageOptions.positionY !== 50;
+        const renderZoom = offCenter && stExpressionImageOptions.zoom < MIN_ST_EXPRESSION_POSITIONING_ZOOM
+          ? MIN_ST_EXPRESSION_POSITIONING_ZOOM
+          : stExpressionImageOptions.zoom;
+        return ` style="--bst-st-expression-zoom:${renderZoom.toFixed(2)};--bst-st-expression-origin-x:${stExpressionImageOptions.positionX.toFixed(2)}%;--bst-st-expression-origin-y:${stExpressionImageOptions.positionY.toFixed(2)}%;"`;
       })();
       const card = document.createElement("div");
       card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;
