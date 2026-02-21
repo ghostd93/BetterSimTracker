@@ -23,6 +23,7 @@ All notable changes to BetterSimTracker are documented here.
 - If no ST expression sprites are available, framing editor now opens in notice-only mode with centered guidance text and close action.
 - Framer preview and tracker cards now use the same zoom-aware pan calculation for ST expression framing.
 - ST expression framing is now applied directly on mood images via inline transform/object-position styles for stronger rendering consistency.
+- Settings modal section drawers now default to collapsed.
 ### Fixed
 - Blocked setting per-character mood source to `ST expressions` when that character has no ST expression sprites.
 - Fixed ST expression framing positioning so X/Y movement works at `zoom=1.0` and remains usable at higher zoom levels.
