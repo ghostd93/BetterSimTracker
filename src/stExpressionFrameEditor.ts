@@ -70,6 +70,10 @@ function round(value: number, digits: number): number {
   return Math.round(value * factor) / factor;
 }
 
+function computeZoomPanOffset(position: number, zoom: number): number {
+  return round((50 - position) * (zoom - 1), 2);
+}
+
 export function sanitizeStExpressionFrame(
   raw: Partial<StExpressionImageOptions> | null | undefined,
   fallback: StExpressionImageOptions = DEFAULT_ST_EXPRESSION_FRAME,
@@ -203,9 +207,6 @@ function ensureEditorStyles(): void {
   opacity: 0.78;
 }
 .${MODAL_CLASS} .bst-st-frame-preview-frame {
-  --bst-st-frame-zoom: 1.2;
-  --bst-st-frame-pos-x: 50%;
-  --bst-st-frame-pos-y: 20%;
   width: min(240px, 44vw);
   aspect-ratio: 1 / 1;
   border-radius: 16px;
@@ -218,9 +219,8 @@ function ensureEditorStyles(): void {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: var(--bst-st-frame-pos-x) var(--bst-st-frame-pos-y);
-  transform: scale(var(--bst-st-frame-zoom));
-  transform-origin: var(--bst-st-frame-pos-x) var(--bst-st-frame-pos-y);
+  object-position: center center;
+  transform-origin: center center;
   display: block;
 }
 .${MODAL_CLASS} .bst-st-frame-controls {
@@ -429,7 +429,6 @@ export function openStExpressionFrameEditor(input: OpenStExpressionFrameEditorIn
     return;
   }
 
-  const previewFrame = modal.querySelector('[data-role="previewFrame"]') as HTMLElement | null;
   const previewImage = modal.querySelector('[data-role="previewImage"]') as HTMLImageElement | null;
   const previewCharacter = modal.querySelector('[data-role="previewCharacter"]') as HTMLSelectElement | null;
   const zoomValue = modal.querySelector('[data-role="zoomValue"]') as HTMLElement | null;
@@ -454,10 +453,12 @@ export function openStExpressionFrameEditor(input: OpenStExpressionFrameEditorIn
 
   const applyCurrent = (notify: boolean): void => {
     current = sanitizeStExpressionFrame(current, fallback);
-    if (previewFrame) {
-      previewFrame.style.setProperty("--bst-st-frame-zoom", current.zoom.toFixed(2));
-      previewFrame.style.setProperty("--bst-st-frame-pos-x", `${current.positionX.toFixed(2)}%`);
-      previewFrame.style.setProperty("--bst-st-frame-pos-y", `${current.positionY.toFixed(2)}%`);
+    if (previewImage) {
+      const panX = computeZoomPanOffset(current.positionX, current.zoom);
+      const panY = computeZoomPanOffset(current.positionY, current.zoom);
+      previewImage.style.setProperty("object-position", `${current.positionX.toFixed(2)}% ${current.positionY.toFixed(2)}%`, "important");
+      previewImage.style.setProperty("transform", `translate(${panX.toFixed(2)}%, ${panY.toFixed(2)}%) scale(${current.zoom.toFixed(2)})`, "important");
+      previewImage.style.setProperty("transform-origin", "center center", "important");
     }
     if (zoomRange) zoomRange.value = current.zoom.toFixed(2);
     if (xRange) xRange.value = String(current.positionX);
