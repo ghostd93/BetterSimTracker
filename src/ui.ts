@@ -548,9 +548,13 @@ function ensureStyles(): void {
   height: clamp(64px, 11vw, 84px);
   border-radius: clamp(12px, 3vw, 16px);
   object-fit: cover;
+  object-position: center center;
   justify-self: center;
   border: 2px solid color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 55%, #ffffff 45%);
   box-shadow: 0 12px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.25);
+}
+.bst-mood-image--st-expression {
+  object-position: center 20%;
 }
 .bst-mood-badge {
   font-size: 11px;
@@ -1665,6 +1669,7 @@ export function renderTracker(
       const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
+      const moodSource = moodText ? getResolvedMoodSource(settings, name) : "bst_images";
       const moodImage = moodText ? getMoodImageUrl(settings, name, moodText, onRequestRerender) : null;
       const lastThoughtText = settings.showLastThought && data.statistics.lastThought?.[name] !== undefined
         ? String(data.statistics.lastThought?.[name] ?? "")
@@ -1709,7 +1714,7 @@ export function renderTracker(
         <div class="bst-mood${moodImage ? " bst-mood-has-image" : ""}" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap ${moodImage ? "bst-mood-wrap--image" : "bst-mood-wrap--emoji"}">
             ${moodImage
-              ? `<img class="bst-mood-image" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}">`
+              ? `<img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}">`
               : `<span class="bst-mood-chip"><span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span></span>`}
             ${moodImage && lastThoughtText
               ? `<span class="bst-mood-bubble">${escapeHtml(lastThoughtText)}</span>`
