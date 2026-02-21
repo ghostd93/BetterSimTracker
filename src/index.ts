@@ -1003,9 +1003,18 @@ function registerEvents(context: STContext): void {
 function openSettings(): void {
   if (!settings) return;
   const context = getSafeContext();
+  const previewCharacterCandidates = Array.from(
+    new Set(
+      [
+        ...(context?.characters?.map(character => String(character?.name ?? "").trim()) ?? []),
+        String(context?.name2 ?? "").trim(),
+      ].filter(name => Boolean(name)),
+    ),
+  );
   openSettingsModal({
     settings,
     profileOptions: context ? discoverConnectionProfiles(context) : [],
+    previewCharacterCandidates,
     debugRecord: lastDebugRecord,
     injectedPrompt: settings.debug ? getLastInjectedPrompt() : "",
     onSave: next => {

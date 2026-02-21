@@ -6,6 +6,7 @@ import {
   openStExpressionFrameEditor,
   sanitizeStExpressionFrame,
 } from "./stExpressionFrameEditor";
+import { fetchFirstExpressionSprite } from "./stExpressionSprites";
 import type {
   BetterSimTrackerSettings,
   MoodExpressionMap,
@@ -609,17 +610,38 @@ function renderPanel(input: InitInput, force = false): void {
     input.onSettingsUpdated();
   });
 
-  panel.querySelector('[data-action="open-st-image-editor"]')?.addEventListener("click", () => {
+  panel.querySelector('[data-action="open-st-image-editor"]')?.addEventListener("click", async event => {
     if (!stImageOverrideToggle?.checked) return;
+    const button = event.currentTarget as HTMLButtonElement | null;
+    const originalLabel = button?.textContent ?? "Adjust ST Expression Framing";
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Loading preview...";
+    }
     const liveSettings = input.getSettings() ?? settings;
     const liveDefaults = getDefaults(liveSettings, characterName);
     const liveOverride = sanitizeStExpressionImageOptions(liveDefaults.stExpressionImageOptions, globalStImageDefaults);
     const initialFrame = liveOverride ?? globalStImageDefaults;
+    let previewSpriteUrl: string | null = null;
+    try {
+      previewSpriteUrl = await fetchFirstExpressionSprite(characterName);
+    } catch {
+      previewSpriteUrl = null;
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
     openStExpressionFrameEditor({
       title: `${characterName}: ST Expression Framing`,
-      description: "Per-character framing override used when this character resolves to ST expressions.",
+      description: previewSpriteUrl
+        ? "Per-character framing override with this character's ST expression preview."
+        : "Per-character framing override used when this character resolves to ST expressions.",
       initial: initialFrame,
       fallback: globalStImageDefaults,
+      previewImageUrl: previewSpriteUrl,
+      emptyPreviewText: "No ST expressions found for this character. Add at least one expression sprite and try again.",
       onChange: nextFrame => {
         if (!stImageOverrideToggle?.checked) return;
         const sanitized = sanitizeStExpressionFrame(nextFrame, globalStImageDefaults);

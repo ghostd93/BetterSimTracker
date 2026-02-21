@@ -39,6 +39,8 @@ export type OpenStExpressionFrameEditorInput = {
   description?: string;
   initial: StExpressionImageOptions;
   fallback?: StExpressionImageOptions;
+  previewImageUrl?: string | null;
+  emptyPreviewText?: string;
   onChange?: (next: StExpressionImageOptions) => void;
 };
 
@@ -137,6 +139,24 @@ function ensureEditorStyles(): void {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+}
+.${MODAL_CLASS} .bst-st-frame-layout-empty {
+  margin-top: 18px;
+  min-height: 280px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 12px;
+  background: rgba(12, 16, 27, 0.72);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 14px;
+}
+.${MODAL_CLASS} .bst-st-frame-layout-empty p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.9;
+  max-width: 480px;
 }
 .${MODAL_CLASS} .bst-st-frame-preview-card {
   border: 1px solid rgba(255,255,255,0.14);
@@ -270,6 +290,8 @@ export function openStExpressionFrameEditor(input: OpenStExpressionFrameEditorIn
 
   const fallback = sanitizeStExpressionFrame(input.fallback ?? DEFAULT_ST_EXPRESSION_FRAME, DEFAULT_ST_EXPRESSION_FRAME);
   let current = sanitizeStExpressionFrame(input.initial, fallback);
+  const previewImageUrl = (input.previewImageUrl ?? "").trim();
+  const hasPreview = Boolean(previewImageUrl);
 
   const backdrop = document.createElement("div");
   backdrop.className = BACKDROP_CLASS;
@@ -286,11 +308,12 @@ export function openStExpressionFrameEditor(input: OpenStExpressionFrameEditorIn
       </div>
       <button type="button" class="bst-st-frame-close" data-action="close" title="Close">&times;</button>
     </div>
+    ${hasPreview ? `
     <div class="bst-st-frame-layout">
       <div class="bst-st-frame-preview-card">
         <div class="bst-st-frame-preview-title">Mood card preview</div>
         <div class="bst-st-frame-preview-frame" data-role="previewFrame">
-          <img src="${PREVIEW_IMAGE}" alt="ST expression framing preview">
+          <img src="${previewImageUrl || PREVIEW_IMAGE}" alt="ST expression framing preview">
         </div>
       </div>
       <div class="bst-st-frame-controls">
@@ -344,8 +367,20 @@ export function openStExpressionFrameEditor(input: OpenStExpressionFrameEditorIn
         </div>
       </div>
     </div>
+    ` : `
+    <div class="bst-st-frame-layout-empty">
+      <p>${input.emptyPreviewText ?? "At least one character with ST expressions is required to preview framing."}</p>
+    </div>
+    `}
   `;
   document.body.appendChild(modal);
+
+  if (!hasPreview) {
+    modal.querySelectorAll('[data-action="close"]').forEach(node => {
+      node.addEventListener("click", () => closeStExpressionFrameEditor());
+    });
+    return;
+  }
 
   const previewFrame = modal.querySelector('[data-role="previewFrame"]') as HTMLElement | null;
   const zoomValue = modal.querySelector('[data-role="zoomValue"]') as HTMLElement | null;
