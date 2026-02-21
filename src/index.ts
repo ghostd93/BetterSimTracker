@@ -612,8 +612,25 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       runId
     });
 
+    const shouldForceSingleRequestAtStart =
+      reason === "GENERATION_ENDED" &&
+      !previousEntry?.data &&
+      settings.sequentialExtraction &&
+      (settings.maxConcurrentCalls ?? 1) > 1;
+    const extractionSettings = shouldForceSingleRequestAtStart
+      ? { ...settings, maxConcurrentCalls: 1 }
+      : settings;
+    if (shouldForceSingleRequestAtStart) {
+      pushTrace("extract.force_single_request_start", {
+        runId,
+        reason,
+        messageIndex: lastIndex,
+        maxConcurrentCalls: settings.maxConcurrentCalls
+      });
+    }
+
     const extractedResult = await extractStatisticsParallel({
-      settings,
+      settings: extractionSettings,
       userName,
       activeCharacters,
       contextText,
@@ -1121,7 +1138,7 @@ function buildCharacterCardsContext(context: STContext, activeCharacters: string
     if (card.personality) lines.push(`Personality: ${card.personality}`);
     if (card.scenario) lines.push(`Scenario: ${card.scenario}`);
     if (!lines.length) continue;
-    chunks.push(`Character Card — ${name}\n${lines.join("\n")}`);
+    chunks.push(`Character Card - ${name}\n${lines.join("\n")}`);
   }
   if (!chunks.length) return "";
   return `\n\nCharacter cards (use only to disambiguate if recent messages are unclear):\n${chunks.join("\n\n")}`;
