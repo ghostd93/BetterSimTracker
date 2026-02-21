@@ -22,6 +22,7 @@ All notable changes to BetterSimTracker are documented here.
 - Per-character mood expression mapping placeholders now inherit from the global map (then built-in defaults).
 - If no ST expression sprites are available, framing editor now opens in notice-only mode with centered guidance text and close action.
 - Framer X/Y movement now scales with zoom so higher zoom levels still allow full positioning range.
+- Framer preview and tracker card rendering now share the same zoom/position conversion math for ST expressions.
 ### Fixed
 - Blocked setting per-character mood source to `ST expressions` when that character has no ST expression sprites.
 - Fixed ST expression framing positioning so X/Y movement works at `zoom=1.0` and remains usable at higher zoom levels.
