@@ -58,6 +58,7 @@ export interface BetterSimTrackerSettings {
   trackMood: boolean;
   trackLastThought: boolean;
   moodSource: MoodSource;
+  moodExpressionMap: MoodExpressionMap;
   stExpressionImageZoom: number;
   stExpressionImagePositionX: number;
   stExpressionImagePositionY: number;
