@@ -24,6 +24,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Global preview sprite scan ignores BST mood-image assets with `bst_` prefix
 - Strong diagnostics/debug dump for bug reports
 - Mobile-friendly settings and graph modals
+- Settings section drawers collapsed by default
 
 ## Screenshots
 
