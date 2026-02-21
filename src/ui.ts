@@ -25,6 +25,7 @@ import {
   formatStExpressionFrameSummary,
   openStExpressionFrameEditor,
   sanitizeStExpressionFrame,
+  toZoomAdjustedFramePosition,
 } from "./stExpressionFrameEditor";
 import { fetchFirstExpressionSprite } from "./stExpressionSprites";
 
@@ -173,10 +174,6 @@ function getResolvedMoodSource(settings: BetterSimTrackerSettings, characterName
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-function zoomAdjustedPosition(position: number, zoom: number): number {
-  return clamp(50 + (position - 50) * zoom, 0, 100);
 }
 
 function toNumber(value: unknown): number | null {
@@ -1782,8 +1779,8 @@ export function renderTracker(
         : "";
       const stExpressionStyle = (() => {
         if (!stExpressionImageOptions) return "";
-        const x = zoomAdjustedPosition(stExpressionImageOptions.positionX, stExpressionImageOptions.zoom);
-        const y = zoomAdjustedPosition(stExpressionImageOptions.positionY, stExpressionImageOptions.zoom);
+        const x = toZoomAdjustedFramePosition(stExpressionImageOptions.positionX, stExpressionImageOptions.zoom);
+        const y = toZoomAdjustedFramePosition(stExpressionImageOptions.positionY, stExpressionImageOptions.zoom);
         return ` style="--bst-st-expression-zoom:${stExpressionImageOptions.zoom.toFixed(2)};--bst-st-expression-pos-x:${x.toFixed(2)}%;--bst-st-expression-pos-y:${y.toFixed(2)}%;"`;
       })();
       const card = document.createElement("div");
