@@ -12,6 +12,8 @@ All notable changes to BetterSimTracker are documented here.
 - Mood rendering now supports partial mood image sets (missing labels fall back to emoji instead of requiring all 15 images).
 - ST expression mood source now resolves sprites from character expression assets, with emoji fallback when mapping or sprite is missing.
 - ST expression mood images now use face-focused framing (top-centered crop) for more consistent portrait presentation.
+- Replaced numeric ST expression framing fields with an interactive `Adjust ST Expression Framing` editor in both Settings and character defaults.
+- ST expression framing adjustments (zoom, X, Y) now update and persist live while you adjust in the preview editor.
 ### Fixed
 - Prevented late/stale extraction progress callbacks from re-entering `extracting` UI state after extraction already finished (fixes stuck progress + non-working Stop button in that stale state).
 - Extraction now retries transient transport failures (with short backoff) that can happen right after AI generation ends.
