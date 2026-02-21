@@ -1066,6 +1066,9 @@ function openSettings(): void {
           autoDetectActive: currentSettings.autoDetectActive,
           activityLookback: currentSettings.activityLookback,
           moodSource: currentSettings.moodSource,
+          stExpressionImageZoom: currentSettings.stExpressionImageZoom,
+          stExpressionImagePositionX: currentSettings.stExpressionImagePositionX,
+          stExpressionImagePositionY: currentSettings.stExpressionImagePositionY,
           strictJsonRepair: currentSettings.strictJsonRepair,
           maxRetriesPerStat: currentSettings.maxRetriesPerStat
         },

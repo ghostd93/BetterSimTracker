@@ -13,6 +13,7 @@ import type {
   MoodExpressionMap,
   MoodLabel,
   MoodSource,
+  StExpressionImageOptions,
   STContext,
 } from "./types";
 
@@ -43,6 +44,9 @@ export const defaultSettings: BetterSimTrackerSettings = {
   trackMood: true,
   trackLastThought: true,
   moodSource: "bst_images",
+  stExpressionImageZoom: 1.2,
+  stExpressionImagePositionX: 50,
+  stExpressionImagePositionY: 20,
   accentColor: "#ff5a6f",
   cardOpacity: 0.92,
   borderRadius: 14,
@@ -342,6 +346,14 @@ function sanitizeMoodSource(raw: unknown, fallback: MoodSource): MoodSource {
   return fallback;
 }
 
+function sanitizeStExpressionZoom(raw: unknown, fallback: number): number {
+  return clampNumber(raw, fallback, 0.5, 3);
+}
+
+function sanitizeStExpressionPosition(raw: unknown, fallback: number): number {
+  return clampNumber(raw, fallback, 0, 100);
+}
+
 export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): BetterSimTrackerSettings {
   return {
     ...defaultSettings,
@@ -372,6 +384,9 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     trackMood: asBool(input.trackMood, defaultSettings.trackMood),
     trackLastThought: asBool(input.trackLastThought, defaultSettings.trackLastThought),
     moodSource: sanitizeMoodSource(input.moodSource, defaultSettings.moodSource),
+    stExpressionImageZoom: sanitizeStExpressionZoom(input.stExpressionImageZoom, defaultSettings.stExpressionImageZoom),
+    stExpressionImagePositionX: sanitizeStExpressionPosition(input.stExpressionImagePositionX, defaultSettings.stExpressionImagePositionX),
+    stExpressionImagePositionY: sanitizeStExpressionPosition(input.stExpressionImagePositionY, defaultSettings.stExpressionImagePositionY),
     accentColor: asText(input.accentColor, defaultSettings.accentColor),
     cardOpacity: clampNumber(input.cardOpacity, defaultSettings.cardOpacity, 0.1, 1),
     borderRadius: clampInt(input.borderRadius, defaultSettings.borderRadius, 0, 32),
@@ -438,6 +453,16 @@ function sanitizeMoodExpressionMap(raw: unknown): MoodExpressionMap | null {
   return Object.keys(out).length ? out : null;
 }
 
+function sanitizeStExpressionImageOptions(raw: unknown): StExpressionImageOptions | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  return {
+    zoom: sanitizeStExpressionZoom(obj.zoom, defaultSettings.stExpressionImageZoom),
+    positionX: sanitizeStExpressionPosition(obj.positionX, defaultSettings.stExpressionImagePositionX),
+    positionY: sanitizeStExpressionPosition(obj.positionY, defaultSettings.stExpressionImagePositionY),
+  };
+}
+
 function sanitizeDebugFlags(input: unknown): DebugFlags {
   const base = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   return {
@@ -466,6 +491,8 @@ function sanitizeCharacterDefaults(raw: unknown): Record<string, CharacterDefaul
     if (obj.moodSource !== undefined) entry.moodSource = sanitizeMoodSource(obj.moodSource, defaultSettings.moodSource);
     const moodExpressionMap = sanitizeMoodExpressionMap(obj.moodExpressionMap);
     if (moodExpressionMap) entry.moodExpressionMap = moodExpressionMap;
+    const stExpressionImageOptions = sanitizeStExpressionImageOptions(obj.stExpressionImageOptions);
+    if (stExpressionImageOptions) entry.stExpressionImageOptions = stExpressionImageOptions;
     const moodImages = sanitizeMoodImages(obj.moodImages);
     if (moodImages) entry.moodImages = moodImages;
     if (Object.keys(entry).length) {

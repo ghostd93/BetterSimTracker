@@ -58,6 +58,9 @@ export interface BetterSimTrackerSettings {
   trackMood: boolean;
   trackLastThought: boolean;
   moodSource: MoodSource;
+  stExpressionImageZoom: number;
+  stExpressionImagePositionX: number;
+  stExpressionImagePositionY: number;
   accentColor: string;
   cardOpacity: number;
   borderRadius: number;
@@ -92,6 +95,11 @@ export interface DebugFlags {
 
 export type MoodImageSet = Partial<Record<MoodLabel, string>>;
 export type MoodExpressionMap = Partial<Record<MoodLabel, string>>;
+export interface StExpressionImageOptions {
+  zoom: number;
+  positionX: number;
+  positionY: number;
+}
 
 export interface CharacterDefaults {
   affection?: number;
@@ -101,6 +109,7 @@ export interface CharacterDefaults {
   mood?: string;
   moodSource?: MoodSource;
   moodExpressionMap?: MoodExpressionMap;
+  stExpressionImageOptions?: StExpressionImageOptions;
   moodImages?: MoodImageSet;
 }
 

@@ -6,6 +6,7 @@ import type {
   DeltaDebugRecord,
   MoodLabel,
   MoodSource,
+  StExpressionImageOptions,
   StatValue,
   TrackerData,
 } from "./types";
@@ -59,6 +60,11 @@ type CachedExpressionSprites = {
 const ST_EXPRESSION_CACHE_TTL_MS = 60_000;
 const stExpressionCache = new Map<string, CachedExpressionSprites>();
 const stExpressionFetchInFlight = new Set<string>();
+const DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS: StExpressionImageOptions = {
+  zoom: 1.2,
+  positionX: 50,
+  positionY: 20,
+};
 
 function hasNumericValue(entry: TrackerData, key: NumericStatKey, name: string): boolean {
   return entry.statistics[key]?.[name] !== undefined;
@@ -156,6 +162,47 @@ function getResolvedMoodSource(settings: BetterSimTrackerSettings, characterName
   const override = normalizeMoodSource(entry.moodSource);
   if (entry.moodSource === "bst_images" || entry.moodSource === "st_expressions") return override;
   return fallback;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function sanitizeStExpressionImageOptions(raw: unknown, fallback: StExpressionImageOptions): StExpressionImageOptions {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const zoom = toNumber(obj.zoom);
+  const positionX = toNumber(obj.positionX);
+  const positionY = toNumber(obj.positionY);
+  return {
+    zoom: clamp(zoom ?? fallback.zoom, 0.5, 3),
+    positionX: clamp(positionX ?? fallback.positionX, 0, 100),
+    positionY: clamp(positionY ?? fallback.positionY, 0, 100),
+  };
+}
+
+function getGlobalStExpressionImageOptions(settings: BetterSimTrackerSettings): StExpressionImageOptions {
+  return sanitizeStExpressionImageOptions(
+    {
+      zoom: settings.stExpressionImageZoom,
+      positionX: settings.stExpressionImagePositionX,
+      positionY: settings.stExpressionImagePositionY,
+    },
+    DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS,
+  );
+}
+
+function getResolvedStExpressionImageOptions(settings: BetterSimTrackerSettings, characterName: string): StExpressionImageOptions {
+  const globalOptions = getGlobalStExpressionImageOptions(settings);
+  const entry = settings.characterDefaults?.[characterName] as Record<string, unknown> | undefined;
+  const override = entry?.stExpressionImageOptions;
+  if (!override || typeof override !== "object") return globalOptions;
+  return sanitizeStExpressionImageOptions(override, globalOptions);
 }
 
 function toSpriteList(data: unknown): SpriteEntry[] {
@@ -543,18 +590,31 @@ function ensureStyles(): void {
   width: 100%;
   justify-content: center;
 }
-.bst-mood-image {
+.bst-mood-image-frame {
   width: clamp(64px, 11vw, 84px);
   height: clamp(64px, 11vw, 84px);
   border-radius: clamp(12px, 3vw, 16px);
-  object-fit: cover;
-  object-position: center center;
   justify-self: center;
+  overflow: hidden;
   border: 2px solid color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 55%, #ffffff 45%);
   box-shadow: 0 12px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.25);
 }
+.bst-mood-image-frame--st-expression {
+  --bst-st-expression-zoom: 1.2;
+  --bst-st-expression-pos-x: 50%;
+  --bst-st-expression-pos-y: 20%;
+}
+.bst-mood-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+}
 .bst-mood-image--st-expression {
-  object-position: center 20%;
+  object-position: var(--bst-st-expression-pos-x) var(--bst-st-expression-pos-y);
+  transform: scale(var(--bst-st-expression-zoom));
+  transform-origin: center center;
 }
 .bst-mood-badge {
   font-size: 11px;
@@ -598,7 +658,7 @@ function ensureStyles(): void {
     justify-items: center;
     gap: 10px;
   }
-  .bst-mood-image {
+  .bst-mood-image-frame {
     width: clamp(78px, 26vw, 110px);
     height: clamp(78px, 26vw, 110px);
   }
@@ -1246,11 +1306,20 @@ function ensureStyles(): void {
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.bst-character-grid-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .bst-character-grid label {
   font-size: 12px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.bst-character-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
 }
 .bst-character-panel input[type="text"],
 .bst-character-panel input[type="number"],
@@ -1372,6 +1441,9 @@ function ensureStyles(): void {
   .bst-settings-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+  .bst-character-grid-three {
+    grid-template-columns: minmax(0, 1fr);
   }
   .bst-check-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -1670,9 +1742,15 @@ export function renderTracker(
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
       const moodSource = moodText ? getResolvedMoodSource(settings, name) : "bst_images";
+      const stExpressionImageOptions = moodSource === "st_expressions"
+        ? getResolvedStExpressionImageOptions(settings, name)
+        : null;
       const moodImage = moodText ? getMoodImageUrl(settings, name, moodText, onRequestRerender) : null;
       const lastThoughtText = settings.showLastThought && data.statistics.lastThought?.[name] !== undefined
         ? String(data.statistics.lastThought?.[name] ?? "")
+        : "";
+      const stExpressionStyle = stExpressionImageOptions
+        ? ` style="--bst-st-expression-zoom:${stExpressionImageOptions.zoom.toFixed(2)};--bst-st-expression-pos-x:${stExpressionImageOptions.positionX.toFixed(1)}%;--bst-st-expression-pos-y:${stExpressionImageOptions.positionY.toFixed(1)}%;"`
         : "";
       const card = document.createElement("div");
       card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;
@@ -1714,7 +1792,7 @@ export function renderTracker(
         <div class="bst-mood${moodImage ? " bst-mood-has-image" : ""}" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap ${moodImage ? "bst-mood-wrap--image" : "bst-mood-wrap--emoji"}">
             ${moodImage
-              ? `<img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}">`
+              ? `<span class="bst-mood-image-frame${moodSource === "st_expressions" ? " bst-mood-image-frame--st-expression" : ""}"${stExpressionStyle}><img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}"></span>`
               : `<span class="bst-mood-chip"><span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span></span>`}
             ${moodImage && lastThoughtText
               ? `<span class="bst-mood-bubble">${escapeHtml(lastThoughtText)}</span>`
@@ -2239,6 +2317,20 @@ export function openSettingsModal(input: {
             </select>
           </label>
         </div>
+        <div data-bst-row="stExpressionImageOptions">
+          <div class="bst-help-line">ST expression framing (global): zoom and crop position for expression sprites.</div>
+          <div class="bst-settings-grid">
+            <label>Expression Zoom
+              <input data-k="stExpressionImageZoom" type="number" min="0.5" max="3" step="0.05">
+            </label>
+            <label>Position X (%)
+              <input data-k="stExpressionImagePositionX" type="number" min="0" max="100" step="1">
+            </label>
+            <label>Position Y (%)
+              <input data-k="stExpressionImagePositionY" type="number" min="0" max="100" step="1">
+            </label>
+          </div>
+        </div>
         <div class="bst-help-line">Emoji is always fallback if the selected source has no image.</div>
       </div>
     </div>
@@ -2653,6 +2745,9 @@ export function openSettingsModal(input: {
   set("trackMood", String(input.settings.trackMood));
   set("trackLastThought", String(input.settings.trackLastThought));
   set("moodSource", input.settings.moodSource);
+  set("stExpressionImageZoom", String(input.settings.stExpressionImageZoom));
+  set("stExpressionImagePositionX", String(input.settings.stExpressionImagePositionX));
+  set("stExpressionImagePositionY", String(input.settings.stExpressionImagePositionY));
   const accentInput = modal.querySelector('[data-k-color="accentColor"]') as HTMLInputElement | null;
   if (accentInput) accentInput.value = input.settings.accentColor || "#ff5a6f";
   set("cardOpacity", String(input.settings.cardOpacity));
@@ -2726,6 +2821,9 @@ export function openSettingsModal(input: {
       trackMood: readBool("trackMood"),
       trackLastThought: readBool("trackLastThought"),
       moodSource: read("moodSource") === "st_expressions" ? "st_expressions" : "bst_images",
+      stExpressionImageZoom: readNumber("stExpressionImageZoom", input.settings.stExpressionImageZoom, 0.5, 3),
+      stExpressionImagePositionX: readNumber("stExpressionImagePositionX", input.settings.stExpressionImagePositionX, 0, 100),
+      stExpressionImagePositionY: readNumber("stExpressionImagePositionY", input.settings.stExpressionImagePositionY, 0, 100),
       accentColor: read("accentColor") || input.settings.accentColor,
       cardOpacity: readNumber("cardOpacity", input.settings.cardOpacity, 0.1, 1),
       borderRadius: readNumber("borderRadius", input.settings.borderRadius, 0, 32),
@@ -2763,6 +2861,7 @@ export function openSettingsModal(input: {
     const injectPromptBlock = modal.querySelector('[data-bst-row="injectPromptBlock"]') as HTMLElement | null;
     const injectPromptDivider = modal.querySelector('[data-bst-row="injectPromptDivider"]') as HTMLElement | null;
     const moodAdvancedBlock = modal.querySelector('[data-bst-row="moodAdvancedBlock"]') as HTMLElement | null;
+    const stExpressionImageOptions = modal.querySelector('[data-bst-row="stExpressionImageOptions"]') as HTMLElement | null;
     const current = collectSettings();
     if (maxConcurrentRow) {
       maxConcurrentRow.style.display = current.sequentialExtraction ? "flex" : "none";
@@ -2804,6 +2903,9 @@ export function openSettingsModal(input: {
     }
     if (moodAdvancedBlock) {
       moodAdvancedBlock.style.display = current.trackMood ? "block" : "none";
+    }
+    if (stExpressionImageOptions) {
+      stExpressionImageOptions.style.display = current.trackMood && current.moodSource === "st_expressions" ? "block" : "none";
     }
   };
 
@@ -2847,6 +2949,9 @@ export function openSettingsModal(input: {
     trackMood: "Enable mood extraction and mood display updates.",
     trackLastThought: "Enable hidden short internal thought extraction.",
     moodSource: "Choose where mood images come from: BetterSimTracker uploads or SillyTavern expression sprites.",
+    stExpressionImageZoom: "Global zoom for ST expression mood images (higher values crop closer).",
+    stExpressionImagePositionX: "Global horizontal crop position for ST expression mood images.",
+    stExpressionImagePositionY: "Global vertical crop position for ST expression mood images.",
     showInactive: "Show tracker cards for inactive/off-screen characters.",
     inactiveLabel: "Text label shown on cards for inactive characters.",
     showLastThought: "Show extracted last thought text inside tracker cards.",
