@@ -24,6 +24,7 @@ import {
   closeStExpressionFrameEditor,
   formatStExpressionFrameSummary,
   openStExpressionFrameEditor,
+  projectStExpressionPosition,
   sanitizeStExpressionFrame,
 } from "./stExpressionFrameEditor";
 import { fetchFirstExpressionSprite } from "./stExpressionSprites";
@@ -1772,7 +1773,7 @@ export function renderTracker(
         ? String(data.statistics.lastThought?.[name] ?? "")
         : "";
       const stExpressionStyle = stExpressionImageOptions
-        ? ` style="--bst-st-expression-zoom:${stExpressionImageOptions.zoom.toFixed(2)};--bst-st-expression-pos-x:${stExpressionImageOptions.positionX.toFixed(1)}%;--bst-st-expression-pos-y:${stExpressionImageOptions.positionY.toFixed(1)}%;"`
+        ? ` style="--bst-st-expression-zoom:${stExpressionImageOptions.zoom.toFixed(2)};--bst-st-expression-pos-x:${projectStExpressionPosition(stExpressionImageOptions.positionX, stExpressionImageOptions.zoom).toFixed(2)}%;--bst-st-expression-pos-y:${projectStExpressionPosition(stExpressionImageOptions.positionY, stExpressionImageOptions.zoom).toFixed(2)}%;"`
         : "";
       const card = document.createElement("div");
       card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;

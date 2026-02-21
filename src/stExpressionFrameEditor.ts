@@ -84,6 +84,10 @@ export function formatStExpressionFrameSummary(value: StExpressionImageOptions):
   return `Zoom ${value.zoom.toFixed(2)} | X ${value.positionX}% | Y ${value.positionY}%`;
 }
 
+export function projectStExpressionPosition(position: number, zoom: number): number {
+  return 50 + (position - 50) * zoom;
+}
+
 function ensureEditorStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement("style");
@@ -456,8 +460,8 @@ export function openStExpressionFrameEditor(input: OpenStExpressionFrameEditorIn
     current = sanitizeStExpressionFrame(current, fallback);
     if (previewFrame) {
       previewFrame.style.setProperty("--bst-st-frame-zoom", current.zoom.toFixed(2));
-      previewFrame.style.setProperty("--bst-st-frame-pos-x", `${current.positionX}%`);
-      previewFrame.style.setProperty("--bst-st-frame-pos-y", `${current.positionY}%`);
+      previewFrame.style.setProperty("--bst-st-frame-pos-x", `${projectStExpressionPosition(current.positionX, current.zoom).toFixed(2)}%`);
+      previewFrame.style.setProperty("--bst-st-frame-pos-y", `${projectStExpressionPosition(current.positionY, current.zoom).toFixed(2)}%`);
     }
     if (zoomRange) zoomRange.value = current.zoom.toFixed(2);
     if (xRange) xRange.value = String(current.positionX);
