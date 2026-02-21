@@ -9,6 +9,7 @@ All notable changes to BetterSimTracker are documented here.
 ### Changed
 - Mood rendering now supports partial mood image sets (missing labels fall back to emoji instead of requiring all 15 images).
 - ST expression mood source now resolves sprites from character expression assets, with emoji fallback when mapping or sprite is missing.
+- ST expression mood images now use face-focused framing (top-centered crop) for more consistent portrait presentation.
 
 ## [1.1.1] - 2026-02-21
 ### Fixed
