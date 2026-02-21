@@ -311,7 +311,7 @@ function scheduleRefresh(delay = 80): void {
   }, delay);
 }
 
-function scheduleExtraction(reason: string, targetMessageIndex?: number): void {
+function scheduleExtraction(reason: string, targetMessageIndex?: number, delay = 180): void {
   if (extractionTimer !== null) {
     window.clearTimeout(extractionTimer);
   }
@@ -319,7 +319,7 @@ function scheduleExtraction(reason: string, targetMessageIndex?: number): void {
     extractionTimer = null;
     pushTrace("extract.schedule.fire", { reason, targetMessageIndex: targetMessageIndex ?? null });
     void runExtraction(reason, targetMessageIndex);
-  }, 180);
+  }, delay);
 }
 
 function scheduleSwipeExtraction(reason: string, targetMessageIndex?: number): void {
@@ -836,7 +836,7 @@ function registerEvents(context: STContext): void {
         swipeExtractionTimer = null;
       }
       swipeGenerationActive = false;
-      scheduleExtraction(pending.reason, pending.messageIndex);
+      scheduleExtraction(pending.reason, pending.messageIndex, 2000);
       return;
     }
     swipeGenerationActive = false;
@@ -847,7 +847,7 @@ function registerEvents(context: STContext): void {
         swipeExtractionTimer = null;
       }
     }
-    scheduleExtraction("GENERATION_ENDED");
+    scheduleExtraction("GENERATION_ENDED", undefined, 2000);
   });
 
   source.on(events.CHAT_CHANGED, () => {
