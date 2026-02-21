@@ -17,6 +17,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
   - multi-stat lines (Affection/Trust/Desire/Connection)
 - Prompt injection (optional) for behavior consistency
 - Prompt templates (unified + per-stat) with per-prompt reset
+- Mood source switch: BST mood images or ST expressions (emoji fallback always available)
 - Strong diagnostics/debug dump for bug reports
 - Mobile-friendly settings and graph modals
 
@@ -259,6 +260,7 @@ Behavior notes:
 - `Track Connection`
 - `Track Mood`
 - `Track Last Thought`
+- `Mood Source` (`BST mood images` or `ST expressions`)
 
 You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only enabled stats.
 
@@ -321,9 +323,15 @@ Direct key path:
 
 - `extensions.bettersimtracker.defaults`
 
+Optional per-character mood source keys:
+
+- `moodSource`: `bst_images` or `st_expressions`
+- `moodExpressionMap`: mood label to ST expression label map (per mood, optional)
+
 If no advanced defaults are present, tracker baseline falls back to contextual inference.
 
-If all mood images are set, tracker cards display the image with a thought bubble (last thought) and the last-thought line is hidden. Otherwise, the mood row stays emoji-only.
+Mood images are optional per label; missing images fall back to emoji.  
+When source is `st_expressions`, tracker maps mood to expression and uses the character sprite if found; missing mappings/sprites also fall back to emoji.
 
 ## Troubleshooting
 
