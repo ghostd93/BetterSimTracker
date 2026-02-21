@@ -596,10 +596,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
         : getLatestTrackerDataWithIndex(context);
     let previous = previousEntry?.data ?? null;
     if (!previous) {
-      latestData = buildBaselineData(activeCharacters, settings);
-      latestDataMessageIndex = lastIndex;
-      queueRender();
-      previous = latestData;
+      previous = buildBaselineData(activeCharacters, settings);
       pushTrace("extract.baseline", { runId, forMessageIndex: lastIndex, activeCharacters: activeCharacters.length });
     }
 
