@@ -175,6 +175,10 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function zoomAdjustedPosition(position: number, zoom: number): number {
+  return clamp(50 + (position - 50) * zoom, 0, 100);
+}
+
 function toNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const parsed = Number(value);
@@ -289,11 +293,16 @@ function scheduleExpressionSpriteFetch(
 
 function getMappedExpressionLabel(settings: BetterSimTrackerSettings, characterName: string, moodLabel: MoodLabel): string {
   const entry = settings.characterDefaults?.[characterName] as Record<string, unknown> | undefined;
-  const rawMap = entry?.moodExpressionMap as Record<string, unknown> | undefined;
-  const override = rawMap && typeof rawMap[moodLabel] === "string"
-    ? String(rawMap[moodLabel]).trim()
+  const rawCharacterMap = entry?.moodExpressionMap as Record<string, unknown> | undefined;
+  const characterOverride = rawCharacterMap && typeof rawCharacterMap[moodLabel] === "string"
+    ? String(rawCharacterMap[moodLabel]).trim()
     : "";
-  if (override) return override;
+  if (characterOverride) return characterOverride;
+  const rawGlobalMap = settings.moodExpressionMap as Record<string, unknown> | undefined;
+  const globalOverride = rawGlobalMap && typeof rawGlobalMap[moodLabel] === "string"
+    ? String(rawGlobalMap[moodLabel]).trim()
+    : "";
+  if (globalOverride) return globalOverride;
   return DEFAULT_MOOD_EXPRESSION_MAP[moodLabel] ?? "neutral";
 }
 
@@ -619,9 +628,9 @@ function ensureStyles(): void {
   display: block;
 }
 .bst-mood-image--st-expression {
-  object-position: center center;
+  object-position: var(--bst-st-expression-pos-x) var(--bst-st-expression-pos-y);
   transform: scale(var(--bst-st-expression-zoom));
-  transform-origin: var(--bst-st-expression-origin-x) var(--bst-st-expression-origin-y);
+  transform-origin: center center;
 }
 .bst-mood-badge {
   font-size: 11px;
@@ -1771,9 +1780,12 @@ export function renderTracker(
       const lastThoughtText = settings.showLastThought && data.statistics.lastThought?.[name] !== undefined
         ? String(data.statistics.lastThought?.[name] ?? "")
         : "";
-      const stExpressionStyle = stExpressionImageOptions
-        ? ` style="--bst-st-expression-zoom:${stExpressionImageOptions.zoom.toFixed(2)};--bst-st-expression-origin-x:${stExpressionImageOptions.positionX.toFixed(2)}%;--bst-st-expression-origin-y:${stExpressionImageOptions.positionY.toFixed(2)}%;"`
-        : "";
+      const stExpressionStyle = (() => {
+        if (!stExpressionImageOptions) return "";
+        const x = zoomAdjustedPosition(stExpressionImageOptions.positionX, stExpressionImageOptions.zoom);
+        const y = zoomAdjustedPosition(stExpressionImageOptions.positionY, stExpressionImageOptions.zoom);
+        return ` style="--bst-st-expression-zoom:${stExpressionImageOptions.zoom.toFixed(2)};--bst-st-expression-pos-x:${x.toFixed(2)}%;--bst-st-expression-pos-y:${y.toFixed(2)}%;"`;
+      })();
       const card = document.createElement("div");
       card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;
       card.style.setProperty("--bst-card-local", palette[name] ?? colorFromName(name));
@@ -2341,6 +2353,26 @@ export function openSettingsModal(input: {
             </select>
           </label>
         </div>
+        <div data-bst-row="globalMoodExpressionMap">
+          <div class="bst-help-line">Global mood to ST expression map (character overrides still take priority).</div>
+          <div class="bst-character-map bst-global-mood-map">
+            ${MOOD_LABELS.map(label => {
+              const moodLabel = label as MoodLabel;
+              const safeLabel = escapeHtml(moodLabel);
+              const rawMap = input.settings.moodExpressionMap as Record<string, unknown> | undefined;
+              const explicitValue = rawMap && typeof rawMap[moodLabel] === "string" ? String(rawMap[moodLabel]).trim() : "";
+              const value = explicitValue || DEFAULT_MOOD_EXPRESSION_MAP[moodLabel];
+              const safeValue = escapeHtml(value);
+              const safePlaceholder = escapeHtml(DEFAULT_MOOD_EXPRESSION_MAP[moodLabel]);
+              return `
+                <label class="bst-character-map-row">
+                  <span>${safeLabel}</span>
+                  <input type="text" data-bst-global-mood-map="${safeLabel}" value="${safeValue}" placeholder="${safePlaceholder}">
+                </label>
+              `;
+            }).join("")}
+          </div>
+        </div>
         <div data-bst-row="stExpressionImageOptions">
           <div class="bst-help-line">ST expression framing (global): zoom and crop position for expression sprites.</div>
           <div class="bst-st-expression-control">
@@ -2862,6 +2894,17 @@ export function openSettingsModal(input: {
       if (typeof max === "number") v = Math.min(max, v);
       return v;
     };
+    const readGlobalMoodExpressionMap = (): Record<MoodLabel, string> => {
+      const map: Record<MoodLabel, string> = { ...DEFAULT_MOOD_EXPRESSION_MAP };
+      const nodes = Array.from(modal.querySelectorAll("[data-bst-global-mood-map]")) as HTMLInputElement[];
+      for (const node of nodes) {
+        const mood = normalizeMoodLabel(String(node.dataset.bstGlobalMoodMap ?? "")) as MoodLabel | null;
+        if (!mood) continue;
+        const value = String(node.value ?? "").trim().slice(0, 80);
+        map[mood] = value || DEFAULT_MOOD_EXPRESSION_MAP[mood];
+      }
+      return map;
+    };
 
     return {
       ...input.settings,
@@ -2890,6 +2933,7 @@ export function openSettingsModal(input: {
       trackMood: readBool("trackMood"),
       trackLastThought: readBool("trackLastThought"),
       moodSource: read("moodSource") === "st_expressions" ? "st_expressions" : "bst_images",
+      moodExpressionMap: readGlobalMoodExpressionMap(),
       stExpressionImageZoom: readNumber("stExpressionImageZoom", input.settings.stExpressionImageZoom, 0.5, 3),
       stExpressionImagePositionX: readNumber("stExpressionImagePositionX", input.settings.stExpressionImagePositionX, 0, 100),
       stExpressionImagePositionY: readNumber("stExpressionImagePositionY", input.settings.stExpressionImagePositionY, 0, 100),
@@ -2930,6 +2974,7 @@ export function openSettingsModal(input: {
     const injectPromptBlock = modal.querySelector('[data-bst-row="injectPromptBlock"]') as HTMLElement | null;
     const injectPromptDivider = modal.querySelector('[data-bst-row="injectPromptDivider"]') as HTMLElement | null;
     const moodAdvancedBlock = modal.querySelector('[data-bst-row="moodAdvancedBlock"]') as HTMLElement | null;
+    const globalMoodExpressionMap = modal.querySelector('[data-bst-row="globalMoodExpressionMap"]') as HTMLElement | null;
     const stExpressionImageOptions = modal.querySelector('[data-bst-row="stExpressionImageOptions"]') as HTMLElement | null;
     const current = collectSettings();
     if (maxConcurrentRow) {
@@ -2972,6 +3017,9 @@ export function openSettingsModal(input: {
     }
     if (moodAdvancedBlock) {
       moodAdvancedBlock.style.display = current.trackMood ? "block" : "none";
+    }
+    if (globalMoodExpressionMap) {
+      globalMoodExpressionMap.style.display = current.trackMood && current.moodSource === "st_expressions" ? "block" : "none";
     }
     if (stExpressionImageOptions) {
       stExpressionImageOptions.style.display = current.trackMood && current.moodSource === "st_expressions" ? "block" : "none";

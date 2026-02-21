@@ -426,6 +426,7 @@ function renderPanel(input: InitInput, force = false): void {
   const moodCount = countMoodImages(moodImages);
   const moodSourceOverride = normalizeMoodSource(String(defaults.moodSource ?? ""));
   const moodExpressionMap = (defaults.moodExpressionMap as MoodExpressionMap | undefined) ?? {};
+  const globalMoodExpressionMap = (settings.moodExpressionMap as MoodExpressionMap | undefined) ?? DEFAULT_MOOD_EXPRESSION_MAP;
   const globalStImageDefaults: StExpressionImageOptions = {
     zoom: settings.stExpressionImageZoom,
     positionX: settings.stExpressionImagePositionX,
@@ -457,7 +458,7 @@ function renderPanel(input: InitInput, force = false): void {
     </div>
     <div class="bst-character-divider">Mood to ST Expression Map</div>
     <div class="bst-character-help">
-      Optional per-character overrides. Leave empty to use built-in defaults.
+      Optional per-character overrides. Leave empty to use the global map from extension settings.
       Used only when source is ST expressions.
     </div>
     <div class="bst-character-map">
@@ -465,7 +466,8 @@ function renderPanel(input: InitInput, force = false): void {
         const safeLabel = escapeHtml(label);
         const value = typeof moodExpressionMap[label] === "string" ? moodExpressionMap[label] ?? "" : "";
         const safeValue = value ? escapeHtml(value) : "";
-        const safePlaceholder = escapeHtml(DEFAULT_MOOD_EXPRESSION_MAP[label]);
+        const placeholder = globalMoodExpressionMap[label] || DEFAULT_MOOD_EXPRESSION_MAP[label];
+        const safePlaceholder = escapeHtml(placeholder);
         return `
           <label class="bst-character-map-row">
             <span>${safeLabel}</span>
@@ -611,7 +613,8 @@ function renderPanel(input: InitInput, force = false): void {
       const mood = normalizeMoodLabel(node.dataset.bstMoodMap ?? "");
       if (!mood) return;
       const expression = sanitizeExpressionValue(node.value);
-      const next = withUpdatedDefaults(settings, characterName, current => {
+      const liveSettings = input.getSettings() ?? settings;
+      const next = withUpdatedDefaults(liveSettings, characterName, current => {
         const copy = { ...current };
         const map = { ...((copy.moodExpressionMap as MoodExpressionMap | undefined) ?? {}) };
         if (!expression) {

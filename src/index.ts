@@ -1097,6 +1097,7 @@ function openSettings(): void {
           autoDetectActive: currentSettings.autoDetectActive,
           activityLookback: currentSettings.activityLookback,
           moodSource: currentSettings.moodSource,
+          moodExpressionMap: currentSettings.moodExpressionMap,
           stExpressionImageZoom: currentSettings.stExpressionImageZoom,
           stExpressionImagePositionX: currentSettings.stExpressionImagePositionX,
           stExpressionImagePositionY: currentSettings.stExpressionImagePositionY,

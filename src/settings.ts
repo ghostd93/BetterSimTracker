@@ -17,6 +17,24 @@ import type {
   STContext,
 } from "./types";
 
+const DEFAULT_MOOD_EXPRESSION_MAP: Record<MoodLabel, string> = {
+  "Happy": "joy",
+  "Sad": "sadness",
+  "Angry": "anger",
+  "Excited": "excitement",
+  "Confused": "confusion",
+  "In Love": "love",
+  "Shy": "nervousness",
+  "Playful": "amusement",
+  "Serious": "neutral",
+  "Lonely": "grief",
+  "Hopeful": "optimism",
+  "Anxious": "nervousness",
+  "Content": "relief",
+  "Frustrated": "annoyance",
+  "Neutral": "neutral",
+};
+
 export const defaultSettings: BetterSimTrackerSettings = {
   enabled: true,
   maxConcurrentCalls: 2,
@@ -44,6 +62,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   trackMood: true,
   trackLastThought: true,
   moodSource: "bst_images",
+  moodExpressionMap: { ...DEFAULT_MOOD_EXPRESSION_MAP },
   stExpressionImageZoom: 1.2,
   stExpressionImagePositionX: 50,
   stExpressionImagePositionY: 20,
@@ -384,6 +403,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     trackMood: asBool(input.trackMood, defaultSettings.trackMood),
     trackLastThought: asBool(input.trackLastThought, defaultSettings.trackLastThought),
     moodSource: sanitizeMoodSource(input.moodSource, defaultSettings.moodSource),
+    moodExpressionMap: sanitizeMoodExpressionMap(input.moodExpressionMap) ?? { ...DEFAULT_MOOD_EXPRESSION_MAP },
     stExpressionImageZoom: sanitizeStExpressionZoom(input.stExpressionImageZoom, defaultSettings.stExpressionImageZoom),
     stExpressionImagePositionX: sanitizeStExpressionPosition(input.stExpressionImagePositionX, defaultSettings.stExpressionImagePositionX),
     stExpressionImagePositionY: sanitizeStExpressionPosition(input.stExpressionImagePositionY, defaultSettings.stExpressionImagePositionY),

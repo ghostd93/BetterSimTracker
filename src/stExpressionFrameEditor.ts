@@ -84,6 +84,10 @@ export function formatStExpressionFrameSummary(value: StExpressionImageOptions):
   return `Zoom ${value.zoom.toFixed(2)} | X ${value.positionX}% | Y ${value.positionY}%`;
 }
 
+function zoomAdjustedPosition(position: number, zoom: number): number {
+  return clamp(50 + (position - 50) * zoom, 0, 100);
+}
+
 function ensureEditorStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement("style");
@@ -204,8 +208,8 @@ function ensureEditorStyles(): void {
 }
 .${MODAL_CLASS} .bst-st-frame-preview-frame {
   --bst-st-frame-zoom: 1.2;
-  --bst-st-frame-origin-x: 50%;
-  --bst-st-frame-origin-y: 20%;
+  --bst-st-frame-pos-x: 50%;
+  --bst-st-frame-pos-y: 20%;
   width: min(240px, 44vw);
   aspect-ratio: 1 / 1;
   border-radius: 16px;
@@ -218,9 +222,9 @@ function ensureEditorStyles(): void {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center center;
+  object-position: var(--bst-st-frame-pos-x) var(--bst-st-frame-pos-y);
   transform: scale(var(--bst-st-frame-zoom));
-  transform-origin: var(--bst-st-frame-origin-x) var(--bst-st-frame-origin-y);
+  transform-origin: center center;
   display: block;
 }
 .${MODAL_CLASS} .bst-st-frame-controls {
@@ -455,9 +459,11 @@ export function openStExpressionFrameEditor(input: OpenStExpressionFrameEditorIn
   const applyCurrent = (notify: boolean): void => {
     current = sanitizeStExpressionFrame(current, fallback);
     if (previewFrame) {
+      const x = zoomAdjustedPosition(current.positionX, current.zoom);
+      const y = zoomAdjustedPosition(current.positionY, current.zoom);
       previewFrame.style.setProperty("--bst-st-frame-zoom", current.zoom.toFixed(2));
-      previewFrame.style.setProperty("--bst-st-frame-origin-x", `${current.positionX.toFixed(2)}%`);
-      previewFrame.style.setProperty("--bst-st-frame-origin-y", `${current.positionY.toFixed(2)}%`);
+      previewFrame.style.setProperty("--bst-st-frame-pos-x", `${x.toFixed(2)}%`);
+      previewFrame.style.setProperty("--bst-st-frame-pos-y", `${y.toFixed(2)}%`);
     }
     if (zoomRange) zoomRange.value = current.zoom.toFixed(2);
     if (xRange) xRange.value = String(current.positionX);
