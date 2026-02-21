@@ -6,7 +6,7 @@ import {
   openStExpressionFrameEditor,
   sanitizeStExpressionFrame,
 } from "./stExpressionFrameEditor";
-import { fetchFirstExpressionSprite } from "./stExpressionSprites";
+import { fetchExpressionSpritePaths, fetchFirstExpressionSprite } from "./stExpressionSprites";
 import type {
   BetterSimTrackerSettings,
   MoodExpressionMap,
@@ -53,6 +53,8 @@ const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_WIDTH = 1024;
 const MAX_IMAGE_HEIGHT = 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const EXPRESSION_CHECK_TTL_MS = 30_000;
+const expressionAvailabilityCache = new Map<string, { checkedAt: number; hasExpressions: boolean }>();
 
 function notify(message: string, type: "info" | "success" | "warning" | "error" = "info"): void {
   const anyGlobal = globalThis as Record<string, unknown>;
@@ -139,6 +141,19 @@ function normalizeMoodLabel(raw: string): MoodLabel | null {
 function normalizeMoodSource(raw: string): MoodSource | null {
   if (raw === "bst_images" || raw === "st_expressions") return raw;
   return null;
+}
+
+async function hasExpressionSpritesForCharacter(characterName: string): Promise<boolean> {
+  const key = characterName.trim().toLowerCase();
+  if (!key) return false;
+  const cached = expressionAvailabilityCache.get(key);
+  if (cached && Date.now() - cached.checkedAt < EXPRESSION_CHECK_TTL_MS) {
+    return cached.hasExpressions;
+  }
+  const sprites = await fetchExpressionSpritePaths(characterName);
+  const hasExpressions = sprites.length > 0;
+  expressionAvailabilityCache.set(key, { checkedAt: Date.now(), hasExpressions });
+  return hasExpressions;
 }
 
 function sanitizeExpressionValue(raw: string): string {
@@ -513,10 +528,24 @@ function renderPanel(input: InitInput, force = false): void {
   }
 
   panel.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-bst-default]").forEach(node => {
-    node.addEventListener("change", () => {
+    node.addEventListener("change", async () => {
       const key = node.dataset.bstDefault ?? "";
       const value = node.value;
-      const next = withUpdatedDefaults(settings, characterName, current => {
+      const liveSettings = input.getSettings() ?? settings;
+      const liveDefaults = getDefaults(liveSettings, characterName);
+      const currentMoodSource = normalizeMoodSource(String(liveDefaults.moodSource ?? "")) ?? "";
+      if (key === "moodSource") {
+        const selectedSource = normalizeMoodSource(value);
+        if (selectedSource === "st_expressions") {
+          const hasExpressions = await hasExpressionSpritesForCharacter(characterName);
+          if (!hasExpressions) {
+            node.value = currentMoodSource;
+            notify("This character has no ST expression sprites. Set expressions first, then enable ST expressions.", "warning");
+            return;
+          }
+        }
+      }
+      const next = withUpdatedDefaults(liveSettings, characterName, current => {
         const copy = { ...current };
         if (key === "mood") {
           if (!value.trim()) {
@@ -546,6 +575,36 @@ function renderPanel(input: InitInput, force = false): void {
       input.onSettingsUpdated();
     });
   });
+
+  const moodSourceSelect = panel.querySelector<HTMLSelectElement>('select[data-bst-default="moodSource"]');
+  const moodSourceStOption = moodSourceSelect?.querySelector('option[value="st_expressions"]') as HTMLOptionElement | null;
+  if (moodSourceSelect && moodSourceStOption) {
+    moodSourceStOption.disabled = true;
+    moodSourceStOption.textContent = "ST expressions (checking...)";
+    void hasExpressionSpritesForCharacter(characterName)
+      .then(hasExpressions => {
+        if (!panel.isConnected) return;
+        moodSourceStOption.disabled = !hasExpressions;
+        moodSourceStOption.textContent = hasExpressions ? "ST expressions" : "ST expressions (no sprites)";
+        if (!hasExpressions && moodSourceSelect.value === "st_expressions") {
+          moodSourceSelect.value = "";
+          const liveSettings = input.getSettings() ?? settings;
+          const next = withUpdatedDefaults(liveSettings, characterName, current => {
+            const copy = { ...current };
+            delete copy.moodSource;
+            return copy;
+          });
+          input.setSettings(next);
+          input.saveSettings(context, next);
+          input.onSettingsUpdated();
+        }
+      })
+      .catch(() => {
+        if (!panel.isConnected) return;
+        moodSourceStOption.disabled = true;
+        moodSourceStOption.textContent = "ST expressions (check failed)";
+      });
+  }
 
   panel.querySelectorAll<HTMLInputElement>("[data-bst-mood-map]").forEach(node => {
     node.addEventListener("change", () => {
@@ -640,7 +699,8 @@ function renderPanel(input: InitInput, force = false): void {
         : "Per-character framing override used when this character resolves to ST expressions.",
       initial: initialFrame,
       fallback: globalStImageDefaults,
-      previewImageUrl: previewSpriteUrl,
+      previewChoices: previewSpriteUrl ? [{ name: characterName, imageUrl: previewSpriteUrl }] : [],
+      selectedPreviewName: characterName,
       emptyPreviewText: "No ST expressions found for this character. Add at least one expression sprite and try again.",
       onChange: nextFrame => {
         if (!stImageOverrideToggle?.checked) return;
