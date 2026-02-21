@@ -16,8 +16,10 @@ All notable changes to BetterSimTracker are documented here.
 - ST expression framing adjustments (zoom, X, Y) now update and persist live while you adjust in the preview editor.
 - Global ST framing editor now includes a `Preview Character` selector inside the framing modal (below preview), filtered to characters that actually have ST expression sprites.
 - Global preview candidate scanning now skips characters currently resolved to `BST mood images`.
+- Sprite scanning for preview candidates now ignores BST-uploaded mood sprites using `bst_` prefix.
 - Character-default framing editor now previews one of that character's own ST expression sprites.
 - If no ST expression sprites are available, framing editor now opens in notice-only mode with centered guidance text and close action.
+- Framer X/Y movement now scales with zoom so higher zoom levels still allow full positioning range.
 ### Fixed
 - Blocked setting per-character mood source to `ST expressions` when that character has no ST expression sprites.
 - Prevented late/stale extraction progress callbacks from re-entering `extracting` UI state after extraction already finished (fixes stuck progress + non-working Stop button in that stale state).
