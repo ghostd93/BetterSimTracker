@@ -72,7 +72,6 @@ const DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS: StExpressionImageOptions = {
   positionX: 50,
   positionY: 20,
 };
-const MIN_ST_EXPRESSION_POSITIONING_ZOOM = 1.05;
 
 function hasNumericValue(entry: TrackerData, key: NumericStatKey, name: string): boolean {
   return entry.statistics[key]?.[name] !== undefined;
@@ -174,6 +173,10 @@ function getResolvedMoodSource(settings: BetterSimTrackerSettings, characterName
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function computeZoomPanOffset(position: number, zoom: number): number {
+  return Math.round((50 - position) * (zoom - 1) * 100) / 100;
 }
 
 function toNumber(value: unknown): number | null {
@@ -614,8 +617,10 @@ function ensureStyles(): void {
 }
 .bst-mood-image-frame--st-expression {
   --bst-st-expression-zoom: 1.2;
-  --bst-st-expression-origin-x: 50%;
-  --bst-st-expression-origin-y: 20%;
+  --bst-st-expression-pos-x: 50%;
+  --bst-st-expression-pos-y: 20%;
+  --bst-st-expression-pan-x: 0%;
+  --bst-st-expression-pan-y: 0%;
 }
 .bst-mood-image {
   width: 100%;
@@ -625,9 +630,9 @@ function ensureStyles(): void {
   display: block;
 }
 .bst-mood-image--st-expression {
-  object-position: center center;
-  transform: scale(var(--bst-st-expression-zoom));
-  transform-origin: var(--bst-st-expression-origin-x) var(--bst-st-expression-origin-y);
+  object-position: var(--bst-st-expression-pos-x) var(--bst-st-expression-pos-y);
+  transform: translate(var(--bst-st-expression-pan-x), var(--bst-st-expression-pan-y)) scale(var(--bst-st-expression-zoom));
+  transform-origin: center center;
 }
 .bst-mood-badge {
   font-size: 11px;
@@ -1779,11 +1784,9 @@ export function renderTracker(
         : "";
       const stExpressionStyle = (() => {
         if (!stExpressionImageOptions) return "";
-        const offCenter = stExpressionImageOptions.positionX !== 50 || stExpressionImageOptions.positionY !== 50;
-        const renderZoom = offCenter && stExpressionImageOptions.zoom < MIN_ST_EXPRESSION_POSITIONING_ZOOM
-          ? MIN_ST_EXPRESSION_POSITIONING_ZOOM
-          : stExpressionImageOptions.zoom;
-        return ` style="--bst-st-expression-zoom:${renderZoom.toFixed(2)};--bst-st-expression-origin-x:${stExpressionImageOptions.positionX.toFixed(2)}%;--bst-st-expression-origin-y:${stExpressionImageOptions.positionY.toFixed(2)}%;"`;
+        const panX = computeZoomPanOffset(stExpressionImageOptions.positionX, stExpressionImageOptions.zoom);
+        const panY = computeZoomPanOffset(stExpressionImageOptions.positionY, stExpressionImageOptions.zoom);
+        return ` style="--bst-st-expression-zoom:${stExpressionImageOptions.zoom.toFixed(2)};--bst-st-expression-pos-x:${stExpressionImageOptions.positionX.toFixed(2)}%;--bst-st-expression-pos-y:${stExpressionImageOptions.positionY.toFixed(2)}%;--bst-st-expression-pan-x:${panX.toFixed(2)}%;--bst-st-expression-pan-y:${panY.toFixed(2)}%;"`;
       })();
       const card = document.createElement("div");
       card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;
