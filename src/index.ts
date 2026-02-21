@@ -35,6 +35,7 @@ let chatGenerationSawCharacterRender = false;
 let chatGenerationStartLastAiIndex: number | null = null;
 let swipeGenerationActive = false;
 let slashCommandsRegistered = false;
+let activeExtractionRunId: number | null = null;
 
 function getTraceStorageKey(context: STContext): string {
   return `${getDebugScopeKey(context)}:trace`;
@@ -562,6 +563,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
 
   isExtracting = true;
   const runId = ++runSequence;
+  activeExtractionRunId = runId;
   pushTrace("extract.start", {
     runId,
     reason,
@@ -621,6 +623,9 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       previousStatistics: previous?.statistics ?? null,
       history: getRecentTrackerHistory(context, 6),
       onProgress: (done, total, label) => {
+        if (!isExtracting || activeExtractionRunId !== runId) {
+          return;
+        }
         pushTrace("extract.progress", { runId, done, total, label: label ?? null });
         setTrackerUi(context, { phase: "extracting", done, total, messageIndex: lastIndex, stepLabel: label ?? null });
         queueRender();
@@ -673,6 +678,9 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     });
     console.error("[BetterSimTracker] Extraction failed:", error);
   } finally {
+    if (activeExtractionRunId === runId) {
+      activeExtractionRunId = null;
+    }
     isExtracting = false;
     setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
     queueRender();
