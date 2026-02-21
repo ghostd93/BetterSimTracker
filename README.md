@@ -268,9 +268,10 @@ Behavior notes:
 - `Track Mood`
 - `Track Last Thought`
 - `Mood Source` (`BST mood images` or `ST expressions`)
+- `Global Mood -> ST Expression Map` (editable in settings when `Mood Source = ST expressions`)
 - `Preview Character` selector (inside framing modal, below preview): includes only characters with ST expressions and drives global framing preview
 - `Adjust ST Expression Framing` button (opens interactive zoom/X/Y preview editor when `Mood Source = ST expressions`)
-  - X/Y positioning works on both axes with zoom-aware framing for full frame control at higher zoom levels
+  - X/Y positioning works at all zoom levels (including `1.0`) with zoom-aware framing behavior at higher zoom levels
 
 You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only enabled stats.
 
@@ -337,6 +338,8 @@ Optional per-character mood source keys:
 
 - `moodSource`: `bst_images` or `st_expressions`
 - `moodExpressionMap`: mood label to ST expression label map (per mood, optional)
+  - Character-level values override the global map from extension settings
+  - Empty character-level values fall back to the global map, then built-in defaults
 - `stExpressionImageOptions`: optional framing override for ST expressions:
   - `zoom`
   - `positionX`
