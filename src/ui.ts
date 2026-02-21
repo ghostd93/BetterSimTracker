@@ -2699,8 +2699,7 @@ export function openSettingsModal(input: {
 
       const storageKey = `bst.section.${id}`;
       const stored = localStorage.getItem(storageKey);
-      const defaultOpen = id === "extraction" || id === "display";
-      const collapsed = stored ? stored === "collapsed" : !defaultOpen;
+      const collapsed = stored ? stored === "collapsed" : true;
       if (collapsed) {
         section.classList.add("bst-section-collapsed");
         head.setAttribute("aria-expanded", "false");
