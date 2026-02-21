@@ -39,10 +39,21 @@ export type OpenStExpressionFrameEditorInput = {
   description?: string;
   initial: StExpressionImageOptions;
   fallback?: StExpressionImageOptions;
-  previewImageUrl?: string | null;
+  previewChoices?: Array<{ name: string; imageUrl: string }>;
+  selectedPreviewName?: string;
+  onPreviewNameChange?: (name: string) => void;
   emptyPreviewText?: string;
   onChange?: (next: StExpressionImageOptions) => void;
 };
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -171,6 +182,26 @@ function ensureEditorStyles(): void {
   font-size: 12px;
   opacity: 0.88;
 }
+.${MODAL_CLASS} .bst-st-frame-preview-picker {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+}
+.${MODAL_CLASS} .bst-st-frame-preview-picker label {
+  font-size: 11px;
+  opacity: 0.78;
+}
+.${MODAL_CLASS} .bst-st-frame-preview-picker select {
+  width: 100%;
+  background: rgba(16, 20, 32, 0.9);
+  color: #f4f7ff;
+  border: 1px solid rgba(255,255,255,0.24);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.${MODAL_CLASS} .bst-st-frame-preview-picker select:disabled {
+  opacity: 0.78;
+}
 .${MODAL_CLASS} .bst-st-frame-preview-frame {
   --bst-st-frame-zoom: 1.2;
   --bst-st-frame-pos-x: 50%;
@@ -274,6 +305,10 @@ function ensureEditorStyles(): void {
   .${MODAL_CLASS} .bst-st-frame-preview-frame {
     width: min(260px, 64vw);
   }
+  .${MODAL_CLASS} .bst-st-frame-preview-picker select {
+    font-size: 16px;
+    padding: 8px 10px;
+  }
 }
   `;
   document.head.appendChild(style);
@@ -290,8 +325,12 @@ export function openStExpressionFrameEditor(input: OpenStExpressionFrameEditorIn
 
   const fallback = sanitizeStExpressionFrame(input.fallback ?? DEFAULT_ST_EXPRESSION_FRAME, DEFAULT_ST_EXPRESSION_FRAME);
   let current = sanitizeStExpressionFrame(input.initial, fallback);
-  const previewImageUrl = (input.previewImageUrl ?? "").trim();
-  const hasPreview = Boolean(previewImageUrl);
+  const previewChoices = (input.previewChoices ?? [])
+    .map(item => ({ name: String(item.name ?? "").trim(), imageUrl: String(item.imageUrl ?? "").trim() }))
+    .filter(item => item.name && item.imageUrl);
+  const hasPreview = previewChoices.length > 0;
+  const initialChoice = previewChoices.find(item => item.name === input.selectedPreviewName) ?? previewChoices[0] ?? null;
+  let selectedPreviewName = initialChoice?.name ?? "";
 
   const backdrop = document.createElement("div");
   backdrop.className = BACKDROP_CLASS;
@@ -313,7 +352,15 @@ export function openStExpressionFrameEditor(input: OpenStExpressionFrameEditorIn
       <div class="bst-st-frame-preview-card">
         <div class="bst-st-frame-preview-title">Mood card preview</div>
         <div class="bst-st-frame-preview-frame" data-role="previewFrame">
-          <img src="${previewImageUrl || PREVIEW_IMAGE}" alt="ST expression framing preview">
+          <img src="${escapeHtml(initialChoice?.imageUrl ?? PREVIEW_IMAGE)}" alt="ST expression framing preview" data-role="previewImage">
+        </div>
+        <div class="bst-st-frame-preview-picker">
+          <label>Preview Character</label>
+          <select data-role="previewCharacter"${previewChoices.length <= 1 ? " disabled" : ""}>
+            ${previewChoices.map(choice => `
+              <option value="${escapeHtml(choice.name)}"${choice.name === selectedPreviewName ? " selected" : ""}>${escapeHtml(choice.name)}</option>
+            `).join("")}
+          </select>
         </div>
       </div>
       <div class="bst-st-frame-controls">
@@ -383,12 +430,27 @@ export function openStExpressionFrameEditor(input: OpenStExpressionFrameEditorIn
   }
 
   const previewFrame = modal.querySelector('[data-role="previewFrame"]') as HTMLElement | null;
+  const previewImage = modal.querySelector('[data-role="previewImage"]') as HTMLImageElement | null;
+  const previewCharacter = modal.querySelector('[data-role="previewCharacter"]') as HTMLSelectElement | null;
   const zoomValue = modal.querySelector('[data-role="zoomValue"]') as HTMLElement | null;
   const xValue = modal.querySelector('[data-role="xValue"]') as HTMLElement | null;
   const yValue = modal.querySelector('[data-role="yValue"]') as HTMLElement | null;
   const zoomRange = modal.querySelector('[data-role="zoomRange"]') as HTMLInputElement | null;
   const xRange = modal.querySelector('[data-role="xRange"]') as HTMLInputElement | null;
   const yRange = modal.querySelector('[data-role="yRange"]') as HTMLInputElement | null;
+
+  const applyPreviewCharacter = (): void => {
+    if (!previewImage) return;
+    const selected = previewChoices.find(item => item.name === selectedPreviewName) ?? previewChoices[0] ?? null;
+    if (!selected) return;
+    previewImage.src = selected.imageUrl;
+    input.onPreviewNameChange?.(selected.name);
+  };
+  previewCharacter?.addEventListener("change", () => {
+    selectedPreviewName = previewCharacter.value;
+    applyPreviewCharacter();
+  });
+  applyPreviewCharacter();
 
   const applyCurrent = (notify: boolean): void => {
     current = sanitizeStExpressionFrame(current, fallback);

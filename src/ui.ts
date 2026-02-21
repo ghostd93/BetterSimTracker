@@ -786,22 +786,6 @@ function ensureStyles(): void {
   margin: 0;
   opacity: 0.82;
 }
-.bst-st-expression-preview-row {
-  display: grid;
-  gap: 4px;
-}
-.bst-st-expression-preview-row select:disabled {
-  opacity: 0.75;
-}
-.bst-st-expression-preview-hint {
-  margin: 0;
-  font-size: 11px;
-  opacity: 0.75;
-}
-.bst-st-expression-preview-hint-warning {
-  color: #ffb7c0;
-  opacity: 0.92;
-}
 .bst-check-grid .bst-check {
   margin: 0;
   align-items: center;
@@ -2360,13 +2344,6 @@ export function openSettingsModal(input: {
         <div data-bst-row="stExpressionImageOptions">
           <div class="bst-help-line">ST expression framing (global): zoom and crop position for expression sprites.</div>
           <div class="bst-st-expression-control">
-            <label class="bst-st-expression-preview-row">
-              Preview Character
-              <select data-bst-preview-character disabled>
-                <option value="">Scanning characters with ST expressions...</option>
-              </select>
-            </label>
-            <p class="bst-st-expression-preview-hint" data-bst-row="stExpressionPreviewHint"></p>
             <button type="button" class="bst-btn bst-btn-soft" data-action="open-global-st-framing">Adjust ST Expression Framing</button>
             <div class="bst-help-line bst-st-expression-summary" data-bst-row="stExpressionImageSummary"></div>
             <input data-k="stExpressionImageZoom" type="hidden">
@@ -2835,55 +2812,19 @@ export function openSettingsModal(input: {
   updateGlobalStExpressionSummary();
   type GlobalPreviewCharacter = { name: string; spriteUrl: string };
   const globalFrameButton = modal.querySelector('[data-action="open-global-st-framing"]') as HTMLButtonElement | null;
-  const globalPreviewSelect = modal.querySelector('[data-bst-preview-character]') as HTMLSelectElement | null;
-  const globalPreviewHint = modal.querySelector('[data-bst-row="stExpressionPreviewHint"]') as HTMLElement | null;
   let globalPreviewCharacters: GlobalPreviewCharacter[] = [];
   let globalPreviewSelected = "";
   const noPreviewFoundText = "No ST expressions found. Add at least one character with ST expressions to use preview framing.";
-  const renderGlobalPreviewSelector = (state: "loading" | "ready"): void => {
-    if (!globalPreviewSelect || !globalFrameButton || !globalPreviewHint) return;
-    if (state === "loading") {
-      globalPreviewSelect.disabled = true;
-      globalFrameButton.disabled = true;
-      globalPreviewSelect.innerHTML = `<option value="">Scanning characters with ST expressions...</option>`;
-      globalPreviewHint.textContent = "Looking for character sprites...";
-      globalPreviewHint.classList.remove("bst-st-expression-preview-hint-warning");
-      return;
-    }
-    if (!globalPreviewCharacters.length) {
-      globalPreviewSelect.disabled = true;
-      globalFrameButton.disabled = false;
-      globalPreviewSelect.innerHTML = `<option value="">No character expressions found</option>`;
-      globalPreviewHint.textContent = noPreviewFoundText;
-      globalPreviewHint.classList.add("bst-st-expression-preview-hint-warning");
-      return;
-    }
-    const selected = globalPreviewCharacters.find(item => item.name === globalPreviewSelected)
-      ? globalPreviewSelected
-      : globalPreviewCharacters[0].name;
-    globalPreviewSelected = selected;
-    globalPreviewSelect.disabled = false;
-    globalFrameButton.disabled = false;
-    globalPreviewSelect.innerHTML = globalPreviewCharacters
-      .map(item => `<option value="${escapeHtml(item.name)}"${item.name === selected ? " selected" : ""}>${escapeHtml(item.name)}</option>`)
-      .join("");
-    globalPreviewHint.textContent = "Preview uses a real ST sprite from the selected character.";
-    globalPreviewHint.classList.remove("bst-st-expression-preview-hint-warning");
-  };
-  const loadGlobalPreviewCharacters = async (): Promise<void> => {
-    renderGlobalPreviewSelector("loading");
+  const loadGlobalPreviewCharacters = async (): Promise<GlobalPreviewCharacter[]> => {
     const candidateNames = Array.from(
       new Set(
         (input.previewCharacterCandidates ?? [])
           .map(name => String(name ?? "").trim())
-          .filter(name => Boolean(name)),
+          .filter(name => Boolean(name))
+          .filter(name => getResolvedMoodSource(input.settings, name) === "st_expressions"),
       ),
     );
-    if (!candidateNames.length) {
-      globalPreviewCharacters = [];
-      renderGlobalPreviewSelector("ready");
-      return;
-    }
+    if (!candidateNames.length) return [];
     const resolved = await Promise.all(candidateNames.map(async name => {
       try {
         const spriteUrl = await fetchFirstExpressionSprite(name);
@@ -2892,16 +2833,11 @@ export function openSettingsModal(input: {
         return null;
       }
     }));
-    globalPreviewCharacters = resolved
+    return resolved
       .filter((entry): entry is GlobalPreviewCharacter => Boolean(entry))
       .sort((a, b) => a.name.localeCompare(b.name));
-    renderGlobalPreviewSelector("ready");
   };
-  globalPreviewSelect?.addEventListener("change", () => {
-    globalPreviewSelected = globalPreviewSelect.value;
-    renderGlobalPreviewSelector("ready");
-  });
-  void loadGlobalPreviewCharacters();
+  if (globalFrameButton) globalFrameButton.disabled = false;
 
   const collectSettings = (): BetterSimTrackerSettings => {
     const read = (k: keyof BetterSimTrackerSettings): string =>
@@ -3050,7 +2986,13 @@ export function openSettingsModal(input: {
     syncExtractionVisibility();
   };
 
-  modal.querySelector('[data-action="open-global-st-framing"]')?.addEventListener("click", () => {
+  modal.querySelector('[data-action="open-global-st-framing"]')?.addEventListener("click", async () => {
+    if (globalFrameButton) globalFrameButton.disabled = true;
+    globalPreviewCharacters = await loadGlobalPreviewCharacters();
+    if (globalFrameButton) globalFrameButton.disabled = false;
+    if (!globalPreviewCharacters.find(item => item.name === globalPreviewSelected)) {
+      globalPreviewSelected = globalPreviewCharacters[0]?.name ?? "";
+    }
     const selected = globalPreviewCharacters.find(item => item.name === globalPreviewSelected) ?? globalPreviewCharacters[0] ?? null;
     openStExpressionFrameEditor({
       title: "Adjust ST Expression Framing",
@@ -3059,7 +3001,11 @@ export function openSettingsModal(input: {
         : "Global framing used when mood source is ST expressions.",
       initial: readGlobalStExpressionFrame(),
       fallback: DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS,
-      previewImageUrl: selected?.spriteUrl ?? null,
+      previewChoices: globalPreviewCharacters.map(item => ({ name: item.name, imageUrl: item.spriteUrl })),
+      selectedPreviewName: selected?.name ?? "",
+      onPreviewNameChange: name => {
+        globalPreviewSelected = name;
+      },
       emptyPreviewText: noPreviewFoundText,
       onChange: next => {
         set("stExpressionImageZoom", String(next.zoom));
