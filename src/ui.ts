@@ -24,7 +24,6 @@ import {
   closeStExpressionFrameEditor,
   formatStExpressionFrameSummary,
   openStExpressionFrameEditor,
-  projectStExpressionPosition,
   sanitizeStExpressionFrame,
 } from "./stExpressionFrameEditor";
 import { fetchFirstExpressionSprite } from "./stExpressionSprites";
@@ -620,9 +619,9 @@ function ensureStyles(): void {
   display: block;
 }
 .bst-mood-image--st-expression {
-  object-position: var(--bst-st-expression-pos-x) var(--bst-st-expression-pos-y);
+  object-position: center center;
   transform: scale(var(--bst-st-expression-zoom));
-  transform-origin: center center;
+  transform-origin: var(--bst-st-expression-origin-x) var(--bst-st-expression-origin-y);
 }
 .bst-mood-badge {
   font-size: 11px;
@@ -1773,7 +1772,7 @@ export function renderTracker(
         ? String(data.statistics.lastThought?.[name] ?? "")
         : "";
       const stExpressionStyle = stExpressionImageOptions
-        ? ` style="--bst-st-expression-zoom:${stExpressionImageOptions.zoom.toFixed(2)};--bst-st-expression-pos-x:${projectStExpressionPosition(stExpressionImageOptions.positionX, stExpressionImageOptions.zoom).toFixed(2)}%;--bst-st-expression-pos-y:${projectStExpressionPosition(stExpressionImageOptions.positionY, stExpressionImageOptions.zoom).toFixed(2)}%;"`
+        ? ` style="--bst-st-expression-zoom:${stExpressionImageOptions.zoom.toFixed(2)};--bst-st-expression-origin-x:${stExpressionImageOptions.positionX.toFixed(2)}%;--bst-st-expression-origin-y:${stExpressionImageOptions.positionY.toFixed(2)}%;"`
         : "";
       const card = document.createElement("div");
       card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;
