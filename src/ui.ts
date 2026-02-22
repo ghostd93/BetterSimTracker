@@ -4351,6 +4351,7 @@ export function openSettingsModal(input: {
         <label>Sequential Prompt Override (optional)
           <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Custom instruction for this stat in sequential mode.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
         </label>
+        <div class="bst-help-line">Template macros: <code>{{statId}}</code> <code>{{statLabel}}</code> <code>{{statDescription}}</code> <code>{{statDefault}}</code> <code>{{maxDelta}}</code> <code>{{characters}}</code> <code>{{envelope}}</code> <code>{{contextText}}</code>.</div>
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="4">

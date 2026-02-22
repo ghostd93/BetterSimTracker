@@ -3,6 +3,7 @@ import type { BetterSimTrackerSettings, STContext, TrackerData } from "./types";
 
 const INJECT_KEY = "bst_relationship_state";
 let lastInjectedPrompt = "";
+const MAX_INJECTION_PROMPT_CHARS = 6000;
 
 function clamp(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -29,6 +30,11 @@ function renderTemplate(template: string, values: Record<string, string>): strin
 }
 
 function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): string {
+  const allEnabledCustom = (settings.customStats ?? [])
+    .filter(stat => stat.track && stat.includeInInjection)
+    .slice(0, 8);
+  const buildWithCustom = (customStatCount: number): string => {
+    const enabledCustom = allEnabledCustom.slice(0, customStatCount);
   const names = data.activeCharacters;
   const numericKeys: Array<{
     key: "affection" | "trust" | "desire" | "connection";
@@ -41,9 +47,6 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): str
     { key: "connection", label: "connection", enabled: settings.trackConnection },
   ];
   const enabledBuiltIns = numericKeys.filter(entry => entry.enabled);
-  const enabledCustom = (settings.customStats ?? [])
-    .filter(stat => stat.track && stat.includeInInjection)
-    .slice(0, 8);
   const hasAnyNumeric = enabledBuiltIns.length > 0 || enabledCustom.length > 0;
   const includeMood = settings.trackMood;
 
@@ -115,7 +118,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): str
     "- remain consistent with character core personality and scenario",
   ].join("\n");
   const template = settings.promptTemplateInjection || DEFAULT_INJECTION_PROMPT_TEMPLATE;
-  return renderTemplate(template, {
+    return renderTemplate(template, {
     header,
     statSemantics,
     behaviorBands,
@@ -123,6 +126,25 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): str
     priorityRules,
     lines: lines.join("\n")
   }).trim();
+  };
+
+  let customCount = allEnabledCustom.length;
+  while (customCount >= 0) {
+    const prompt = buildWithCustom(customCount);
+    if (prompt.length <= MAX_INJECTION_PROMPT_CHARS) {
+      if (customCount < allEnabledCustom.length) {
+        console.warn("[BetterSimTracker] prompt injection custom stat lines truncated to stay within safe prompt size.", {
+          keptCustomStats: customCount,
+          totalCustomStats: allEnabledCustom.length,
+          maxChars: MAX_INJECTION_PROMPT_CHARS,
+          promptChars: prompt.length
+        });
+      }
+      return prompt;
+    }
+    customCount -= 1;
+  }
+  return buildWithCustom(0).slice(0, MAX_INJECTION_PROMPT_CHARS).trim();
 }
 
 type ScriptModule = {
