@@ -108,6 +108,7 @@ export async function extractStatisticsParallel(input: {
   contextText: string;
   previousStatistics: Statistics | null;
   history: TrackerData[];
+  isCancelled?: () => boolean;
   onProgress?: (done: number, total: number, label?: string) => void;
 }): Promise<{ statistics: Statistics; debug: DeltaDebugRecord | null }> {
   const { settings, userName, activeCharacters, contextText, previousStatistics, history, onProgress } = input;
@@ -116,10 +117,23 @@ export async function extractStatisticsParallel(input: {
   let debugRecord: DeltaDebugRecord | null = null;
   let cancelled = false;
 
-  const isAbortError = (error: unknown): boolean =>
-    error instanceof DOMException && error.name === "AbortError";
+  const isAbortError = (error: unknown): boolean => {
+    if (error instanceof DOMException && error.name === "AbortError") return true;
+    const raw = typeof error === "string"
+      ? error
+      : error && typeof error === "object"
+        ? [
+            String((error as Record<string, unknown>).name ?? ""),
+            String((error as Record<string, unknown>).message ?? ""),
+            String((((error as Record<string, unknown>).meta as Record<string, unknown> | undefined)?.error ?? "")),
+          ].join(" ")
+        : "";
+    const normalized = raw.toLowerCase();
+    return normalized.includes("abort") || normalized.includes("cancel");
+  };
   const checkCancelled = (): void => {
-    if (cancelled) {
+    if (cancelled || input.isCancelled?.()) {
+      cancelled = true;
       throw new DOMException("Request aborted by user", "AbortError");
     }
   };
@@ -244,12 +258,17 @@ export async function extractStatisticsParallel(input: {
         attempts += 1;
         requestSeq += 1;
         try {
+          checkCancelled();
           const response = await generateJson(prompt, settings);
+          checkCancelled();
           const type = attemptIndex === 0 ? retryType : `${retryType}_transport_retry_${attemptIndex}`;
           requestMetas.push({ ...response.meta, statList, attempt: requestSeq, retryType: type });
           return response;
         } catch (error) {
-          if (isAbortError(error)) throw error;
+          if (isAbortError(error) || input.isCancelled?.()) {
+            cancelled = true;
+            throw new DOMException("Request aborted by user", "AbortError");
+          }
           lastError = error;
           if (attemptIndex >= retryDelaysMs.length) {
             throw error;
@@ -297,6 +316,7 @@ export async function extractStatisticsParallel(input: {
         );
       tickProgress(`Requesting ${statLabel}`);
       let rawResponse = await callGenerate(prompt, statList, "initial");
+      checkCancelled();
       let raw = rawResponse.text;
       tickProgress(`Parsing ${statLabel}`);
       let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList, settings.maxDeltaPerTurn);
@@ -308,6 +328,7 @@ export async function extractStatisticsParallel(input: {
         retryUsed = true;
         retriesLeft -= 1;
         const retryResponse = await callGenerate(retryPrompt, statList, "strict");
+        checkCancelled();
         const retryParsed = parseUnifiedDeltaResponse(retryResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(retryParsed, statList)) {
           raw = retryResponse.text;
@@ -324,6 +345,7 @@ export async function extractStatisticsParallel(input: {
         retryUsed = true;
         retriesLeft -= 1;
         const repairResponse = await callGenerate(repairPrompt, statList, "repair");
+        checkCancelled();
         const repairParsed = parseUnifiedDeltaResponse(repairResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(repairParsed, statList)) {
           raw = repairResponse.text;
@@ -335,6 +357,7 @@ export async function extractStatisticsParallel(input: {
         retryUsed = true;
         retriesLeft -= 1;
         const strictResponse = await callGenerate(strictPrompt, statList, "strict_loop");
+        checkCancelled();
         const strictParsed = parseUnifiedDeltaResponse(strictResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
         if (hasValuesForRequestedStats(strictParsed, statList)) {
           raw = strictResponse.text;
@@ -348,6 +371,7 @@ export async function extractStatisticsParallel(input: {
 
     if (!settings.sequentialExtraction) {
       const one = await runOneStat(stats);
+      checkCancelled();
       rawOutputAggregate = one.raw;
       promptAggregate = one.prompt;
       for (const stat of stats) {
@@ -360,10 +384,11 @@ export async function extractStatisticsParallel(input: {
       const promptByStat: Array<{ stat: StatKey; prompt: string }> = [];
       const worker = async (): Promise<void> => {
         while (queue.length) {
-          if (cancelled) return;
+          checkCancelled();
           const stat = queue.shift();
           if (!stat) return;
           const one = await runOneStat([stat]);
+          checkCancelled();
           rawByStat.push({ stat, raw: one.raw });
           promptByStat.push({ stat, prompt: one.prompt });
           applyParsedForStat(stat, one.parsedOne);

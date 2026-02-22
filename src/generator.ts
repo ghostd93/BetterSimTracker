@@ -251,6 +251,10 @@ async function generateViaGenerator(prompt: string, profileId: string, limits: T
             timestamp: Date.now()
           };
           if (error) {
+            if (abortController.signal.aborted) {
+              reject(Object.assign(new DOMException("Request aborted by user", "AbortError"), { meta: { ...baseMeta, error: String(error) } }));
+              return;
+            }
             reject(Object.assign(new Error(String(error)), { meta: { ...baseMeta, error: String(error) } }));
             return;
           }
