@@ -21,6 +21,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
   - multi-stat lines (built-ins + enabled custom graph stats)
 - Prompt injection (optional) for behavior consistency
 - Prompt injection includes enabled custom stats marked `includeInInjection`
+  - when injected guidance grows too large, custom stat lines are trimmed first to keep prompt size safe
 - Prompt templates (unified + per-stat) with per-prompt reset
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
 - Interactive ST expression framing editor with live preview (global + per-character override)
@@ -287,6 +288,7 @@ Behavior notes:
   - `Edit` and `Clone` for faster setup reuse
   - `Remove` uses soft-remove flow (historical payload remains stored, active tracking stops)
   - `track`, `showOnCard`, `showInGraph`, and `includeInInjection` flags are respected by extraction, card rendering, graph rendering, and prompt injection
+  - wizard includes macro hints for custom sequential prompt overrides (`{{statId}}`, `{{statLabel}}`, `{{characters}}`, `{{contextText}}`, etc.)
 - `Mood Source` (`BST mood images` or `ST expressions`)
 - `Global Mood -> ST Expression Map` (editable in settings when `Mood Source = ST expressions`)
 - `Preview Character` selector (inside framing modal, below preview): includes only characters with ST expressions and drives global framing preview
