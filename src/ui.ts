@@ -1285,6 +1285,8 @@ function ensureStyles(): void {
   display: inline-flex;
   align-items: center;
   margin-top: 6px;
+  gap: 8px;
+  width: 100%;
 }
 .bst-color-inputs input[type="color"] {
   width: 42px;
@@ -1304,6 +1306,10 @@ function ensureStyles(): void {
 .bst-color-inputs input[type="color"]::-moz-color-swatch {
   border: none;
   border-radius: 4px;
+}
+.bst-color-inputs input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 120px;
 }
 .bst-quick-help {
   background: linear-gradient(135deg, rgba(10, 18, 32, 0.75), rgba(8, 12, 22, 0.75));
@@ -4547,7 +4553,7 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
         </div>
         <label>Sequential Prompt Override (optional)
-          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. Leave empty to use the global Seq: Custom Numeric template fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
+          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. Literal example: [Propose incremental changes to {{statLabel}} from recent messages. Only update {{statId}}.] Leave empty to use the global Seq: Custom Numeric template fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
         </label>
         <div class="bst-help-line">Template macros: <code>{{statId}}</code> <code>{{statLabel}}</code> <code>{{statDescription}}</code> <code>{{statDefault}}</code> <code>{{maxDelta}}</code> <code>{{characters}}</code> <code>{{envelope}}</code> <code>{{contextText}}</code>.</div>
       </div>
@@ -4555,7 +4561,10 @@ export function openSettingsModal(input: {
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="4">
         <div class="bst-help-line">Color helps visually distinguish this stat in cards and graph.</div>
         <label>Color (optional)
-          <input type="text" data-bst-custom-field="color" value="${escapeHtml(draft.color)}" placeholder="#66ccff">
+          <div class="bst-color-inputs">
+            <input type="color" data-bst-custom-color-picker value="#66ccff" aria-label="Custom stat color picker">
+            <input type="text" data-bst-custom-field="color" value="${escapeHtml(draft.color)}" placeholder="#66ccff">
+          </div>
         </label>
       </div>
 
@@ -4581,6 +4590,19 @@ export function openSettingsModal(input: {
     const saveBtn = wizard.querySelector('[data-action="custom-save"]') as HTMLButtonElement | null;
     const getField = (name: string): HTMLInputElement | HTMLTextAreaElement | null =>
       wizard.querySelector(`[data-bst-custom-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
+    const colorPickerNode = wizard.querySelector('[data-bst-custom-color-picker]') as HTMLInputElement | null;
+
+    const toPickerHex = (raw: string, fallback: string): string => {
+      const value = raw.trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(value)) return value.toLowerCase();
+      if (/^#[0-9a-fA-F]{3}$/.test(value)) {
+        const r = value[1];
+        const g = value[2];
+        const b = value[3];
+        return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+      }
+      return fallback;
+    };
 
     const syncDraftFromFields = (): void => {
       const labelNode = getField("label");
@@ -4601,6 +4623,19 @@ export function openSettingsModal(input: {
       draft.includeInInjection = Boolean(injectNode?.checked);
       draft.color = String(colorNode?.value ?? "");
       draft.sequentialPromptTemplate = String(templateNode?.value ?? "");
+    };
+
+    const syncColorPickerFromText = (): void => {
+      if (!colorPickerNode) return;
+      const colorNode = getField("color") as HTMLInputElement | null;
+      const fallback = toPickerHex(input.settings.accentColor || "#66ccff", "#66ccff");
+      colorPickerNode.value = toPickerHex(String(colorNode?.value ?? ""), fallback);
+    };
+
+    const syncColorTextFromPicker = (): void => {
+      const colorNode = getField("color") as HTMLInputElement | null;
+      if (!colorNode || !colorPickerNode) return;
+      colorNode.value = colorPickerNode.value;
     };
 
     const writeReview = (): void => {
@@ -4648,6 +4683,7 @@ export function openSettingsModal(input: {
 
     const labelInput = getField("label") as HTMLInputElement | null;
     const idInput = getField("id") as HTMLInputElement | null;
+    const colorTextInput = getField("color") as HTMLInputElement | null;
     labelInput?.addEventListener("input", () => {
       if (draft.lockId || idTouched) return;
       if (!idInput) return;
@@ -4661,6 +4697,13 @@ export function openSettingsModal(input: {
       idTouched = true;
       idInput.value = idInput.value.toLowerCase().replace(/[^a-z0-9_]/g, "_");
     });
+    colorPickerNode?.addEventListener("input", () => {
+      syncColorTextFromPicker();
+    });
+    colorTextInput?.addEventListener("input", () => {
+      syncColorPickerFromText();
+    });
+    syncColorPickerFromText();
 
     backdropNode.addEventListener("click", close);
     wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
