@@ -16,6 +16,7 @@ All notable changes to BetterSimTracker are documented here.
 - Mood image trigger is now keyboard-accessible (`button` semantics) instead of image-click only.
 
 ### Fixed
+- Mood image preview modal now remains visible when `prefers-reduced-motion` is enabled (no longer animation-dependent for visibility).
 - Tracker mood-image preview trigger now enforces compact frame sizing and no longer expands to full-card image dimensions.
 - Character defaults now resolve consistently across group-card and character-list Advanced Definitions paths by using stable character identity matching.
 - Character-default writes in mood image/map/framing actions now always use the latest in-memory settings to prevent stale overwrite inconsistencies.
