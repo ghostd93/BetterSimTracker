@@ -15,6 +15,7 @@ All notable changes to BetterSimTracker are documented here.
 - Baseline seeding and history fallback now include configured custom stat defaults (global + per-character overrides) to keep first-run behavior consistent.
 - Tracker cards and graph now keep enabled numeric stat definitions visible with default-value fallback when older snapshots lack explicit values.
 - Custom stat wizard now shows available sequential-template macros directly in the Tracking Behavior step.
+- Added global `Seq: Custom Numeric` prompt template setting used as fallback for custom stat sequential extraction when a stat has no per-stat override.
 
 ### Fixed
 - Character defaults numeric inputs (built-in and custom stat defaults) now clamp visually and on save to `0..100`.

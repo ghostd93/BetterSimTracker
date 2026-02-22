@@ -22,7 +22,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Prompt injection (optional) for behavior consistency
 - Prompt injection includes enabled custom stats marked `includeInInjection`
   - when injected guidance grows too large, custom stat lines are trimmed first to keep prompt size safe
-- Prompt templates (unified + per-stat) with per-prompt reset
+- Prompt templates (unified + per-stat + custom numeric default) with per-prompt reset
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
 - Interactive ST expression framing editor with live preview (global + per-character override)
 - Click-to-preview mood image lightbox with close button / backdrop / Esc support (native top-layer dialog path on supported browsers)
@@ -169,7 +169,7 @@ Numeric scaling formula used by runtime:
 - `Inject Tracker Into Prompt`: uses current relationship state as hidden guidance
 - `Injection Depth`: controls prompt-injection depth in the in-chat prompt stack (`0..8`)
 - `Injection Prompt Template`: editable template for injected guidance (shown only when injection is enabled)
-- `Prompt Templates`: edit unified + per-stat sequential prompt instructions (protocol blocks are fixed; repair prompts are fixed)
+- `Prompt Templates`: edit unified + per-stat sequential prompt instructions plus a global custom-numeric sequential default (protocol blocks are fixed; repair prompts are fixed)
 - `Custom Stats`: create and manage additional numeric percentage stats via step-by-step wizard in settings
 - `Profile Token Limits`: extraction now respects profile max tokens and truncation length (when available)
 - `Max Tokens Override`: force max tokens for extraction (0 = auto)
@@ -203,7 +203,7 @@ Numeric scaling formula used by runtime:
 - `Injection Prompt Template`: editable template that defines the injected guidance block (shown only when injection is enabled).
 - `Auto Detect Active`: in group chat, tries to determine which characters are currently active in the scene.
 - `Activity Lookback`: recent-message window used for active character detection.
-- `Prompt Templates`: unified prompt instruction for one-shot extraction, per-stat instructions for sequential mode.
+- `Prompt Templates`: unified prompt instruction for one-shot extraction, per-stat instructions for sequential mode, and a global default template for custom numeric sequential extraction.
   - Each prompt has a reset-to-default button.
   - Protocol blocks (JSON shape, constraints) are fixed for safety and consistency.
   - A hidden main prompt is always prefixed to extraction prompts (not shown in settings).
@@ -289,6 +289,7 @@ Behavior notes:
   - `Remove` uses soft-remove flow (historical payload remains stored, active tracking stops)
   - `track`, `showOnCard`, `showInGraph`, and `includeInInjection` flags are respected by extraction, card rendering, graph rendering, and prompt injection
   - wizard includes macro hints for custom sequential prompt overrides (`{{statId}}`, `{{statLabel}}`, `{{characters}}`, `{{contextText}}`, etc.)
+  - custom sequential prompt precedence: per-stat template override in wizard -> global `Seq: Custom Numeric` template -> built-in default template
 - `Mood Source` (`BST mood images` or `ST expressions`)
 - `Global Mood -> ST Expression Map` (editable in settings when `Mood Source = ST expressions`)
 - `Preview Character` selector (inside framing modal, below preview): includes only characters with ST expressions and drives global framing preview
@@ -325,6 +326,7 @@ Two editable prompt types are supported:
 
 - Unified prompt: used when sequential extraction is off.
 - Per-stat prompts: used in sequential mode (`affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`).
+- `Seq: Custom Numeric` prompt: global default for custom stat sequential extraction when a custom stat does not define its own template override.
 - Default desire prompt guardrail: only increase desire when the recent messages are explicitly romantic/sexual; non-romantic context should be 0 or negative.
 
 Each prompt instruction can be reset to its default with the per-prompt reset button. Protocol blocks are read-only.
@@ -341,6 +343,8 @@ Available placeholders:
 - `{{textStats}}`: requested text stats list.
 - `{{maxDelta}}`: configured max delta per turn.
 - `{{moodOptions}}`: allowed mood labels.
+- `{{statId}}` / `{{statLabel}}`: custom stat id/label (custom sequential templates).
+- `{{statDescription}}` / `{{statDefault}}`: custom stat metadata (custom sequential templates).
 
 Note: strict/repair prompts are not editable.
 
