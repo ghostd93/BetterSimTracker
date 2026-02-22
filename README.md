@@ -19,6 +19,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Prompt templates (unified + per-stat) with per-prompt reset
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
 - Interactive ST expression framing editor with live preview (global + per-character override)
+- Click-to-preview mood image lightbox (click image to open, click preview to close)
 - Framing modal includes `Preview Character` selector under the preview (global mode)
 - Global preview candidates skip characters currently resolved to `BST mood images`
 - Global preview sprite scan ignores BST mood-image assets with `bst_` prefix
