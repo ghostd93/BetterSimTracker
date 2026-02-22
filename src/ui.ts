@@ -101,6 +101,9 @@ type RenderEntry = {
 
 const ROOT_CLASS = "bst-root";
 const collapsedTrackerMessages = new Set<number>();
+const MOOD_PREVIEW_BACKDROP_CLASS = "bst-mood-preview-backdrop";
+const MOOD_PREVIEW_MODAL_CLASS = "bst-mood-preview-modal";
+let moodPreviewKeyListener: ((event: KeyboardEvent) => void) | null = null;
 
 function toPercent(value: StatValue): number {
   if (typeof value === "number") return Math.max(0, Math.min(100, value));
@@ -644,6 +647,7 @@ function ensureStyles(): void {
   object-fit: cover;
   object-position: center center;
   display: block;
+  cursor: zoom-in;
 }
 .bst-mood-image--st-expression {
   object-position: center center;
@@ -1213,6 +1217,31 @@ function ensureStyles(): void {
   padding: 14px;
   color: #fff;
 }
+.bst-mood-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: rgba(0,0,0,0.72);
+  z-index: 2147483020;
+}
+.bst-mood-preview-modal {
+  width: min(920px, 94vw);
+  max-height: calc(100dvh - 24px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bst-mood-preview-image {
+  max-width: 100%;
+  max-height: calc(100dvh - 24px);
+  object-fit: contain;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.2);
+  box-shadow: 0 20px 64px rgba(0,0,0,0.56);
+  cursor: zoom-out;
+}
 .bst-graph-top {
   display: flex;
   justify-content: space-between;
@@ -1658,6 +1687,15 @@ export function renderTracker(
       root.dataset.bstBound = "1";
       root.addEventListener("click", event => {
         const target = event.target as HTMLElement | null;
+        const preview = target?.closest('[data-bst-action="open-mood-preview"]') as HTMLElement | null;
+        if (preview) {
+          const src = String(preview.getAttribute("data-bst-image-src") ?? "").trim();
+          const alt = String(preview.getAttribute("data-bst-image-alt") ?? "").trim() || "Mood image";
+          if (src) {
+            openMoodImageModal(src, alt);
+          }
+          return;
+        }
         const button = target?.closest('[data-bst-action="graph"]') as HTMLElement | null;
         if (button) {
           const name = String(button.getAttribute("data-character") ?? "").trim();
@@ -1845,7 +1883,7 @@ export function renderTracker(
         <div class="bst-mood${moodImage ? " bst-mood-has-image" : ""}" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap ${moodImage ? "bst-mood-wrap--image" : "bst-mood-wrap--emoji"}">
             ${moodImage
-              ? `<span class="bst-mood-image-frame${moodSource === "st_expressions" ? " bst-mood-image-frame--st-expression" : ""}"><img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}"${stExpressionImageStyle}></span>`
+              ? `<span class="bst-mood-image-frame${moodSource === "st_expressions" ? " bst-mood-image-frame--st-expression" : ""}"><img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" data-bst-action="open-mood-preview" data-bst-image-src="${escapeHtml(moodImage)}" data-bst-image-alt="${escapeHtml(moodText)}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}"${stExpressionImageStyle}></span>`
               : `<span class="bst-mood-chip"><span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span></span>`}
             ${moodImage && lastThoughtText
               ? `<span class="bst-mood-bubble">${escapeHtml(lastThoughtText)}</span>`
@@ -1868,8 +1906,50 @@ export function removeTrackerUI(): void {
   document.getElementById(STYLE_ID)?.remove();
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
+  closeMoodImageModal();
   closeStExpressionFrameEditor();
   closeGraphModal();
+}
+
+function openMoodImageModal(imageUrl: string, altText: string): void {
+  ensureStyles();
+  closeMoodImageModal();
+
+  const backdrop = document.createElement("div");
+  backdrop.className = MOOD_PREVIEW_BACKDROP_CLASS;
+
+  const modal = document.createElement("div");
+  modal.className = MOOD_PREVIEW_MODAL_CLASS;
+
+  const image = document.createElement("img");
+  image.className = "bst-mood-preview-image";
+  image.src = imageUrl;
+  image.alt = altText || "Mood image";
+  image.addEventListener("click", () => closeMoodImageModal());
+
+  modal.appendChild(image);
+  backdrop.appendChild(modal);
+  backdrop.addEventListener("click", event => {
+    if (event.target === backdrop) {
+      closeMoodImageModal();
+    }
+  });
+  document.body.appendChild(backdrop);
+
+  moodPreviewKeyListener = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      closeMoodImageModal();
+    }
+  };
+  document.addEventListener("keydown", moodPreviewKeyListener);
+}
+
+function closeMoodImageModal(): void {
+  document.querySelector(`.${MOOD_PREVIEW_BACKDROP_CLASS}`)?.remove();
+  if (moodPreviewKeyListener) {
+    document.removeEventListener("keydown", moodPreviewKeyListener);
+    moodPreviewKeyListener = null;
+  }
 }
 
 function statValue(entry: TrackerData, stat: NumericStatKey, character: string): number {
