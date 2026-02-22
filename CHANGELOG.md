@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Fixed
+- Character defaults now resolve consistently across group-card and character-list Advanced Definitions paths by using stable character identity matching.
+
 ## [1.2.0] - 2026-02-21
 ### Added
 - ST expressions mood workflow with global/per-character mood-to-expression mapping and character-level mood-source controls.
