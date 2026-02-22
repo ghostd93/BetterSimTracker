@@ -25,6 +25,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Strong diagnostics/debug dump for bug reports
 - Mobile-friendly settings and graph modals
 - Settings section drawers collapsed by default
+- Single-click Stop now hard-cancels the current extraction run (workers + retries)
 
 ## Screenshots
 
