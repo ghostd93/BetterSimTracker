@@ -3,6 +3,9 @@
 All notable changes to BetterSimTracker are documented here.
 
 ## [Unreleased]
+### Added
+- Mood images in tracker cards now open a full-size preview modal on click; clicking the preview image closes the modal.
+
 ### Changed
 - Character defaults panel now shows ST-expression controls and BST mood-image controls conditionally based on the effective mood source.
 - Character defaults input normalization now applies canonical mood labels and clamped numeric values directly in the UI.
