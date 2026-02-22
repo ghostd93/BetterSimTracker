@@ -14,3 +14,17 @@ export const STAT_KEYS = [
 export const NUMERIC_STATS = ["affection", "trust", "desire", "connection"] as const;
 
 export const TEXT_STATS = ["mood", "lastThought"] as const;
+
+export const MAX_CUSTOM_STATS = 8;
+export const CUSTOM_STAT_ID_REGEX = /^[a-z][a-z0-9_]{1,31}$/;
+export const RESERVED_CUSTOM_STAT_IDS = new Set<string>([
+  ...STAT_KEYS,
+  "custom",
+  "custom_stats",
+  "customstatistics",
+  "statistics",
+  "settings",
+  "defaults",
+  "all",
+  "none",
+]);

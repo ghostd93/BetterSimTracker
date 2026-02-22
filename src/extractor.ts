@@ -1,18 +1,29 @@
 import { STAT_KEYS } from "./constants";
 import { generateJson } from "./generator";
-import { parseUnifiedDeltaResponse } from "./parse";
+import { parseCustomDeltaResponse, parseUnifiedDeltaResponse } from "./parse";
 import {
   DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE,
   DEFAULT_REPAIR_MOOD_TEMPLATE,
+  DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_STRICT_RETRY_TEMPLATE,
+  buildSequentialCustomNumericPrompt,
   buildSequentialPrompt,
   buildUnifiedPrompt,
   moodOptions
 } from "./prompts";
-import type { BetterSimTrackerSettings, DeltaDebugRecord, GenerateRequestMeta, StatKey, Statistics, TrackerData } from "./types";
+import type {
+  BetterSimTrackerSettings,
+  CustomStatDefinition,
+  CustomStatistics,
+  DeltaDebugRecord,
+  GenerateRequestMeta,
+  StatKey,
+  Statistics,
+  TrackerData
+} from "./types";
 
-function enabledStats(settings: BetterSimTrackerSettings): StatKey[] {
+function enabledBuiltInAndTextStats(settings: BetterSimTrackerSettings): StatKey[] {
   const selected: StatKey[] = [];
   if (settings.trackAffection) selected.push("affection");
   if (settings.trackTrust) selected.push("trust");
@@ -21,6 +32,11 @@ function enabledStats(settings: BetterSimTrackerSettings): StatKey[] {
   if (settings.trackMood) selected.push("mood");
   if (settings.trackLastThought) selected.push("lastThought");
   return selected;
+}
+
+function enabledCustomStats(settings: BetterSimTrackerSettings): CustomStatDefinition[] {
+  if (!Array.isArray(settings.customStats)) return [];
+  return settings.customStats.filter(def => Boolean(def.track));
 }
 
 function emptyStatistics(): Statistics {
@@ -54,7 +70,7 @@ function hasParsedValues(parsed: ReturnType<typeof parseUnifiedDeltaResponse>): 
   );
 }
 
-function hasValuesForRequestedStats(
+function hasValuesForRequestedBuiltInAndTextStats(
   parsed: ReturnType<typeof parseUnifiedDeltaResponse>,
   stats: StatKey[],
 ): boolean {
@@ -95,6 +111,14 @@ function countMapValues(values: Record<string, unknown>): number {
   return Object.keys(values).length;
 }
 
+function countMapValuesByStat(values: Record<string, Record<string, unknown>>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [key, map] of Object.entries(values)) {
+    out[key] = Object.keys(map ?? {}).length;
+  }
+  return out;
+}
+
 function wait(ms: number): Promise<void> {
   return new Promise(resolve => {
     window.setTimeout(resolve, ms);
@@ -107,13 +131,29 @@ export async function extractStatisticsParallel(input: {
   activeCharacters: string[];
   contextText: string;
   previousStatistics: Statistics | null;
+  previousCustomStatistics?: CustomStatistics | null;
+  previousCustomStatisticsRaw?: CustomStatistics | null;
+  hasPriorTrackerData?: boolean;
   history: TrackerData[];
   isCancelled?: () => boolean;
   onProgress?: (done: number, total: number, label?: string) => void;
-}): Promise<{ statistics: Statistics; debug: DeltaDebugRecord | null }> {
-  const { settings, userName, activeCharacters, contextText, previousStatistics, history, onProgress } = input;
-  const stats = enabledStats(settings);
+}): Promise<{ statistics: Statistics; customStatistics: CustomStatistics; debug: DeltaDebugRecord | null }> {
+  const {
+    settings,
+    userName,
+    activeCharacters,
+    contextText,
+    previousStatistics,
+    previousCustomStatistics,
+    previousCustomStatisticsRaw,
+    hasPriorTrackerData,
+    history,
+    onProgress,
+  } = input;
+  const builtInAndTextStats = enabledBuiltInAndTextStats(settings);
+  const customStats = enabledCustomStats(settings);
   const output = emptyStatistics();
+  const outputCustom: CustomStatistics = {};
   let debugRecord: DeltaDebugRecord | null = null;
   let cancelled = false;
 
@@ -138,17 +178,22 @@ export async function extractStatisticsParallel(input: {
     }
   };
 
-  if (!stats.length || !activeCharacters.length) return { statistics: output, debug: debugRecord };
+  if ((!builtInAndTextStats.length && !customStats.length) || !activeCharacters.length) {
+    return { statistics: output, customStatistics: outputCustom, debug: debugRecord };
+  }
 
-  const total = 3;
-  onProgress?.(0, settings.sequentialExtraction ? Math.max(1, stats.length * 3) : total, "Preparing context");
+  const progressTotal = settings.sequentialExtraction
+    ? Math.max(1, (builtInAndTextStats.length + customStats.length) * 3)
+    : Math.max(1, (builtInAndTextStats.length ? 3 : 0) + customStats.length * 3);
+  onProgress?.(0, progressTotal, "Preparing context");
 
   try {
-    const applyDelta = (prev: number, delta: number, confidence: number): number => {
+    const applyDelta = (prev: number, delta: number, confidence: number, maxDeltaOverride?: number): number => {
       const conf = Math.max(0, Math.min(1, confidence));
       const damp = Math.max(0, Math.min(1, settings.confidenceDampening));
       const scale = (1 - damp) + conf * damp;
-      const limit = Math.max(1, Math.round(settings.maxDeltaPerTurn || 15));
+      const fallbackLimit = Math.max(1, Math.round(settings.maxDeltaPerTurn || 15));
+      const limit = Math.max(1, Math.round(Number(maxDeltaOverride ?? fallbackLimit) || fallbackLimit));
       const bounded = Math.max(-limit, Math.min(limit, delta));
       const scaledDelta = Math.round(bounded * scale);
       return clamp(prev + scaledDelta);
@@ -161,6 +206,7 @@ export async function extractStatisticsParallel(input: {
       connection: {} as Record<string, number>,
       mood: {} as Record<string, string>,
       lastThought: {} as Record<string, string>,
+      customStatistics: {} as Record<string, Record<string, number>>,
     };
     const moodFallbackApplied = new Set<string>();
     const parsed = {
@@ -170,12 +216,16 @@ export async function extractStatisticsParallel(input: {
         trust: {} as Record<string, number>,
         desire: {} as Record<string, number>,
         connection: {} as Record<string, number>,
+        custom: {} as Record<string, Record<string, number>>,
       },
       mood: {} as Record<string, string>,
       lastThought: {} as Record<string, string>,
     };
 
-    const applyParsedForStat = (stat: StatKey, parsedOne: ReturnType<typeof parseUnifiedDeltaResponse>): void => {
+    const applyParsedForBuiltInOrTextStat = (
+      stat: StatKey,
+      parsedOne: ReturnType<typeof parseUnifiedDeltaResponse>,
+    ): void => {
       for (const [name, value] of Object.entries(parsedOne.confidence)) {
         parsed.confidence[name] = value;
       }
@@ -234,22 +284,78 @@ export async function extractStatisticsParallel(input: {
       }
     };
 
+    const applyParsedForCustomStat = (
+      statDef: CustomStatDefinition,
+      parsedOne: ReturnType<typeof parseCustomDeltaResponse>,
+      requestCharacters: string[],
+    ): void => {
+      const statId = statDef.id;
+      if (!parsed.deltas.custom[statId]) parsed.deltas.custom[statId] = {};
+      if (!applied.customStatistics[statId]) applied.customStatistics[statId] = {};
+      if (!outputCustom[statId]) outputCustom[statId] = {};
+      for (const [name, value] of Object.entries(parsedOne.confidence)) {
+        parsed.confidence[name] = value;
+      }
+      for (const name of requestCharacters) {
+        const delta = parsedOne.delta[name];
+        if (delta === undefined) continue;
+        parsed.deltas.custom[statId][name] = delta;
+        const confidence = parsedOne.confidence[name] ?? 0.8;
+        const prevValue = Number(previousCustomStatistics?.[statId]?.[name] ?? statDef.defaultValue);
+        const next = applyDelta(prevValue, delta, confidence, statDef.maxDeltaPerTurn);
+        outputCustom[statId][name] = next;
+        applied.customStatistics[statId][name] = next;
+      }
+    };
+
+    const seedCustomStatDefaultsForNames = (
+      statDef: CustomStatDefinition,
+      names: string[],
+    ): void => {
+      if (!names.length) return;
+      const statId = statDef.id;
+      if (!applied.customStatistics[statId]) applied.customStatistics[statId] = {};
+      if (!outputCustom[statId]) outputCustom[statId] = {};
+      for (const name of names) {
+        const seedValue = clamp(Number(previousCustomStatistics?.[statId]?.[name] ?? statDef.defaultValue));
+        outputCustom[statId][name] = seedValue;
+        applied.customStatistics[statId][name] = seedValue;
+      }
+    };
+
+    const splitCustomCharactersByBaseline = (
+      statId: string,
+    ): { existing: string[]; firstRunSeedOnly: string[] } => {
+      const hasPrior = Boolean(hasPriorTrackerData);
+      const rawMap = previousCustomStatisticsRaw?.[statId] ?? {};
+      const existing: string[] = [];
+      const firstRunSeedOnly: string[] = [];
+      for (const name of activeCharacters) {
+        if (hasPrior && rawMap[name] !== undefined) {
+          existing.push(name);
+        } else {
+          firstRunSeedOnly.push(name);
+        }
+      }
+      return { existing, firstRunSeedOnly };
+    };
+
     let attempts = 0;
     let requestSeq = 0;
     let retryUsed = false;
     let firstParseHadValues = true;
-    let rawOutputAggregate = "";
-    let promptAggregate = "";
-    const requestMetas: Array<GenerateRequestMeta & { statList: StatKey[]; attempt: number; retryType: string }> = [];
+    const rawBlocks: Array<{ label: string; raw: string }> = [];
+    const promptBlocks: Array<{ label: string; prompt: string }> = [];
+    const requestMetas: Array<GenerateRequestMeta & { statList: string[]; attempt: number; retryType: string }> = [];
     let progressDone = 0;
-    const progressTotal = settings.sequentialExtraction ? Math.max(1, stats.length * 3) : total;
     const tickProgress = (label?: string): void => {
       progressDone = Math.min(progressTotal, progressDone + 1);
       onProgress?.(progressDone, progressTotal, label);
     };
+
     const callGenerate = async (
       prompt: string,
-      statList: StatKey[],
+      statList: string[],
       retryType: string,
     ): Promise<{ text: string; meta: GenerateRequestMeta }> => {
       const retryDelaysMs = [350, 1200];
@@ -290,7 +396,9 @@ export async function extractStatisticsParallel(input: {
       return settings.promptTemplateSequentialLastThought || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought;
     };
 
-    const runOneStat = async (statList: StatKey[]): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
+    const runOneBuiltInOrTextRequest = async (
+      statList: StatKey[],
+    ): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
       checkCancelled();
       const statLabel = statList.length === 1 ? statList[0] : "stats";
       const prompt = settings.sequentialExtraction && statList.length === 1
@@ -312,8 +420,8 @@ export async function extractStatisticsParallel(input: {
             previousStatistics,
             history,
             settings.maxDeltaPerTurn,
-          settings.promptTemplateUnified,
-        );
+            settings.promptTemplateUnified,
+          );
       tickProgress(`Requesting ${statLabel}`);
       let rawResponse = await callGenerate(prompt, statList, "initial");
       checkCancelled();
@@ -323,21 +431,21 @@ export async function extractStatisticsParallel(input: {
       const firstHasValues = hasParsedValues(parsedOne);
       firstParseHadValues = firstParseHadValues && firstHasValues;
       let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
-      if (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
+      if (!hasValuesForRequestedBuiltInAndTextStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
         const retryPrompt = buildStrictJsonRetryPrompt(prompt);
         retryUsed = true;
         retriesLeft -= 1;
         const retryResponse = await callGenerate(retryPrompt, statList, "strict");
         checkCancelled();
         const retryParsed = parseUnifiedDeltaResponse(retryResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
-        if (hasValuesForRequestedStats(retryParsed, statList)) {
+        if (hasValuesForRequestedBuiltInAndTextStats(retryParsed, statList)) {
           raw = retryResponse.text;
           parsedOne = retryParsed;
         }
       }
       if (
         statList.length === 1 &&
-        !hasValuesForRequestedStats(parsedOne, statList) &&
+        !hasValuesForRequestedBuiltInAndTextStats(parsedOne, statList) &&
         retriesLeft > 0 &&
         settings.strictJsonRepair
       ) {
@@ -347,19 +455,19 @@ export async function extractStatisticsParallel(input: {
         const repairResponse = await callGenerate(repairPrompt, statList, "repair");
         checkCancelled();
         const repairParsed = parseUnifiedDeltaResponse(repairResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
-        if (hasValuesForRequestedStats(repairParsed, statList)) {
+        if (hasValuesForRequestedBuiltInAndTextStats(repairParsed, statList)) {
           raw = repairResponse.text;
           parsedOne = repairParsed;
         }
       }
-      while (!hasValuesForRequestedStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
+      while (!hasValuesForRequestedBuiltInAndTextStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
         const strictPrompt = buildStrictJsonRetryPrompt(prompt);
         retryUsed = true;
         retriesLeft -= 1;
         const strictResponse = await callGenerate(strictPrompt, statList, "strict_loop");
         checkCancelled();
         const strictParsed = parseUnifiedDeltaResponse(strictResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
-        if (hasValuesForRequestedStats(strictParsed, statList)) {
+        if (hasValuesForRequestedBuiltInAndTextStats(strictParsed, statList)) {
           raw = strictResponse.text;
           parsedOne = strictParsed;
           break;
@@ -369,35 +477,140 @@ export async function extractStatisticsParallel(input: {
       return { prompt, raw, parsedOne };
     };
 
-    if (!settings.sequentialExtraction) {
-      const one = await runOneStat(stats);
+    const runOneCustomRequest = async (
+      statDef: CustomStatDefinition,
+      requestCharacters: string[],
+    ): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseCustomDeltaResponse> }> => {
       checkCancelled();
-      rawOutputAggregate = one.raw;
-      promptAggregate = one.prompt;
-      for (const stat of stats) {
-        applyParsedForStat(stat, one.parsedOne);
+      const label = statDef.label || statDef.id;
+      const statId = statDef.id;
+      const prompt = buildSequentialCustomNumericPrompt({
+        statId,
+        statLabel: label,
+        statDescription: statDef.description,
+        statDefault: statDef.defaultValue,
+        maxDeltaPerTurn: statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
+        userName,
+        characters: requestCharacters,
+        contextText,
+        current: previousStatistics,
+        currentCustom: previousCustomStatistics ?? {},
+        history,
+        template: statDef.sequentialPromptTemplate
+          || settings.promptTemplateSequentialCustomNumeric
+          || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
+      });
+      tickProgress(`Requesting ${label}`);
+      let rawResponse = await callGenerate(prompt, [statId], "initial");
+      checkCancelled();
+      let raw = rawResponse.text;
+      tickProgress(`Parsing ${label}`);
+      let parsedOne = parseCustomDeltaResponse(raw, requestCharacters, statId, statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn);
+      const firstHasValues = hasAnyValues(parsedOne.delta);
+      firstParseHadValues = firstParseHadValues && firstHasValues;
+      let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
+      while (!hasAnyValues(parsedOne.delta) && retriesLeft > 0 && settings.strictJsonRepair) {
+        const strictPrompt = buildStrictJsonRetryPrompt(prompt);
+        retryUsed = true;
+        retriesLeft -= 1;
+        const strictResponse = await callGenerate(strictPrompt, [statId], "strict_loop");
+        checkCancelled();
+        const strictParsed = parseCustomDeltaResponse(
+          strictResponse.text,
+          requestCharacters,
+          statId,
+          statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
+        );
+        if (hasAnyValues(strictParsed.delta)) {
+          raw = strictResponse.text;
+          parsedOne = strictParsed;
+          break;
+        }
       }
-    } else {
-      const queue = [...stats];
-      const workers = Math.max(1, Math.min(settings.maxConcurrentCalls || 1, 8));
-      const rawByStat: Array<{ stat: StatKey; raw: string }> = [];
-      const promptByStat: Array<{ stat: StatKey; prompt: string }> = [];
-      const worker = async (): Promise<void> => {
-        while (queue.length) {
+      tickProgress(`Applying ${label}`);
+      return { prompt, raw, parsedOne };
+    };
+
+    if (!settings.sequentialExtraction) {
+      if (builtInAndTextStats.length) {
+        const one = await runOneBuiltInOrTextRequest(builtInAndTextStats);
+        checkCancelled();
+        rawBlocks.push({ label: "builtins", raw: one.raw });
+        promptBlocks.push({ label: "builtins", prompt: one.prompt });
+        for (const stat of builtInAndTextStats) {
+          applyParsedForBuiltInOrTextStat(stat, one.parsedOne);
+        }
+      }
+
+      const customQueue = [...customStats];
+      const customWorkers = Math.max(1, Math.min(settings.maxConcurrentCalls || 1, 8, customQueue.length || 1));
+      const runCustomWorker = async (): Promise<void> => {
+        while (customQueue.length) {
           checkCancelled();
-          const stat = queue.shift();
-          if (!stat) return;
-          const one = await runOneStat([stat]);
+          const statDef = customQueue.shift();
+          if (!statDef) return;
+          const split = splitCustomCharactersByBaseline(statDef.id);
+          seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          if (!split.existing.length) {
+            const label = statDef.label || statDef.id;
+            tickProgress(`Seeding ${label}`);
+            tickProgress(`Seeding ${label}`);
+            tickProgress(`Applying ${label}`);
+            continue;
+          }
+          const one = await runOneCustomRequest(statDef, split.existing);
           checkCancelled();
-          rawByStat.push({ stat, raw: one.raw });
-          promptByStat.push({ stat, prompt: one.prompt });
-          applyParsedForStat(stat, one.parsedOne);
+          rawBlocks.push({ label: `custom:${statDef.id}`, raw: one.raw });
+          promptBlocks.push({ label: `custom:${statDef.id}`, prompt: one.prompt });
+          applyParsedForCustomStat(statDef, one.parsedOne, split.existing);
         }
       };
-      await Promise.all(Array.from({ length: Math.min(workers, stats.length) }, () => worker()));
-      rawOutputAggregate = rawByStat.map(item => `--- ${item.stat} ---\n${item.raw}`).join("\n\n");
-      promptAggregate = promptByStat.map(item => `--- ${item.stat} ---\n${item.prompt}`).join("\n\n");
+      await Promise.all(Array.from({ length: customWorkers }, () => runCustomWorker()));
+    } else {
+      const builtInQueue = [...builtInAndTextStats];
+      const builtInWorkers = Math.max(1, Math.min(settings.maxConcurrentCalls || 1, 8, builtInQueue.length || 1));
+      const runBuiltInWorker = async (): Promise<void> => {
+        while (builtInQueue.length) {
+          checkCancelled();
+          const stat = builtInQueue.shift();
+          if (!stat) return;
+          const one = await runOneBuiltInOrTextRequest([stat]);
+          checkCancelled();
+          rawBlocks.push({ label: stat, raw: one.raw });
+          promptBlocks.push({ label: stat, prompt: one.prompt });
+          applyParsedForBuiltInOrTextStat(stat, one.parsedOne);
+        }
+      };
+      await Promise.all(Array.from({ length: builtInWorkers }, () => runBuiltInWorker()));
+
+      const customQueue = [...customStats];
+      const customWorkers = Math.max(1, Math.min(settings.maxConcurrentCalls || 1, 8, customQueue.length || 1));
+      const runCustomWorker = async (): Promise<void> => {
+        while (customQueue.length) {
+          checkCancelled();
+          const statDef = customQueue.shift();
+          if (!statDef) return;
+          const split = splitCustomCharactersByBaseline(statDef.id);
+          seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          if (!split.existing.length) {
+            const label = statDef.label || statDef.id;
+            tickProgress(`Seeding ${label}`);
+            tickProgress(`Seeding ${label}`);
+            tickProgress(`Applying ${label}`);
+            continue;
+          }
+          const one = await runOneCustomRequest(statDef, split.existing);
+          checkCancelled();
+          rawBlocks.push({ label: `custom:${statDef.id}`, raw: one.raw });
+          promptBlocks.push({ label: `custom:${statDef.id}`, prompt: one.prompt });
+          applyParsedForCustomStat(statDef, one.parsedOne, split.existing);
+        }
+      };
+      await Promise.all(Array.from({ length: customWorkers }, () => runCustomWorker()));
     }
+
+    const rawOutputAggregate = rawBlocks.map(item => `--- ${item.label} ---\n${item.raw}`).join("\n\n");
+    const promptAggregate = promptBlocks.map(item => `--- ${item.label} ---\n${item.prompt}`).join("\n\n");
 
     debugRecord = {
       rawModelOutput: rawOutputAggregate,
@@ -410,7 +623,10 @@ export async function extractStatisticsParallel(input: {
         contextChars: contextText.length,
         historySnapshots: history.length,
         activeCharacters: [...activeCharacters],
-        statsRequested: [...stats],
+        statsRequested: [
+          ...builtInAndTextStats,
+          ...customStats.map(stat => stat.id),
+        ],
         attempts,
         extractionMode: settings.sequentialExtraction ? "sequential" : "unified",
         retryUsed,
@@ -423,7 +639,8 @@ export async function extractStatisticsParallel(input: {
           desire: countMapValues(parsed.deltas.desire),
           connection: countMapValues(parsed.deltas.connection),
           mood: countMapValues(parsed.mood),
-          lastThought: countMapValues(parsed.lastThought)
+          lastThought: countMapValues(parsed.lastThought),
+          customByStat: countMapValuesByStat(parsed.deltas.custom),
         },
         appliedCounts: {
           affection: countMapValues(applied.affection),
@@ -431,7 +648,8 @@ export async function extractStatisticsParallel(input: {
           desire: countMapValues(applied.desire),
           connection: countMapValues(applied.connection),
           mood: countMapValues(applied.mood),
-          lastThought: countMapValues(applied.lastThought)
+          lastThought: countMapValues(applied.lastThought),
+          customByStat: countMapValuesByStat(applied.customStatistics),
         },
         moodFallbackApplied: Array.from(moodFallbackApplied),
         requests: requestMetas
@@ -445,8 +663,7 @@ export async function extractStatisticsParallel(input: {
       throw error;
     }
   } finally {
-    const done = settings.sequentialExtraction ? Math.max(1, stats.length * 3) : 3;
-    onProgress?.(done, done, "Finalizing");
+    onProgress?.(progressTotal, progressTotal, "Finalizing");
   }
 
   if (cancelled) {
@@ -457,5 +674,5 @@ export async function extractStatisticsParallel(input: {
     if (!output[key]) output[key] = {};
   }
 
-  return { statistics: output, debug: debugRecord };
+  return { statistics: output, customStatistics: outputCustom, debug: debugRecord };
 }

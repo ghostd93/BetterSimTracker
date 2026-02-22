@@ -1,9 +1,11 @@
-import { STYLE_ID } from "./constants";
+import { CUSTOM_STAT_ID_REGEX, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS, STYLE_ID } from "./constants";
 import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import { logDebug } from "./settings";
 import type {
   BetterSimTrackerSettings,
+  BuiltInNumericStatUiSettings,
   ConnectionProfileOption,
+  CustomStatDefinition,
   DeltaDebugRecord,
   MoodLabel,
   MoodSource,
@@ -13,6 +15,7 @@ import type {
 } from "./types";
 import {
   DEFAULT_INJECTION_PROMPT_TEMPLATE,
+  DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
   LAST_THOUGHT_PROMPT_PROTOCOL,
@@ -28,15 +31,19 @@ import {
   sanitizeStExpressionFrame,
 } from "./stExpressionFrameEditor";
 import { fetchFirstExpressionSprite } from "./stExpressionSprites";
+import { getAllNumericStatDefinitions } from "./statRegistry";
 
-type NumericStatKey = "affection" | "trust" | "desire" | "connection";
+type UiNumericStatDefinition = {
+  key: string;
+  label: string;
+  short: string;
+  color: string;
+  defaultValue: number;
+  showOnCard: boolean;
+  showInGraph: boolean;
+};
 
-const NUMERIC_STAT_DEFS: Array<{ key: NumericStatKey; label: string; short: string; color: string }> = [
-  { key: "affection", label: "Affection", short: "A", color: "#ff6b81" },
-  { key: "trust", label: "Trust", short: "T", color: "#55d5ff" },
-  { key: "desire", label: "Desire", short: "D", color: "#ffb347" },
-  { key: "connection", label: "Connection", short: "C", color: "#9cff8f" }
-];
+const BUILT_IN_NUMERIC_STAT_KEYS = new Set(["affection", "trust", "desire", "connection"]);
 
 const MOOD_LABELS = moodOptions;
 const MOOD_LABEL_LOOKUP = new Map(MOOD_LABELS.map(label => [label.toLowerCase(), label]));
@@ -74,16 +81,59 @@ const DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS: StExpressionImageOptions = {
   positionY: 20,
 };
 
-function hasNumericValue(entry: TrackerData, key: NumericStatKey, name: string): boolean {
-  return entry.statistics[key]?.[name] !== undefined;
+function shortLabelFrom(label: string): string {
+  const cleaned = label.trim().toUpperCase();
+  if (!cleaned) return "?";
+  if (cleaned.length <= 2) return cleaned;
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return `${words[0][0]}${words[1][0]}`;
+  }
+  return cleaned.slice(0, 2);
 }
 
-function getNumericStatsForCharacter(entry: TrackerData, name: string): typeof NUMERIC_STAT_DEFS {
-  return NUMERIC_STAT_DEFS.filter(def => hasNumericValue(entry, def.key, name));
+function getNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNumericStatDefinition[] {
+  return getAllNumericStatDefinitions(settings).map(def => ({
+    key: def.id,
+    label: def.label,
+    short: shortLabelFrom(def.label),
+    color: def.color || "#9cff8f",
+    defaultValue: Math.max(0, Math.min(100, Math.round(Number(def.defaultValue) || 50))),
+    showOnCard: def.showOnCard,
+    showInGraph: def.showInGraph,
+  }));
 }
 
-function getNumericStatsForHistory(history: TrackerData[], name: string): typeof NUMERIC_STAT_DEFS {
-  return NUMERIC_STAT_DEFS.filter(def => history.some(entry => hasNumericValue(entry, def.key, name)));
+function getNumericRawValue(entry: TrackerData, key: string, name: string): number | undefined {
+  if (BUILT_IN_NUMERIC_STAT_KEYS.has(key)) {
+    const raw = entry.statistics[key as "affection" | "trust" | "desire" | "connection"]?.[name];
+    if (raw === undefined) return undefined;
+    return Number(raw);
+  }
+  const customRaw = entry.customStatistics?.[key]?.[name];
+  if (customRaw === undefined) return undefined;
+  return Number(customRaw);
+}
+
+function hasNumericValue(entry: TrackerData, key: string, name: string): boolean {
+  const raw = getNumericRawValue(entry, key, name);
+  return raw !== undefined && !Number.isNaN(raw);
+}
+
+function getNumericStatsForCharacter(
+  entry: TrackerData,
+  name: string,
+  settings: BetterSimTrackerSettings,
+): UiNumericStatDefinition[] {
+  return getNumericStatDefinitions(settings).filter(def => def.showOnCard);
+}
+
+function getNumericStatsForHistory(
+  history: TrackerData[],
+  name: string,
+  settings: BetterSimTrackerSettings,
+): UiNumericStatDefinition[] {
+  return getNumericStatDefinitions(settings).filter(def => def.showInGraph);
 }
 
 export type TrackerUiState = {
@@ -227,6 +277,87 @@ function sanitizeStExpressionImageOptions(raw: unknown, fallback: StExpressionIm
     positionX: clamp(positionX ?? fallback.positionX, 0, 100),
     positionY: clamp(positionY ?? fallback.positionY, 0, 100),
   };
+}
+
+function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStatDefinition {
+  return {
+    id: String(definition.id ?? "").trim().toLowerCase(),
+    label: String(definition.label ?? "").trim(),
+    description: typeof definition.description === "string" ? definition.description : undefined,
+    defaultValue: Number(definition.defaultValue),
+    maxDeltaPerTurn: definition.maxDeltaPerTurn === undefined ? undefined : Number(definition.maxDeltaPerTurn),
+    track: Boolean(definition.track),
+    showOnCard: Boolean(definition.showOnCard),
+    showInGraph: Boolean(definition.showInGraph),
+    includeInInjection: Boolean(definition.includeInInjection),
+    color: typeof definition.color === "string" ? definition.color : undefined,
+    sequentialPromptTemplate: typeof definition.sequentialPromptTemplate === "string" ? definition.sequentialPromptTemplate : undefined,
+  };
+}
+
+const DEFAULT_BUILT_IN_NUMERIC_STAT_UI: BuiltInNumericStatUiSettings = {
+  affection: { showOnCard: true, showInGraph: true, includeInInjection: true },
+  trust: { showOnCard: true, showInGraph: true, includeInInjection: true },
+  desire: { showOnCard: true, showInGraph: true, includeInInjection: true },
+  connection: { showOnCard: true, showInGraph: true, includeInInjection: true },
+};
+
+function cloneBuiltInNumericStatUi(settings: Partial<BuiltInNumericStatUiSettings> | null | undefined): BuiltInNumericStatUiSettings {
+  const row = (key: keyof BuiltInNumericStatUiSettings): BuiltInNumericStatUiSettings[typeof key] => {
+    const fallback = DEFAULT_BUILT_IN_NUMERIC_STAT_UI[key];
+    const raw = settings?.[key];
+    return {
+      showOnCard: Boolean(raw?.showOnCard ?? fallback.showOnCard),
+      showInGraph: Boolean(raw?.showInGraph ?? fallback.showInGraph),
+      includeInInjection: Boolean(raw?.includeInInjection ?? fallback.includeInInjection),
+    };
+  };
+  return {
+    affection: row("affection"),
+    trust: row("trust"),
+    desire: row("desire"),
+    connection: row("connection"),
+  };
+}
+
+const BUILT_IN_STAT_LABELS: Record<"affection" | "trust" | "desire" | "connection" | "mood" | "lastThought", string> = {
+  affection: "Affection",
+  trust: "Trust",
+  desire: "Desire",
+  connection: "Connection",
+  mood: "Mood",
+  lastThought: "Last Thought",
+};
+const BUILT_IN_NUMERIC_STAT_KEY_LIST = ["affection", "trust", "desire", "connection"] as const;
+const BUILT_IN_TRACKABLE_STAT_KEY_LIST = ["affection", "trust", "desire", "connection", "mood", "lastThought"] as const;
+
+function toCustomStatSlug(label: string): string {
+  const normalized = String(label ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+  if (!normalized) return "stat";
+  const prefixed = /^[a-z]/.test(normalized) ? normalized : `s_${normalized}`;
+  return prefixed.slice(0, 32).replace(/_+$/g, "");
+}
+
+function suggestUniqueCustomStatId(base: string, existing: Set<string>): string {
+  const root = (toCustomStatSlug(base) || "stat").slice(0, 32);
+  if (!existing.has(root) && CUSTOM_STAT_ID_REGEX.test(root) && !RESERVED_CUSTOM_STAT_IDS.has(root)) {
+    return root;
+  }
+  for (let i = 2; i < 10_000; i += 1) {
+    const suffix = `_${i}`;
+    const maxBaseLength = Math.max(1, 32 - suffix.length);
+    const candidateRoot = root.slice(0, maxBaseLength).replace(/_+$/g, "") || "stat";
+    const candidate = `${candidateRoot}${suffix}`;
+    if (existing.has(candidate)) continue;
+    if (!CUSTOM_STAT_ID_REGEX.test(candidate)) continue;
+    if (RESERVED_CUSTOM_STAT_IDS.has(candidate)) continue;
+    return candidate;
+  }
+  return `stat_${Date.now().toString().slice(-4)}`;
 }
 
 function getGlobalStExpressionImageOptions(settings: BetterSimTrackerSettings): StExpressionImageOptions {
@@ -1000,6 +1131,9 @@ function ensureStyles(): void {
   row-gap: 10px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.bst-toggle-block {
+  margin-top: 8px;
+}
 .bst-check-grid-single { grid-template-columns: minmax(0, 1fr); }
 .bst-mood-advanced-settings { margin-top: 8px; }
 .bst-st-expression-control {
@@ -1023,15 +1157,21 @@ function ensureStyles(): void {
   border-color: rgba(168, 203, 245, 0.32);
   background: rgba(14, 20, 33, 0.72);
 }
-.bst-settings label { font-size: 12px; display: flex; flex-direction: column; gap: 6px; color: rgba(241, 246, 255, 0.94); }
-.bst-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
+.bst-settings label,
+.bst-custom-wizard label { font-size: 12px; display: flex; flex-direction: column; gap: 6px; color: rgba(241, 246, 255, 0.94); }
+.bst-check { flex-direction: row !important; align-items: center; gap: 10px !important; }
 .bst-check input[type="checkbox"] {
-  all: unset;
   appearance: none !important;
   -webkit-appearance: none !important;
-  width: 18px;
-  height: 18px;
-  min-width: 18px;
+  -moz-appearance: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  min-width: 19px;
   margin: 0;
   border-radius: 999px;
   border: 1px solid rgba(188, 212, 242, 0.55);
@@ -1043,14 +1183,12 @@ function ensureStyles(): void {
 }
 .bst-check input[type="checkbox"]::before {
   content: "";
-  position: absolute;
-  left: 5px;
-  top: 2px;
+  display: block;
   width: 5px;
   height: 9px;
   border-right: 2px solid #0b1020;
   border-bottom: 2px solid #0b1020;
-  transform: rotate(45deg) scale(0);
+  transform: translate(-0.5px, -1px) rotate(45deg) scale(0);
   transform-origin: center;
   opacity: 0;
   transition: transform .14s ease, opacity .14s ease;
@@ -1074,46 +1212,62 @@ function ensureStyles(): void {
 }
 .bst-check input[type="checkbox"]:checked::before {
   opacity: 1;
-  transform: rotate(45deg) scale(1);
+  transform: translate(-0.5px, -1px) rotate(45deg) scale(1);
 }
 .bst-check input[type="checkbox"]:active {
   transform: scale(0.94);
 }
-.bst-settings input, .bst-settings select, .bst-settings textarea {
+.bst-settings input:not([type="checkbox"]), .bst-settings select, .bst-settings textarea,
+.bst-custom-wizard input:not([type="checkbox"]), .bst-custom-wizard select, .bst-custom-wizard textarea {
   background: #0d1220 !important;
   color: #f3f5f9 !important;
   border: 1px solid rgba(255,255,255,0.20) !important;
   border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
   padding: 8px 10px;
   transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
 }
-.bst-settings input,
-.bst-settings select {
+.bst-settings input:not([type="checkbox"]),
+.bst-settings select,
+.bst-custom-wizard input:not([type="checkbox"]),
+.bst-custom-wizard select {
   min-height: 36px;
 }
-.bst-settings input:hover,
+.bst-settings input:not([type="checkbox"]):hover,
 .bst-settings select:hover,
-.bst-settings textarea:hover {
+.bst-settings textarea:hover,
+.bst-custom-wizard input:not([type="checkbox"]):hover,
+.bst-custom-wizard select:hover,
+.bst-custom-wizard textarea:hover {
   border-color: rgba(168, 203, 245, 0.48) !important;
   background: #101728 !important;
 }
-.bst-settings input:focus-visible,
+.bst-settings input:not([type="checkbox"]):focus-visible,
 .bst-settings select:focus-visible,
-.bst-settings textarea:focus-visible {
+.bst-settings textarea:focus-visible,
+.bst-custom-wizard input:not([type="checkbox"]):focus-visible,
+.bst-custom-wizard select:focus-visible,
+.bst-custom-wizard textarea:focus-visible {
   outline: none;
   border-color: rgba(56,189,248,0.9) !important;
   box-shadow: 0 0 0 2px rgba(56,189,248,0.25);
 }
-.bst-settings label:focus-within {
+.bst-settings label:focus-within,
+.bst-custom-wizard label:focus-within {
   color: #e6f6ff;
 }
-.bst-settings textarea {
+.bst-settings textarea,
+.bst-custom-wizard textarea {
   resize: vertical;
   min-height: 120px;
   font-family: Consolas, "Courier New", monospace;
   line-height: 1.35;
 }
-.bst-settings input::placeholder { color: rgba(243,245,249,0.6); }
+.bst-settings input::placeholder,
+.bst-settings textarea::placeholder,
+.bst-custom-wizard input::placeholder,
+.bst-custom-wizard textarea::placeholder { color: rgba(243,245,249,0.6); }
 .bst-settings-section {
   margin: 10px 0;
   padding: 12px 12px 13px;
@@ -1131,6 +1285,8 @@ function ensureStyles(): void {
   display: inline-flex;
   align-items: center;
   margin-top: 6px;
+  gap: 8px;
+  width: 100%;
 }
 .bst-color-inputs input[type="color"] {
   width: 42px;
@@ -1150,6 +1306,10 @@ function ensureStyles(): void {
 .bst-color-inputs input[type="color"]::-moz-color-swatch {
   border: none;
   border-radius: 4px;
+}
+.bst-color-inputs input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 120px;
 }
 .bst-quick-help {
   background: linear-gradient(135deg, rgba(10, 18, 32, 0.75), rgba(8, 12, 22, 0.75));
@@ -1483,6 +1643,172 @@ function ensureStyles(): void {
   font-family: Consolas, "Courier New", monospace;
   font-size: 11px;
   white-space: pre-wrap;
+}
+.bst-custom-stats-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.bst-custom-stats-top-centered {
+  justify-content: center;
+}
+.bst-custom-stats-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+.bst-custom-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(11, 16, 27, 0.58);
+}
+.bst-custom-stat-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.bst-custom-stat-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.bst-custom-stat-id {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+  font-size: 11px;
+  font-family: Consolas, "Courier New", monospace;
+  opacity: 0.9;
+}
+.bst-custom-stat-meta {
+  font-size: 11px;
+  opacity: 0.85;
+}
+.bst-custom-stat-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bst-custom-stat-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.08);
+  font-size: 11px;
+  opacity: 0.9;
+}
+.bst-custom-stat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bst-custom-stat-empty {
+  border: 1px dashed rgba(255,255,255,0.2);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.82;
+  background: rgba(6, 10, 18, 0.44);
+}
+.bst-custom-wizard-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 2147483250;
+}
+.bst-custom-wizard {
+  position: fixed;
+  z-index: 2147483251;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, calc(100vw - 20px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: linear-gradient(180deg, rgba(13, 19, 31, 0.98), rgba(9, 14, 24, 0.98));
+  box-shadow: 0 20px 54px rgba(0,0,0,0.5);
+  color: #f3f5f9;
+  padding: 12px 12px 14px;
+}
+.bst-custom-wizard-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.bst-custom-wizard-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.bst-custom-wizard-step {
+  font-size: 12px;
+  opacity: 0.84;
+}
+.bst-custom-wizard-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.bst-custom-wizard-grid-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.bst-custom-wizard-panel {
+  display: none;
+  margin-top: 8px;
+}
+.bst-custom-wizard-panel.is-active {
+  display: block;
+}
+.bst-custom-wizard-error {
+  display: none;
+  margin-top: 8px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,127,127,0.45);
+  background: rgba(88, 19, 19, 0.5);
+  color: #ffd6d6;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.bst-custom-wizard-review {
+  margin: 0;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(7, 11, 19, 0.7);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.bst-custom-wizard-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bst-custom-wizard-actions .bst-btn {
+  min-width: 96px;
 }
 .bst-graph-backdrop {
   position: fixed;
@@ -2003,6 +2329,35 @@ function ensureStyles(): void {
   .bst-settings-footer .bst-btn {
     flex: 1 1 0;
   }
+  .bst-custom-stat-row {
+    flex-direction: column;
+  }
+  .bst-custom-stat-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bst-custom-wizard {
+    left: 0;
+    top: 0;
+    transform: none;
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    padding: 12px 10px 14px;
+  }
+  .bst-custom-wizard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bst-custom-wizard-actions {
+    flex-wrap: wrap;
+  }
+  .bst-custom-wizard-actions .bst-btn {
+    flex: 1 1 0;
+  }
   .bst-graph-modal {
     left: 0;
     top: 0;
@@ -2312,11 +2667,10 @@ export function renderTracker(
     const showRetrack = latestAiIndex != null && entry.messageIndex === latestAiIndex;
     const collapsed = root.classList.contains("bst-root-collapsed");
     const activeSet = new Set(data.activeCharacters.map(normalizeName));
+    const allNumericDefs = getNumericStatDefinitions(settings);
+    const cardNumericDefs = allNumericDefs.filter(def => def.showOnCard);
     const hasAnyStatFor = (name: string): boolean =>
-      data.statistics.affection?.[name] !== undefined ||
-      data.statistics.trust?.[name] !== undefined ||
-      data.statistics.desire?.[name] !== undefined ||
-      data.statistics.connection?.[name] !== undefined ||
+      cardNumericDefs.some(def => hasNumericValue(data, def.key, name)) ||
       data.statistics.mood?.[name] !== undefined ||
       data.statistics.lastThought?.[name] !== undefined;
     const forceAllInGroup = isGroupChat;
@@ -2354,7 +2708,7 @@ export function renderTracker(
       const isActive = activeSet.has(normalizeName(name));
       if (!isActive && !settings.showInactive) continue;
       const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
-      const enabledNumeric = getNumericStatsForCharacter(data, name);
+      const enabledNumeric = getNumericStatsForCharacter(data, name, settings);
       const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
@@ -2374,7 +2728,7 @@ export function renderTracker(
         return ` style="object-position:${stExpressionImageOptions.positionX.toFixed(2)}% ${stExpressionImageOptions.positionY.toFixed(2)}% !important;transform:translate(${panX.toFixed(2)}%, ${panY.toFixed(2)}%) scale(${stExpressionImageOptions.zoom.toFixed(2)}) !important;transform-origin:center center !important;"`;
       })();
       const collapsedSummary = enabledNumeric.map(def => {
-        const value = toPercent(data.statistics[def.key]?.[name] ?? 0);
+        const value = toPercent(getNumericRawValue(data, def.key, name) ?? def.defaultValue);
         return `<span>${def.short} ${value}%</span>`;
       }).join("");
       const showCollapsedMood = moodText !== "";
@@ -2395,13 +2749,15 @@ export function renderTracker(
           ${showCollapsedMood ? `<span class="bst-collapsed-mood" title="${moodText}">${moodToEmojiEntity(moodText)}</span>` : ""}
         </div>` : ""}
         <div class="bst-body">
-        ${enabledNumeric.map(({ key, label, color }) => {
-          const value = toPercent(data.statistics[key]?.[name] ?? 0);
-          const prevValueRaw = previousData?.statistics[key]?.[name];
-          const prevValue = toPercent(prevValueRaw ?? value);
+        ${enabledNumeric.map(({ key, label, color, defaultValue }) => {
+          const defDefault = defaultValue ?? 50;
+          const value = toPercent(getNumericRawValue(data, key, name) ?? defDefault);
+          const prevValueRaw = previousData ? getNumericRawValue(previousData, key, name) : undefined;
+          const hasPrevValue = prevValueRaw !== undefined;
+          const prevValue = toPercent(hasPrevValue ? prevValueRaw : value);
           const delta = Math.round(value - prevValue);
           const deltaClass = delta > 0 ? "bst-delta bst-delta-up" : delta < 0 ? "bst-delta bst-delta-down" : "bst-delta bst-delta-flat";
-          const showDelta = latestAiIndex != null && entry.messageIndex === latestAiIndex;
+          const showDelta = latestAiIndex != null && entry.messageIndex === latestAiIndex && hasPrevValue;
           const rowClass = showDelta && delta !== 0 ? "bst-row bst-row-changed" : "bst-row";
           return `
             <div class="${rowClass}">
@@ -2651,46 +3007,42 @@ function closeMoodImageModal(immediate = false): void {
   }, 150);
 }
 
-function statValue(entry: TrackerData, stat: NumericStatKey, character: string): number {
-  const raw = Number(entry.statistics[stat]?.[character] ?? 0);
-  if (Number.isNaN(raw)) return 0;
+function statValue(entry: TrackerData, statKey: string, character: string, fallback: number): number {
+  const raw = getNumericRawValue(entry, statKey, character);
+  if (raw === undefined || Number.isNaN(raw)) return fallback;
   return Math.max(0, Math.min(100, raw));
 }
 
 function hasCharacterSnapshot(entry: TrackerData, character: string): boolean {
+  for (const statKey of BUILT_IN_NUMERIC_STAT_KEYS) {
+    if (hasNumericValue(entry, statKey, character)) return true;
+  }
+  if (entry.customStatistics) {
+    for (const values of Object.values(entry.customStatistics)) {
+      if (values?.[character] !== undefined) return true;
+    }
+  }
   return (
-    entry.statistics.affection?.[character] !== undefined ||
-    entry.statistics.trust?.[character] !== undefined ||
-    entry.statistics.desire?.[character] !== undefined ||
-    entry.statistics.connection?.[character] !== undefined ||
     entry.statistics.mood?.[character] !== undefined ||
     entry.statistics.lastThought?.[character] !== undefined
   );
 }
 
-function hasNumericSnapshot(entry: TrackerData, character: string): boolean {
-  return (
-    entry.statistics.affection?.[character] !== undefined ||
-    entry.statistics.trust?.[character] !== undefined ||
-    entry.statistics.desire?.[character] !== undefined ||
-    entry.statistics.connection?.[character] !== undefined
-  );
+function hasNumericSnapshot(entry: TrackerData, character: string, defs: UiNumericStatDefinition[]): boolean {
+  for (const def of defs) {
+    if (hasNumericValue(entry, def.key, character)) return true;
+  }
+  return false;
 }
 
 function buildStatSeries(
   timeline: TrackerData[],
   character: string,
-  stat: NumericStatKey,
+  def: UiNumericStatDefinition,
 ): number[] {
-  let carry = 50;
+  let carry = Math.max(0, Math.min(100, Math.round(def.defaultValue)));
   return timeline.map(item => {
-    const raw = item.statistics[stat]?.[character];
-    if (raw !== undefined) {
-      const n = Number(raw);
-      if (!Number.isNaN(n)) {
-        carry = Math.max(0, Math.min(100, n));
-      }
-    }
+    carry = statValue(item, def.key, character, carry);
     return carry;
   });
 }
@@ -2804,6 +3156,10 @@ function buildLastPointCircle(values: number[], color: string, width: number, he
   return `<circle cx="${x}" cy="${y}" r="4.2" fill="${color}" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />`;
 }
 
+function graphSeriesDomId(key: string): string {
+  return `series-${key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
 export function openGraphModal(input: {
   character: string;
   history: TrackerData[];
@@ -2822,27 +3178,27 @@ export function openGraphModal(input: {
   const modal = document.createElement("div");
   modal.className = "bst-graph-modal";
 
-  const enabledNumeric = getNumericStatsForHistory(input.history, input.character);
+  const enabledNumeric = getNumericStatsForHistory(input.history, input.character, input.settings);
   const timeline = [...input.history]
     .filter(item => Number.isFinite(item.timestamp))
     .sort((a, b) => a.timestamp - b.timestamp)
-    .filter(item => hasNumericSnapshot(item, input.character));
+    .filter(item => hasNumericSnapshot(item, input.character, enabledNumeric));
   const rawSnapshotCount = timeline.length;
   const windowPreference = getGraphWindowPreference();
   const windowSize = windowPreference === "all" ? null : Number(windowPreference);
   const windowedTimeline = windowSize ? timeline.slice(-windowSize) : timeline;
   const renderedTimeline = downsampleTimeline(windowedTimeline, 140);
-  const points: Partial<Record<NumericStatKey, number[]>> = {};
+  const points: Record<string, number[]> = {};
   for (const def of enabledNumeric) {
-    points[def.key] = buildStatSeries(renderedTimeline, input.character, def.key);
+    points[def.key] = buildStatSeries(renderedTimeline, input.character, def);
   }
 
   const width = 780;
   const height = 320;
   let smoothing = getGraphSmoothingPreference();
   const connectionColor = input.accentColor || "#9cff8f";
-  const buildSeriesFrom = (defs: typeof NUMERIC_STAT_DEFS, seriesSource: Partial<Record<NumericStatKey, number[]>>) => {
-    const series: Partial<Record<NumericStatKey, number[]>> = {};
+  const buildSeriesFrom = (defs: UiNumericStatDefinition[], seriesSource: Record<string, number[]>) => {
+    const series: Record<string, number[]> = {};
     for (const def of defs) {
       const values = seriesSource[def.key] ?? [];
       series[def.key] = smoothing ? smoothSeries(values, 3) : values;
@@ -2863,7 +3219,7 @@ export function openGraphModal(input: {
     const color = def.key === "connection" ? connectionColor : def.color;
     return buildLastPointCircle(points[def.key] ?? [], color, width, height);
   }).join("");
-  const latest: Partial<Record<NumericStatKey, number>> = {};
+  const latest: Record<string, number> = {};
   for (const def of enabledNumeric) {
     latest[def.key] = points[def.key]?.at(-1) ?? 0;
   }
@@ -2924,7 +3280,7 @@ export function openGraphModal(input: {
         <line id="bst-graph-hover-line" x1="0" y1="24" x2="0" y2="${height - 24}" stroke="rgba(255,255,255,0.25)" stroke-width="1"></line>
         ${enabledNumeric.map(def => {
           const color = def.key === "connection" ? connectionColor : def.color;
-          return `<circle id="bst-graph-hover-${def.key}" r="3.8" fill="${color}"></circle>`;
+          return `<circle id="bst-graph-hover-${graphSeriesDomId(def.key)}" r="3.8" fill="${color}"></circle>`;
         }).join("")}
       </g>
       ${enabledNumeric.length === 0 && snapshotCount === 0
@@ -2950,9 +3306,9 @@ export function openGraphModal(input: {
   const svg = modal.querySelector(".bst-graph-svg") as SVGSVGElement | null;
   const hoverGroup = modal.querySelector("#bst-graph-hover") as SVGGElement | null;
   const hoverLine = modal.querySelector("#bst-graph-hover-line") as SVGLineElement | null;
-  const hoverDots: Partial<Record<NumericStatKey, SVGCircleElement | null>> = {};
+  const hoverDots: Record<string, SVGCircleElement | null> = {};
   for (const def of enabledNumeric) {
-    hoverDots[def.key] = modal.querySelector(`#bst-graph-hover-${def.key}`) as SVGCircleElement | null;
+    hoverDots[def.key] = modal.querySelector(`#bst-graph-hover-${graphSeriesDomId(def.key)}`) as SVGCircleElement | null;
   }
   const tooltip = modal.querySelector("#bst-graph-tooltip") as HTMLDivElement | null;
   const pointCount = enabledNumeric.length ? (points[enabledNumeric[0].key]?.length ?? 0) : 0;
@@ -3058,6 +3414,10 @@ export function openSettingsModal(input: {
     `<option value="">Use active connection</option>`,
     ...Array.from(profileMap.entries()).map(([id, label]) => `<option value="${id}">${label}</option>`)
   ].join("");
+  let customStatsState: CustomStatDefinition[] = Array.isArray(input.settings.customStats)
+    ? input.settings.customStats.map(cloneCustomStatDefinition)
+    : [];
+  let builtInNumericStatUiState: BuiltInNumericStatUiSettings = cloneBuiltInNumericStatUi(input.settings.builtInNumericStatUi);
 
   const modal = document.createElement("div");
   modal.className = "bst-settings";
@@ -3137,13 +3497,8 @@ export function openSettingsModal(input: {
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-chart-line"></span>Tracked Stats</h4>
-      <div class="bst-check-grid">
-        <label class="bst-check"><input data-k="trackAffection" type="checkbox">Track Affection</label>
-        <label class="bst-check"><input data-k="trackTrust" type="checkbox">Track Trust</label>
-        <label class="bst-check"><input data-k="trackDesire" type="checkbox">Track Desire</label>
-        <label class="bst-check"><input data-k="trackConnection" type="checkbox">Track Connection</label>
-        <label class="bst-check"><input data-k="trackMood" type="checkbox">Track Mood</label>
-        <label class="bst-check"><input data-k="trackLastThought" type="checkbox">Track Last Thought</label>
+      <div class="bst-custom-stats-top bst-custom-stats-top-centered">
+        <button type="button" class="bst-btn bst-btn-soft" data-action="manage-builtins">Manage Built-in Stats</button>
       </div>
       <div data-bst-row="moodAdvancedBlock" class="bst-mood-advanced-settings">
         <div class="bst-section-divider">Mood Advanced Settings</div>
@@ -3189,6 +3544,14 @@ export function openSettingsModal(input: {
       </div>
     </div>
     <div class="bst-settings-section">
+      <h4><span class="bst-header-icon fa-solid fa-sliders"></span>Custom Stats</h4>
+      <div class="bst-custom-stats-top">
+        <div class="bst-help-line">Add custom numeric percentage stats (0..100). Maximum ${MAX_CUSTOM_STATS} custom stats.</div>
+        <button type="button" class="bst-btn bst-btn-soft" data-action="custom-add">Add Custom Stat</button>
+      </div>
+      <div class="bst-custom-stats-list" data-bst-row="customStatsList"></div>
+    </div>
+    <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-eye"></span>Display</h4>
       <div class="bst-settings-grid">
         <label data-bst-row="inactiveLabel">Inactive Label <input data-k="inactiveLabel" type="text"></label>
@@ -3226,6 +3589,8 @@ export function openSettingsModal(input: {
           <li><code>{{textStats}}</code> — requested text stats list</li>
           <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
           <li><code>{{moodOptions}}</code> — allowed mood labels</li>
+          <li><code>{{statId}}</code>/<code>{{statLabel}}</code> — custom stat identity (custom sequential template)</li>
+          <li><code>{{statDescription}}</code>/<code>{{statDefault}}</code> — custom stat metadata (custom sequential template)</li>
         </ul>
       </details>
       <div class="bst-settings-grid bst-settings-grid-single bst-prompts-stack">
@@ -3292,6 +3657,19 @@ export function openSettingsModal(input: {
             <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("connection"))}</pre>
+          </div>
+        </label>
+        <label class="bst-prompt-group">
+          <div class="bst-prompt-head">
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-sliders"></span>Seq: Custom Numeric</span>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialCustomNumeric" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+          </div>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable default used when a custom stat has no per-stat override)</div>
+            <textarea data-k="promptTemplateSequentialCustomNumeric" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("{{statId}}"))}</pre>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -3466,6 +3844,7 @@ export function openSettingsModal(input: {
       "Connection & Generation": "connection",
       "Extraction": "extraction",
       "Tracked Stats": "tracked-stats",
+      "Custom Stats": "custom-stats",
       "Display": "display",
       "Prompts": "prompts",
       "Debug": "debug"
@@ -3671,6 +4050,7 @@ export function openSettingsModal(input: {
   set("promptTemplateSequentialTrust", input.settings.promptTemplateSequentialTrust);
   set("promptTemplateSequentialDesire", input.settings.promptTemplateSequentialDesire);
   set("promptTemplateSequentialConnection", input.settings.promptTemplateSequentialConnection);
+  set("promptTemplateSequentialCustomNumeric", input.settings.promptTemplateSequentialCustomNumeric);
   set("promptTemplateSequentialMood", input.settings.promptTemplateSequentialMood);
   set("promptTemplateSequentialLastThought", input.settings.promptTemplateSequentialLastThought);
   set("promptTemplateInjection", input.settings.promptTemplateInjection);
@@ -3723,20 +4103,698 @@ export function openSettingsModal(input: {
       .sort((a, b) => a.name.localeCompare(b.name));
   };
   if (globalFrameButton) globalFrameButton.disabled = false;
+  const customStatsListNode = modal.querySelector('[data-bst-row="customStatsList"]') as HTMLElement | null;
+  const customAddButton = modal.querySelector('[data-action="custom-add"]') as HTMLButtonElement | null;
+  const manageBuiltInsButton = modal.querySelector('[data-action="manage-builtins"]') as HTMLButtonElement | null;
+
+  type CustomStatWizardMode = "add" | "edit" | "duplicate";
+  type CustomStatDraft = {
+    label: string;
+    id: string;
+    description: string;
+    defaultValue: string;
+    maxDeltaPerTurn: string;
+    enabled: boolean;
+    includeInInjection: boolean;
+    color: string;
+    sequentialPromptTemplate: string;
+    lockId: boolean;
+  };
+
+  const makeDraft = (mode: CustomStatWizardMode, source?: CustomStatDefinition): CustomStatDraft => {
+    if (!source) {
+      return {
+        label: "",
+        id: "",
+        description: "",
+        defaultValue: "50",
+        maxDeltaPerTurn: "",
+        enabled: true,
+        includeInInjection: true,
+        color: "",
+        sequentialPromptTemplate: "",
+        lockId: false,
+      };
+    }
+    const clone = cloneCustomStatDefinition(source);
+    const duplicateId = mode === "duplicate"
+      ? suggestUniqueCustomStatId(`${clone.id}_copy`, new Set(customStatsState.map(item => item.id)))
+      : clone.id;
+    return {
+      label: clone.label,
+      id: duplicateId,
+      description: clone.description ?? "",
+      defaultValue: String(Number.isFinite(clone.defaultValue) ? Math.round(clone.defaultValue) : 50),
+      maxDeltaPerTurn: clone.maxDeltaPerTurn == null ? "" : String(Math.round(clone.maxDeltaPerTurn)),
+      enabled: clone.track || clone.showOnCard || clone.showInGraph,
+      includeInInjection: clone.includeInInjection,
+      color: clone.color ?? "",
+      sequentialPromptTemplate: clone.sequentialPromptTemplate ?? "",
+      lockId: mode === "edit",
+    };
+  };
+
+  const validateCustomStatDraft = (
+    draft: CustomStatDraft,
+    mode: CustomStatWizardMode,
+    step: number,
+    currentId?: string,
+  ): string[] => {
+    const errors: string[] = [];
+    const id = draft.id.trim().toLowerCase();
+    const label = draft.label.trim();
+    const existingIds = new Set(customStatsState
+      .map(item => item.id)
+      .filter(item => !currentId || item !== currentId));
+
+    if (step >= 1) {
+      if (label.length < 2 || label.length > 40) {
+        errors.push("Label must be between 2 and 40 characters.");
+      }
+      if (!id) {
+        errors.push("ID is required.");
+      } else if (!CUSTOM_STAT_ID_REGEX.test(id)) {
+        errors.push("ID must match: lowercase, numbers, underscore, and start with a letter.");
+      } else if (RESERVED_CUSTOM_STAT_IDS.has(id)) {
+        errors.push("ID is reserved by the tracker.");
+      } else if (existingIds.has(id)) {
+        errors.push("ID is already used.");
+      }
+      if (mode === "edit" && draft.lockId && currentId && id !== currentId) {
+        errors.push("ID cannot be changed in edit mode.");
+      }
+      if (draft.description.trim().length < 3) {
+        errors.push("Description is required (at least 3 characters).");
+      }
+    }
+
+    if (step >= 2) {
+      const defaultValue = Number(draft.defaultValue);
+      if (!Number.isFinite(defaultValue) || defaultValue < 0 || defaultValue > 100) {
+        errors.push("Default value must be between 0 and 100.");
+      }
+      if (draft.maxDeltaPerTurn.trim()) {
+        const maxDelta = Number(draft.maxDeltaPerTurn);
+        if (!Number.isFinite(maxDelta) || maxDelta < 1 || maxDelta > 30) {
+          errors.push("Max delta per turn must be between 1 and 30.");
+        }
+      }
+    }
+
+    if (step >= 3) {
+      if (draft.sequentialPromptTemplate.length > 20000) {
+        errors.push("Custom sequential prompt template is too long.");
+      }
+    }
+
+    if (step >= 4) {
+      const color = draft.color.trim();
+      if (color && !/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color)) {
+        errors.push("Color must be empty or a hex value like #66ccff.");
+      }
+    }
+
+    return errors;
+  };
+
+  const toCustomStatDefinition = (draft: CustomStatDraft): CustomStatDefinition => {
+    const maxDeltaText = draft.maxDeltaPerTurn.trim();
+    const maxDeltaValue = maxDeltaText ? Number(maxDeltaText) : null;
+    const color = draft.color.trim();
+    const template = draft.sequentialPromptTemplate.trim();
+    return {
+      id: draft.id.trim().toLowerCase(),
+      label: draft.label.trim(),
+      description: draft.description.trim(),
+      defaultValue: Math.max(0, Math.min(100, Math.round(Number(draft.defaultValue)))),
+      maxDeltaPerTurn: maxDeltaValue == null || !Number.isFinite(maxDeltaValue)
+        ? undefined
+        : Math.max(1, Math.min(30, Math.round(maxDeltaValue))),
+      track: draft.enabled,
+      includeInInjection: draft.includeInInjection,
+      showOnCard: draft.enabled,
+      showInGraph: draft.enabled,
+      color: color || undefined,
+      sequentialPromptTemplate: template || undefined,
+    };
+  };
+
+  const renderCustomStatsList = (): void => {
+    if (!customStatsListNode) return;
+    if (customAddButton) {
+      customAddButton.disabled = customStatsState.length >= MAX_CUSTOM_STATS;
+      customAddButton.title = customAddButton.disabled
+        ? `Maximum ${MAX_CUSTOM_STATS} custom stats reached.`
+        : "Add custom stat";
+    }
+    if (!customStatsState.length) {
+      customStatsListNode.innerHTML = `
+        <div class="bst-custom-stat-empty">
+          No custom stats yet. Add one to track extra dimensions without changing built-in defaults.
+        </div>
+      `;
+      return;
+    }
+    customStatsListNode.innerHTML = customStatsState.map(stat => {
+      const flags = [
+        stat.track || stat.showOnCard || stat.showInGraph ? "enabled" : "disabled",
+        stat.includeInInjection ? "injection" : "no injection",
+      ];
+      const description = (stat.description ?? "").trim();
+      return `
+        <div class="bst-custom-stat-row" data-bst-custom-id="${escapeHtml(stat.id)}">
+          <div class="bst-custom-stat-main">
+            <div class="bst-custom-stat-title">
+              <span>${escapeHtml(stat.label)}</span>
+              <span class="bst-custom-stat-id">${escapeHtml(stat.id)}</span>
+            </div>
+            <div class="bst-custom-stat-meta">
+              Default: ${Math.round(Number(stat.defaultValue) || 0)}% · Max delta: ${stat.maxDeltaPerTurn == null ? "global" : Math.round(Number(stat.maxDeltaPerTurn))}
+            </div>
+            ${description ? `<div class="bst-custom-stat-meta">${escapeHtml(description)}</div>` : ""}
+            <div class="bst-custom-stat-flags">
+              ${flags.map(flag => `<span class="bst-custom-stat-flag">${escapeHtml(flag)}</span>`).join("")}
+            </div>
+          </div>
+          <div class="bst-custom-stat-actions">
+            <button type="button" class="bst-btn bst-btn-soft" data-action="custom-edit" data-custom-id="${escapeHtml(stat.id)}">Edit</button>
+            <button type="button" class="bst-btn bst-btn-soft" data-action="custom-duplicate" data-custom-id="${escapeHtml(stat.id)}">Clone</button>
+            <button type="button" class="bst-btn bst-btn-danger" data-action="custom-remove" data-custom-id="${escapeHtml(stat.id)}">Remove</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  };
+
+  const closeCustomWizard = (): void => {
+    document.querySelector(".bst-custom-wizard-backdrop")?.remove();
+    document.querySelector(".bst-custom-wizard")?.remove();
+  };
+
+  const openBuiltInManagerWizard = (): void => {
+    closeCustomWizard();
+    const current = collectSettings();
+    const draftUi = cloneBuiltInNumericStatUi(current.builtInNumericStatUi);
+    const draftTrack: Record<(typeof BUILT_IN_TRACKABLE_STAT_KEY_LIST)[number], boolean> = {
+      affection: current.trackAffection,
+      trust: current.trackTrust,
+      desire: current.trackDesire,
+      connection: current.trackConnection,
+      mood: current.trackMood,
+      lastThought: current.trackLastThought,
+    };
+
+    const backdropNode = document.createElement("div");
+    backdropNode.className = "bst-custom-wizard-backdrop";
+    const wizard = document.createElement("div");
+    wizard.className = "bst-custom-wizard";
+    const renderRows = (): string =>
+      BUILT_IN_TRACKABLE_STAT_KEY_LIST.map(key => {
+        const isNumeric = BUILT_IN_NUMERIC_STAT_KEYS.has(key);
+        const enabled = isNumeric
+          ? (draftTrack[key] || draftUi[key as keyof BuiltInNumericStatUiSettings].showOnCard || draftUi[key as keyof BuiltInNumericStatUiSettings].showInGraph)
+          : draftTrack[key];
+        return `
+        <div class="bst-custom-stat-row">
+          <div class="bst-custom-stat-main">
+            <div class="bst-custom-stat-title">
+              <span>${escapeHtml(BUILT_IN_STAT_LABELS[key])}</span>
+              <span class="bst-custom-stat-id">${escapeHtml(key)}</span>
+            </div>
+          </div>
+          <div class="bst-check-grid bst-toggle-block ${isNumeric ? "" : "bst-check-grid-single"}">
+            <label class="bst-check"><input type="checkbox" data-bst-builtin-enabled="${key}" ${enabled ? "checked" : ""}>${isNumeric ? "Enabled (Track + Card + Graph)" : "Enabled (Track)"}</label>
+            ${isNumeric
+              ? `<label class="bst-check"><input type="checkbox" data-bst-builtin-inject="${key}" ${draftUi[key as keyof BuiltInNumericStatUiSettings].includeInInjection ? "checked" : ""}>Include in prompt injection</label>`
+              : ""}
+          </div>
+        </div>
+      `;
+      }).join("");
+
+    wizard.innerHTML = `
+      <div class="bst-custom-wizard-head">
+        <div>
+          <div class="bst-custom-wizard-title">Manage Built-in Stats</div>
+          <div class="bst-custom-wizard-step" data-bst-builtin-step>Step 1 / 2</div>
+        </div>
+        <button type="button" class="bst-btn bst-close-btn" data-action="custom-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="bst-custom-wizard-panel is-active" data-bst-builtin-panel="1">
+        <div class="bst-help-line">Built-in stats are never deleted. You can manage whether each one is enabled.</div>
+        <ul class="bst-help-list">
+          <li><strong>Enabled</strong>: one toggle for Track + Card + Graph on numeric built-ins, and Track on text built-ins.</li>
+          <li><strong>Include in prompt injection</strong>: controls prompt injection lines for numeric built-ins.</li>
+        </ul>
+      </div>
+      <div class="bst-custom-wizard-panel" data-bst-builtin-panel="2">
+        <div class="bst-help-line">Configure built-in stats behavior:</div>
+        ${renderRows()}
+      </div>
+      <div class="bst-custom-wizard-actions">
+        <button type="button" class="bst-btn" data-action="builtin-back">Back</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="bst-btn bst-btn-soft" data-action="builtin-next">Next</button>
+          <button type="button" class="bst-btn bst-btn-soft" data-action="builtin-save" style="display:none;">Save</button>
+        </div>
+      </div>
+    `;
+
+    const stepLabel = wizard.querySelector('[data-bst-builtin-step]') as HTMLElement | null;
+    const panel1 = wizard.querySelector('[data-bst-builtin-panel="1"]') as HTMLElement | null;
+    const panel2 = wizard.querySelector('[data-bst-builtin-panel="2"]') as HTMLElement | null;
+    const backBtn = wizard.querySelector('[data-action="builtin-back"]') as HTMLButtonElement | null;
+    const nextBtn = wizard.querySelector('[data-action="builtin-next"]') as HTMLButtonElement | null;
+    const saveBtn = wizard.querySelector('[data-action="builtin-save"]') as HTMLButtonElement | null;
+    let step = 1;
+
+    const syncStep = (): void => {
+      if (stepLabel) stepLabel.textContent = `Step ${step} / 2`;
+      panel1?.classList.toggle("is-active", step === 1);
+      panel2?.classList.toggle("is-active", step === 2);
+      if (backBtn) backBtn.style.visibility = step === 1 ? "hidden" : "visible";
+      if (nextBtn) nextBtn.style.display = step === 1 ? "" : "none";
+      if (saveBtn) saveBtn.style.display = step === 2 ? "" : "none";
+    };
+
+    const applyFromDom = (): void => {
+      for (const key of BUILT_IN_TRACKABLE_STAT_KEY_LIST) {
+        const enabled = Boolean((wizard.querySelector(`[data-bst-builtin-enabled="${key}"]`) as HTMLInputElement | null)?.checked);
+        draftTrack[key] = enabled;
+        if (BUILT_IN_NUMERIC_STAT_KEYS.has(key)) {
+          const numericKey = key as (typeof BUILT_IN_NUMERIC_STAT_KEY_LIST)[number];
+          draftUi[numericKey].showOnCard = enabled;
+          draftUi[numericKey].showInGraph = enabled;
+          draftUi[numericKey].includeInInjection = Boolean((wizard.querySelector(`[data-bst-builtin-inject="${key}"]`) as HTMLInputElement | null)?.checked);
+        }
+      }
+    };
+
+    const close = (): void => closeCustomWizard();
+    backdropNode.addEventListener("click", close);
+    wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
+    backBtn?.addEventListener("click", () => {
+      step = 1;
+      syncStep();
+    });
+    nextBtn?.addEventListener("click", () => {
+      step = 2;
+      syncStep();
+    });
+    saveBtn?.addEventListener("click", () => {
+      applyFromDom();
+      builtInNumericStatUiState = cloneBuiltInNumericStatUi(draftUi);
+      input.settings.trackAffection = draftTrack.affection;
+      input.settings.trackTrust = draftTrack.trust;
+      input.settings.trackDesire = draftTrack.desire;
+      input.settings.trackConnection = draftTrack.connection;
+      input.settings.trackMood = draftTrack.mood;
+      input.settings.trackLastThought = draftTrack.lastThought;
+      close();
+      persistLive();
+    });
+
+    document.body.appendChild(backdropNode);
+    document.body.appendChild(wizard);
+    syncStep();
+  };
+
+  const openCustomRemoveWizard = (target: CustomStatDefinition): void => {
+    closeCustomWizard();
+    const backdropNode = document.createElement("div");
+    backdropNode.className = "bst-custom-wizard-backdrop";
+    const wizard = document.createElement("div");
+    wizard.className = "bst-custom-wizard";
+    wizard.innerHTML = `
+      <div class="bst-custom-wizard-head">
+        <div>
+          <div class="bst-custom-wizard-title">Remove Custom Stat</div>
+          <div class="bst-custom-wizard-step" data-bst-remove-step>Step 1 / 2</div>
+        </div>
+        <button type="button" class="bst-btn bst-close-btn" data-action="custom-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="bst-custom-wizard-panel is-active" data-bst-remove-panel="1">
+        <div class="bst-help-line"><strong>${escapeHtml(target.label)}</strong> (${escapeHtml(target.id)}) will be removed from active definitions.</div>
+        <ul class="bst-help-list">
+          <li>Future extraction will stop updating this stat.</li>
+          <li>Cards/graph/injection will stop showing this stat.</li>
+          <li>Historical snapshot payload is retained (soft remove).</li>
+        </ul>
+      </div>
+      <div class="bst-custom-wizard-panel" data-bst-remove-panel="2">
+        <div class="bst-help-line">Confirm removal of <strong>${escapeHtml(target.label)}</strong>.</div>
+        <div class="bst-help-line">This is a soft remove only in current release.</div>
+      </div>
+      <div class="bst-custom-wizard-actions">
+        <button type="button" class="bst-btn" data-action="custom-remove-back">Back</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="bst-btn bst-btn-soft" data-action="custom-remove-next">Next</button>
+          <button type="button" class="bst-btn bst-btn-danger" data-action="custom-remove-confirm" style="display:none;">Remove Stat</button>
+        </div>
+      </div>
+    `;
+    const stepLabel = wizard.querySelector("[data-bst-remove-step]") as HTMLElement | null;
+    const panel1 = wizard.querySelector('[data-bst-remove-panel="1"]') as HTMLElement | null;
+    const panel2 = wizard.querySelector('[data-bst-remove-panel="2"]') as HTMLElement | null;
+    const backBtn = wizard.querySelector('[data-action="custom-remove-back"]') as HTMLButtonElement | null;
+    const nextBtn = wizard.querySelector('[data-action="custom-remove-next"]') as HTMLButtonElement | null;
+    const confirmBtn = wizard.querySelector('[data-action="custom-remove-confirm"]') as HTMLButtonElement | null;
+    let step = 1;
+
+    const syncStep = (): void => {
+      if (stepLabel) stepLabel.textContent = `Step ${step} / 2`;
+      panel1?.classList.toggle("is-active", step === 1);
+      panel2?.classList.toggle("is-active", step === 2);
+      if (backBtn) backBtn.style.visibility = step === 1 ? "hidden" : "visible";
+      if (nextBtn) nextBtn.style.display = step === 1 ? "" : "none";
+      if (confirmBtn) confirmBtn.style.display = step === 2 ? "" : "none";
+    };
+    syncStep();
+
+    const close = (): void => closeCustomWizard();
+    backdropNode.addEventListener("click", close);
+    wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
+    backBtn?.addEventListener("click", () => {
+      step = 1;
+      syncStep();
+    });
+    nextBtn?.addEventListener("click", () => {
+      step = 2;
+      syncStep();
+    });
+    confirmBtn?.addEventListener("click", () => {
+      customStatsState = customStatsState.filter(item => item.id !== target.id);
+      renderCustomStatsList();
+      close();
+      persistLive();
+    });
+
+    document.body.appendChild(backdropNode);
+    document.body.appendChild(wizard);
+  };
+
+  const openCustomStatWizard = (mode: CustomStatWizardMode, source?: CustomStatDefinition): void => {
+    if (mode === "add" && customStatsState.length >= MAX_CUSTOM_STATS) return;
+    closeCustomWizard();
+
+    const existingIds = new Set(customStatsState.map(item => item.id));
+    const fallbackBase = source?.label || source?.id || "custom_stat";
+    const draft = makeDraft(mode, source);
+    if (mode === "add" && !draft.id) {
+      draft.id = suggestUniqueCustomStatId(fallbackBase, existingIds);
+    }
+
+    let idTouched = Boolean(draft.id && mode !== "add");
+    let step = 1;
+
+    const backdropNode = document.createElement("div");
+    backdropNode.className = "bst-custom-wizard-backdrop";
+    const wizard = document.createElement("div");
+    wizard.className = "bst-custom-wizard";
+    wizard.innerHTML = `
+      <div class="bst-custom-wizard-head">
+        <div>
+          <div class="bst-custom-wizard-title">${mode === "edit" ? "Edit" : mode === "duplicate" ? "Clone" : "Add"} Custom Stat</div>
+          <div class="bst-custom-wizard-step" data-bst-custom-step>Step 1 / 5</div>
+        </div>
+        <button type="button" class="bst-btn bst-close-btn" data-action="custom-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="bst-custom-wizard-error" data-bst-custom-error></div>
+
+      <div class="bst-custom-wizard-panel is-active" data-bst-custom-panel="1">
+        <div class="bst-custom-wizard-grid">
+          <label>Label
+            <input type="text" data-bst-custom-field="label" maxlength="40" value="${escapeHtml(draft.label)}" placeholder="e.g. Respect">
+          </label>
+          <label>ID
+            <input type="text" data-bst-custom-field="id" maxlength="32" value="${escapeHtml(draft.id)}" ${draft.lockId ? "readonly" : ""} placeholder="respect">
+          </label>
+        </div>
+        <label>Description
+          <textarea data-bst-custom-field="description" rows="4" maxlength="200" placeholder="Required. Explain what this stat represents and how extraction should interpret it.">${escapeHtml(draft.description)}</textarea>
+        </label>
+      </div>
+
+      <div class="bst-custom-wizard-panel" data-bst-custom-panel="2">
+        <div class="bst-custom-wizard-grid">
+          <label>Default Value (%)
+            <input type="number" min="0" max="100" data-bst-custom-field="defaultValue" value="${escapeHtml(draft.defaultValue)}">
+          </label>
+          <label>Max Delta Per Turn
+            <input type="number" min="1" max="30" data-bst-custom-field="maxDeltaPerTurn" value="${escapeHtml(draft.maxDeltaPerTurn)}" placeholder="Use global">
+          </label>
+        </div>
+        <div class="bst-help-line">Values are always percentage-based in v1 (0..100).</div>
+      </div>
+
+      <div class="bst-custom-wizard-panel" data-bst-custom-panel="3">
+        <div class="bst-check-grid bst-toggle-block">
+          <label class="bst-check"><input type="checkbox" data-bst-custom-field="enabled" ${draft.enabled ? "checked" : ""}>Enabled (Track + Card + Graph)</label>
+          <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
+        </div>
+        <label>Sequential Prompt Override (optional)
+          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. Literal example: [Propose incremental changes to {{statLabel}} from recent messages. Only update {{statId}}.] Leave empty to use the global Seq: Custom Numeric template fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
+        </label>
+        <div class="bst-help-line">Template macros: <code>{{statId}}</code> <code>{{statLabel}}</code> <code>{{statDescription}}</code> <code>{{statDefault}}</code> <code>{{maxDelta}}</code> <code>{{characters}}</code> <code>{{envelope}}</code> <code>{{contextText}}</code>.</div>
+      </div>
+
+      <div class="bst-custom-wizard-panel" data-bst-custom-panel="4">
+        <div class="bst-help-line">Color helps visually distinguish this stat in cards and graph.</div>
+        <label>Color (optional)
+          <div class="bst-color-inputs">
+            <input type="color" data-bst-custom-color-picker value="#66ccff" aria-label="Custom stat color picker">
+            <input type="text" data-bst-custom-field="color" value="${escapeHtml(draft.color)}" placeholder="#66ccff">
+          </div>
+        </label>
+      </div>
+
+      <div class="bst-custom-wizard-panel" data-bst-custom-panel="5">
+        <div class="bst-help-line">Review before saving:</div>
+        <pre class="bst-custom-wizard-review" data-bst-custom-review></pre>
+      </div>
+
+      <div class="bst-custom-wizard-actions">
+        <button type="button" class="bst-btn" data-action="custom-prev">Back</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="bst-btn bst-btn-soft" data-action="custom-next">Next</button>
+          <button type="button" class="bst-btn bst-btn-soft" data-action="custom-save" style="display:none;">Save</button>
+        </div>
+      </div>
+    `;
+
+    const stepLabel = wizard.querySelector("[data-bst-custom-step]") as HTMLElement | null;
+    const errorNode = wizard.querySelector("[data-bst-custom-error]") as HTMLElement | null;
+    const reviewNode = wizard.querySelector("[data-bst-custom-review]") as HTMLElement | null;
+    const prevBtn = wizard.querySelector('[data-action="custom-prev"]') as HTMLButtonElement | null;
+    const nextBtn = wizard.querySelector('[data-action="custom-next"]') as HTMLButtonElement | null;
+    const saveBtn = wizard.querySelector('[data-action="custom-save"]') as HTMLButtonElement | null;
+    const getField = (name: string): HTMLInputElement | HTMLTextAreaElement | null =>
+      wizard.querySelector(`[data-bst-custom-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
+    const colorPickerNode = wizard.querySelector('[data-bst-custom-color-picker]') as HTMLInputElement | null;
+
+    const toPickerHex = (raw: string, fallback: string): string => {
+      const value = raw.trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(value)) return value.toLowerCase();
+      if (/^#[0-9a-fA-F]{3}$/.test(value)) {
+        const r = value[1];
+        const g = value[2];
+        const b = value[3];
+        return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+      }
+      return fallback;
+    };
+
+    const syncDraftFromFields = (): void => {
+      const labelNode = getField("label");
+      const idNode = getField("id");
+      const descriptionNode = getField("description");
+      const defaultNode = getField("defaultValue");
+      const maxDeltaNode = getField("maxDeltaPerTurn");
+      const enabledNode = getField("enabled") as HTMLInputElement | null;
+      const injectNode = getField("includeInInjection") as HTMLInputElement | null;
+      const colorNode = getField("color");
+      const templateNode = getField("sequentialPromptTemplate");
+      draft.label = String(labelNode?.value ?? "");
+      draft.id = String(idNode?.value ?? "").toLowerCase();
+      draft.description = String(descriptionNode?.value ?? "");
+      draft.defaultValue = String(defaultNode?.value ?? "");
+      draft.maxDeltaPerTurn = String(maxDeltaNode?.value ?? "");
+      draft.enabled = Boolean(enabledNode?.checked);
+      draft.includeInInjection = Boolean(injectNode?.checked);
+      draft.color = String(colorNode?.value ?? "");
+      draft.sequentialPromptTemplate = String(templateNode?.value ?? "");
+    };
+
+    const syncColorPickerFromText = (): void => {
+      if (!colorPickerNode) return;
+      const colorNode = getField("color") as HTMLInputElement | null;
+      const fallback = toPickerHex(input.settings.accentColor || "#66ccff", "#66ccff");
+      colorPickerNode.value = toPickerHex(String(colorNode?.value ?? ""), fallback);
+    };
+
+    const syncColorTextFromPicker = (): void => {
+      const colorNode = getField("color") as HTMLInputElement | null;
+      if (!colorNode || !colorPickerNode) return;
+      colorNode.value = colorPickerNode.value;
+    };
+
+    const writeReview = (): void => {
+      if (!reviewNode) return;
+      const normalized = toCustomStatDefinition(draft);
+      reviewNode.textContent = JSON.stringify(normalized, null, 2);
+    };
+
+    const syncStepUi = (): void => {
+      if (stepLabel) stepLabel.textContent = `Step ${step} / 5`;
+      Array.from(wizard.querySelectorAll("[data-bst-custom-panel]")).forEach(panel => {
+        const element = panel as HTMLElement;
+        const panelStep = Number(element.dataset.bstCustomPanel ?? "1");
+        element.classList.toggle("is-active", panelStep === step);
+      });
+      if (prevBtn) prevBtn.style.visibility = step === 1 ? "hidden" : "visible";
+      if (nextBtn) nextBtn.style.display = step === 5 ? "none" : "";
+      if (saveBtn) saveBtn.style.display = step === 5 ? "" : "none";
+      writeReview();
+    };
+
+    const setErrors = (errors: string[]): boolean => {
+      if (!errorNode) return errors.length === 0;
+      if (!errors.length) {
+        errorNode.style.display = "none";
+        errorNode.textContent = "";
+        return true;
+      }
+      errorNode.style.display = "block";
+      errorNode.textContent = errors.join("\n");
+      return false;
+    };
+
+    const close = (): void => closeCustomWizard();
+    const currentId = source?.id;
+    const validateCurrentStep = (): boolean => {
+      syncDraftFromFields();
+      return setErrors(validateCustomStatDraft(draft, mode, step, currentId));
+    };
+
+    const validateAll = (): boolean => {
+      syncDraftFromFields();
+      return setErrors(validateCustomStatDraft(draft, mode, 4, currentId));
+    };
+
+    const labelInput = getField("label") as HTMLInputElement | null;
+    const idInput = getField("id") as HTMLInputElement | null;
+    const colorTextInput = getField("color") as HTMLInputElement | null;
+    labelInput?.addEventListener("input", () => {
+      if (draft.lockId || idTouched) return;
+      if (!idInput) return;
+      const suggested = toCustomStatSlug(labelInput.value || "stat");
+      const existing = new Set(customStatsState
+        .map(item => item.id)
+        .filter(item => item !== source?.id));
+      idInput.value = suggestUniqueCustomStatId(suggested, existing);
+    });
+    idInput?.addEventListener("input", () => {
+      idTouched = true;
+      idInput.value = idInput.value.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+    });
+    colorPickerNode?.addEventListener("input", () => {
+      syncColorTextFromPicker();
+    });
+    colorTextInput?.addEventListener("input", () => {
+      syncColorPickerFromText();
+    });
+    syncColorPickerFromText();
+
+    backdropNode.addEventListener("click", close);
+    wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
+    prevBtn?.addEventListener("click", () => {
+      if (step <= 1) return;
+      step -= 1;
+      setErrors([]);
+      syncStepUi();
+    });
+    nextBtn?.addEventListener("click", () => {
+      if (!validateCurrentStep()) return;
+      if (step >= 5) return;
+      step += 1;
+      setErrors([]);
+      syncStepUi();
+    });
+    saveBtn?.addEventListener("click", () => {
+      if (!validateAll()) return;
+      const nextDef = toCustomStatDefinition(draft);
+      if (mode === "edit" && source) {
+        customStatsState = customStatsState.map(item => item.id === source.id ? nextDef : item);
+      } else {
+        customStatsState = [...customStatsState, nextDef];
+      }
+      customStatsState = customStatsState.slice(0, MAX_CUSTOM_STATS);
+      renderCustomStatsList();
+      close();
+      persistLive();
+    });
+
+    wizard.querySelectorAll("input, textarea").forEach(node => {
+      node.addEventListener("input", () => {
+        syncDraftFromFields();
+        writeReview();
+      });
+      node.addEventListener("change", () => {
+        syncDraftFromFields();
+        writeReview();
+      });
+    });
+
+    document.body.appendChild(backdropNode);
+    document.body.appendChild(wizard);
+    syncStepUi();
+  };
+
+  customAddButton?.addEventListener("click", () => {
+    openCustomStatWizard("add");
+  });
+  manageBuiltInsButton?.addEventListener("click", () => {
+    openBuiltInManagerWizard();
+  });
+
+  customStatsListNode?.addEventListener("click", event => {
+    const target = event.target as HTMLElement | null;
+    const button = target?.closest("button[data-action][data-custom-id]") as HTMLButtonElement | null;
+    if (!button) return;
+    const id = String(button.getAttribute("data-custom-id") ?? "").trim().toLowerCase();
+    if (!id) return;
+    const stat = customStatsState.find(item => item.id === id);
+    if (!stat) return;
+    const action = String(button.getAttribute("data-action") ?? "");
+    if (action === "custom-edit") {
+      openCustomStatWizard("edit", stat);
+      return;
+    }
+    if (action === "custom-duplicate") {
+      openCustomStatWizard("duplicate", stat);
+      return;
+    }
+    if (action === "custom-remove") {
+      openCustomRemoveWizard(stat);
+    }
+  });
+  renderCustomStatsList();
 
   const collectSettings = (): BetterSimTrackerSettings => {
     const read = (k: keyof BetterSimTrackerSettings): string =>
       ((modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "").trim();
     const readExtra = (k: string): string =>
       ((modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "").trim();
-    const readBool = (k: keyof BetterSimTrackerSettings): boolean => {
+    const readBool = (k: keyof BetterSimTrackerSettings, fallback: boolean): boolean => {
       const node = modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null;
       if (node instanceof HTMLInputElement && node.type === "checkbox") return node.checked;
+      if (!node) return fallback;
       return read(k) === "true";
     };
-    const readBoolExtra = (k: string): boolean => {
+    const readBoolExtra = (k: string, fallback: boolean): boolean => {
       const node = modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null;
       if (node instanceof HTMLInputElement && node.type === "checkbox") return node.checked;
+      if (!node) return fallback;
       return readExtra(k) === "true";
     };
     const readNumber = (k: keyof BetterSimTrackerSettings, fallback: number, min?: number, max?: number): number => {
@@ -3762,30 +4820,31 @@ export function openSettingsModal(input: {
     return {
       ...input.settings,
       connectionProfile: read("connectionProfile"),
-      sequentialExtraction: readBool("sequentialExtraction"),
+      sequentialExtraction: readBool("sequentialExtraction", input.settings.sequentialExtraction),
       maxConcurrentCalls: readNumber("maxConcurrentCalls", input.settings.maxConcurrentCalls, 1, 8),
-      strictJsonRepair: readBool("strictJsonRepair"),
+      strictJsonRepair: readBool("strictJsonRepair", input.settings.strictJsonRepair),
       maxRetriesPerStat: readNumber("maxRetriesPerStat", input.settings.maxRetriesPerStat, 0, 4),
       contextMessages: readNumber("contextMessages", input.settings.contextMessages, 1, 40),
       injectPromptDepth: readNumber("injectPromptDepth", input.settings.injectPromptDepth, 0, 8),
       maxDeltaPerTurn: readNumber("maxDeltaPerTurn", input.settings.maxDeltaPerTurn, 1, 30),
       maxTokensOverride: readNumber("maxTokensOverride", input.settings.maxTokensOverride, 0, 100000),
       truncationLengthOverride: readNumber("truncationLengthOverride", input.settings.truncationLengthOverride, 0, 200000),
-      includeCharacterCardsInPrompt: readBool("includeCharacterCardsInPrompt"),
+      includeCharacterCardsInPrompt: readBool("includeCharacterCardsInPrompt", input.settings.includeCharacterCardsInPrompt),
       confidenceDampening: readNumber("confidenceDampening", input.settings.confidenceDampening, 0, 1),
       moodStickiness: readNumber("moodStickiness", input.settings.moodStickiness, 0, 1),
-      injectTrackerIntoPrompt: readBool("injectTrackerIntoPrompt"),
-      autoDetectActive: readBool("autoDetectActive"),
+      injectTrackerIntoPrompt: readBool("injectTrackerIntoPrompt", input.settings.injectTrackerIntoPrompt),
+      autoDetectActive: readBool("autoDetectActive", input.settings.autoDetectActive),
       activityLookback: readNumber("activityLookback", input.settings.activityLookback, 1, 25),
-      showInactive: readBool("showInactive"),
+      showInactive: readBool("showInactive", input.settings.showInactive),
       inactiveLabel: read("inactiveLabel") || input.settings.inactiveLabel,
-      showLastThought: readBool("showLastThought"),
-      trackAffection: readBool("trackAffection"),
-      trackTrust: readBool("trackTrust"),
-      trackDesire: readBool("trackDesire"),
-      trackConnection: readBool("trackConnection"),
-      trackMood: readBool("trackMood"),
-      trackLastThought: readBool("trackLastThought"),
+      showLastThought: readBool("showLastThought", input.settings.showLastThought),
+      trackAffection: readBool("trackAffection", input.settings.trackAffection),
+      trackTrust: readBool("trackTrust", input.settings.trackTrust),
+      trackDesire: readBool("trackDesire", input.settings.trackDesire),
+      trackConnection: readBool("trackConnection", input.settings.trackConnection),
+      trackMood: readBool("trackMood", input.settings.trackMood),
+      trackLastThought: readBool("trackLastThought", input.settings.trackLastThought),
+      builtInNumericStatUi: cloneBuiltInNumericStatUi(builtInNumericStatUiState),
       moodSource: read("moodSource") === "st_expressions" ? "st_expressions" : "bst_images",
       moodExpressionMap: readGlobalMoodExpressionMap(),
       stExpressionImageZoom: readNumber("stExpressionImageZoom", input.settings.stExpressionImageZoom, 0.5, 3),
@@ -3795,24 +4854,26 @@ export function openSettingsModal(input: {
       cardOpacity: readNumber("cardOpacity", input.settings.cardOpacity, 0.1, 1),
       borderRadius: readNumber("borderRadius", input.settings.borderRadius, 0, 32),
       fontSize: readNumber("fontSize", input.settings.fontSize, 10, 22),
-      debug: readBool("debug"),
+      debug: readBool("debug", input.settings.debug),
       debugFlags: {
-        extraction: readBoolExtra("debugExtraction"),
-        prompts: readBoolExtra("debugPrompts"),
-        ui: readBoolExtra("debugUi"),
-        moodImages: readBoolExtra("debugMoodImages"),
-        storage: readBoolExtra("debugStorage"),
+        extraction: readBoolExtra("debugExtraction", input.settings.debugFlags?.extraction ?? true),
+        prompts: readBoolExtra("debugPrompts", input.settings.debugFlags?.prompts ?? true),
+        ui: readBoolExtra("debugUi", input.settings.debugFlags?.ui ?? true),
+        moodImages: readBoolExtra("debugMoodImages", input.settings.debugFlags?.moodImages ?? true),
+        storage: readBoolExtra("debugStorage", input.settings.debugFlags?.storage ?? true),
       },
-      includeContextInDiagnostics: readBool("includeContextInDiagnostics"),
-      includeGraphInDiagnostics: readBool("includeGraphInDiagnostics"),
-      promptTemplateUnified: read("promptTemplateUnified") || input.settings.promptTemplateUnified,
-      promptTemplateSequentialAffection: read("promptTemplateSequentialAffection") || input.settings.promptTemplateSequentialAffection,
-      promptTemplateSequentialTrust: read("promptTemplateSequentialTrust") || input.settings.promptTemplateSequentialTrust,
-      promptTemplateSequentialDesire: read("promptTemplateSequentialDesire") || input.settings.promptTemplateSequentialDesire,
-      promptTemplateSequentialConnection: read("promptTemplateSequentialConnection") || input.settings.promptTemplateSequentialConnection,
-      promptTemplateSequentialMood: read("promptTemplateSequentialMood") || input.settings.promptTemplateSequentialMood,
-      promptTemplateSequentialLastThought: read("promptTemplateSequentialLastThought") || input.settings.promptTemplateSequentialLastThought,
-      promptTemplateInjection: read("promptTemplateInjection") || input.settings.promptTemplateInjection
+      includeContextInDiagnostics: readBool("includeContextInDiagnostics", input.settings.includeContextInDiagnostics),
+      includeGraphInDiagnostics: readBool("includeGraphInDiagnostics", input.settings.includeGraphInDiagnostics),
+      promptTemplateUnified: read("promptTemplateUnified") || DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
+      promptTemplateSequentialAffection: read("promptTemplateSequentialAffection") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.affection,
+      promptTemplateSequentialTrust: read("promptTemplateSequentialTrust") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.trust,
+      promptTemplateSequentialDesire: read("promptTemplateSequentialDesire") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.desire,
+      promptTemplateSequentialConnection: read("promptTemplateSequentialConnection") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
+      promptTemplateSequentialCustomNumeric: read("promptTemplateSequentialCustomNumeric") || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
+      promptTemplateSequentialMood: read("promptTemplateSequentialMood") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
+      promptTemplateSequentialLastThought: read("promptTemplateSequentialLastThought") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
+      promptTemplateInjection: read("promptTemplateInjection") || DEFAULT_INJECTION_PROMPT_TEMPLATE,
+      customStats: customStatsState.map(cloneCustomStatDefinition)
     };
   };
 
@@ -3888,8 +4949,13 @@ export function openSettingsModal(input: {
 
   const persistLive = (): void => {
     const next = collectSettings();
+    customStatsState = Array.isArray(next.customStats)
+      ? next.customStats.map(cloneCustomStatDefinition)
+      : [];
+    builtInNumericStatUiState = cloneBuiltInNumericStatUi(next.builtInNumericStatUi);
     input.settings = next;
     input.onSave(next);
+    renderCustomStatsList();
     updateGlobalStExpressionSummary();
     syncExtractionVisibility();
   };
@@ -3978,6 +5044,7 @@ export function openSettingsModal(input: {
     promptTemplateSequentialTrust: "Sequential Trust instruction (protocol block is fixed).",
     promptTemplateSequentialDesire: "Sequential Desire instruction (protocol block is fixed).",
     promptTemplateSequentialConnection: "Sequential Connection instruction (protocol block is fixed).",
+    promptTemplateSequentialCustomNumeric: "Sequential default instruction for custom numeric stats (per-stat override in custom stat wizard still wins).",
     promptTemplateSequentialMood: "Sequential Mood instruction (protocol block is fixed).",
     promptTemplateSequentialLastThought: "Sequential LastThought instruction (protocol block is fixed)."
   };
@@ -4023,6 +5090,7 @@ export function openSettingsModal(input: {
     promptTemplateSequentialTrust: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.trust,
     promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.desire,
     promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
+    promptTemplateSequentialCustomNumeric: DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
     promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
     promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
     promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
@@ -4046,6 +5114,8 @@ export function openSettingsModal(input: {
 
 export function closeSettingsModal(): void {
   closeStExpressionFrameEditor();
+  document.querySelector(".bst-custom-wizard-backdrop")?.remove();
+  document.querySelector(".bst-custom-wizard")?.remove();
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
 }

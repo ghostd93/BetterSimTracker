@@ -3,6 +3,7 @@ import type { BetterSimTrackerSettings, STContext, TrackerData } from "./types";
 
 const INJECT_KEY = "bst_relationship_state";
 let lastInjectedPrompt = "";
+const MAX_INJECTION_PROMPT_CHARS = 6000;
 
 function clamp(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -29,27 +30,60 @@ function renderTemplate(template: string, values: Record<string, string>): strin
 }
 
 function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): string {
+  const builtInUi = settings.builtInNumericStatUi ?? {
+    affection: { showOnCard: true, showInGraph: true, includeInInjection: true },
+    trust: { showOnCard: true, showInGraph: true, includeInInjection: true },
+    desire: { showOnCard: true, showInGraph: true, includeInInjection: true },
+    connection: { showOnCard: true, showInGraph: true, includeInInjection: true },
+  };
+  const allEnabledCustom = (settings.customStats ?? [])
+    .filter(stat => stat.track && stat.includeInInjection)
+    .slice(0, 8);
+  const buildWithCustom = (customStatCount: number): string => {
+    const enabledCustom = allEnabledCustom.slice(0, customStatCount);
   const names = data.activeCharacters;
   const numericKeys: Array<{
     key: "affection" | "trust" | "desire" | "connection";
     label: string;
     enabled: boolean;
   }> = [
-    { key: "affection", label: "affection", enabled: settings.trackAffection },
-    { key: "trust", label: "trust", enabled: settings.trackTrust },
-    { key: "desire", label: "desire", enabled: settings.trackDesire },
-    { key: "connection", label: "connection", enabled: settings.trackConnection },
+    {
+      key: "affection",
+      label: "affection",
+      enabled: settings.trackAffection && builtInUi.affection.includeInInjection,
+    },
+    {
+      key: "trust",
+      label: "trust",
+      enabled: settings.trackTrust && builtInUi.trust.includeInInjection,
+    },
+    {
+      key: "desire",
+      label: "desire",
+      enabled: settings.trackDesire && builtInUi.desire.includeInInjection,
+    },
+    {
+      key: "connection",
+      label: "connection",
+      enabled: settings.trackConnection && builtInUi.connection.includeInInjection,
+    },
   ];
-  const enabledNumeric = numericKeys.filter(entry => entry.enabled);
+  const enabledBuiltIns = numericKeys.filter(entry => entry.enabled);
+  const enabledBuiltInKeys = new Set(enabledBuiltIns.map(entry => entry.key));
+  const hasAnyNumeric = enabledBuiltIns.length > 0 || enabledCustom.length > 0;
   const includeMood = settings.trackMood;
 
-  if (enabledNumeric.length === 0 && !includeMood) return "";
+  if (!hasAnyNumeric && !includeMood) return "";
 
   const lines = names.map(name => {
     const parts: string[] = [];
-    for (const stat of enabledNumeric) {
+    for (const stat of enabledBuiltIns) {
       const value = numeric(data.statistics[stat.key]?.[name] ?? 50) ?? 50;
       parts.push(`${stat.label} ${value}`);
+    }
+    for (const stat of enabledCustom) {
+      const value = numeric(data.customStatistics?.[stat.id]?.[name] ?? stat.defaultValue) ?? stat.defaultValue;
+      parts.push(`${stat.id} ${value}`);
     }
     if (includeMood) {
       const mood = String(data.statistics.mood?.[name] ?? "Neutral").trim() || "Neutral";
@@ -68,15 +102,22 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): str
     "Treat as soft state: do not quote numbers directly; express them through tone, wording, initiative, boundaries, and choices.",
   ].join("\n");
   const statSemantics = [
-    ...enabledNumeric.map(stat => {
+    ...enabledBuiltIns.map(stat => {
       if (stat.key === "affection") return "- affection: emotional warmth, fondness, care toward the user";
       if (stat.key === "trust") return "- trust: perceived safety/reliability; willingness to be vulnerable";
       if (stat.key === "desire") return "- desire: physical/romantic attraction and flirt/sexual tension";
       return "- connection: felt closeness/bond depth and emotional attunement";
     }),
+    ...enabledCustom.map(stat => {
+      const label = stat.label?.trim() || stat.id;
+      const description = stat.description?.trim();
+      return description
+        ? `- ${stat.id}: ${description}`
+        : `- ${stat.id}: custom stat "${label}"`;
+    }),
     ...(includeMood ? ["- mood: immediate emotional tone for this turn"] : []),
   ].join("\n");
-  const behaviorBands = enabledNumeric.length
+  const behaviorBands = hasAnyNumeric
     ? [
         "Behavior bands:",
         "- 0-30 low: guarded, distant, skeptical, defensive, cold, or avoidant",
@@ -84,13 +125,14 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): str
         "- 61-100 high: warm, open, engaged, proactive, intimate (where appropriate)",
       ].join("\n")
     : "";
-  const reactRules = enabledNumeric.length
+  const reactRules = hasAnyNumeric
     ? [
         "How to react:",
-        ...(settings.trackTrust ? ["- low trust -> avoid deep vulnerability; require proof/consistency", "- high trust -> share more, accept reassurance, collaborate"] : []),
-        ...(settings.trackAffection ? ["- low affection -> limited warmth; less caring language", "- high affection -> caring language, concern, emotional support"] : []),
-        ...(settings.trackDesire ? ["- low desire -> little/no flirtation; keep distance", "- high desire -> increased flirtation/attraction cues (respect context and consent)"] : []),
-        ...(settings.trackConnection ? ["- low connection -> conversations stay surface-level", "- high connection -> personal references, emotional continuity, deeper empathy"] : []),
+        ...(enabledBuiltInKeys.has("trust") ? ["- low trust -> avoid deep vulnerability; require proof/consistency", "- high trust -> share more, accept reassurance, collaborate"] : []),
+        ...(enabledBuiltInKeys.has("affection") ? ["- low affection -> limited warmth; less caring language", "- high affection -> caring language, concern, emotional support"] : []),
+        ...(enabledBuiltInKeys.has("desire") ? ["- low desire -> little/no flirtation; keep distance", "- high desire -> increased flirtation/attraction cues (respect context and consent)"] : []),
+        ...(enabledBuiltInKeys.has("connection") ? ["- low connection -> conversations stay surface-level", "- high connection -> personal references, emotional continuity, deeper empathy"] : []),
+        ...enabledCustom.map(stat => `- low ${stat.id} -> less ${stat.label.toLowerCase()}; high ${stat.id} -> more ${stat.label.toLowerCase()}`),
       ].join("\n")
     : "";
   const priorityRules = [
@@ -99,7 +141,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): str
     "- remain consistent with character core personality and scenario",
   ].join("\n");
   const template = settings.promptTemplateInjection || DEFAULT_INJECTION_PROMPT_TEMPLATE;
-  return renderTemplate(template, {
+    return renderTemplate(template, {
     header,
     statSemantics,
     behaviorBands,
@@ -107,6 +149,25 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): str
     priorityRules,
     lines: lines.join("\n")
   }).trim();
+  };
+
+  let customCount = allEnabledCustom.length;
+  while (customCount >= 0) {
+    const prompt = buildWithCustom(customCount);
+    if (prompt.length <= MAX_INJECTION_PROMPT_CHARS) {
+      if (customCount < allEnabledCustom.length) {
+        console.warn("[BetterSimTracker] prompt injection custom stat lines truncated to stay within safe prompt size.", {
+          keptCustomStats: customCount,
+          totalCustomStats: allEnabledCustom.length,
+          maxChars: MAX_INJECTION_PROMPT_CHARS,
+          promptChars: prompt.length
+        });
+      }
+      return prompt;
+    }
+    customCount -= 1;
+  }
+  return buildWithCustom(0).slice(0, MAX_INJECTION_PROMPT_CHARS).trim();
 }
 
 type ScriptModule = {

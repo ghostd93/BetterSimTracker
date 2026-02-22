@@ -35,17 +35,21 @@ function parseArgs(raw: string): string[] {
 }
 
 function formatEnabledStats(settings: BetterSimTrackerSettings): string {
-  const enabled: StatKey[] = [];
+  const enabled: string[] = [];
   if (settings.trackAffection) enabled.push("affection");
   if (settings.trackTrust) enabled.push("trust");
   if (settings.trackDesire) enabled.push("desire");
   if (settings.trackConnection) enabled.push("connection");
   if (settings.trackMood) enabled.push("mood");
   if (settings.trackLastThought) enabled.push("lastThought");
+  for (const stat of settings.customStats ?? []) {
+    if (!stat.track) continue;
+    enabled.push(stat.id);
+  }
   return enabled.length ? enabled.join(", ") : "none";
 }
 
-function resolveToggleKey(raw: string): StatKey | null {
+function resolveBuiltInToggleKey(raw: string): StatKey | null {
   const key = raw.toLowerCase();
   if (key === "affection") return "affection";
   if (key === "trust") return "trust";
@@ -65,6 +69,19 @@ function updateSetting(settings: BetterSimTrackerSettings, key: StatKey, next: b
   if (key === "mood") copy.trackMood = next;
   if (key === "lastThought") copy.trackLastThought = next;
   return copy;
+}
+
+function updateCustomTrackSetting(
+  settings: BetterSimTrackerSettings,
+  id: string,
+  next: boolean,
+): BetterSimTrackerSettings {
+  const normalized = id.trim().toLowerCase();
+  return {
+    ...settings,
+    customStats: (settings.customStats ?? []).map(stat =>
+      stat.id === normalized ? { ...stat, track: next } : stat),
+  };
 }
 
 function coerceArgs(raw: unknown): string {
@@ -136,25 +153,38 @@ export function registerSlashCommands(deps: SlashCommandDeps): void {
       notify("Tracker context not ready.", "warning");
       return;
     }
-    const target = resolveToggleKey(args[0] ?? "");
-    if (!target) {
-      notify("Usage: /bst toggle <affection|trust|desire|connection|mood|lastThought>", "warning");
+    const rawTarget = String(args[0] ?? "").trim();
+    const target = resolveBuiltInToggleKey(rawTarget);
+    const customTargetId = rawTarget.toLowerCase();
+    const customTarget = (resolved.settings.customStats ?? []).find(stat => stat.id === customTargetId);
+    if (!target && !customTarget) {
+      notify("Usage: /bst toggle <affection|trust|desire|connection|mood|lastThought|custom_stat_id>", "warning");
       return;
     }
     const { context, settings } = resolved;
-    const current =
-      target === "affection" ? settings.trackAffection :
-      target === "trust" ? settings.trackTrust :
-      target === "desire" ? settings.trackDesire :
-      target === "connection" ? settings.trackConnection :
-      target === "mood" ? settings.trackMood :
-      settings.trackLastThought;
-    const nextSettings = updateSetting(settings, target, !current);
+    let nextSettings = settings;
+    let toggledName = "";
+    let current = false;
+    if (target) {
+      current =
+        target === "affection" ? settings.trackAffection :
+        target === "trust" ? settings.trackTrust :
+        target === "desire" ? settings.trackDesire :
+        target === "connection" ? settings.trackConnection :
+        target === "mood" ? settings.trackMood :
+        settings.trackLastThought;
+      nextSettings = updateSetting(settings, target, !current);
+      toggledName = target;
+    } else if (customTarget) {
+      current = Boolean(customTarget.track);
+      nextSettings = updateCustomTrackSetting(settings, customTarget.id, !current);
+      toggledName = customTarget.id;
+    }
     deps.setSettings(nextSettings);
     deps.saveSettings(context, nextSettings);
     deps.refreshFromStoredData();
     deps.queuePromptSync(context);
-    notify(`Toggled ${target}: ${current ? "off" : "on"}.`, "success");
+    notify(`Toggled ${toggledName}: ${current ? "off" : "on"}.`, "success");
   };
 
   const handleInject = (args: string[]): void => {

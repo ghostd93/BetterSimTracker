@@ -2,6 +2,23 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.0.0] - 2026-02-22
+### Added
+- Full custom numeric stats support: definition schema, add/edit/clone/remove wizards, extraction/runtime processing, persistence (`customStatistics`), tracker cards, graphs, and prompt injection.
+- Built-in stats manager wizard with per-stat controls and unified `Enabled` behavior (`Track + Card + Graph`) plus injection control for numeric built-ins.
+- Global sequential custom-numeric prompt template fallback (`Seq: Custom Numeric`) with per-stat override support.
+
+### Changed
+- Settings UX was refined for custom stats and built-ins, including centered built-in management entry point and wizard polish.
+- Baseline/default seeding and historical fallback now include custom stats (global + per-character defaults) for consistent first-run behavior.
+- Prompt injection now respects built-in toggles and safely trims custom-stat lines first when the injected block grows too large.
+
+### Fixed
+- First-run custom stat flows now avoid unnecessary extraction requests and misleading delta spikes when prior values are missing.
+- Custom stat template fallback behavior is now consistent when fields are cleared and settings are reopened.
+- Cross-browser UI reliability improvements for settings/wizard controls and debug visibility for custom stat data paths.
+And more...
+
 ## [1.2.3] - 2026-02-22
 ### Added
 - Configurable `Injection Depth` setting for prompt injection in extension settings.

@@ -1,6 +1,6 @@
 import { EXTENSION_KEY, STAT_KEYS } from "./constants";
 import { isTrackableAiMessage } from "./messageFilter";
-import type { BetterSimTrackerSettings, ChatMessage, STContext, StatKey, Statistics, TrackerData } from "./types";
+import type { BetterSimTrackerSettings, ChatMessage, CustomStatistics, STContext, StatKey, Statistics, TrackerData } from "./types";
 const CHAT_STATE_KEY = `${EXTENSION_KEY}:chat`;
 
 function createEmptyStatistics(): Statistics {
@@ -28,8 +28,29 @@ function normalizeTrackerData(data: Partial<TrackerData>): TrackerData {
     statistics: {
       ...createEmptyStatistics(),
       ...(data.statistics as Statistics)
-    }
+    },
+    customStatistics: normalizeCustomStatistics(data.customStatistics),
   };
+}
+
+function normalizeCustomStatistics(raw: unknown): CustomStatistics {
+  if (!raw || typeof raw !== "object") return {};
+  const out: CustomStatistics = {};
+  for (const [statId, values] of Object.entries(raw as Record<string, unknown>)) {
+    if (!values || typeof values !== "object" || Array.isArray(values)) continue;
+    const statKey = String(statId ?? "").trim().toLowerCase();
+    if (!statKey) continue;
+    const byCharacter: Record<string, number> = {};
+    for (const [characterName, value] of Object.entries(values as Record<string, unknown>)) {
+      const n = Number(value);
+      if (Number.isNaN(n)) continue;
+      byCharacter[characterName] = Math.max(0, Math.min(100, Math.round(n)));
+    }
+    if (Object.keys(byCharacter).length > 0) {
+      out[statKey] = byCharacter;
+    }
+  }
+  return out;
 }
 
 function isTrackerPayload(raw: unknown): raw is Partial<TrackerData> {
@@ -416,6 +437,28 @@ export function mergeStatisticsWithFallback(
       : { ...prevValues, ...nextValues };
   }
 
+  return merged;
+}
+
+export function mergeCustomStatisticsWithFallback(
+  incoming: CustomStatistics | undefined,
+  previous: CustomStatistics | null | undefined,
+): CustomStatistics {
+  const next = normalizeCustomStatistics(incoming);
+  const prev = normalizeCustomStatistics(previous);
+  const merged: CustomStatistics = {};
+  const allKeys = new Set<string>([
+    ...Object.keys(prev),
+    ...Object.keys(next),
+  ]);
+  for (const key of allKeys) {
+    const prevValues = prev[key] ?? {};
+    const nextValues = next[key] ?? {};
+    const combined = { ...prevValues, ...nextValues };
+    if (Object.keys(combined).length > 0) {
+      merged[key] = combined;
+    }
+  }
   return merged;
 }
 
