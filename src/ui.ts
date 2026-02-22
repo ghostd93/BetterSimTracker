@@ -668,6 +668,7 @@ function ensureStyles(): void {
   justify-content: center;
 }
 .bst-mood-image-frame {
+  display: block;
   width: clamp(64px, 11vw, 84px);
   height: clamp(64px, 11vw, 84px);
   border-radius: clamp(12px, 3vw, 16px);
@@ -677,17 +678,27 @@ function ensureStyles(): void {
   box-shadow: 0 12px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.25);
 }
 .bst-mood-image-trigger {
-  border: none;
+  display: inline-block !important;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100%;
+  border: none !important;
   margin: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  cursor: zoom-in;
+  padding: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+  line-height: 0;
+  appearance: none;
+  cursor: zoom-in !important;
   border-radius: clamp(12px, 3vw, 16px);
 }
 .bst-mood-image-trigger:focus-visible {
   outline: 2px solid rgba(125, 211, 252, 0.85);
   outline-offset: 2px;
+}
+.bst-mood-image-trigger .bst-mood-image-frame {
+  display: block;
 }
 .bst-mood-image-frame--st-expression {
   --bst-st-expression-zoom: 1.2;
@@ -695,8 +706,10 @@ function ensureStyles(): void {
   --bst-st-expression-pos-y: 20%;
 }
 .bst-mood-image {
-  width: 100%;
-  height: 100%;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
   object-fit: cover;
   object-position: center center;
   display: block;
