@@ -13,7 +13,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Polished tracker action controls for `Collapse cards` and `Retrack`
 - Polished extension settings modal with sticky header/footer actions and one-click `Expand all` / `Collapse all` section control
 - Settings checkboxes now use consistent round accent-matched styling across ST themes/mobile UI overrides
-- Built-in stats manager wizard for `Track / Card / Graph / Inject` behavior per built-in stat (without deleting built-ins)
+- Built-in stats manager wizard with unified `Enabled` toggle (`Track + Card + Graph`) plus `Inject` control for numeric built-ins
 - Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8)
 - Retrack button (regenerate tracker for last AI message)
 - Relationship graph modal:
@@ -280,21 +280,16 @@ Behavior notes:
 
 ### Tracked Stats
 
-- `Track Affection`
-- `Track Trust`
-- `Track Desire`
-- `Track Connection`
-- `Track Mood`
-- `Track Last Thought`
 - `Manage Built-in Stats` wizard:
   - built-ins stay non-deletable for backward compatibility
-  - configure per built-in: `Track`, `Card`, `Graph`, `Inject`
-  - `Track` controls extraction updates; other toggles control visibility/injection when tracking is enabled
+  - configure per built-in:
+    - `Enabled` (numeric = `Track + Card + Graph`, text stats = `Track`)
+    - `Inject` (numeric built-ins only)
 - `Custom Stats` section:
   - `Add Custom Stat` wizard (Basics, Numeric Behavior, Tracking Behavior, Display, Review)
   - `Edit` and `Clone` for faster setup reuse
   - `Remove` uses soft-remove flow (historical payload remains stored, active tracking stops)
-  - `track`, `showOnCard`, `showInGraph`, and `includeInInjection` flags are respected by extraction, card rendering, graph rendering, and prompt injection
+  - custom stat wizard uses unified `Enabled` toggle (`Track + Card + Graph`) plus `includeInInjection`
   - wizard includes macro hints for custom sequential prompt overrides (`{{statId}}`, `{{statLabel}}`, `{{characters}}`, `{{contextText}}`, etc.)
   - custom sequential prompt precedence: per-stat template override in wizard -> global `Seq: Custom Numeric` template -> built-in default template
 - `Mood Source` (`BST mood images` or `ST expressions`)

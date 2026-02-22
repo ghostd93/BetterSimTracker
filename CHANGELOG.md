@@ -18,6 +18,8 @@ All notable changes to BetterSimTracker are documented here.
 - Custom stat wizard now shows available sequential-template macros directly in the Tracking Behavior step.
 - Added global `Seq: Custom Numeric` prompt template setting used as fallback for custom stat sequential extraction when a stat has no per-stat override.
 - Prompt injection now respects built-in per-stat injection toggles from the built-in stats manager.
+- Tracked Stats settings section now shows a centered `Manage Built-in Stats` control (global built-in toggles removed from the section body).
+- Built-in/custom stat management now use a unified `Enabled` toggle for `Track + Card + Graph` behavior.
 
 ### Fixed
 - Character defaults numeric inputs (built-in and custom stat defaults) now clamp visually and on save to `0..100`.
@@ -30,6 +32,10 @@ All notable changes to BetterSimTracker are documented here.
 - Clearing prompt-template fields in settings now cleanly falls back to built-in defaults (visible again after reopening settings).
 - Custom stats no longer trigger first-run extraction requests when seeded from defaults; seeded values are used first.
 - Tracker card deltas no longer show misleading first-run jumps when previous values for a stat do not exist.
+- Custom stat wizard inputs/textarea now use the same dark-themed styling as settings (fixes white fields and clipped number placeholders).
+- Custom stat wizard now requires Description (with clearer textarea placeholders/help text).
+- Checkbox/toggle layout polish: improved checkmark spacing and dedicated top spacing above toggle blocks.
+- `Seq: Custom Numeric` protocol preview now uses `{{statId}}` placeholder instead of literal `custom_stat`.
 
 ## [1.2.3] - 2026-02-22
 ### Added
