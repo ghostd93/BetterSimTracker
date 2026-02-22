@@ -8,6 +8,12 @@ function clamp(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function injectionDepth(value: unknown): number {
+  const n = Number(value);
+  if (Number.isNaN(n)) return 0;
+  return Math.max(0, Math.min(8, Math.round(n)));
+}
+
 function numeric(value: unknown): number | null {
   const n = Number(value);
   if (Number.isNaN(n)) return null;
@@ -150,16 +156,17 @@ export async function syncPromptInjection(input: {
   const roles = module?.extension_prompt_roles ?? {};
   const inChat = Number(types.IN_CHAT ?? 3);
   const systemRole = Number(roles.SYSTEM ?? 0);
+  const depth = injectionDepth(settings.injectPromptDepth);
 
   if (!settings.enabled || !settings.injectTrackerIntoPrompt || !data) {
     lastInjectedPrompt = "";
-    setExtensionPrompt(INJECT_KEY, "", inChat, 0, false, systemRole);
+    setExtensionPrompt(INJECT_KEY, "", inChat, depth, false, systemRole);
     return;
   }
 
   const prompt = buildPrompt(data, settings);
   lastInjectedPrompt = prompt;
-  setExtensionPrompt(INJECT_KEY, prompt, inChat, 0, Boolean(prompt), systemRole);
+  setExtensionPrompt(INJECT_KEY, prompt, inChat, depth, Boolean(prompt), systemRole);
 }
 
 export function getLastInjectedPrompt(): string {

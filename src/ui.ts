@@ -3095,6 +3095,7 @@ export function openSettingsModal(input: {
       <h4><span class="bst-header-icon fa-solid fa-filter"></span>Extraction</h4>
       <div class="bst-settings-grid">
         <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
+        <label data-bst-row="injectPromptDepth">Injection Depth <select data-k="injectPromptDepth"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></label>
         <label data-bst-row="maxConcurrentCalls">Max Concurrent Requests <input data-k="maxConcurrentCalls" type="number" min="1" max="8"></label>
         <label data-bst-row="maxRetriesPerStat">Max Retries Per Stat <input data-k="maxRetriesPerStat" type="number" min="0" max="4"></label>
         <label>Max Delta Per Turn <input data-k="maxDeltaPerTurn" type="number" min="1" max="30"></label>
@@ -3629,6 +3630,7 @@ export function openSettingsModal(input: {
   set("strictJsonRepair", String(input.settings.strictJsonRepair));
   set("maxRetriesPerStat", String(input.settings.maxRetriesPerStat));
   set("contextMessages", String(input.settings.contextMessages));
+  set("injectPromptDepth", String(input.settings.injectPromptDepth));
   set("maxDeltaPerTurn", String(input.settings.maxDeltaPerTurn));
   set("maxTokensOverride", String(input.settings.maxTokensOverride));
   set("truncationLengthOverride", String(input.settings.truncationLengthOverride));
@@ -3765,6 +3767,7 @@ export function openSettingsModal(input: {
       strictJsonRepair: readBool("strictJsonRepair"),
       maxRetriesPerStat: readNumber("maxRetriesPerStat", input.settings.maxRetriesPerStat, 0, 4),
       contextMessages: readNumber("contextMessages", input.settings.contextMessages, 1, 40),
+      injectPromptDepth: readNumber("injectPromptDepth", input.settings.injectPromptDepth, 0, 8),
       maxDeltaPerTurn: readNumber("maxDeltaPerTurn", input.settings.maxDeltaPerTurn, 1, 30),
       maxTokensOverride: readNumber("maxTokensOverride", input.settings.maxTokensOverride, 0, 100000),
       truncationLengthOverride: readNumber("truncationLengthOverride", input.settings.truncationLengthOverride, 0, 200000),
@@ -3815,6 +3818,7 @@ export function openSettingsModal(input: {
 
   const syncExtractionVisibility = (): void => {
     const maxConcurrentRow = modal.querySelector('[data-bst-row="maxConcurrentCalls"]') as HTMLElement | null;
+    const injectPromptDepthRow = modal.querySelector('[data-bst-row="injectPromptDepth"]') as HTMLElement | null;
     const maxRetriesRow = modal.querySelector('[data-bst-row="maxRetriesPerStat"]') as HTMLElement | null;
     const lookbackRow = modal.querySelector('[data-bst-row="activityLookback"]') as HTMLElement | null;
     const inactiveLabelRow = modal.querySelector('[data-bst-row="inactiveLabel"]') as HTMLElement | null;
@@ -3832,6 +3836,11 @@ export function openSettingsModal(input: {
       maxConcurrentRow.style.display = current.sequentialExtraction ? "flex" : "none";
       maxConcurrentRow.style.flexDirection = "column";
       maxConcurrentRow.style.gap = "4px";
+    }
+    if (injectPromptDepthRow) {
+      injectPromptDepthRow.style.display = current.injectTrackerIntoPrompt ? "flex" : "none";
+      injectPromptDepthRow.style.flexDirection = "column";
+      injectPromptDepthRow.style.gap = "4px";
     }
     if (maxRetriesRow) {
       maxRetriesRow.style.display = current.strictJsonRepair ? "flex" : "none";
@@ -3933,6 +3942,7 @@ export function openSettingsModal(input: {
     strictJsonRepair: "Enable strict retry prompts when model output is not valid or missing required fields.",
     maxRetriesPerStat: "Maximum repair retries for each stat extraction stage.",
     contextMessages: "How many recent chat messages are included in tracker extraction context.",
+    injectPromptDepth: "How deep into the in-chat prompt stack the injected relationship state should be inserted (0 = nearest/top, max 8).",
     maxDeltaPerTurn: "Hard cap for stat change magnitude in one tracker update before confidence scaling.",
     maxTokensOverride: "Override max tokens for extraction requests (0 = use profile/preset defaults).",
     truncationLengthOverride: "Override context truncation length for extraction requests (0 = use profile/preset defaults).",

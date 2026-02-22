@@ -1218,6 +1218,7 @@ function openSettings(): void {
           includeContextInDiagnostics: currentSettings.includeContextInDiagnostics,
           includeGraphInDiagnostics: currentSettings.includeGraphInDiagnostics,
           injectTrackerIntoPrompt: currentSettings.injectTrackerIntoPrompt,
+          injectPromptDepth: currentSettings.injectPromptDepth,
           contextMessages: currentSettings.contextMessages,
           maxConcurrentCalls: currentSettings.maxConcurrentCalls,
           maxDeltaPerTurn: currentSettings.maxDeltaPerTurn,
