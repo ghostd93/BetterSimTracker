@@ -101,6 +101,8 @@ type RenderEntry = {
 
 const ROOT_CLASS = "bst-root";
 const collapsedTrackerMessages = new Set<number>();
+const expandedThoughtKeys = new Set<string>();
+const renderedCardKeys = new Set<string>();
 const MOOD_PREVIEW_BACKDROP_CLASS = "bst-mood-preview-backdrop";
 const MOOD_PREVIEW_MODAL_CLASS = "bst-mood-preview-modal";
 let moodPreviewKeyListener: ((event: KeyboardEvent) => void) | null = null;
@@ -173,6 +175,29 @@ function getResolvedMoodSource(settings: BetterSimTrackerSettings, characterName
   const override = normalizeMoodSource(entry.moodSource);
   if (entry.moodSource === "bst_images" || entry.moodSource === "st_expressions") return override;
   return fallback;
+}
+
+function thoughtKey(messageIndex: number, characterName: string): string {
+  return `${messageIndex}:${normalizeName(characterName)}`;
+}
+
+function shouldEnableThoughtExpand(text: string): boolean {
+  const normalized = text.trim();
+  if (!normalized) return false;
+  return normalized.length > 120 || normalized.includes("\n");
+}
+
+function renderThoughtMarkup(text: string, key: string, variant: "bubble" | "panel"): string {
+  const expanded = expandedThoughtKeys.has(key);
+  const expandable = shouldEnableThoughtExpand(text);
+  const containerClass = variant === "bubble" ? "bst-mood-bubble" : "bst-thought";
+  const textClass = variant === "bubble" ? "bst-mood-bubble-text" : "bst-thought-text";
+  return `
+    <div class="${containerClass}${expanded ? " bst-thought-expanded" : ""}" data-bst-thought-container="1" data-bst-thought-key="${escapeHtml(key)}">
+      <span class="${textClass}">${escapeHtml(text)}</span>
+      ${expandable ? `<button class="bst-thought-toggle" data-bst-action="toggle-thought" data-bst-thought-key="${escapeHtml(key)}" aria-expanded="${String(expanded)}">${expanded ? "Less" : "More"}</button>` : ""}
+    </div>
+  `;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -503,7 +528,14 @@ function ensureStyles(): void {
   color: #fff;
   box-shadow: 0 8px 20px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.06) inset;
   padding: 11px 12px;
-  transition: box-shadow .15s ease;
+  transition: box-shadow .15s ease, transform .15s ease, border-color .2s ease;
+}
+.bst-card.bst-card-new {
+  animation: bst-card-enter .26s ease-out;
+}
+@keyframes bst-card-enter {
+  0% { opacity: 0; transform: translateY(6px) scale(0.985); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 .bst-card-inactive {
   border-color: rgba(255,255,255,0.12);
@@ -607,9 +639,17 @@ function ensureStyles(): void {
 }
 .bst-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--bst-accent), color-mix(in srgb, var(--bst-accent) 65%, #ffd38f 35%));
-  box-shadow: 0 0 10px color-mix(in srgb, var(--bst-accent) 70%, #ffffff 30%);
+  background: linear-gradient(90deg, var(--bst-stat-color, var(--bst-accent)), color-mix(in srgb, var(--bst-stat-color, var(--bst-accent)) 65%, #ffd38f 35%));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--bst-stat-color, var(--bst-accent)) 70%, #ffffff 30%);
   transition: width 0.5s ease;
+}
+.bst-row.bst-row-changed .bst-track {
+  animation: bst-stat-track-pulse .45s ease;
+}
+@keyframes bst-stat-track-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+  35% { box-shadow: 0 0 0 2px rgba(255,255,255,0.22); }
+  100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
 }
 .bst-mood { margin-top: 10px; }
 .bst-mood-emoji { font-size: 18px; line-height: 1; }
@@ -635,6 +675,19 @@ function ensureStyles(): void {
   overflow: hidden;
   border: 2px solid color-mix(in srgb, var(--bst-card-local, var(--bst-accent)) 55%, #ffffff 45%);
   box-shadow: 0 12px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.25);
+}
+.bst-mood-image-trigger {
+  border: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: zoom-in;
+  border-radius: clamp(12px, 3vw, 16px);
+}
+.bst-mood-image-trigger:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.85);
+  outline-offset: 2px;
 }
 .bst-mood-image-frame--st-expression {
   --bst-st-expression-zoom: 1.2;
@@ -674,7 +727,8 @@ function ensureStyles(): void {
 .bst-mood-bubble {
   position: relative;
   display: inline-flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: center;
   width: 100%;
   min-width: 0;
@@ -688,6 +742,32 @@ function ensureStyles(): void {
   max-width: 520px;
   color: rgba(255,255,255,0.9);
   text-align: left;
+}
+.bst-mood-bubble-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bst-thought.bst-thought-expanded .bst-thought-text,
+.bst-mood-bubble.bst-thought-expanded .bst-mood-bubble-text {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+.bst-thought-toggle {
+  margin-top: 8px;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 999px;
+  background: rgba(10, 15, 24, 0.72);
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.bst-thought-toggle:hover {
+  border-color: rgba(255,255,255,0.5);
 }
 @media (max-width: 560px) {
   .bst-mood-wrap--image {
@@ -703,6 +783,7 @@ function ensureStyles(): void {
     text-align: center;
     min-height: 52px;
     max-width: 100%;
+    align-items: center;
   }
 }
 .bst-delta {
@@ -725,6 +806,10 @@ function ensureStyles(): void {
   background: rgba(0,0,0,0.18);
   font-style: italic;
   color: rgba(243,245,249,0.78);
+  display: flex;
+  flex-direction: column;
+}
+.bst-thought-text {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1225,13 +1310,19 @@ function ensureStyles(): void {
   padding: 12px;
   background: rgba(0,0,0,0.72);
   z-index: 2147483020;
+  opacity: 0;
+  animation: bst-fade-in .16s ease forwards;
 }
 .bst-mood-preview-modal {
-  width: min(920px, 94vw);
+  position: relative;
+  width: min(960px, 94vw);
   max-height: calc(100dvh - 24px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-rows: auto auto;
+  place-items: center;
+  gap: 10px;
+  transform: translateY(10px) scale(0.985);
+  animation: bst-modal-in .16s ease forwards;
 }
 .bst-mood-preview-image {
   max-width: 100%;
@@ -1241,6 +1332,51 @@ function ensureStyles(): void {
   border: 1px solid rgba(255,255,255,0.2);
   box-shadow: 0 20px 64px rgba(0,0,0,0.56);
   cursor: zoom-out;
+}
+.bst-mood-preview-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.38);
+  background: rgba(10,12,16,0.68);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bst-mood-preview-caption {
+  font-size: 12px;
+  color: rgba(244, 247, 255, 0.92);
+  background: rgba(10,12,16,0.52);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+.bst-mood-preview-backdrop.is-closing {
+  animation: bst-fade-out .14s ease forwards;
+}
+.bst-mood-preview-backdrop.is-closing .bst-mood-preview-modal {
+  animation: bst-modal-out .14s ease forwards;
+}
+@keyframes bst-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes bst-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes bst-modal-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes bst-modal-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(8px) scale(0.985); }
 }
 .bst-graph-top {
   display: flex;
@@ -1494,6 +1630,44 @@ function ensureStyles(): void {
     padding: 4px 8px;
     font-size: 12px;
   }
+  .bst-card {
+    padding: 9px 10px;
+  }
+  .bst-head {
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .bst-name {
+    font-size: 13px;
+  }
+  .bst-state {
+    font-size: 11px;
+    padding: 1px 6px;
+  }
+  .bst-row {
+    margin: 4px 0;
+  }
+  .bst-label {
+    font-size: 11px;
+  }
+  .bst-track {
+    height: 7px;
+  }
+  .bst-actions {
+    gap: 4px;
+  }
+  .bst-actions .bst-mini-btn {
+    min-height: 28px;
+    padding: 2px 6px;
+    font-size: 11px;
+  }
+  .bst-actions .bst-graph-label {
+    display: none;
+  }
+  .bst-root-actions .bst-mini-btn {
+    font-size: 11px;
+    padding: 2px 6px;
+  }
   .bst-settings {
     left: 0;
     top: 0;
@@ -1581,6 +1755,22 @@ function ensureStyles(): void {
   }
   .bst-graph-svg {
     height: 250px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bst-loading-track-indeterminate .bst-loading-fill,
+  .bst-row.bst-row-changed .bst-track,
+  .bst-card.bst-card-new,
+  .bst-mood-preview-backdrop,
+  .bst-mood-preview-modal,
+  .bst-mood-preview-backdrop.is-closing,
+  .bst-mood-preview-backdrop.is-closing .bst-mood-preview-modal {
+    animation: none !important;
+  }
+  .bst-fill,
+  .bst-card,
+  .bst-mini-btn {
+    transition: none !important;
   }
 }
 `;
@@ -1681,7 +1871,6 @@ export function renderTracker(
     root.style.opacity = `${settings.cardOpacity}`;
     root.style.fontSize = `${settings.fontSize}px`;
     root.style.display = "grid";
-    root.innerHTML = "";
 
     if (!root.dataset.bstBound) {
       root.dataset.bstBound = "1";
@@ -1691,8 +1880,33 @@ export function renderTracker(
         if (preview) {
           const src = String(preview.getAttribute("data-bst-image-src") ?? "").trim();
           const alt = String(preview.getAttribute("data-bst-image-alt") ?? "").trim() || "Mood image";
+          const character = String(preview.getAttribute("data-bst-image-character") ?? "").trim();
+          const mood = String(preview.getAttribute("data-bst-image-mood") ?? "").trim();
           if (src) {
-            openMoodImageModal(src, alt);
+            openMoodImageModal(src, alt, character, mood);
+          }
+          return;
+        }
+        const thoughtToggle = target?.closest('[data-bst-action="toggle-thought"]') as HTMLElement | null;
+        if (thoughtToggle) {
+          const key = String(thoughtToggle.getAttribute("data-bst-thought-key") ?? "").trim();
+          if (!key) return;
+          const expanded = expandedThoughtKeys.has(key);
+          if (expanded) {
+            expandedThoughtKeys.delete(key);
+          } else {
+            expandedThoughtKeys.add(key);
+          }
+          root.dataset.bstRenderSignature = "";
+          if (onRequestRerender) {
+            onRequestRerender();
+          } else {
+            const container = root.querySelector(`[data-bst-thought-container="1"][data-bst-thought-key="${CSS.escape(key)}"]`) as HTMLElement | null;
+            if (container) {
+              container.classList.toggle("bst-thought-expanded", !expanded);
+            }
+            thoughtToggle.setAttribute("aria-expanded", String(!expanded));
+            thoughtToggle.textContent = expanded ? "More" : "Less";
           }
           return;
         }
@@ -1723,8 +1937,10 @@ export function renderTracker(
             collapsedTrackerMessages.delete(idx);
           }
           collapse.setAttribute("aria-expanded", String(!nextCollapsed));
-          collapse.setAttribute("title", nextCollapsed ? "Expand all trackers" : "Collapse all trackers");
-          collapse.innerHTML = nextCollapsed ? "&#9656; Expand all" : "&#9662; Collapse all";
+          collapse.setAttribute("title", nextCollapsed ? "Expand cards" : "Collapse cards");
+          collapse.innerHTML = nextCollapsed ? "&#9656; Expand cards" : "&#9662; Collapse cards";
+          root.dataset.bstRenderSignature = "";
+          onRequestRerender?.();
           return;
         }
         const cancel = target?.closest('[data-bst-action="cancel-extraction"]') as HTMLElement | null;
@@ -1737,6 +1953,9 @@ export function renderTracker(
     root.classList.toggle("bst-root-collapsed", collapsedTrackerMessages.has(entry.messageIndex));
 
     if (uiState.phase === "generating" && uiState.messageIndex === entry.messageIndex) {
+      root.dataset.bstRenderPhase = "generating";
+      root.dataset.bstRenderSignature = "";
+      root.innerHTML = "";
       const loadingBox = document.createElement("div");
       loadingBox.className = "bst-loading";
       loadingBox.innerHTML = `
@@ -1752,6 +1971,9 @@ export function renderTracker(
     }
 
     if (uiState.phase === "extracting" && uiState.messageIndex === entry.messageIndex) {
+      root.dataset.bstRenderPhase = "extracting";
+      root.dataset.bstRenderSignature = "";
+      root.innerHTML = "";
       const total = Math.max(1, uiState.total);
       const done = Math.max(0, Math.min(total, uiState.done));
       const ratio = Math.max(0, Math.min(1, done / total));
@@ -1789,21 +2011,13 @@ export function renderTracker(
     const data = entry.data;
     if (!data) {
       root.style.display = "none";
+      root.dataset.bstRenderPhase = "idle";
+      root.dataset.bstRenderSignature = "";
       continue;
     }
 
     const showRetrack = latestAiIndex != null && entry.messageIndex === latestAiIndex;
-    {
-      const collapsed = root.classList.contains("bst-root-collapsed");
-      const actions = document.createElement("div");
-      actions.className = "bst-root-actions";
-      actions.innerHTML = `
-        <button class="bst-mini-btn" data-bst-action="toggle-all-collapse" title="${collapsed ? "Expand all trackers" : "Collapse all trackers"}" aria-expanded="${String(!collapsed)}">${collapsed ? "&#9656; Expand all" : "&#9662; Collapse all"}</button>
-        ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-mini-btn-accent" data-bst-action="retrack" title="Retrack latest AI message" aria-label="Retrack latest AI message">&#x21BB;</button>` : ""}
-      `;
-      root.appendChild(actions);
-    }
-
+    const collapsed = root.classList.contains("bst-root-collapsed");
     const activeSet = new Set(data.activeCharacters.map(normalizeName));
     const hasAnyStatFor = (name: string): boolean =>
       data.statistics.affection?.[name] !== undefined ||
@@ -1817,14 +2031,36 @@ export function renderTracker(
       (forceAllInGroup || settings.showInactive) && allCharacters.length > 0
         ? allCharacters
         : data.activeCharacters;
-    const targets = displayPool.filter(name => hasAnyStatFor(name) || activeSet.has(normalizeName(name)));
+    const displayOrder = new Map(displayPool.map((name, index) => [normalizeName(name), index]));
+    const targets = Array.from(new Set(
+      displayPool.filter(name => hasAnyStatFor(name) || activeSet.has(normalizeName(name)))
+    ))
+      .sort((a, b) => {
+        const aActive = activeSet.has(normalizeName(a));
+        const bActive = activeSet.has(normalizeName(b));
+        if (aActive !== bActive) return aActive ? -1 : 1;
+        const aOrder = displayOrder.get(normalizeName(a)) ?? Number.MAX_SAFE_INTEGER;
+        const bOrder = displayOrder.get(normalizeName(b)) ?? Number.MAX_SAFE_INTEGER;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return a.localeCompare(b);
+      });
+
+    const previousData = findPreviousData(entry.messageIndex);
+    const cardHtmlByName: Array<{ name: string; html: string; isActive: boolean; isNew: boolean }> = [];
+    const signatureParts: string[] = [
+      `msg:${entry.messageIndex}`,
+      `collapsed:${collapsed ? "1" : "0"}`,
+      `retrack:${showRetrack ? "1" : "0"}`,
+      `inactive:${settings.showInactive ? "1" : "0"}`,
+      `thought:${settings.showLastThought ? "1" : "0"}`,
+      `inactivelabel:${settings.inactiveLabel}`,
+      `scale:${settings.fontSize}|${settings.cardOpacity}`
+    ];
 
     for (const name of targets) {
       const isActive = activeSet.has(normalizeName(name));
       if (!isActive && !settings.showInactive) continue;
       const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
-
-      const previousData = findPreviousData(entry.messageIndex);
       const enabledNumeric = getNumericStatsForCharacter(data, name);
       const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
@@ -1837,25 +2073,26 @@ export function renderTracker(
       const lastThoughtText = settings.showLastThought && data.statistics.lastThought?.[name] !== undefined
         ? String(data.statistics.lastThought?.[name] ?? "")
         : "";
+      const thoughtUiKey = thoughtKey(entry.messageIndex, name);
       const stExpressionImageStyle = (() => {
         if (!stExpressionImageOptions) return "";
         const panX = computeZoomPanOffset(stExpressionImageOptions.positionX, stExpressionImageOptions.zoom);
         const panY = computeZoomPanOffset(stExpressionImageOptions.positionY, stExpressionImageOptions.zoom);
         return ` style="object-position:${stExpressionImageOptions.positionX.toFixed(2)}% ${stExpressionImageOptions.positionY.toFixed(2)}% !important;transform:translate(${panX.toFixed(2)}%, ${panY.toFixed(2)}%) scale(${stExpressionImageOptions.zoom.toFixed(2)}) !important;transform-origin:center center !important;"`;
       })();
-      const card = document.createElement("div");
-      card.className = `bst-card${isActive ? "" : " bst-card-inactive"}`;
-      card.style.setProperty("--bst-card-local", palette[name] ?? colorFromName(name));
       const collapsedSummary = enabledNumeric.map(def => {
         const value = toPercent(data.statistics[def.key]?.[name] ?? 0);
         return `<span>${def.short} ${value}%</span>`;
       }).join("");
       const showCollapsedMood = moodText !== "";
-      card.innerHTML = `
+      const cardKey = `${entry.messageIndex}:${normalizeName(name)}`;
+      const isNew = !renderedCardKeys.has(cardKey);
+      renderedCardKeys.add(cardKey);
+      const cardHtml = `
         <div class="bst-head">
           <div class="bst-name" title="${name}">${name}</div>
           <div class="bst-actions">
-            <button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> Graph</button>
+            <button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> <span class="bst-graph-label">Graph</span></button>
             <div class="bst-state" title="${isActive ? "Active" : settings.inactiveLabel}">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>
           </div>
         </div>
@@ -1865,17 +2102,18 @@ export function renderTracker(
           ${showCollapsedMood ? `<span class="bst-collapsed-mood" title="${moodText}">${moodToEmojiEntity(moodText)}</span>` : ""}
         </div>` : ""}
         <div class="bst-body">
-        ${enabledNumeric.map(({ key, label }) => {
+        ${enabledNumeric.map(({ key, label, color }) => {
           const value = toPercent(data.statistics[key]?.[name] ?? 0);
           const prevValueRaw = previousData?.statistics[key]?.[name];
           const prevValue = toPercent(prevValueRaw ?? value);
           const delta = Math.round(value - prevValue);
           const deltaClass = delta > 0 ? "bst-delta bst-delta-up" : delta < 0 ? "bst-delta bst-delta-down" : "bst-delta bst-delta-flat";
           const showDelta = latestAiIndex != null && entry.messageIndex === latestAiIndex;
+          const rowClass = showDelta && delta !== 0 ? "bst-row bst-row-changed" : "bst-row";
           return `
-            <div class="bst-row">
+            <div class="${rowClass}">
               <div class="bst-label"><span>${label}</span><span>${value}%${showDelta ? `<span class="${deltaClass}">${formatDelta(delta)}</span>` : ""}</span></div>
-              <div class="bst-track"><div class="bst-fill" style="width:${value}%"></div></div>
+              <div class="bst-track"><div class="bst-fill" style="width:${value}%;--bst-stat-color:${color};"></div></div>
             </div>
           `;
         }).join("")}
@@ -1883,19 +2121,44 @@ export function renderTracker(
         <div class="bst-mood${moodImage ? " bst-mood-has-image" : ""}" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap ${moodImage ? "bst-mood-wrap--image" : "bst-mood-wrap--emoji"}">
             ${moodImage
-              ? `<span class="bst-mood-image-frame${moodSource === "st_expressions" ? " bst-mood-image-frame--st-expression" : ""}"><img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" data-bst-action="open-mood-preview" data-bst-image-src="${escapeHtml(moodImage)}" data-bst-image-alt="${escapeHtml(moodText)}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}"${stExpressionImageStyle}></span>`
+              ? `<button type="button" class="bst-mood-image-trigger" data-bst-action="open-mood-preview" data-bst-image-src="${escapeHtml(moodImage)}" data-bst-image-alt="${escapeHtml(moodText)}" data-bst-image-character="${escapeHtml(name)}" data-bst-image-mood="${escapeHtml(moodText)}" aria-label="Open mood image preview for ${escapeHtml(name)} (${escapeHtml(moodText)})"><span class="bst-mood-image-frame${moodSource === "st_expressions" ? " bst-mood-image-frame--st-expression" : ""}"><img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}"${stExpressionImageStyle}></span></button>`
               : `<span class="bst-mood-chip"><span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span></span>`}
             ${moodImage && lastThoughtText
-              ? `<span class="bst-mood-bubble">${escapeHtml(lastThoughtText)}</span>`
+              ? renderThoughtMarkup(lastThoughtText, thoughtUiKey, "bubble")
               : moodImage
                 ? ""
                 : `<span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>`}
           </div>
         </div>` : ""}
-        ${settings.showLastThought && data.statistics.lastThought?.[name] !== undefined && !moodImage ? `<div class="bst-thought">${String(data.statistics.lastThought?.[name] ?? "")}</div>` : ""}
+        ${settings.showLastThought && data.statistics.lastThought?.[name] !== undefined && !moodImage ? renderThoughtMarkup(String(data.statistics.lastThought?.[name] ?? ""), thoughtUiKey, "panel") : ""}
         ${enabledNumeric.length === 0 && moodText === "" && !(settings.showLastThought && data.statistics.lastThought?.[name] !== undefined) ? `<div class="bst-empty">No stats recorded.</div>` : ""}
         </div>
       `;
+      cardHtmlByName.push({ name, html: cardHtml, isActive, isNew });
+      signatureParts.push(`card:${name}:${isActive ? "1" : "0"}:${moodText}:${moodImage ?? ""}:${lastThoughtText}:${cardHtml}`);
+    }
+
+    const renderSignature = signatureParts.join("|#|");
+    if (root.dataset.bstRenderPhase === "idle" && root.dataset.bstRenderSignature === renderSignature) {
+      continue;
+    }
+    root.dataset.bstRenderPhase = "idle";
+    root.dataset.bstRenderSignature = renderSignature;
+    root.innerHTML = "";
+
+    const actions = document.createElement("div");
+    actions.className = "bst-root-actions";
+    actions.innerHTML = `
+      <button class="bst-mini-btn" data-bst-action="toggle-all-collapse" title="${collapsed ? "Expand cards" : "Collapse cards"}" aria-expanded="${String(!collapsed)}">${collapsed ? "&#9656; Expand cards" : "&#9662; Collapse cards"}</button>
+      ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-mini-btn-accent" data-bst-action="retrack" title="Retrack latest AI message" aria-label="Retrack latest AI message">&#x21BB;</button>` : ""}
+    `;
+    root.appendChild(actions);
+
+    for (const item of cardHtmlByName) {
+      const card = document.createElement("div");
+      card.className = `bst-card${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
+      card.style.setProperty("--bst-card-local", palette[item.name] ?? colorFromName(item.name));
+      card.innerHTML = item.html;
       root.appendChild(card);
     }
   }
@@ -1906,14 +2169,14 @@ export function removeTrackerUI(): void {
   document.getElementById(STYLE_ID)?.remove();
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
-  closeMoodImageModal();
+  closeMoodImageModal(true);
   closeStExpressionFrameEditor();
   closeGraphModal();
 }
 
-function openMoodImageModal(imageUrl: string, altText: string): void {
+function openMoodImageModal(imageUrl: string, altText: string, characterName?: string, moodText?: string): void {
   ensureStyles();
-  closeMoodImageModal();
+  closeMoodImageModal(true);
 
   const backdrop = document.createElement("div");
   backdrop.className = MOOD_PREVIEW_BACKDROP_CLASS;
@@ -1921,13 +2184,27 @@ function openMoodImageModal(imageUrl: string, altText: string): void {
   const modal = document.createElement("div");
   modal.className = MOOD_PREVIEW_MODAL_CLASS;
 
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "bst-mood-preview-close";
+  closeButton.setAttribute("aria-label", "Close image preview");
+  closeButton.innerHTML = "&times;";
+  closeButton.addEventListener("click", () => closeMoodImageModal());
+
   const image = document.createElement("img");
   image.className = "bst-mood-preview-image";
   image.src = imageUrl;
   image.alt = altText || "Mood image";
   image.addEventListener("click", () => closeMoodImageModal());
 
+  const caption = document.createElement("div");
+  caption.className = "bst-mood-preview-caption";
+  const captionParts = [characterName, moodText].filter(part => typeof part === "string" && part.trim());
+  caption.textContent = captionParts.length ? captionParts.join(" - ") : (altText || "Mood image");
+
+  modal.appendChild(closeButton);
   modal.appendChild(image);
+  modal.appendChild(caption);
   backdrop.appendChild(modal);
   backdrop.addEventListener("click", event => {
     if (event.target === backdrop) {
@@ -1944,12 +2221,28 @@ function openMoodImageModal(imageUrl: string, altText: string): void {
   document.addEventListener("keydown", moodPreviewKeyListener);
 }
 
-function closeMoodImageModal(): void {
-  document.querySelector(`.${MOOD_PREVIEW_BACKDROP_CLASS}`)?.remove();
+function closeMoodImageModal(immediate = false): void {
+  const backdrop = document.querySelector(`.${MOOD_PREVIEW_BACKDROP_CLASS}`) as HTMLElement | null;
+  if (!backdrop) {
+    if (moodPreviewKeyListener) {
+      document.removeEventListener("keydown", moodPreviewKeyListener);
+      moodPreviewKeyListener = null;
+    }
+    return;
+  }
   if (moodPreviewKeyListener) {
     document.removeEventListener("keydown", moodPreviewKeyListener);
     moodPreviewKeyListener = null;
   }
+  if (immediate) {
+    backdrop.remove();
+    return;
+  }
+  if (backdrop.classList.contains("is-closing")) return;
+  backdrop.classList.add("is-closing");
+  window.setTimeout(() => {
+    backdrop.remove();
+  }, 150);
 }
 
 function statValue(entry: TrackerData, stat: NumericStatKey, character: string): number {
