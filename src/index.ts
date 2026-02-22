@@ -7,7 +7,7 @@ import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from
 import { upsertSettingsPanel } from "./settingsPanel";
 import { discoverConnectionProfiles, getActiveConnectionProfileId, getContext, getSettingsProvenance, loadSettings, logDebug, saveSettings } from "./settings";
 import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLatestTrackerDataWithIndexBefore, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getRecentTrackerHistoryEntries, getTrackerDataFromMessage, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
-import type { BetterSimTrackerSettings, DeltaDebugRecord, STContext, TrackerData } from "./types";
+import type { BetterSimTrackerSettings, DeltaDebugRecord, STContext, Statistics, TrackerData } from "./types";
 import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
 import { cancelActiveGenerations } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
@@ -369,9 +369,108 @@ function setTrackerUi(context: STContext, next: TrackerUiState): void {
   }
 }
 
+function findCharacterByName(context: STContext | null, name: string): Character | null {
+  const normalized = String(name ?? "").trim().toLowerCase();
+  if (!normalized) return null;
+  const characters = context?.characters ?? [];
+  return characters.find(character => String(character?.name ?? "").trim().toLowerCase() === normalized) ?? null;
+}
+
+function parseDefaultNumber(raw: unknown): number | null {
+  const value = Number(raw);
+  if (Number.isNaN(value)) return null;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function parseDefaultText(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const text = raw.trim();
+  return text ? text : null;
+}
+
+function getConfiguredCharacterDefaults(
+  context: STContext | null,
+  settingsInput: BetterSimTrackerSettings,
+  name: string,
+): { affection?: number; trust?: number; desire?: number; connection?: number; mood?: string } {
+  const character = findCharacterByName(context, name);
+  const extFromCharacter = character?.extensions as Record<string, unknown> | undefined;
+  const extFromData = character?.data?.extensions as Record<string, unknown> | undefined;
+  const own = ((extFromCharacter?.bettersimtracker ?? extFromData?.bettersimtracker) as Record<string, unknown> | undefined);
+  const defaultsFromExtensions = (own?.defaults as Record<string, unknown> | undefined) ?? {};
+  const defaultsFromSettings = resolveCharacterDefaultsEntry(settingsInput, {
+    name,
+    avatar: character?.avatar,
+  });
+  const merged = { ...defaultsFromSettings, ...defaultsFromExtensions };
+  const affection = parseDefaultNumber(merged.affection);
+  const trust = parseDefaultNumber(merged.trust);
+  const desire = parseDefaultNumber(merged.desire);
+  const connection = parseDefaultNumber(merged.connection);
+  const mood = parseDefaultText(merged.mood);
+  return {
+    ...(affection != null ? { affection } : {}),
+    ...(trust != null ? { trust } : {}),
+    ...(desire != null ? { desire } : {}),
+    ...(connection != null ? { connection } : {}),
+    ...(mood != null ? { mood } : {}),
+  };
+}
+
+function buildSeededStatisticsForActiveCharacters(
+  base: Statistics | null,
+  activeCharacters: string[],
+  settingsInput: BetterSimTrackerSettings,
+  context: STContext | null,
+): Statistics {
+  const seeded: Statistics = {
+    affection: { ...(base?.affection ?? {}) },
+    trust: { ...(base?.trust ?? {}) },
+    desire: { ...(base?.desire ?? {}) },
+    connection: { ...(base?.connection ?? {}) },
+    mood: { ...(base?.mood ?? {}) },
+    lastThought: { ...(base?.lastThought ?? {}) },
+  };
+
+  for (const name of activeCharacters) {
+    const configured = getConfiguredCharacterDefaults(context, settingsInput, name);
+    if (seeded.affection[name] === undefined) {
+      seeded.affection[name] = configured.affection ?? settingsInput.defaultAffection;
+    }
+    if (seeded.trust[name] === undefined) {
+      seeded.trust[name] = configured.trust ?? settingsInput.defaultTrust;
+    }
+    if (seeded.desire[name] === undefined) {
+      seeded.desire[name] = configured.desire ?? settingsInput.defaultDesire;
+    }
+    if (seeded.connection[name] === undefined) {
+      seeded.connection[name] = configured.connection ?? settingsInput.defaultConnection;
+    }
+    if (seeded.mood[name] === undefined) {
+      seeded.mood[name] = configured.mood ?? settingsInput.defaultMood;
+    }
+    if (seeded.lastThought[name] === undefined) {
+      seeded.lastThought[name] = "";
+    }
+  }
+
+  return seeded;
+}
+
+function seedHistoryForActiveCharacters(
+  history: TrackerData[],
+  activeCharacters: string[],
+  settingsInput: BetterSimTrackerSettings,
+  context: STContext | null,
+): TrackerData[] {
+  return history.map(entry => ({
+    ...entry,
+    statistics: buildSeededStatisticsForActiveCharacters(entry.statistics, activeCharacters, settingsInput, context),
+  }));
+}
+
 function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettings): TrackerData {
   const context = getSafeContext();
-  const charByName = new Map((context?.characters ?? []).map(character => [character.name, character]));
 
   const pickNumber = (raw: unknown, fallback: number): number => {
     const n = Number(raw);
@@ -425,18 +524,7 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
     mood: string;
   } => {
     const contextual = inferFromContext(name);
-
-    const character = charByName.get(name);
-
-    const extFromCharacter = character?.extensions as Record<string, unknown> | undefined;
-    const extFromData = character?.data?.extensions as Record<string, unknown> | undefined;
-    const own = ((extFromCharacter?.bettersimtracker ?? extFromData?.bettersimtracker) as Record<string, unknown> | undefined);
-    const defaultsFromExtensions = (own?.defaults as Record<string, unknown> | undefined) ?? {};
-    const defaultsFromSettings = resolveCharacterDefaultsEntry(s, {
-      name,
-      avatar: character?.avatar,
-    });
-    const defaults = { ...defaultsFromSettings, ...defaultsFromExtensions };
+    const defaults = getConfiguredCharacterDefaults(context, s, name);
     const hasAnyExplicitDefaults =
       defaults.affection !== undefined ||
       defaults.trust !== undefined ||
@@ -617,6 +705,18 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     if (settings.includeCharacterCardsInPrompt) {
       contextText = `${contextText}${buildCharacterCardsContext(context, activeCharacters)}`.trim();
     }
+    const previousSeededStatistics = buildSeededStatisticsForActiveCharacters(
+      previous?.statistics ?? null,
+      activeCharacters,
+      settings,
+      context,
+    );
+    const seededHistory = seedHistoryForActiveCharacters(
+      getRecentTrackerHistory(context, 6),
+      activeCharacters,
+      settings,
+      context,
+    );
 
     logDebug(settings, "extraction", `Extraction started (${reason})`, {
       activeCharacters,
@@ -646,8 +746,8 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       userName,
       activeCharacters,
       contextText,
-      previousStatistics: previous?.statistics ?? null,
-      history: getRecentTrackerHistory(context, 6),
+      previousStatistics: previousSeededStatistics,
+      history: seededHistory,
       onProgress: (done, total, label) => {
         if (!isExtracting || activeExtractionRunId !== runId) {
           return;
