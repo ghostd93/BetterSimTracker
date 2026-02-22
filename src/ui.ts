@@ -1025,7 +1025,17 @@ function ensureStyles(): void {
 }
 .bst-settings label { font-size: 12px; display: flex; flex-direction: column; gap: 6px; color: rgba(241, 246, 255, 0.94); }
 .bst-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
-.bst-check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--bst-accent); }
+.bst-check input[type="checkbox"] {
+  all: revert;
+  appearance: auto !important;
+  -webkit-appearance: checkbox !important;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  margin: 0;
+  accent-color: var(--bst-accent);
+  cursor: pointer;
+}
 .bst-settings input, .bst-settings select, .bst-settings textarea {
   background: #0d1220 !important;
   color: #f3f5f9 !important;
