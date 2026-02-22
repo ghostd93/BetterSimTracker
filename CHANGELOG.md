@@ -28,6 +28,7 @@ All notable changes to BetterSimTracker are documented here.
 - Settings checkbox visuals now stay stable on hover (checked toggles no longer appear unchecked while hovered).
 - Checkbox rendering in wizard modals is now cross-browser stable (including Firefox).
 - Clearing prompt-template fields in settings now cleanly falls back to built-in defaults (visible again after reopening settings).
+- Custom stats no longer trigger first-run extraction requests when seeded from defaults; seeded values are used first.
 
 ## [1.2.3] - 2026-02-22
 ### Added
