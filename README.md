@@ -20,7 +20,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Prompt templates (unified + per-stat) with per-prompt reset
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
 - Interactive ST expression framing editor with live preview (global + per-character override)
-- Click-to-preview mood image lightbox with close button / backdrop / Esc support
+- Click-to-preview mood image lightbox with close button / backdrop / Esc support (native top-layer dialog path on supported browsers)
 - Active-first tracker card ordering in group chats with stable per-message order
 - Per-stat colored bars, subtle card/stat update animations, and reduced-motion support
 - Expandable last-thought text (`More` / `Less`) in cards and mood bubbles
