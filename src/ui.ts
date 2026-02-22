@@ -2351,6 +2351,29 @@ function openMoodImageModal(imageUrl: string, altText: string, characterName?: s
   const captionParts = [characterName, moodText].filter(part => typeof part === "string" && part.trim());
   caption.textContent = captionParts.length ? captionParts.join(" - ") : (altText || "Mood image");
 
+  // Inline fallback for environments where extension CSS is delayed/overridden on mobile.
+  backdrop.style.setProperty("position", "fixed", "important");
+  backdrop.style.setProperty("inset", "0", "important");
+  backdrop.style.setProperty("display", "grid", "important");
+  backdrop.style.setProperty("place-items", "center", "important");
+  backdrop.style.setProperty("padding", "12px", "important");
+  backdrop.style.setProperty("background", "rgba(0,0,0,0.72)", "important");
+  backdrop.style.setProperty("z-index", "2147483647", "important");
+  backdrop.style.setProperty("overflow", "auto", "important");
+
+  modal.style.setProperty("position", "relative", "important");
+  modal.style.setProperty("width", "min(960px, 94vw)", "important");
+  modal.style.setProperty("max-height", "calc(100dvh - 24px)", "important");
+  modal.style.setProperty("display", "grid", "important");
+  modal.style.setProperty("grid-template-rows", "auto auto", "important");
+  modal.style.setProperty("place-items", "center", "important");
+  modal.style.setProperty("gap", "10px", "important");
+  modal.style.setProperty("z-index", "2147483647", "important");
+
+  image.style.setProperty("max-width", "100%", "important");
+  image.style.setProperty("max-height", "calc(100dvh - 24px)", "important");
+  image.style.setProperty("object-fit", "contain", "important");
+
   modal.appendChild(closeButton);
   modal.appendChild(image);
   modal.appendChild(caption);
@@ -2361,7 +2384,13 @@ function openMoodImageModal(imageUrl: string, altText: string, characterName?: s
       closeMoodImageModal();
     }
   });
-  document.body.appendChild(backdrop);
+  backdrop.addEventListener("touchend", event => {
+    if (Date.now() - moodPreviewOpenedAt < 220) return;
+    if (event.target === backdrop) {
+      closeMoodImageModal();
+    }
+  }, { passive: true });
+  (document.documentElement ?? document.body).appendChild(backdrop);
   document.body.classList.add(MOOD_PREVIEW_BODY_CLASS);
   // Fallback for environments where CSS animations are disabled/not applied.
   backdrop.style.opacity = "1";
