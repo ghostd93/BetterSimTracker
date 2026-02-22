@@ -13,10 +13,12 @@ All notable changes to BetterSimTracker are documented here.
 ### Changed
 - Settings now persist `customStats` as part of live autosave, while keeping existing built-in stat behavior unchanged.
 - Baseline seeding and history fallback now include configured custom stat defaults (global + per-character overrides) to keep first-run behavior consistent.
+- Tracker cards and graph now keep enabled numeric stat definitions visible with default-value fallback when older snapshots lack explicit values.
 
 ### Fixed
 - Character defaults numeric inputs (built-in and custom stat defaults) now clamp visually and on save to `0..100`.
 - Diagnostics dumps now include custom-stat settings and history payloads for easier debugging of custom-stat runs.
+- Graph debug traces now include custom stat series/latest values alongside built-in stat series.
 
 ## [1.2.3] - 2026-02-22
 ### Added
