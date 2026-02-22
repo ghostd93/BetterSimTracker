@@ -12,7 +12,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Scene activity detection (active vs inactive character state)
 - Polished tracker action controls for `Collapse cards` and `Retrack`
 - Polished extension settings modal with sticky header/footer actions and one-click `Expand all` / `Collapse all` section control
-- Settings checkboxes now use consistent native styling across ST themes/mobile UI overrides
+- Settings checkboxes now use consistent round accent-matched styling across ST themes/mobile UI overrides
 - Retrack button (regenerate tracker for last AI message)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)

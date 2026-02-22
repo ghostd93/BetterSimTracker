@@ -36,7 +36,7 @@ All notable changes to BetterSimTracker are documented here.
 - Stop extraction now hard-cancels the active run in one click (including queued sequential workers/retries), with abort-like transport errors normalized as cancellation.
 - Tracker card rerenders now skip unchanged payloads via render signatures, reducing unnecessary DOM churn/flicker.
 - Settings `Close` and `Retrack` actions now bind correctly across all duplicated action buttons (header/footer/debug area).
-- Settings checkboxes now use a hard-reset native checkbox style so ST/global CSS cannot distort their appearance.
+- Settings checkboxes now use custom round accent-matched styling with explicit reset rules so ST/global CSS cannot distort their appearance.
 
 ## [1.2.0] - 2026-02-21
 ### Added
