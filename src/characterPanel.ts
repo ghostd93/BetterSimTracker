@@ -422,9 +422,15 @@ function renderPanel(input: InitInput, force = false): void {
   const namedCharacter = normalizedName
     ? context.characters?.find(character => String(character?.name ?? "").trim().toLowerCase() === normalizedName) ?? null
     : null;
+  const contextCharacterName = String(contextCharacter?.name ?? "").trim().toLowerCase();
+  const contextCharacterMatchesSelection = Boolean(
+    normalizedName &&
+    contextCharacterName &&
+    contextCharacterName === normalizedName,
+  );
   const characterAvatar =
-    contextCharacter?.avatar?.trim() ||
     namedCharacter?.avatar?.trim() ||
+    (contextCharacterMatchesSelection ? contextCharacter?.avatar?.trim() : "") ||
     "";
   const characterIdentity: CharacterDefaultsIdentity = { name: characterName, avatar: characterAvatar };
   if (!characterName) {
