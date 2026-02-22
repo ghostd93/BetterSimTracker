@@ -1207,7 +1207,7 @@ function ensureStyles(): void {
 .bst-check input[type="checkbox"]:active {
   transform: scale(0.94);
 }
-.bst-settings input, .bst-settings select, .bst-settings textarea {
+.bst-settings input:not([type="checkbox"]), .bst-settings select, .bst-settings textarea {
   background: #0d1220 !important;
   color: #f3f5f9 !important;
   border: 1px solid rgba(255,255,255,0.20) !important;
@@ -1215,17 +1215,17 @@ function ensureStyles(): void {
   padding: 8px 10px;
   transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
 }
-.bst-settings input,
+.bst-settings input:not([type="checkbox"]),
 .bst-settings select {
   min-height: 36px;
 }
-.bst-settings input:hover,
+.bst-settings input:not([type="checkbox"]):hover,
 .bst-settings select:hover,
 .bst-settings textarea:hover {
   border-color: rgba(168, 203, 245, 0.48) !important;
   background: #101728 !important;
 }
-.bst-settings input:focus-visible,
+.bst-settings input:not([type="checkbox"]):focus-visible,
 .bst-settings select:focus-visible,
 .bst-settings textarea:focus-visible {
   outline: none;
