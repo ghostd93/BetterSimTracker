@@ -123,7 +123,7 @@ function getNumericStatsForCharacter(
   name: string,
   settings: BetterSimTrackerSettings,
 ): UiNumericStatDefinition[] {
-  return getNumericStatDefinitions(settings).filter(def => def.showOnCard && hasNumericValue(entry, def.key, name));
+  return getNumericStatDefinitions(settings).filter(def => def.showOnCard);
 }
 
 function getNumericStatsForHistory(
@@ -131,7 +131,7 @@ function getNumericStatsForHistory(
   name: string,
   settings: BetterSimTrackerSettings,
 ): UiNumericStatDefinition[] {
-  return getNumericStatDefinitions(settings).filter(def => def.showInGraph && history.some(entry => hasNumericValue(entry, def.key, name)));
+  return getNumericStatDefinitions(settings).filter(def => def.showInGraph);
 }
 
 export type TrackerUiState = {
@@ -2682,10 +2682,11 @@ export function renderTracker(
           ${showCollapsedMood ? `<span class="bst-collapsed-mood" title="${moodText}">${moodToEmojiEntity(moodText)}</span>` : ""}
         </div>` : ""}
         <div class="bst-body">
-        ${enabledNumeric.map(({ key, label, color }) => {
-          const value = toPercent(getNumericRawValue(data, key, name) ?? 0);
+        ${enabledNumeric.map(({ key, label, color, defaultValue }) => {
+          const defDefault = defaultValue ?? 50;
+          const value = toPercent(getNumericRawValue(data, key, name) ?? defDefault);
           const prevValueRaw = previousData ? getNumericRawValue(previousData, key, name) : undefined;
-          const prevValue = toPercent(prevValueRaw ?? value);
+          const prevValue = toPercent(prevValueRaw ?? defDefault);
           const delta = Math.round(value - prevValue);
           const deltaClass = delta > 0 ? "bst-delta bst-delta-up" : delta < 0 ? "bst-delta bst-delta-down" : "bst-delta bst-delta-flat";
           const showDelta = latestAiIndex != null && entry.messageIndex === latestAiIndex;
