@@ -3,6 +3,7 @@ import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import { logDebug } from "./settings";
 import type {
   BetterSimTrackerSettings,
+  BuiltInNumericStatUiSettings,
   ConnectionProfileOption,
   CustomStatDefinition,
   DeltaDebugRecord,
@@ -293,6 +294,39 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     sequentialPromptTemplate: typeof definition.sequentialPromptTemplate === "string" ? definition.sequentialPromptTemplate : undefined,
   };
 }
+
+function cloneBuiltInNumericStatUi(settings: BuiltInNumericStatUiSettings): BuiltInNumericStatUiSettings {
+  return {
+    affection: {
+      showOnCard: Boolean(settings.affection.showOnCard),
+      showInGraph: Boolean(settings.affection.showInGraph),
+      includeInInjection: Boolean(settings.affection.includeInInjection),
+    },
+    trust: {
+      showOnCard: Boolean(settings.trust.showOnCard),
+      showInGraph: Boolean(settings.trust.showInGraph),
+      includeInInjection: Boolean(settings.trust.includeInInjection),
+    },
+    desire: {
+      showOnCard: Boolean(settings.desire.showOnCard),
+      showInGraph: Boolean(settings.desire.showInGraph),
+      includeInInjection: Boolean(settings.desire.includeInInjection),
+    },
+    connection: {
+      showOnCard: Boolean(settings.connection.showOnCard),
+      showInGraph: Boolean(settings.connection.showInGraph),
+      includeInInjection: Boolean(settings.connection.includeInInjection),
+    },
+  };
+}
+
+const BUILT_IN_STAT_LABELS: Record<"affection" | "trust" | "desire" | "connection", string> = {
+  affection: "Affection",
+  trust: "Trust",
+  desire: "Desire",
+  connection: "Connection",
+};
+const BUILT_IN_NUMERIC_STAT_KEY_LIST = ["affection", "trust", "desire", "connection"] as const;
 
 function toCustomStatSlug(label: string): string {
   const normalized = String(label ?? "")
@@ -3350,6 +3384,7 @@ export function openSettingsModal(input: {
   let customStatsState: CustomStatDefinition[] = Array.isArray(input.settings.customStats)
     ? input.settings.customStats.map(cloneCustomStatDefinition)
     : [];
+  let builtInNumericStatUiState: BuiltInNumericStatUiSettings = cloneBuiltInNumericStatUi(input.settings.builtInNumericStatUi);
 
   const modal = document.createElement("div");
   modal.className = "bst-settings";
@@ -3429,6 +3464,10 @@ export function openSettingsModal(input: {
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-chart-line"></span>Tracked Stats</h4>
+      <div class="bst-custom-stats-top">
+        <div class="bst-help-line">Built-ins are never deletable, but you can manage extraction/card/graph/injection behavior.</div>
+        <button type="button" class="bst-btn bst-btn-soft" data-action="manage-builtins">Manage Built-in Stats</button>
+      </div>
       <div class="bst-check-grid">
         <label class="bst-check"><input data-k="trackAffection" type="checkbox">Track Affection</label>
         <label class="bst-check"><input data-k="trackTrust" type="checkbox">Track Trust</label>
@@ -4042,6 +4081,7 @@ export function openSettingsModal(input: {
   if (globalFrameButton) globalFrameButton.disabled = false;
   const customStatsListNode = modal.querySelector('[data-bst-row="customStatsList"]') as HTMLElement | null;
   const customAddButton = modal.querySelector('[data-action="custom-add"]') as HTMLButtonElement | null;
+  const manageBuiltInsButton = modal.querySelector('[data-action="manage-builtins"]') as HTMLButtonElement | null;
 
   type CustomStatWizardMode = "add" | "edit" | "duplicate";
   type CustomStatDraft = {
@@ -4230,6 +4270,122 @@ export function openSettingsModal(input: {
   const closeCustomWizard = (): void => {
     document.querySelector(".bst-custom-wizard-backdrop")?.remove();
     document.querySelector(".bst-custom-wizard")?.remove();
+  };
+
+  const openBuiltInManagerWizard = (): void => {
+    closeCustomWizard();
+    const current = collectSettings();
+    const draftUi = cloneBuiltInNumericStatUi(current.builtInNumericStatUi);
+    const draftTrack: Record<(typeof BUILT_IN_NUMERIC_STAT_KEY_LIST)[number], boolean> = {
+      affection: current.trackAffection,
+      trust: current.trackTrust,
+      desire: current.trackDesire,
+      connection: current.trackConnection,
+    };
+
+    const backdropNode = document.createElement("div");
+    backdropNode.className = "bst-custom-wizard-backdrop";
+    const wizard = document.createElement("div");
+    wizard.className = "bst-custom-wizard";
+    const renderRows = (): string =>
+      BUILT_IN_NUMERIC_STAT_KEY_LIST.map(key => `
+        <div class="bst-custom-stat-row">
+          <div class="bst-custom-stat-main">
+            <div class="bst-custom-stat-title">
+              <span>${escapeHtml(BUILT_IN_STAT_LABELS[key])}</span>
+              <span class="bst-custom-stat-id">${escapeHtml(key)}</span>
+            </div>
+          </div>
+          <div class="bst-check-grid">
+            <label class="bst-check"><input type="checkbox" data-bst-builtin-track="${key}" ${draftTrack[key] ? "checked" : ""}>Track</label>
+            <label class="bst-check"><input type="checkbox" data-bst-builtin-card="${key}" ${draftUi[key].showOnCard ? "checked" : ""}>Card</label>
+            <label class="bst-check"><input type="checkbox" data-bst-builtin-graph="${key}" ${draftUi[key].showInGraph ? "checked" : ""}>Graph</label>
+            <label class="bst-check"><input type="checkbox" data-bst-builtin-inject="${key}" ${draftUi[key].includeInInjection ? "checked" : ""}>Inject</label>
+          </div>
+        </div>
+      `).join("");
+
+    wizard.innerHTML = `
+      <div class="bst-custom-wizard-head">
+        <div>
+          <div class="bst-custom-wizard-title">Manage Built-in Stats</div>
+          <div class="bst-custom-wizard-step" data-bst-builtin-step>Step 1 / 2</div>
+        </div>
+        <button type="button" class="bst-btn bst-close-btn" data-action="custom-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="bst-custom-wizard-panel is-active" data-bst-builtin-panel="1">
+        <div class="bst-help-line">Built-in stats are never deleted. You can manage how each one participates in extraction and UI.</div>
+        <ul class="bst-help-list">
+          <li><strong>Track</strong>: include in extraction updates.</li>
+          <li><strong>Card</strong>: show as a row in tracker cards.</li>
+          <li><strong>Graph</strong>: include as graph series.</li>
+          <li><strong>Inject</strong>: include in prompt injection guidance.</li>
+        </ul>
+      </div>
+      <div class="bst-custom-wizard-panel" data-bst-builtin-panel="2">
+        <div class="bst-help-line">Configure built-in stats behavior:</div>
+        ${renderRows()}
+      </div>
+      <div class="bst-custom-wizard-actions">
+        <button type="button" class="bst-btn" data-action="builtin-back">Back</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="bst-btn bst-btn-soft" data-action="builtin-next">Next</button>
+          <button type="button" class="bst-btn bst-btn-soft" data-action="builtin-save" style="display:none;">Save</button>
+        </div>
+      </div>
+    `;
+
+    const stepLabel = wizard.querySelector('[data-bst-builtin-step]') as HTMLElement | null;
+    const panel1 = wizard.querySelector('[data-bst-builtin-panel="1"]') as HTMLElement | null;
+    const panel2 = wizard.querySelector('[data-bst-builtin-panel="2"]') as HTMLElement | null;
+    const backBtn = wizard.querySelector('[data-action="builtin-back"]') as HTMLButtonElement | null;
+    const nextBtn = wizard.querySelector('[data-action="builtin-next"]') as HTMLButtonElement | null;
+    const saveBtn = wizard.querySelector('[data-action="builtin-save"]') as HTMLButtonElement | null;
+    let step = 1;
+
+    const syncStep = (): void => {
+      if (stepLabel) stepLabel.textContent = `Step ${step} / 2`;
+      panel1?.classList.toggle("is-active", step === 1);
+      panel2?.classList.toggle("is-active", step === 2);
+      if (backBtn) backBtn.style.visibility = step === 1 ? "hidden" : "visible";
+      if (nextBtn) nextBtn.style.display = step === 1 ? "" : "none";
+      if (saveBtn) saveBtn.style.display = step === 2 ? "" : "none";
+    };
+
+    const applyFromDom = (): void => {
+      for (const key of BUILT_IN_NUMERIC_STAT_KEY_LIST) {
+        draftTrack[key] = Boolean((wizard.querySelector(`[data-bst-builtin-track="${key}"]`) as HTMLInputElement | null)?.checked);
+        draftUi[key].showOnCard = Boolean((wizard.querySelector(`[data-bst-builtin-card="${key}"]`) as HTMLInputElement | null)?.checked);
+        draftUi[key].showInGraph = Boolean((wizard.querySelector(`[data-bst-builtin-graph="${key}"]`) as HTMLInputElement | null)?.checked);
+        draftUi[key].includeInInjection = Boolean((wizard.querySelector(`[data-bst-builtin-inject="${key}"]`) as HTMLInputElement | null)?.checked);
+      }
+    };
+
+    const close = (): void => closeCustomWizard();
+    backdropNode.addEventListener("click", close);
+    wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
+    backBtn?.addEventListener("click", () => {
+      step = 1;
+      syncStep();
+    });
+    nextBtn?.addEventListener("click", () => {
+      step = 2;
+      syncStep();
+    });
+    saveBtn?.addEventListener("click", () => {
+      applyFromDom();
+      builtInNumericStatUiState = cloneBuiltInNumericStatUi(draftUi);
+      set("trackAffection", String(draftTrack.affection));
+      set("trackTrust", String(draftTrack.trust));
+      set("trackDesire", String(draftTrack.desire));
+      set("trackConnection", String(draftTrack.connection));
+      close();
+      persistLive();
+    });
+
+    document.body.appendChild(backdropNode);
+    document.body.appendChild(wizard);
+    syncStep();
   };
 
   const openCustomRemoveWizard = (target: CustomStatDefinition): void => {
@@ -4536,6 +4692,9 @@ export function openSettingsModal(input: {
   customAddButton?.addEventListener("click", () => {
     openCustomStatWizard("add");
   });
+  manageBuiltInsButton?.addEventListener("click", () => {
+    openBuiltInManagerWizard();
+  });
 
   customStatsListNode?.addEventListener("click", event => {
     const target = event.target as HTMLElement | null;
@@ -4622,6 +4781,7 @@ export function openSettingsModal(input: {
       trackConnection: readBool("trackConnection"),
       trackMood: readBool("trackMood"),
       trackLastThought: readBool("trackLastThought"),
+      builtInNumericStatUi: cloneBuiltInNumericStatUi(builtInNumericStatUiState),
       moodSource: read("moodSource") === "st_expressions" ? "st_expressions" : "bst_images",
       moodExpressionMap: readGlobalMoodExpressionMap(),
       stExpressionImageZoom: readNumber("stExpressionImageZoom", input.settings.stExpressionImageZoom, 0.5, 3),
@@ -4729,6 +4889,7 @@ export function openSettingsModal(input: {
     customStatsState = Array.isArray(next.customStats)
       ? next.customStats.map(cloneCustomStatDefinition)
       : [];
+    builtInNumericStatUiState = cloneBuiltInNumericStatUi(next.builtInNumericStatUi);
     input.settings = next;
     input.onSave(next);
     renderCustomStatsList();

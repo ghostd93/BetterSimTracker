@@ -41,12 +41,29 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): str
     label: string;
     enabled: boolean;
   }> = [
-    { key: "affection", label: "affection", enabled: settings.trackAffection },
-    { key: "trust", label: "trust", enabled: settings.trackTrust },
-    { key: "desire", label: "desire", enabled: settings.trackDesire },
-    { key: "connection", label: "connection", enabled: settings.trackConnection },
+    {
+      key: "affection",
+      label: "affection",
+      enabled: settings.trackAffection && settings.builtInNumericStatUi.affection.includeInInjection,
+    },
+    {
+      key: "trust",
+      label: "trust",
+      enabled: settings.trackTrust && settings.builtInNumericStatUi.trust.includeInInjection,
+    },
+    {
+      key: "desire",
+      label: "desire",
+      enabled: settings.trackDesire && settings.builtInNumericStatUi.desire.includeInInjection,
+    },
+    {
+      key: "connection",
+      label: "connection",
+      enabled: settings.trackConnection && settings.builtInNumericStatUi.connection.includeInInjection,
+    },
   ];
   const enabledBuiltIns = numericKeys.filter(entry => entry.enabled);
+  const enabledBuiltInKeys = new Set(enabledBuiltIns.map(entry => entry.key));
   const hasAnyNumeric = enabledBuiltIns.length > 0 || enabledCustom.length > 0;
   const includeMood = settings.trackMood;
 
@@ -105,10 +122,10 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): str
   const reactRules = hasAnyNumeric
     ? [
         "How to react:",
-        ...(settings.trackTrust ? ["- low trust -> avoid deep vulnerability; require proof/consistency", "- high trust -> share more, accept reassurance, collaborate"] : []),
-        ...(settings.trackAffection ? ["- low affection -> limited warmth; less caring language", "- high affection -> caring language, concern, emotional support"] : []),
-        ...(settings.trackDesire ? ["- low desire -> little/no flirtation; keep distance", "- high desire -> increased flirtation/attraction cues (respect context and consent)"] : []),
-        ...(settings.trackConnection ? ["- low connection -> conversations stay surface-level", "- high connection -> personal references, emotional continuity, deeper empathy"] : []),
+        ...(enabledBuiltInKeys.has("trust") ? ["- low trust -> avoid deep vulnerability; require proof/consistency", "- high trust -> share more, accept reassurance, collaborate"] : []),
+        ...(enabledBuiltInKeys.has("affection") ? ["- low affection -> limited warmth; less caring language", "- high affection -> caring language, concern, emotional support"] : []),
+        ...(enabledBuiltInKeys.has("desire") ? ["- low desire -> little/no flirtation; keep distance", "- high desire -> increased flirtation/attraction cues (respect context and consent)"] : []),
+        ...(enabledBuiltInKeys.has("connection") ? ["- low connection -> conversations stay surface-level", "- high connection -> personal references, emotional continuity, deeper empathy"] : []),
         ...enabledCustom.map(stat => `- low ${stat.id} -> less ${stat.label.toLowerCase()}; high ${stat.id} -> more ${stat.label.toLowerCase()}`),
       ].join("\n")
     : "";

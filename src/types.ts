@@ -41,6 +41,14 @@ export interface CustomStatDefinition {
   sequentialPromptTemplate?: string;
 }
 
+export interface BuiltInNumericStatUiConfig {
+  showOnCard: boolean;
+  showInGraph: boolean;
+  includeInInjection: boolean;
+}
+
+export type BuiltInNumericStatUiSettings = Record<NumericStatKey, BuiltInNumericStatUiConfig>;
+
 export interface TrackerData {
   timestamp: number;
   activeCharacters: string[];
@@ -75,6 +83,7 @@ export interface BetterSimTrackerSettings {
   trackConnection: boolean;
   trackMood: boolean;
   trackLastThought: boolean;
+  builtInNumericStatUi: BuiltInNumericStatUiSettings;
   moodSource: MoodSource;
   moodExpressionMap: MoodExpressionMap;
   stExpressionImageZoom: number;

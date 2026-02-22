@@ -54,6 +54,7 @@ function toBuiltInDef(settings: BetterSimTrackerSettings, key: NumericStatKey): 
       : key === "desire"
         ? settings.defaultDesire
         : settings.defaultConnection;
+  const ui = settings.builtInNumericStatUi[key];
   return {
     id: key,
     label: meta.label,
@@ -61,9 +62,9 @@ function toBuiltInDef(settings: BetterSimTrackerSettings, key: NumericStatKey): 
     defaultValue,
     maxDeltaPerTurn: settings.maxDeltaPerTurn,
     track,
-    showOnCard: track,
-    showInGraph: track,
-    includeInInjection: track,
+    showOnCard: track && ui.showOnCard,
+    showInGraph: track && ui.showInGraph,
+    includeInInjection: track && ui.includeInInjection,
     builtIn: true,
     color: meta.color,
   };

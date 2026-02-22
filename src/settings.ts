@@ -63,6 +63,12 @@ export const defaultSettings: BetterSimTrackerSettings = {
   trackConnection: true,
   trackMood: true,
   trackLastThought: true,
+  builtInNumericStatUi: {
+    affection: { showOnCard: true, showInGraph: true, includeInInjection: true },
+    trust: { showOnCard: true, showInGraph: true, includeInInjection: true },
+    desire: { showOnCard: true, showInGraph: true, includeInInjection: true },
+    connection: { showOnCard: true, showInGraph: true, includeInInjection: true },
+  },
   moodSource: "bst_images",
   moodExpressionMap: { ...DEFAULT_MOOD_EXPRESSION_MAP },
   stExpressionImageZoom: 1.2,
@@ -408,6 +414,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     trackConnection: asBool(input.trackConnection, defaultSettings.trackConnection),
     trackMood: asBool(input.trackMood, defaultSettings.trackMood),
     trackLastThought: asBool(input.trackLastThought, defaultSettings.trackLastThought),
+    builtInNumericStatUi: sanitizeBuiltInNumericStatUi(input.builtInNumericStatUi),
     moodSource: sanitizeMoodSource(input.moodSource, defaultSettings.moodSource),
     moodExpressionMap: sanitizeMoodExpressionMap(input.moodExpressionMap) ?? { ...DEFAULT_MOOD_EXPRESSION_MAP },
     stExpressionImageZoom: sanitizeStExpressionZoom(input.stExpressionImageZoom, defaultSettings.stExpressionImageZoom),
@@ -499,6 +506,26 @@ function sanitizeDebugFlags(input: unknown): DebugFlags {
     ui: asBool(base.ui, defaultSettings.debugFlags.ui),
     moodImages: asBool(base.moodImages, defaultSettings.debugFlags.moodImages),
     storage: asBool(base.storage, defaultSettings.debugFlags.storage),
+  };
+}
+
+function sanitizeBuiltInNumericStatUi(input: unknown): BetterSimTrackerSettings["builtInNumericStatUi"] {
+  const base = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const getRow = (key: "affection" | "trust" | "desire" | "connection"): BetterSimTrackerSettings["builtInNumericStatUi"][typeof key] => {
+    const fallback = defaultSettings.builtInNumericStatUi[key];
+    const raw = base[key];
+    const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    return {
+      showOnCard: asBool(row.showOnCard, fallback.showOnCard),
+      showInGraph: asBool(row.showInGraph, fallback.showInGraph),
+      includeInInjection: asBool(row.includeInInjection, fallback.includeInInjection),
+    };
+  };
+  return {
+    affection: getRow("affection"),
+    trust: getRow("trust"),
+    desire: getRow("desire"),
+    connection: getRow("connection"),
   };
 }
 
