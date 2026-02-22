@@ -55,7 +55,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 5. Settings modal  
 ![Settings modal](docs/screenshots/settings-modal-desktop.png)
 
-## What It Tracks
+## What It Tracks (By Default)
 
 - `Affection`: emotional warmth and care
 - `Trust`: safety, reliability, willingness to open up
