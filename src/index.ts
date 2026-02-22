@@ -1016,14 +1016,23 @@ function registerEvents(context: STContext): void {
 function openSettings(): void {
   if (!settings) return;
   const context = getSafeContext();
-  const previewCharacterCandidates = Array.from(
-    new Set(
-      [
-        ...(context?.characters?.map(character => String(character?.name ?? "").trim()) ?? []),
-        String(context?.name2 ?? "").trim(),
-      ].filter(name => Boolean(name)),
-    ),
-  );
+  const previewCandidateMap = new Map<string, { name: string; avatar?: string | null }>();
+  for (const character of context?.characters ?? []) {
+    const name = String(character?.name ?? "").trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (!previewCandidateMap.has(key)) {
+      previewCandidateMap.set(key, { name, avatar: String(character?.avatar ?? "").trim() || null });
+    }
+  }
+  const fallbackName = String(context?.name2 ?? "").trim();
+  if (fallbackName) {
+    const key = fallbackName.toLowerCase();
+    if (!previewCandidateMap.has(key)) {
+      previewCandidateMap.set(key, { name: fallbackName, avatar: null });
+    }
+  }
+  const previewCharacterCandidates = Array.from(previewCandidateMap.values());
   openSettingsModal({
     settings,
     profileOptions: context ? discoverConnectionProfiles(context) : [],
