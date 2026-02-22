@@ -13,6 +13,7 @@ All notable changes to BetterSimTracker are documented here.
 - Global ST framing preview candidate filtering now respects per-character mood-source overrides keyed by stable character identity.
 - Character defaults panel now prioritizes the character currently opened in Advanced Definitions when resolving avatar identity in group chat flows.
 - Character defaults panel now tracks ST `character_editor_opened` selection and uses it for identity resolution, fixing remaining group-vs-single Advanced Definitions mismatches.
+- Character defaults identity resolution now correctly handles ST string IDs/event payloads and avatar-field fallback so group and single Advanced Definitions resolve the same character record.
 
 ## [1.2.0] - 2026-02-21
 ### Added
