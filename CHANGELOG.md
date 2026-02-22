@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Fixed
+- Extraction now falls back to SillyTavern's active connection profile when BetterSimTracker `Connection Profile` is empty, instead of failing with a profile-selection error.
+- Diagnostics `resolvedProfileId` now reflects the active profile fallback when no explicit BetterSimTracker profile is selected.
+
 ## [1.2.2] - 2026-02-22
 ### Added
 - Full-size mood image preview modal from tracker cards with caption metadata and close controls.

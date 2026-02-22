@@ -154,6 +154,7 @@ Numeric scaling formula used by runtime:
 - Tracker progress includes a Stop button to cancel extraction.
 - On reload, tracker state is restored from saved chat metadata/message data.
 - If extraction fails, provisional baseline values are not saved as final tracker state.
+- If BetterSimTracker `Connection Profile` is empty, extraction automatically uses SillyTavern's currently active connection profile.
 
 ## Settings Overview
 
