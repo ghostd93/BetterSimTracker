@@ -2,42 +2,22 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [Unreleased]
+## [2.0.0] - 2026-02-22
 ### Added
-- Internal groundwork for upcoming custom stats: schema/types for `customStats`, safe sanitization for custom stat definitions and character-level custom defaults, and numeric stat registry helpers.
-- Custom stats management in extension settings with step-by-step add/edit/clone wizard and a guided soft-remove confirmation flow.
-- Character defaults panel support for per-character custom-stat default values (for configured custom stats).
-- End-to-end custom stat runtime support: extraction parsing/application, storage payloads (`customStatistics`), tracker card rows, graph series, and prompt injection lines/semantics.
-- Slash command toggle now supports custom stat IDs (`/bst toggle <custom_stat_id>`).
-- Built-in stats manager wizard in extension settings to configure per-stat `Track / Card / Graph / Inject` behavior without deleting built-ins.
+- Full custom numeric stats support: definition schema, add/edit/clone/remove wizards, extraction/runtime processing, persistence (`customStatistics`), tracker cards, graphs, and prompt injection.
+- Built-in stats manager wizard with per-stat controls and unified `Enabled` behavior (`Track + Card + Graph`) plus injection control for numeric built-ins.
+- Global sequential custom-numeric prompt template fallback (`Seq: Custom Numeric`) with per-stat override support.
 
 ### Changed
-- Settings now persist `customStats` as part of live autosave, while keeping existing built-in stat behavior unchanged.
-- Baseline seeding and history fallback now include configured custom stat defaults (global + per-character overrides) to keep first-run behavior consistent.
-- Tracker cards and graph now keep enabled numeric stat definitions visible with default-value fallback when older snapshots lack explicit values.
-- Custom stat wizard now shows available sequential-template macros directly in the Tracking Behavior step.
-- Custom stat wizard color field now includes a synchronized color picker + hex input pair.
-- Custom stat wizard `Sequential Prompt Override` placeholder now shows a clearly marked literal example snippet.
-- Added global `Seq: Custom Numeric` prompt template setting used as fallback for custom stat sequential extraction when a stat has no per-stat override.
-- Prompt injection now respects built-in per-stat injection toggles from the built-in stats manager.
-- Tracked Stats settings section now shows a centered `Manage Built-in Stats` control (global built-in toggles removed from the section body).
-- Built-in/custom stat management now use a unified `Enabled` toggle for `Track + Card + Graph` behavior.
+- Settings UX was refined for custom stats and built-ins, including centered built-in management entry point and wizard polish.
+- Baseline/default seeding and historical fallback now include custom stats (global + per-character defaults) for consistent first-run behavior.
+- Prompt injection now respects built-in toggles and safely trims custom-stat lines first when the injected block grows too large.
 
 ### Fixed
-- Character defaults numeric inputs (built-in and custom stat defaults) now clamp visually and on save to `0..100`.
-- Diagnostics dumps now include custom-stat settings and history payloads for easier debugging of custom-stat runs.
-- Graph debug traces now include custom stat series/latest values alongside built-in stat series.
-- Prompt injection now applies a safe-size guard that trims custom-stat injection lines first when the injected block grows too large.
-- Built-in stat UI/injection fallback defaults now guard legacy/partial settings payloads to prevent runtime crashes.
-- Settings checkbox visuals now stay stable on hover (checked toggles no longer appear unchecked while hovered).
-- Checkbox rendering in wizard modals is now cross-browser stable (including Firefox).
-- Clearing prompt-template fields in settings now cleanly falls back to built-in defaults (visible again after reopening settings).
-- Custom stats no longer trigger first-run extraction requests when seeded from defaults; seeded values are used first.
-- Tracker card deltas no longer show misleading first-run jumps when previous values for a stat do not exist.
-- Custom stat wizard inputs/textarea now use the same dark-themed styling as settings (fixes white fields and clipped number placeholders).
-- Custom stat wizard now requires Description (with clearer textarea placeholders/help text).
-- Checkbox/toggle layout polish: improved checkmark spacing and dedicated top spacing above toggle blocks.
-- `Seq: Custom Numeric` protocol preview now uses `{{statId}}` placeholder instead of literal `custom_stat`.
+- First-run custom stat flows now avoid unnecessary extraction requests and misleading delta spikes when prior values are missing.
+- Custom stat template fallback behavior is now consistent when fields are cleared and settings are reopened.
+- Cross-browser UI reliability improvements for settings/wizard controls and debug visibility for custom stat data paths.
+And more...
 
 ## [1.2.3] - 2026-02-22
 ### Added
