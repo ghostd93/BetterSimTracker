@@ -516,8 +516,70 @@ function ensureStyles(): void {
 .bst-root-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.bst-root-action-main {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-  margin-bottom: 2px;
+  border-radius: 999px;
+  padding: 4px 11px;
+  border: 1px solid color-mix(in srgb, var(--bst-accent) 45%, rgba(255,255,255,0.25) 55%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--bst-accent) 16%, rgba(14,18,28,0.84) 84%), rgba(12,16,24,0.92));
+  box-shadow: 0 8px 18px rgba(0,0,0,0.28), inset 0 0 0 1px rgba(255,255,255,0.05);
+  color: #eef6ff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.15px;
+}
+.bst-root-action-main:hover {
+  border-color: color-mix(in srgb, var(--bst-accent) 62%, rgba(255,255,255,0.38) 38%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--bst-accent) 24%, rgba(16,22,34,0.86) 76%), rgba(14,20,30,0.96));
+}
+.bst-root-action-main:active {
+  transform: translateY(1px);
+}
+.bst-root-action-icon {
+  width: 14px;
+  min-width: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  opacity: 0.95;
+}
+.bst-root-action-label {
+  white-space: nowrap;
+}
+.bst-root-action-retrack {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  border-color: color-mix(in srgb, var(--bst-accent) 62%, #ffffff 38%);
+  background: radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--bst-accent) 30%, #ffffff 70%), color-mix(in srgb, var(--bst-accent) 44%, #131a28 56%));
+  box-shadow: 0 8px 18px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+.bst-root-action-retrack:hover {
+  border-color: color-mix(in srgb, var(--bst-accent) 80%, #ffffff 20%);
+  filter: brightness(1.06);
+}
+.bst-root-action-retrack span {
+  display: inline-block;
+  transition: transform .16s ease;
+}
+.bst-root-action-retrack:hover span {
+  transform: rotate(-22deg);
+}
+.bst-root-action-retrack:focus-visible,
+.bst-root-action-main:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.82);
+  outline-offset: 1px;
 }
 .bst-card {
   position: relative;
@@ -1677,9 +1739,14 @@ function ensureStyles(): void {
   .bst-actions .bst-graph-label {
     display: none;
   }
-  .bst-root-actions .bst-mini-btn {
-    font-size: 11px;
-    padding: 2px 6px;
+  .bst-root-action-main {
+    padding: 3px 9px;
+    font-size: 10px;
+  }
+  .bst-root-action-retrack {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
   }
   .bst-settings {
     left: 0;
@@ -1951,7 +2018,9 @@ export function renderTracker(
           }
           collapse.setAttribute("aria-expanded", String(!nextCollapsed));
           collapse.setAttribute("title", nextCollapsed ? "Expand cards" : "Collapse cards");
-          collapse.innerHTML = nextCollapsed ? "&#9656; Expand cards" : "&#9662; Collapse cards";
+          collapse.innerHTML = nextCollapsed
+            ? `<span class="bst-root-action-icon" aria-hidden="true">&#9656;</span><span class="bst-root-action-label">Expand cards</span>`
+            : `<span class="bst-root-action-icon" aria-hidden="true">&#9662;</span><span class="bst-root-action-label">Collapse cards</span>`;
           root.dataset.bstRenderSignature = "";
           onRequestRerender?.();
           return;
@@ -2162,8 +2231,11 @@ export function renderTracker(
     const actions = document.createElement("div");
     actions.className = "bst-root-actions";
     actions.innerHTML = `
-      <button class="bst-mini-btn" data-bst-action="toggle-all-collapse" title="${collapsed ? "Expand cards" : "Collapse cards"}" aria-expanded="${String(!collapsed)}">${collapsed ? "&#9656; Expand cards" : "&#9662; Collapse cards"}</button>
-      ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-mini-btn-accent" data-bst-action="retrack" title="Retrack latest AI message" aria-label="Retrack latest AI message">&#x21BB;</button>` : ""}
+      <button class="bst-mini-btn bst-root-action-main" data-bst-action="toggle-all-collapse" title="${collapsed ? "Expand cards" : "Collapse cards"}" aria-expanded="${String(!collapsed)}">
+        <span class="bst-root-action-icon" aria-hidden="true">${collapsed ? "&#9656;" : "&#9662;"}</span>
+        <span class="bst-root-action-label">${collapsed ? "Expand cards" : "Collapse cards"}</span>
+      </button>
+      ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-mini-btn-accent bst-root-action-retrack" data-bst-action="retrack" title="Retrack latest AI message" aria-label="Retrack latest AI message"><span aria-hidden="true">&#x21BB;</span></button>` : ""}
     `;
     root.appendChild(actions);
 
