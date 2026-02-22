@@ -2,41 +2,22 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [Unreleased]
+## [1.2.2] - 2026-02-22
 ### Added
-- Mood images in tracker cards now open a full-size preview modal on click; clicking the preview image closes the modal.
-- Mood image preview modal now includes a dedicated close button, caption metadata, backdrop close, and `Esc` close support.
-- Last-thought text in tracker cards and mood bubbles now supports inline `More` / `Less` expansion.
+- Full-size mood image preview modal from tracker cards with caption metadata and close controls.
+- Expandable last-thought text in tracker cards and mood bubbles.
 
 ### Changed
-- Character defaults panel now shows ST-expression controls and BST mood-image controls conditionally based on the effective mood source.
-- Character defaults input normalization now applies canonical mood labels and clamped numeric values directly in the UI.
-- Tracker cards now sort visible characters active-first while preserving stable order for equal-priority entries.
-- Tracker card stat bars now use per-stat colors and include subtle change highlights; mobile card density was tightened for small screens.
-- Mood image trigger is now keyboard-accessible (`button` semantics) instead of image-click only.
-- Tracker root action buttons (`Collapse cards` and `Retrack`) were visually refreshed with clearer iconography and stronger focus/hover states.
-- Extension settings modal visuals were polished (improved section cards/controls, sticky header, and sticky footer actions).
-- Settings now include a global `Expand all` / `Collapse all` section toggle in the modal header.
+- ST expression framing and mood-source workflows were expanded in global settings and character defaults, including interactive framing preview updates.
+- Extension settings UI was refreshed with collapsible sections, sticky header/footer actions, global expand/collapse, modernized controls, and round accent-matched checkboxes.
+- Tracker cards were polished with active-first ordering, colored stat bars, and tighter mobile density.
 
 ### Fixed
-- Mood image preview modal now remains visible when `prefers-reduced-motion` is enabled (no longer animation-dependent for visibility).
-- Mood image preview modal now renders correctly on mobile layouts with safe-area aware spacing and non-animation visibility fallback.
-- Mood image preview modal now handles mobile touch input without instant close from synthetic follow-up clicks.
-- Mood image preview overlay z-index now stays above SillyTavern interface layers on mobile.
-- Mood image preview modal now applies inline fixed-position/top-layer fallback styles to avoid being hidden by mobile UI stacking/stylesheet timing issues.
-- Mood image preview now uses a native top-layer `dialog` path on supported browsers, fixing mobile cases where chat layers still rendered above the modal.
-- Tracker mood-image preview trigger now enforces compact frame sizing and no longer expands to full-card image dimensions.
-- Character defaults now resolve consistently across group-card and character-list Advanced Definitions paths by using stable character identity matching.
-- Character-default writes in mood image/map/framing actions now always use the latest in-memory settings to prevent stale overwrite inconsistencies.
-- Global ST framing preview candidate filtering now respects per-character mood-source overrides keyed by stable character identity.
-- Character defaults panel now prioritizes the character currently opened in Advanced Definitions when resolving avatar identity in group chat flows.
-- Character defaults panel now tracks ST `character_editor_opened` selection and uses it for identity resolution, fixing remaining group-vs-single Advanced Definitions mismatches.
-- Character defaults identity resolution now correctly handles ST string IDs/event payloads and avatar-field fallback so group and single Advanced Definitions resolve the same character record.
-- First-time-active characters in existing chats now seed from per-character defaults (including 0 values) instead of falling back to global 50s during extraction and prompt state/snapshot prep.
-- Stop extraction now hard-cancels the active run in one click (including queued sequential workers/retries), with abort-like transport errors normalized as cancellation.
-- Tracker card rerenders now skip unchanged payloads via render signatures, reducing unnecessary DOM churn/flicker.
-- Settings `Close` and `Retrack` actions now bind correctly across all duplicated action buttons (header/footer/debug area).
-- Settings checkboxes now use custom round accent-matched styling with explicit reset rules so ST/global CSS cannot distort their appearance.
+- Mood preview modal now reliably appears above mobile ST UI layers (top-layer dialog path with safe-area/touch/reduced-motion handling).
+- ST expression framing now applies consistently in tracker cards with immediate save behavior and full-range positioning.
+- Character defaults now resolve consistently across group/single Advanced Definitions and correctly seed first-time active characters.
+- Extraction stop now cancels reliably in one click, and tracker rendering skips unchanged payloads to reduce churn.
+And more...
 
 ## [1.2.0] - 2026-02-21
 ### Added
