@@ -14,6 +14,7 @@ All notable changes to BetterSimTracker are documented here.
 - Character defaults panel now prioritizes the character currently opened in Advanced Definitions when resolving avatar identity in group chat flows.
 - Character defaults panel now tracks ST `character_editor_opened` selection and uses it for identity resolution, fixing remaining group-vs-single Advanced Definitions mismatches.
 - Character defaults identity resolution now correctly handles ST string IDs/event payloads and avatar-field fallback so group and single Advanced Definitions resolve the same character record.
+- First-time-active characters in existing chats now seed from per-character defaults (including 0 values) instead of falling back to global 50s during extraction and prompt state/snapshot prep.
 
 ## [1.2.0] - 2026-02-21
 ### Added
