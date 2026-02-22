@@ -11,6 +11,7 @@ All notable changes to BetterSimTracker are documented here.
 - Character defaults now resolve consistently across group-card and character-list Advanced Definitions paths by using stable character identity matching.
 - Character-default writes in mood image/map/framing actions now always use the latest in-memory settings to prevent stale overwrite inconsistencies.
 - Global ST framing preview candidate filtering now respects per-character mood-source overrides keyed by stable character identity.
+- Character defaults panel now prioritizes the character currently opened in Advanced Definitions when resolving avatar identity in group chat flows.
 
 ## [1.2.0] - 2026-02-21
 ### Added
