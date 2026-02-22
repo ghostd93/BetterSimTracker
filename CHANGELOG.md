@@ -9,6 +9,7 @@ All notable changes to BetterSimTracker are documented here.
 - Character defaults panel support for per-character custom-stat default values (for configured custom stats).
 - End-to-end custom stat runtime support: extraction parsing/application, storage payloads (`customStatistics`), tracker card rows, graph series, and prompt injection lines/semantics.
 - Slash command toggle now supports custom stat IDs (`/bst toggle <custom_stat_id>`).
+- Built-in stats manager wizard in extension settings to configure per-stat `Track / Card / Graph / Inject` behavior without deleting built-ins.
 
 ### Changed
 - Settings now persist `customStats` as part of live autosave, while keeping existing built-in stat behavior unchanged.
@@ -16,6 +17,7 @@ All notable changes to BetterSimTracker are documented here.
 - Tracker cards and graph now keep enabled numeric stat definitions visible with default-value fallback when older snapshots lack explicit values.
 - Custom stat wizard now shows available sequential-template macros directly in the Tracking Behavior step.
 - Added global `Seq: Custom Numeric` prompt template setting used as fallback for custom stat sequential extraction when a stat has no per-stat override.
+- Prompt injection now respects built-in per-stat injection toggles from the built-in stats manager.
 
 ### Fixed
 - Character defaults numeric inputs (built-in and custom stat defaults) now clamp visually and on save to `0..100`.

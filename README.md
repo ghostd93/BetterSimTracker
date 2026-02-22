@@ -13,6 +13,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Polished tracker action controls for `Collapse cards` and `Retrack`
 - Polished extension settings modal with sticky header/footer actions and one-click `Expand all` / `Collapse all` section control
 - Settings checkboxes now use consistent round accent-matched styling across ST themes/mobile UI overrides
+- Built-in stats manager wizard for `Track / Card / Graph / Inject` behavior per built-in stat (without deleting built-ins)
 - Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8)
 - Retrack button (regenerate tracker for last AI message)
 - Relationship graph modal:
@@ -170,6 +171,7 @@ Numeric scaling formula used by runtime:
 - `Injection Depth`: controls prompt-injection depth in the in-chat prompt stack (`0..8`)
 - `Injection Prompt Template`: editable template for injected guidance (shown only when injection is enabled)
 - `Prompt Templates`: edit unified + per-stat sequential prompt instructions plus a global custom-numeric sequential default (protocol blocks are fixed; repair prompts are fixed)
+- `Manage Built-in Stats`: open a wizard to control built-in stat participation in extraction/cards/graph/injection
 - `Custom Stats`: create and manage additional numeric percentage stats via step-by-step wizard in settings
 - `Profile Token Limits`: extraction now respects profile max tokens and truncation length (when available)
 - `Max Tokens Override`: force max tokens for extraction (0 = auto)
@@ -283,6 +285,10 @@ Behavior notes:
 - `Track Connection`
 - `Track Mood`
 - `Track Last Thought`
+- `Manage Built-in Stats` wizard:
+  - built-ins stay non-deletable for backward compatibility
+  - configure per built-in: `Track`, `Card`, `Graph`, `Inject`
+  - `Track` controls extraction updates; other toggles control visibility/injection when tracking is enabled
 - `Custom Stats` section:
   - `Add Custom Stat` wizard (Basics, Numeric Behavior, Tracking Behavior, Display, Review)
   - `Edit` and `Clone` for faster setup reuse
