@@ -953,31 +953,45 @@ function ensureStyles(): void {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(760px, calc(100vw - 16px));
+  width: min(820px, calc(100vw - 16px));
   max-height: calc(100dvh - 16px);
   background:
-    radial-gradient(1200px 400px at 0% 0%, rgba(255, 98, 123, 0.14), transparent 60%),
-    radial-gradient(900px 300px at 100% 0%, rgba(86, 189, 255, 0.12), transparent 55%),
+    radial-gradient(1300px 460px at 0% 0%, rgba(255, 98, 123, 0.14), transparent 62%),
+    radial-gradient(980px 360px at 100% 0%, rgba(86, 189, 255, 0.14), transparent 58%),
     #121621;
   border: 1px solid rgba(255,255,255,0.16);
   border-radius: 16px;
   color: #fff;
-  padding: 16px;
+  padding: 16px 16px 18px;
   pointer-events: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
   font-family: "Segoe UI", "Trebuchet MS", sans-serif;
   box-shadow: 0 24px 80px rgba(0,0,0,0.5);
 }
 .bst-settings h3 { margin: 0 0 4px 0; font-size: 20px; letter-spacing: 0.2px; }
 .bst-settings-top {
+  position: sticky;
+  top: -16px;
+  z-index: 5;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
+  margin: -16px -16px 12px;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, rgba(18, 24, 38, 0.96), rgba(18, 24, 38, 0.86));
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(6px);
 }
-.bst-settings-subtitle { margin: 0 0 12px 0; opacity: 0.78; font-size: 12px; }
-.bst-settings-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bst-settings-top-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.bst-settings-subtitle { margin: 0; opacity: 0.84; font-size: 12px; color: rgba(220, 235, 255, 0.88); }
+.bst-settings-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bst-settings-grid-compact { gap: 8px; }
 .bst-settings-grid-single { grid-template-columns: minmax(0, 1fr); }
 .bst-check-grid {
@@ -999,9 +1013,17 @@ function ensureStyles(): void {
 .bst-check-grid .bst-check {
   margin: 0;
   align-items: center;
-  min-height: 26px;
+  min-height: 30px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(11, 16, 27, 0.58);
+  border-radius: 10px;
+  padding: 6px 10px;
 }
-.bst-settings label { font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+.bst-check-grid .bst-check:hover {
+  border-color: rgba(168, 203, 245, 0.32);
+  background: rgba(14, 20, 33, 0.72);
+}
+.bst-settings label { font-size: 12px; display: flex; flex-direction: column; gap: 6px; color: rgba(241, 246, 255, 0.94); }
 .bst-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
 .bst-check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--bst-accent); }
 .bst-settings input, .bst-settings select, .bst-settings textarea {
@@ -1009,7 +1031,18 @@ function ensureStyles(): void {
   color: #f3f5f9 !important;
   border: 1px solid rgba(255,255,255,0.20) !important;
   border-radius: 8px;
-  padding: 7px;
+  padding: 8px 10px;
+  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+.bst-settings input,
+.bst-settings select {
+  min-height: 36px;
+}
+.bst-settings input:hover,
+.bst-settings select:hover,
+.bst-settings textarea:hover {
+  border-color: rgba(168, 203, 245, 0.48) !important;
+  background: #101728 !important;
 }
 .bst-settings input:focus-visible,
 .bst-settings select:focus-visible,
@@ -1029,11 +1062,17 @@ function ensureStyles(): void {
 }
 .bst-settings input::placeholder { color: rgba(243,245,249,0.6); }
 .bst-settings-section {
-  margin: 12px 0;
-  padding: 12px;
-  border-radius: 12px;
+  margin: 10px 0;
+  padding: 12px 12px 13px;
+  border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(9, 12, 20, 0.45);
+  background: linear-gradient(180deg, rgba(11, 15, 25, 0.62), rgba(8, 11, 19, 0.56));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+.bst-settings-section:hover {
+  border-color: rgba(148, 189, 235, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px rgba(2, 6, 12, 0.28);
 }
 .bst-color-inputs {
   display: inline-flex;
@@ -1096,6 +1135,9 @@ function ensureStyles(): void {
 .bst-section-head:hover {
   background: linear-gradient(135deg, rgba(22, 30, 44, 0.75), rgba(12, 18, 28, 0.75));
   border-color: rgba(255,255,255,0.16);
+}
+.bst-section-head[aria-expanded="true"] {
+  border-color: rgba(148, 189, 235, 0.32);
 }
 .bst-section-head:focus-visible {
   outline: 2px solid rgba(125, 211, 252, 0.6);
@@ -1363,6 +1405,19 @@ function ensureStyles(): void {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+.bst-settings-footer {
+  position: sticky;
+  bottom: -18px;
+  z-index: 5;
+  margin: 12px -16px -18px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: linear-gradient(180deg, rgba(18, 24, 38, 0.72), rgba(18, 24, 38, 0.96));
+  border-top: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(6px);
 }
 .bst-debug-box {
   margin-top: 8px;
@@ -1833,6 +1888,14 @@ function ensureStyles(): void {
     border-right: 0;
     padding: 12px 10px 18px;
   }
+  .bst-settings-top {
+    top: -12px;
+    margin: -12px -10px 12px;
+    padding: calc(env(safe-area-inset-top, 0px) + 10px) 10px 10px;
+  }
+  .bst-settings-top-actions {
+    gap: 6px;
+  }
   .bst-settings h3 {
     font-size: 18px;
   }
@@ -1877,6 +1940,15 @@ function ensureStyles(): void {
   .bst-debug-actions {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+  }
+  .bst-settings-footer {
+    bottom: -18px;
+    margin: 12px -10px -18px;
+    padding: 10px;
+    justify-content: stretch;
+  }
+  .bst-settings-footer .bst-btn {
+    flex: 1 1 0;
   }
   .bst-graph-modal {
     left: 0;
@@ -2942,7 +3014,10 @@ export function openSettingsModal(input: {
         <h3>BetterSimTracker Settings</h3>
         <p class="bst-settings-subtitle">Changes are saved automatically.</p>
       </div>
-      <button class="bst-btn bst-close-btn" data-action="close" title="Close settings" aria-label="Close settings">&times;</button>
+      <div class="bst-settings-top-actions">
+        <button class="bst-btn bst-btn-soft" data-action="toggle-all-sections" title="Expand all sections">Expand all</button>
+        <button class="bst-btn bst-close-btn" data-action="close" title="Close settings" aria-label="Close settings">&times;</button>
+      </div>
     </div>
     <div class="bst-settings-section bst-quick-help">
       <h4><span class="bst-header-icon fa-solid fa-circle-info"></span>Quick Help</h4>
@@ -3231,6 +3306,13 @@ export function openSettingsModal(input: {
         <div class="bst-debug-box">${input.injectedPrompt?.trim() ? input.injectedPrompt : "No injected prompt currently active."}</div>
       </div>
     </div>
+    <div class="bst-settings-footer">
+      <button class="bst-btn bst-btn-soft" data-action="retrack" title="Retrack Last AI Message">
+        <span class="fa-solid fa-rotate-left bst-btn-icon-left" aria-hidden="true"></span>
+        Retrack
+      </button>
+      <button class="bst-btn" data-action="close" title="Close settings">Done</button>
+    </div>
   `;
   document.body.appendChild(modal);
 
@@ -3365,6 +3447,7 @@ export function openSettingsModal(input: {
       section.appendChild(body);
 
       const storageKey = `bst.section.${id}`;
+      section.dataset.bstStorageKey = storageKey;
       const stored = localStorage.getItem(storageKey);
       const collapsed = stored ? stored === "collapsed" : true;
       if (collapsed) {
@@ -3379,6 +3462,7 @@ export function openSettingsModal(input: {
         section.classList.toggle("bst-section-collapsed", nextCollapsed);
         head.setAttribute("aria-expanded", nextCollapsed ? "false" : "true");
         safeSetLocalStorage(storageKey, nextCollapsed ? "collapsed" : "expanded");
+        modal.dispatchEvent(new CustomEvent("bst:section-toggle"));
       };
       head.addEventListener("click", toggleSection);
       head.addEventListener("keydown", event => {
@@ -3388,6 +3472,48 @@ export function openSettingsModal(input: {
     });
   };
   initSectionDrawers();
+
+  const initGlobalSectionToggle = (): void => {
+    const buttons = Array.from(modal.querySelectorAll('[data-action="toggle-all-sections"]')) as HTMLButtonElement[];
+    if (!buttons.length) return;
+    const getSections = (): HTMLElement[] =>
+      Array.from(modal.querySelectorAll('.bst-settings-section[data-bst-section]')) as HTMLElement[];
+    const updateButtons = (): void => {
+      const sections = getSections();
+      const allCollapsed = sections.length > 0 && sections.every(section => section.classList.contains("bst-section-collapsed"));
+      buttons.forEach(button => {
+        button.textContent = allCollapsed ? "Expand all" : "Collapse all";
+        button.setAttribute("title", allCollapsed ? "Expand all sections" : "Collapse all sections");
+        button.setAttribute("aria-pressed", allCollapsed ? "false" : "true");
+      });
+    };
+    const toggleAll = (): void => {
+      const sections = getSections();
+      if (!sections.length) return;
+      const allCollapsed = sections.every(section => section.classList.contains("bst-section-collapsed"));
+      const nextCollapsed = !allCollapsed;
+      sections.forEach(section => {
+        section.classList.toggle("bst-section-collapsed", nextCollapsed);
+        const head = section.querySelector(".bst-section-head") as HTMLElement | null;
+        head?.setAttribute("aria-expanded", nextCollapsed ? "false" : "true");
+        const storageKey = section.dataset.bstStorageKey;
+        if (storageKey) {
+          safeSetLocalStorage(storageKey, nextCollapsed ? "collapsed" : "expanded");
+        }
+      });
+      updateButtons();
+    };
+    buttons.forEach(button => {
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleAll();
+      });
+    });
+    modal.addEventListener("bst:section-toggle", updateButtons);
+    updateButtons();
+  };
+  initGlobalSectionToggle();
 
   const initPromptGroups = (): void => {
     const groups = Array.from(modal.querySelectorAll(".bst-prompt-group")) as HTMLElement[];
@@ -3800,14 +3926,18 @@ export function openSettingsModal(input: {
     labelNode?.setAttribute("title", tooltip);
   }
 
-  modal.querySelector('[data-action="close"]')?.addEventListener("click", () => {
-    persistLive();
-    closeSettingsModal();
+  modal.querySelectorAll('[data-action="close"]').forEach(node => {
+    node.addEventListener("click", () => {
+      persistLive();
+      closeSettingsModal();
+    });
   });
 
-  modal.querySelector('[data-action="retrack"]')?.addEventListener("click", () => {
-    persistLive();
-    input.onRetrack?.();
+  modal.querySelectorAll('[data-action="retrack"]').forEach(node => {
+    node.addEventListener("click", () => {
+      persistLive();
+      input.onRetrack?.();
+    });
   });
 
   modal.querySelector('[data-action="clear-chat"]')?.addEventListener("click", () => {
