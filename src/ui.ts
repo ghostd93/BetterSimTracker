@@ -1,4 +1,5 @@
 import { STYLE_ID } from "./constants";
+import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import { logDebug } from "./settings";
 import type {
   BetterSimTrackerSettings,
@@ -162,10 +163,10 @@ function normalizeMoodSource(raw: unknown): MoodSource {
   return raw === "st_expressions" ? "st_expressions" : "bst_images";
 }
 
-function getResolvedMoodSource(settings: BetterSimTrackerSettings, characterName: string): MoodSource {
+function getResolvedMoodSource(settings: BetterSimTrackerSettings, characterName: string, characterAvatar?: string): MoodSource {
   const fallback = normalizeMoodSource(settings.moodSource);
-  const entry = settings.characterDefaults?.[characterName] as Record<string, unknown> | undefined;
-  if (!entry) return fallback;
+  const entry = resolveCharacterDefaultsEntry(settings, { name: characterName, avatar: characterAvatar });
+  if (!Object.keys(entry).length) return fallback;
   const override = normalizeMoodSource(entry.moodSource);
   if (entry.moodSource === "bst_images" || entry.moodSource === "st_expressions") return override;
   return fallback;
@@ -208,9 +209,13 @@ function getGlobalStExpressionImageOptions(settings: BetterSimTrackerSettings): 
   );
 }
 
-function getResolvedStExpressionImageOptions(settings: BetterSimTrackerSettings, characterName: string): StExpressionImageOptions {
+function getResolvedStExpressionImageOptions(
+  settings: BetterSimTrackerSettings,
+  characterName: string,
+  characterAvatar?: string,
+): StExpressionImageOptions {
   const globalOptions = getGlobalStExpressionImageOptions(settings);
-  const entry = settings.characterDefaults?.[characterName] as Record<string, unknown> | undefined;
+  const entry = resolveCharacterDefaultsEntry(settings, { name: characterName, avatar: characterAvatar });
   const override = entry?.stExpressionImageOptions;
   if (!override || typeof override !== "object") return globalOptions;
   return sanitizeStExpressionImageOptions(override, globalOptions);
@@ -291,8 +296,13 @@ function scheduleExpressionSpriteFetch(
     });
 }
 
-function getMappedExpressionLabel(settings: BetterSimTrackerSettings, characterName: string, moodLabel: MoodLabel): string {
-  const entry = settings.characterDefaults?.[characterName] as Record<string, unknown> | undefined;
+function getMappedExpressionLabel(
+  settings: BetterSimTrackerSettings,
+  characterName: string,
+  moodLabel: MoodLabel,
+  characterAvatar?: string,
+): string {
+  const entry = resolveCharacterDefaultsEntry(settings, { name: characterName, avatar: characterAvatar });
   const rawCharacterMap = entry?.moodExpressionMap as Record<string, unknown> | undefined;
   const readMappedValue = (map: Record<string, unknown> | undefined): string => {
     if (!map) return "";
@@ -317,11 +327,12 @@ function getMoodImageUrl(
   settings: BetterSimTrackerSettings,
   characterName: string,
   moodRaw: string,
+  characterAvatar: string | undefined,
   onRerender?: () => void,
 ): string | null {
-  const entry = settings.characterDefaults?.[characterName] as Record<string, unknown> | undefined;
+  const entry = resolveCharacterDefaultsEntry(settings, { name: characterName, avatar: characterAvatar });
   const normalizedMood = (normalizeMoodLabel(moodRaw) ?? "Neutral") as MoodLabel;
-  const source = getResolvedMoodSource(settings, characterName);
+  const source = getResolvedMoodSource(settings, characterName, characterAvatar);
 
   if (source === "bst_images") {
     const moodImages = entry?.moodImages as Record<string, string> | undefined;
@@ -329,7 +340,7 @@ function getMoodImageUrl(
     return typeof url === "string" && url.trim() ? url.trim() : null;
   }
 
-  const expression = getMappedExpressionLabel(settings, characterName, normalizedMood);
+  const expression = getMappedExpressionLabel(settings, characterName, normalizedMood, characterAvatar);
   const cachedUrl = getCachedExpressionSpriteUrl(characterName, expression);
   if (cachedUrl) return cachedUrl;
   if (isExpressionCacheStale(characterName)) {
@@ -1600,6 +1611,7 @@ export function renderTracker(
   isGroupChat: boolean,
   uiState: TrackerUiState,
   latestAiIndex: number | null,
+  resolveCharacterAvatar?: (characterName: string) => string | null,
   onOpenGraph?: (characterName: string) => void,
   onRetrackMessage?: (messageIndex: number) => void,
   onCancelExtraction?: () => void,
@@ -1772,17 +1784,18 @@ export function renderTracker(
     for (const name of targets) {
       const isActive = activeSet.has(normalizeName(name));
       if (!isActive && !settings.showInactive) continue;
+      const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
 
       const previousData = findPreviousData(entry.messageIndex);
       const enabledNumeric = getNumericStatsForCharacter(data, name);
       const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
-      const moodSource = moodText ? getResolvedMoodSource(settings, name) : "bst_images";
+      const moodSource = moodText ? getResolvedMoodSource(settings, name, characterAvatar) : "bst_images";
       const stExpressionImageOptions = moodSource === "st_expressions"
-        ? getResolvedStExpressionImageOptions(settings, name)
+        ? getResolvedStExpressionImageOptions(settings, name, characterAvatar)
         : null;
-      const moodImage = moodText ? getMoodImageUrl(settings, name, moodText, onRequestRerender) : null;
+      const moodImage = moodText ? getMoodImageUrl(settings, name, moodText, characterAvatar, onRequestRerender) : null;
       const lastThoughtText = settings.showLastThought && data.statistics.lastThought?.[name] !== undefined
         ? String(data.statistics.lastThought?.[name] ?? "")
         : "";
