@@ -1323,7 +1323,7 @@ function ensureStyles(): void {
   padding: 12px;
   background: rgba(0,0,0,0.72);
   z-index: 2147483020;
-  opacity: 0;
+  opacity: 1;
   animation: bst-fade-in .16s ease forwards;
 }
 .bst-mood-preview-modal {
@@ -1334,7 +1334,7 @@ function ensureStyles(): void {
   grid-template-rows: auto auto;
   place-items: center;
   gap: 10px;
-  transform: translateY(10px) scale(0.985);
+  transform: none;
   animation: bst-modal-in .16s ease forwards;
 }
 .bst-mood-preview-image {
