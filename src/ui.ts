@@ -105,6 +105,7 @@ const expandedThoughtKeys = new Set<string>();
 const renderedCardKeys = new Set<string>();
 const MOOD_PREVIEW_BACKDROP_CLASS = "bst-mood-preview-backdrop";
 const MOOD_PREVIEW_MODAL_CLASS = "bst-mood-preview-modal";
+const MOOD_PREVIEW_BODY_CLASS = "bst-mood-preview-open";
 let moodPreviewKeyListener: ((event: KeyboardEvent) => void) | null = null;
 
 function toPercent(value: StatValue): number {
@@ -752,6 +753,7 @@ function ensureStyles(): void {
   color: inherit !important;
   line-height: 0;
   appearance: none;
+  touch-action: manipulation;
   cursor: zoom-in !important;
   border-radius: clamp(12px, 3vw, 16px);
 }
@@ -1385,6 +1387,8 @@ function ensureStyles(): void {
   padding: 12px;
   background: rgba(0,0,0,0.72);
   z-index: 2147483020;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
   opacity: 1;
   animation: bst-fade-in .16s ease forwards;
 }
@@ -1421,6 +1425,7 @@ function ensureStyles(): void {
   color: #fff;
   font-size: 22px;
   line-height: 1;
+  touch-action: manipulation;
   cursor: pointer;
 }
 .bst-mood-preview-caption {
@@ -1436,6 +1441,9 @@ function ensureStyles(): void {
 }
 .bst-mood-preview-backdrop.is-closing .bst-mood-preview-modal {
   animation: bst-modal-out .14s ease forwards;
+}
+.bst-mood-preview-open {
+  overflow: hidden !important;
 }
 @keyframes bst-fade-in {
   from { opacity: 0; }
@@ -1747,6 +1755,26 @@ function ensureStyles(): void {
     width: 28px;
     min-width: 28px;
     height: 28px;
+  }
+  .bst-mood-preview-backdrop {
+    padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
+  }
+  .bst-mood-preview-modal {
+    width: min(100%, 100vw - 16px);
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 14px);
+    gap: 8px;
+  }
+  .bst-mood-preview-image {
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 78px);
+    border-radius: 10px;
+  }
+  .bst-mood-preview-close {
+    top: calc(env(safe-area-inset-top, 0px) + 2px);
+    right: 2px;
+  }
+  .bst-mood-preview-caption {
+    font-size: 11px;
+    padding: 5px 10px;
   }
   .bst-settings {
     left: 0;
@@ -2297,6 +2325,10 @@ function openMoodImageModal(imageUrl: string, altText: string, characterName?: s
     }
   });
   document.body.appendChild(backdrop);
+  document.body.classList.add(MOOD_PREVIEW_BODY_CLASS);
+  // Fallback for environments where CSS animations are disabled/not applied.
+  backdrop.style.opacity = "1";
+  modal.style.transform = "none";
 
   moodPreviewKeyListener = (event: KeyboardEvent) => {
     if (event.key === "Escape") {
@@ -2309,6 +2341,7 @@ function openMoodImageModal(imageUrl: string, altText: string, characterName?: s
 function closeMoodImageModal(immediate = false): void {
   const backdrop = document.querySelector(`.${MOOD_PREVIEW_BACKDROP_CLASS}`) as HTMLElement | null;
   if (!backdrop) {
+    document.body.classList.remove(MOOD_PREVIEW_BODY_CLASS);
     if (moodPreviewKeyListener) {
       document.removeEventListener("keydown", moodPreviewKeyListener);
       moodPreviewKeyListener = null;
@@ -2321,12 +2354,14 @@ function closeMoodImageModal(immediate = false): void {
   }
   if (immediate) {
     backdrop.remove();
+    document.body.classList.remove(MOOD_PREVIEW_BODY_CLASS);
     return;
   }
   if (backdrop.classList.contains("is-closing")) return;
   backdrop.classList.add("is-closing");
   window.setTimeout(() => {
     backdrop.remove();
+    document.body.classList.remove(MOOD_PREVIEW_BODY_CLASS);
   }, 150);
 }
 
