@@ -164,6 +164,7 @@ Numeric scaling formula used by runtime:
 - `Strict JSON Repair`: retries if model output is invalid
 - `Auto Detect Active`: scene-based active character detection
 - `Inject Tracker Into Prompt`: uses current relationship state as hidden guidance
+- `Injection Depth`: controls prompt-injection depth in the in-chat prompt stack (`0..8`)
 - `Injection Prompt Template`: editable template for injected guidance (shown only when injection is enabled)
 - `Prompt Templates`: edit unified + per-stat sequential prompt instructions (protocol blocks are fixed; repair prompts are fixed)
 - `Profile Token Limits`: extraction now respects profile max tokens and truncation length (when available)
@@ -194,6 +195,7 @@ Numeric scaling formula used by runtime:
 - `Confidence Dampening`: scales delta strength by model confidence.
 - `Mood Stickiness`: keeps mood stable unless model confidence/context strongly supports change.
 - `Inject Tracker Into Prompt`: inject hidden relationship state guidance into chat generation prompts.
+- `Injection Depth`: depth value passed to ST extension prompt injection (`0` = nearest/top in-chat insertion, max `8`).
 - `Injection Prompt Template`: editable template that defines the injected guidance block (shown only when injection is enabled).
 - `Auto Detect Active`: in group chat, tries to determine which characters are currently active in the scene.
 - `Activity Lookback`: recent-message window used for active character detection.
