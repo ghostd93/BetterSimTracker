@@ -19,12 +19,15 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Prompt templates (unified + per-stat) with per-prompt reset
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
 - Interactive ST expression framing editor with live preview (global + per-character override)
-- Click-to-preview mood image lightbox (click image to open, click preview to close)
+- Click-to-preview mood image lightbox with close button / backdrop / Esc support
+- Active-first tracker card ordering in group chats with stable per-message order
+- Per-stat colored bars, subtle card/stat update animations, and reduced-motion support
+- Expandable last-thought text (`More` / `Less`) in cards and mood bubbles
 - Framing modal includes `Preview Character` selector under the preview (global mode)
 - Global preview candidates skip characters currently resolved to `BST mood images`
 - Global preview sprite scan ignores BST mood-image assets with `bst_` prefix
 - Strong diagnostics/debug dump for bug reports
-- Mobile-friendly settings and graph modals
+- Mobile-friendly tracker cards, settings modal, and graph modal
 - Settings section drawers collapsed by default
 - Single-click Stop now hard-cancels the current extraction run (workers + retries)
 

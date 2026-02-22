@@ -5,10 +5,15 @@ All notable changes to BetterSimTracker are documented here.
 ## [Unreleased]
 ### Added
 - Mood images in tracker cards now open a full-size preview modal on click; clicking the preview image closes the modal.
+- Mood image preview modal now includes a dedicated close button, caption metadata, backdrop close, and `Esc` close support.
+- Last-thought text in tracker cards and mood bubbles now supports inline `More` / `Less` expansion.
 
 ### Changed
 - Character defaults panel now shows ST-expression controls and BST mood-image controls conditionally based on the effective mood source.
 - Character defaults input normalization now applies canonical mood labels and clamped numeric values directly in the UI.
+- Tracker cards now sort visible characters active-first while preserving stable order for equal-priority entries.
+- Tracker card stat bars now use per-stat colors and include subtle change highlights; mobile card density was tightened for small screens.
+- Mood image trigger is now keyboard-accessible (`button` semantics) instead of image-click only.
 
 ### Fixed
 - Character defaults now resolve consistently across group-card and character-list Advanced Definitions paths by using stable character identity matching.
@@ -19,6 +24,7 @@ All notable changes to BetterSimTracker are documented here.
 - Character defaults identity resolution now correctly handles ST string IDs/event payloads and avatar-field fallback so group and single Advanced Definitions resolve the same character record.
 - First-time-active characters in existing chats now seed from per-character defaults (including 0 values) instead of falling back to global 50s during extraction and prompt state/snapshot prep.
 - Stop extraction now hard-cancels the active run in one click (including queued sequential workers/retries), with abort-like transport errors normalized as cancellation.
+- Tracker card rerenders now skip unchanged payloads via render signatures, reducing unnecessary DOM churn/flicker.
 
 ## [1.2.0] - 2026-02-21
 ### Added
