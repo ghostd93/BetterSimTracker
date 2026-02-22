@@ -107,6 +107,7 @@ const MOOD_PREVIEW_BACKDROP_CLASS = "bst-mood-preview-backdrop";
 const MOOD_PREVIEW_MODAL_CLASS = "bst-mood-preview-modal";
 const MOOD_PREVIEW_BODY_CLASS = "bst-mood-preview-open";
 let moodPreviewKeyListener: ((event: KeyboardEvent) => void) | null = null;
+let moodPreviewOpenedAt = 0;
 
 function toPercent(value: StatValue): number {
   if (typeof value === "number") return Math.max(0, Math.min(100, value));
@@ -1386,7 +1387,7 @@ function ensureStyles(): void {
   place-items: center;
   padding: 12px;
   background: rgba(0,0,0,0.72);
-  z-index: 2147483020;
+  z-index: 2147483646;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   opacity: 1;
@@ -1394,6 +1395,8 @@ function ensureStyles(): void {
 }
 .bst-mood-preview-modal {
   position: relative;
+  z-index: 2147483647;
+  isolation: isolate;
   width: min(960px, 94vw);
   max-height: calc(100dvh - 24px);
   display: grid;
@@ -1414,6 +1417,7 @@ function ensureStyles(): void {
 }
 .bst-mood-preview-close {
   position: absolute;
+  z-index: 2;
   top: 6px;
   right: 6px;
   width: 38px;
@@ -1760,7 +1764,7 @@ function ensureStyles(): void {
     padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
   }
   .bst-mood-preview-modal {
-    width: min(100%, 100vw - 16px);
+    width: min(100%, calc(100vw - 16px));
     max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 14px);
     gap: 8px;
   }
@@ -1982,17 +1986,22 @@ export function renderTracker(
 
     if (!root.dataset.bstBound) {
       root.dataset.bstBound = "1";
+      const openPreviewFromTarget = (target: EventTarget | null): boolean => {
+        const node = target as HTMLElement | null;
+        const preview = node?.closest('[data-bst-action="open-mood-preview"]') as HTMLElement | null;
+        if (!preview) return false;
+        const src = String(preview.getAttribute("data-bst-image-src") ?? "").trim();
+        const alt = String(preview.getAttribute("data-bst-image-alt") ?? "").trim() || "Mood image";
+        const character = String(preview.getAttribute("data-bst-image-character") ?? "").trim();
+        const mood = String(preview.getAttribute("data-bst-image-mood") ?? "").trim();
+        if (src) {
+          openMoodImageModal(src, alt, character, mood);
+        }
+        return true;
+      };
       root.addEventListener("click", event => {
         const target = event.target as HTMLElement | null;
-        const preview = target?.closest('[data-bst-action="open-mood-preview"]') as HTMLElement | null;
-        if (preview) {
-          const src = String(preview.getAttribute("data-bst-image-src") ?? "").trim();
-          const alt = String(preview.getAttribute("data-bst-image-alt") ?? "").trim() || "Mood image";
-          const character = String(preview.getAttribute("data-bst-image-character") ?? "").trim();
-          const mood = String(preview.getAttribute("data-bst-image-mood") ?? "").trim();
-          if (src) {
-            openMoodImageModal(src, alt, character, mood);
-          }
+        if (openPreviewFromTarget(target)) {
           return;
         }
         const thoughtToggle = target?.closest('[data-bst-action="toggle-thought"]') as HTMLElement | null;
@@ -2059,6 +2068,13 @@ export function renderTracker(
           return;
         }
       });
+      root.addEventListener("pointerup", event => {
+        const pointer = event as PointerEvent;
+        if (pointer.pointerType !== "touch") return;
+        if (openPreviewFromTarget(event.target)) {
+          event.preventDefault();
+        }
+      }, { passive: false });
     }
     root.classList.toggle("bst-root-collapsed", collapsedTrackerMessages.has(entry.messageIndex));
 
@@ -2290,6 +2306,7 @@ export function removeTrackerUI(): void {
 function openMoodImageModal(imageUrl: string, altText: string, characterName?: string, moodText?: string): void {
   ensureStyles();
   closeMoodImageModal(true);
+  moodPreviewOpenedAt = Date.now();
 
   const backdrop = document.createElement("div");
   backdrop.className = MOOD_PREVIEW_BACKDROP_CLASS;
@@ -2308,7 +2325,10 @@ function openMoodImageModal(imageUrl: string, altText: string, characterName?: s
   image.className = "bst-mood-preview-image";
   image.src = imageUrl;
   image.alt = altText || "Mood image";
-  image.addEventListener("click", () => closeMoodImageModal());
+  image.addEventListener("click", () => {
+    if (Date.now() - moodPreviewOpenedAt < 220) return;
+    closeMoodImageModal();
+  });
 
   const caption = document.createElement("div");
   caption.className = "bst-mood-preview-caption";
@@ -2320,6 +2340,7 @@ function openMoodImageModal(imageUrl: string, altText: string, characterName?: s
   modal.appendChild(caption);
   backdrop.appendChild(modal);
   backdrop.addEventListener("click", event => {
+    if (Date.now() - moodPreviewOpenedAt < 220) return;
     if (event.target === backdrop) {
       closeMoodImageModal();
     }
@@ -2355,6 +2376,7 @@ function closeMoodImageModal(immediate = false): void {
   if (immediate) {
     backdrop.remove();
     document.body.classList.remove(MOOD_PREVIEW_BODY_CLASS);
+    moodPreviewOpenedAt = 0;
     return;
   }
   if (backdrop.classList.contains("is-closing")) return;
@@ -2362,6 +2384,7 @@ function closeMoodImageModal(immediate = false): void {
   window.setTimeout(() => {
     backdrop.remove();
     document.body.classList.remove(MOOD_PREVIEW_BODY_CLASS);
+    moodPreviewOpenedAt = 0;
   }, 150);
 }
 
