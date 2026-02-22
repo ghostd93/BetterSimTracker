@@ -29,6 +29,7 @@ All notable changes to BetterSimTracker are documented here.
 - Checkbox rendering in wizard modals is now cross-browser stable (including Firefox).
 - Clearing prompt-template fields in settings now cleanly falls back to built-in defaults (visible again after reopening settings).
 - Custom stats no longer trigger first-run extraction requests when seeded from defaults; seeded values are used first.
+- Tracker card deltas no longer show misleading first-run jumps when previous values for a stat do not exist.
 
 ## [1.2.3] - 2026-02-22
 ### Added
