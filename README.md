@@ -11,6 +11,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Group chat support (multiple character cards in one message)
 - Scene activity detection (active vs inactive character state)
 - Polished tracker action controls for `Collapse cards` and `Retrack`
+- Polished extension settings modal with sticky header/footer actions and one-click `Expand all` / `Collapse all` section control
 - Retrack button (regenerate tracker for last AI message)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
