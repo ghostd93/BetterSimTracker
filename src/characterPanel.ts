@@ -23,6 +23,7 @@ import type {
 
 const PANEL_ID = "bst-character-panel";
 const NAME_INPUT_SELECTORS = ["#character_name_pole", "#character_name", "input[name='name']"];
+const AVATAR_INPUT_SELECTORS = ["#avatar_url_pole", "input[name='avatar']"];
 const POPUP_SELECTORS = ["#character_popup", ".character_popup", "#character-settings"];
 
 type InitInput = {
@@ -199,6 +200,14 @@ function findNameInput(container: HTMLElement): HTMLInputElement | null {
   return null;
 }
 
+function findAvatarInput(container: HTMLElement): HTMLInputElement | null {
+  for (const selector of AVATAR_INPUT_SELECTORS) {
+    const node = container.querySelector(selector);
+    if (node instanceof HTMLInputElement) return node;
+  }
+  return null;
+}
+
 function findPanelContainer(popup: HTMLElement): HTMLElement {
   const candidates = [
     popup.querySelector(".character-settings"),
@@ -362,6 +371,10 @@ function countMoodImages(images: MoodImageSet | undefined): number {
 }
 
 function parseCharacterEditorId(payload: unknown): number | null {
+  if (typeof payload === "string") {
+    const parsedRaw = Number(payload);
+    return Number.isInteger(parsedRaw) ? parsedRaw : null;
+  }
   if (typeof payload === "number" && Number.isInteger(payload)) return payload;
   if (!payload || typeof payload !== "object") return null;
   const obj = payload as Record<string, unknown>;
@@ -438,15 +451,25 @@ function renderPanel(input: InitInput, force = false): void {
   }
 
   const nameInput = findNameInput(popup);
+  const avatarInput = findAvatarInput(popup);
   const nameFromInput = nameInput?.value.trim() ?? "";
-  const contextCharacter = typeof context.characterId === "number"
-    ? context.characters?.[context.characterId]
+  const contextCharacterIdRaw = typeof context.characterId === "string" || typeof context.characterId === "number"
+    ? Number(context.characterId)
+    : Number.NaN;
+  const contextCharacterId = Number.isInteger(contextCharacterIdRaw) ? contextCharacterIdRaw : null;
+  const contextCharacter = contextCharacterId != null
+    ? context.characters?.[contextCharacterId]
     : null;
   const editorCharacter = typeof lastEditorCharacterId === "number"
     ? context.characters?.[lastEditorCharacterId] ?? null
     : null;
+  const avatarFromInput = avatarInput?.value.trim() ?? "";
+  const avatarMatchedCharacter = avatarFromInput
+    ? context.characters?.find(character => String(character?.avatar ?? "").trim() === avatarFromInput) ?? null
+    : null;
   const characterName =
     nameFromInput ||
+    avatarMatchedCharacter?.name?.trim() ||
     editorCharacter?.name?.trim() ||
     contextCharacter?.name?.trim() ||
     context.name2?.trim() ||
@@ -469,6 +492,7 @@ function renderPanel(input: InitInput, force = false): void {
     contextCharacterName === normalizedName,
   );
   const resolvedCharacter =
+    avatarMatchedCharacter ??
     (editorCharacterMatchesSelection ? editorCharacter : null) ??
     namedCharacter ??
     (contextCharacterMatchesSelection ? contextCharacter : null) ??
@@ -478,6 +502,7 @@ function renderPanel(input: InitInput, force = false): void {
   const resolvedCharacterName = String(resolvedCharacter?.name ?? "").trim() || characterName;
   const characterAvatar =
     resolvedCharacter?.avatar?.trim() ||
+    avatarFromInput ||
     "";
   const characterIdentity: CharacterDefaultsIdentity = { name: resolvedCharacterName, avatar: characterAvatar };
   if (!characterName) {
@@ -893,7 +918,7 @@ function renderPanel(input: InitInput, force = false): void {
             failed.push(moods[index]);
           }
         });
-        const next = withUpdatedDefaults(settings, characterIdentity, current => {
+        const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
           const copy = { ...current };
           if (failed.length === 0) {
             delete copy.moodImages;
