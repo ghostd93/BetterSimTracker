@@ -320,13 +320,16 @@ function cloneBuiltInNumericStatUi(settings: Partial<BuiltInNumericStatUiSetting
   };
 }
 
-const BUILT_IN_STAT_LABELS: Record<"affection" | "trust" | "desire" | "connection", string> = {
+const BUILT_IN_STAT_LABELS: Record<"affection" | "trust" | "desire" | "connection" | "mood" | "lastThought", string> = {
   affection: "Affection",
   trust: "Trust",
   desire: "Desire",
   connection: "Connection",
+  mood: "Mood",
+  lastThought: "Last Thought",
 };
 const BUILT_IN_NUMERIC_STAT_KEY_LIST = ["affection", "trust", "desire", "connection"] as const;
+const BUILT_IN_TRACKABLE_STAT_KEY_LIST = ["affection", "trust", "desire", "connection", "mood", "lastThought"] as const;
 
 function toCustomStatSlug(label: string): string {
   const normalized = String(label ?? "")
@@ -1128,6 +1131,9 @@ function ensureStyles(): void {
   row-gap: 10px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.bst-toggle-block {
+  margin-top: 8px;
+}
 .bst-check-grid-single { grid-template-columns: minmax(0, 1fr); }
 .bst-mood-advanced-settings { margin-top: 8px; }
 .bst-st-expression-control {
@@ -1151,8 +1157,9 @@ function ensureStyles(): void {
   border-color: rgba(168, 203, 245, 0.32);
   background: rgba(14, 20, 33, 0.72);
 }
-.bst-settings label { font-size: 12px; display: flex; flex-direction: column; gap: 6px; color: rgba(241, 246, 255, 0.94); }
-.bst-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
+.bst-settings label,
+.bst-custom-wizard label { font-size: 12px; display: flex; flex-direction: column; gap: 6px; color: rgba(241, 246, 255, 0.94); }
+.bst-check { flex-direction: row !important; align-items: center; gap: 10px !important; }
 .bst-check input[type="checkbox"] {
   appearance: none !important;
   -webkit-appearance: none !important;
@@ -1161,10 +1168,10 @@ function ensureStyles(): void {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  flex: 0 0 18px;
-  width: 18px;
-  height: 18px;
-  min-width: 18px;
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  min-width: 19px;
   margin: 0;
   border-radius: 999px;
   border: 1px solid rgba(188, 212, 242, 0.55);
@@ -1181,7 +1188,7 @@ function ensureStyles(): void {
   height: 9px;
   border-right: 2px solid #0b1020;
   border-bottom: 2px solid #0b1020;
-  transform: translateY(-1px) rotate(45deg) scale(0);
+  transform: translate(-0.5px, -1px) rotate(45deg) scale(0);
   transform-origin: center;
   opacity: 0;
   transition: transform .14s ease, opacity .14s ease;
@@ -1205,46 +1212,62 @@ function ensureStyles(): void {
 }
 .bst-check input[type="checkbox"]:checked::before {
   opacity: 1;
-  transform: translateY(-1px) rotate(45deg) scale(1);
+  transform: translate(-0.5px, -1px) rotate(45deg) scale(1);
 }
 .bst-check input[type="checkbox"]:active {
   transform: scale(0.94);
 }
-.bst-settings input:not([type="checkbox"]), .bst-settings select, .bst-settings textarea {
+.bst-settings input:not([type="checkbox"]), .bst-settings select, .bst-settings textarea,
+.bst-custom-wizard input:not([type="checkbox"]), .bst-custom-wizard select, .bst-custom-wizard textarea {
   background: #0d1220 !important;
   color: #f3f5f9 !important;
   border: 1px solid rgba(255,255,255,0.20) !important;
   border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
   padding: 8px 10px;
   transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
 }
 .bst-settings input:not([type="checkbox"]),
-.bst-settings select {
+.bst-settings select,
+.bst-custom-wizard input:not([type="checkbox"]),
+.bst-custom-wizard select {
   min-height: 36px;
 }
 .bst-settings input:not([type="checkbox"]):hover,
 .bst-settings select:hover,
-.bst-settings textarea:hover {
+.bst-settings textarea:hover,
+.bst-custom-wizard input:not([type="checkbox"]):hover,
+.bst-custom-wizard select:hover,
+.bst-custom-wizard textarea:hover {
   border-color: rgba(168, 203, 245, 0.48) !important;
   background: #101728 !important;
 }
 .bst-settings input:not([type="checkbox"]):focus-visible,
 .bst-settings select:focus-visible,
-.bst-settings textarea:focus-visible {
+.bst-settings textarea:focus-visible,
+.bst-custom-wizard input:not([type="checkbox"]):focus-visible,
+.bst-custom-wizard select:focus-visible,
+.bst-custom-wizard textarea:focus-visible {
   outline: none;
   border-color: rgba(56,189,248,0.9) !important;
   box-shadow: 0 0 0 2px rgba(56,189,248,0.25);
 }
-.bst-settings label:focus-within {
+.bst-settings label:focus-within,
+.bst-custom-wizard label:focus-within {
   color: #e6f6ff;
 }
-.bst-settings textarea {
+.bst-settings textarea,
+.bst-custom-wizard textarea {
   resize: vertical;
   min-height: 120px;
   font-family: Consolas, "Courier New", monospace;
   line-height: 1.35;
 }
-.bst-settings input::placeholder { color: rgba(243,245,249,0.6); }
+.bst-settings input::placeholder,
+.bst-settings textarea::placeholder,
+.bst-custom-wizard input::placeholder,
+.bst-custom-wizard textarea::placeholder { color: rgba(243,245,249,0.6); }
 .bst-settings-section {
   margin: 10px 0;
   padding: 12px 12px 13px;
@@ -1622,6 +1645,9 @@ function ensureStyles(): void {
   align-items: center;
   gap: 10px;
 }
+.bst-custom-stats-top-centered {
+  justify-content: center;
+}
 .bst-custom-stats-list {
   margin-top: 10px;
   display: grid;
@@ -1739,9 +1765,6 @@ function ensureStyles(): void {
 }
 .bst-custom-wizard-grid-single {
   grid-template-columns: minmax(0, 1fr);
-}
-.bst-custom-wizard .bst-settings label {
-  font-size: 12px;
 }
 .bst-custom-wizard-panel {
   display: none;
@@ -3468,17 +3491,8 @@ export function openSettingsModal(input: {
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-chart-line"></span>Tracked Stats</h4>
-      <div class="bst-custom-stats-top">
-        <div class="bst-help-line">Built-ins are never deletable, but you can manage extraction/card/graph/injection behavior.</div>
+      <div class="bst-custom-stats-top bst-custom-stats-top-centered">
         <button type="button" class="bst-btn bst-btn-soft" data-action="manage-builtins">Manage Built-in Stats</button>
-      </div>
-      <div class="bst-check-grid">
-        <label class="bst-check"><input data-k="trackAffection" type="checkbox">Track Affection</label>
-        <label class="bst-check"><input data-k="trackTrust" type="checkbox">Track Trust</label>
-        <label class="bst-check"><input data-k="trackDesire" type="checkbox">Track Desire</label>
-        <label class="bst-check"><input data-k="trackConnection" type="checkbox">Track Connection</label>
-        <label class="bst-check"><input data-k="trackMood" type="checkbox">Track Mood</label>
-        <label class="bst-check"><input data-k="trackLastThought" type="checkbox">Track Last Thought</label>
       </div>
       <div data-bst-row="moodAdvancedBlock" class="bst-mood-advanced-settings">
         <div class="bst-section-divider">Mood Advanced Settings</div>
@@ -3649,7 +3663,7 @@ export function openSettingsModal(input: {
             <div class="bst-prompt-caption">Instruction (editable default used when a custom stat has no per-stat override)</div>
             <textarea data-k="promptTemplateSequentialCustomNumeric" rows="6"></textarea>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
-            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("custom_stat"))}</pre>
+            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("{{statId}}"))}</pre>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -4094,10 +4108,8 @@ export function openSettingsModal(input: {
     description: string;
     defaultValue: string;
     maxDeltaPerTurn: string;
-    track: boolean;
+    enabled: boolean;
     includeInInjection: boolean;
-    showOnCard: boolean;
-    showInGraph: boolean;
     color: string;
     sequentialPromptTemplate: string;
     lockId: boolean;
@@ -4111,10 +4123,8 @@ export function openSettingsModal(input: {
         description: "",
         defaultValue: "50",
         maxDeltaPerTurn: "",
-        track: true,
+        enabled: true,
         includeInInjection: true,
-        showOnCard: true,
-        showInGraph: true,
         color: "",
         sequentialPromptTemplate: "",
         lockId: false,
@@ -4130,10 +4140,8 @@ export function openSettingsModal(input: {
       description: clone.description ?? "",
       defaultValue: String(Number.isFinite(clone.defaultValue) ? Math.round(clone.defaultValue) : 50),
       maxDeltaPerTurn: clone.maxDeltaPerTurn == null ? "" : String(Math.round(clone.maxDeltaPerTurn)),
-      track: clone.track,
+      enabled: clone.track || clone.showOnCard || clone.showInGraph,
       includeInInjection: clone.includeInInjection,
-      showOnCard: clone.showOnCard,
-      showInGraph: clone.showInGraph,
       color: clone.color ?? "",
       sequentialPromptTemplate: clone.sequentialPromptTemplate ?? "",
       lockId: mode === "edit",
@@ -4168,6 +4176,9 @@ export function openSettingsModal(input: {
       }
       if (mode === "edit" && draft.lockId && currentId && id !== currentId) {
         errors.push("ID cannot be changed in edit mode.");
+      }
+      if (draft.description.trim().length < 3) {
+        errors.push("Description is required (at least 3 characters).");
       }
     }
 
@@ -4208,15 +4219,15 @@ export function openSettingsModal(input: {
     return {
       id: draft.id.trim().toLowerCase(),
       label: draft.label.trim(),
-      description: draft.description.trim() || undefined,
+      description: draft.description.trim(),
       defaultValue: Math.max(0, Math.min(100, Math.round(Number(draft.defaultValue)))),
       maxDeltaPerTurn: maxDeltaValue == null || !Number.isFinite(maxDeltaValue)
         ? undefined
         : Math.max(1, Math.min(30, Math.round(maxDeltaValue))),
-      track: draft.track,
+      track: draft.enabled,
       includeInInjection: draft.includeInInjection,
-      showOnCard: draft.showOnCard,
-      showInGraph: draft.showInGraph,
+      showOnCard: draft.enabled,
+      showInGraph: draft.enabled,
       color: color || undefined,
       sequentialPromptTemplate: template || undefined,
     };
@@ -4240,9 +4251,7 @@ export function openSettingsModal(input: {
     }
     customStatsListNode.innerHTML = customStatsState.map(stat => {
       const flags = [
-        stat.track ? "tracked" : "not tracked",
-        stat.showOnCard ? "card" : "card hidden",
-        stat.showInGraph ? "graph" : "graph hidden",
+        stat.track || stat.showOnCard || stat.showInGraph ? "enabled" : "disabled",
         stat.includeInInjection ? "injection" : "no injection",
       ];
       const description = (stat.description ?? "").trim();
@@ -4280,11 +4289,13 @@ export function openSettingsModal(input: {
     closeCustomWizard();
     const current = collectSettings();
     const draftUi = cloneBuiltInNumericStatUi(current.builtInNumericStatUi);
-    const draftTrack: Record<(typeof BUILT_IN_NUMERIC_STAT_KEY_LIST)[number], boolean> = {
+    const draftTrack: Record<(typeof BUILT_IN_TRACKABLE_STAT_KEY_LIST)[number], boolean> = {
       affection: current.trackAffection,
       trust: current.trackTrust,
       desire: current.trackDesire,
       connection: current.trackConnection,
+      mood: current.trackMood,
+      lastThought: current.trackLastThought,
     };
 
     const backdropNode = document.createElement("div");
@@ -4292,7 +4303,12 @@ export function openSettingsModal(input: {
     const wizard = document.createElement("div");
     wizard.className = "bst-custom-wizard";
     const renderRows = (): string =>
-      BUILT_IN_NUMERIC_STAT_KEY_LIST.map(key => `
+      BUILT_IN_TRACKABLE_STAT_KEY_LIST.map(key => {
+        const isNumeric = BUILT_IN_NUMERIC_STAT_KEYS.has(key);
+        const enabled = isNumeric
+          ? (draftTrack[key] || draftUi[key as keyof BuiltInNumericStatUiSettings].showOnCard || draftUi[key as keyof BuiltInNumericStatUiSettings].showInGraph)
+          : draftTrack[key];
+        return `
         <div class="bst-custom-stat-row">
           <div class="bst-custom-stat-main">
             <div class="bst-custom-stat-title">
@@ -4300,14 +4316,15 @@ export function openSettingsModal(input: {
               <span class="bst-custom-stat-id">${escapeHtml(key)}</span>
             </div>
           </div>
-          <div class="bst-check-grid">
-            <label class="bst-check"><input type="checkbox" data-bst-builtin-track="${key}" ${draftTrack[key] ? "checked" : ""}>Track</label>
-            <label class="bst-check"><input type="checkbox" data-bst-builtin-card="${key}" ${draftUi[key].showOnCard ? "checked" : ""}>Card</label>
-            <label class="bst-check"><input type="checkbox" data-bst-builtin-graph="${key}" ${draftUi[key].showInGraph ? "checked" : ""}>Graph</label>
-            <label class="bst-check"><input type="checkbox" data-bst-builtin-inject="${key}" ${draftUi[key].includeInInjection ? "checked" : ""}>Inject</label>
+          <div class="bst-check-grid bst-toggle-block ${isNumeric ? "" : "bst-check-grid-single"}">
+            <label class="bst-check"><input type="checkbox" data-bst-builtin-enabled="${key}" ${enabled ? "checked" : ""}>${isNumeric ? "Enabled (Track + Card + Graph)" : "Enabled (Track)"}</label>
+            ${isNumeric
+              ? `<label class="bst-check"><input type="checkbox" data-bst-builtin-inject="${key}" ${draftUi[key as keyof BuiltInNumericStatUiSettings].includeInInjection ? "checked" : ""}>Include in prompt injection</label>`
+              : ""}
           </div>
         </div>
-      `).join("");
+      `;
+      }).join("");
 
     wizard.innerHTML = `
       <div class="bst-custom-wizard-head">
@@ -4318,12 +4335,10 @@ export function openSettingsModal(input: {
         <button type="button" class="bst-btn bst-close-btn" data-action="custom-close" aria-label="Close">&times;</button>
       </div>
       <div class="bst-custom-wizard-panel is-active" data-bst-builtin-panel="1">
-        <div class="bst-help-line">Built-in stats are never deleted. You can manage how each one participates in extraction and UI.</div>
+        <div class="bst-help-line">Built-in stats are never deleted. You can manage whether each one is enabled.</div>
         <ul class="bst-help-list">
-          <li><strong>Track</strong>: include in extraction updates.</li>
-          <li><strong>Card</strong>: show as a row in tracker cards.</li>
-          <li><strong>Graph</strong>: include as graph series.</li>
-          <li><strong>Inject</strong>: include in prompt injection guidance.</li>
+          <li><strong>Enabled</strong>: one toggle for Track + Card + Graph on numeric built-ins, and Track on text built-ins.</li>
+          <li><strong>Include in prompt injection</strong>: controls prompt injection lines for numeric built-ins.</li>
         </ul>
       </div>
       <div class="bst-custom-wizard-panel" data-bst-builtin-panel="2">
@@ -4357,11 +4372,15 @@ export function openSettingsModal(input: {
     };
 
     const applyFromDom = (): void => {
-      for (const key of BUILT_IN_NUMERIC_STAT_KEY_LIST) {
-        draftTrack[key] = Boolean((wizard.querySelector(`[data-bst-builtin-track="${key}"]`) as HTMLInputElement | null)?.checked);
-        draftUi[key].showOnCard = Boolean((wizard.querySelector(`[data-bst-builtin-card="${key}"]`) as HTMLInputElement | null)?.checked);
-        draftUi[key].showInGraph = Boolean((wizard.querySelector(`[data-bst-builtin-graph="${key}"]`) as HTMLInputElement | null)?.checked);
-        draftUi[key].includeInInjection = Boolean((wizard.querySelector(`[data-bst-builtin-inject="${key}"]`) as HTMLInputElement | null)?.checked);
+      for (const key of BUILT_IN_TRACKABLE_STAT_KEY_LIST) {
+        const enabled = Boolean((wizard.querySelector(`[data-bst-builtin-enabled="${key}"]`) as HTMLInputElement | null)?.checked);
+        draftTrack[key] = enabled;
+        if (BUILT_IN_NUMERIC_STAT_KEYS.has(key)) {
+          const numericKey = key as (typeof BUILT_IN_NUMERIC_STAT_KEY_LIST)[number];
+          draftUi[numericKey].showOnCard = enabled;
+          draftUi[numericKey].showInGraph = enabled;
+          draftUi[numericKey].includeInInjection = Boolean((wizard.querySelector(`[data-bst-builtin-inject="${key}"]`) as HTMLInputElement | null)?.checked);
+        }
       }
     };
 
@@ -4379,10 +4398,12 @@ export function openSettingsModal(input: {
     saveBtn?.addEventListener("click", () => {
       applyFromDom();
       builtInNumericStatUiState = cloneBuiltInNumericStatUi(draftUi);
-      set("trackAffection", String(draftTrack.affection));
-      set("trackTrust", String(draftTrack.trust));
-      set("trackDesire", String(draftTrack.desire));
-      set("trackConnection", String(draftTrack.connection));
+      input.settings.trackAffection = draftTrack.affection;
+      input.settings.trackTrust = draftTrack.trust;
+      input.settings.trackDesire = draftTrack.desire;
+      input.settings.trackConnection = draftTrack.connection;
+      input.settings.trackMood = draftTrack.mood;
+      input.settings.trackLastThought = draftTrack.lastThought;
       close();
       persistLive();
     });
@@ -4503,8 +4524,8 @@ export function openSettingsModal(input: {
             <input type="text" data-bst-custom-field="id" maxlength="32" value="${escapeHtml(draft.id)}" ${draft.lockId ? "readonly" : ""} placeholder="respect">
           </label>
         </div>
-        <label>Description (optional)
-          <textarea data-bst-custom-field="description" rows="4" maxlength="200" placeholder="How should extraction interpret this stat?">${escapeHtml(draft.description)}</textarea>
+        <label>Description
+          <textarea data-bst-custom-field="description" rows="4" maxlength="200" placeholder="Required. Explain what this stat represents and how extraction should interpret it.">${escapeHtml(draft.description)}</textarea>
         </label>
       </div>
 
@@ -4513,7 +4534,7 @@ export function openSettingsModal(input: {
           <label>Default Value (%)
             <input type="number" min="0" max="100" data-bst-custom-field="defaultValue" value="${escapeHtml(draft.defaultValue)}">
           </label>
-          <label>Max Delta Per Turn (optional)
+          <label>Max Delta Per Turn
             <input type="number" min="1" max="30" data-bst-custom-field="maxDeltaPerTurn" value="${escapeHtml(draft.maxDeltaPerTurn)}" placeholder="Use global">
           </label>
         </div>
@@ -4521,21 +4542,18 @@ export function openSettingsModal(input: {
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="3">
-        <div class="bst-check-grid">
-          <label class="bst-check"><input type="checkbox" data-bst-custom-field="track" ${draft.track ? "checked" : ""}>Include in extraction</label>
+        <div class="bst-check-grid bst-toggle-block">
+          <label class="bst-check"><input type="checkbox" data-bst-custom-field="enabled" ${draft.enabled ? "checked" : ""}>Enabled (Track + Card + Graph)</label>
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
         </div>
         <label>Sequential Prompt Override (optional)
-          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Custom instruction for this stat in sequential mode.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
+          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. Leave empty to use the global Seq: Custom Numeric template fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
         </label>
         <div class="bst-help-line">Template macros: <code>{{statId}}</code> <code>{{statLabel}}</code> <code>{{statDescription}}</code> <code>{{statDefault}}</code> <code>{{maxDelta}}</code> <code>{{characters}}</code> <code>{{envelope}}</code> <code>{{contextText}}</code>.</div>
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="4">
-        <div class="bst-check-grid">
-          <label class="bst-check"><input type="checkbox" data-bst-custom-field="showOnCard" ${draft.showOnCard ? "checked" : ""}>Show on tracker cards</label>
-          <label class="bst-check"><input type="checkbox" data-bst-custom-field="showInGraph" ${draft.showInGraph ? "checked" : ""}>Show in graph</label>
-        </div>
+        <div class="bst-help-line">Color helps visually distinguish this stat in cards and graph.</div>
         <label>Color (optional)
           <input type="text" data-bst-custom-field="color" value="${escapeHtml(draft.color)}" placeholder="#66ccff">
         </label>
@@ -4570,10 +4588,8 @@ export function openSettingsModal(input: {
       const descriptionNode = getField("description");
       const defaultNode = getField("defaultValue");
       const maxDeltaNode = getField("maxDeltaPerTurn");
-      const trackNode = getField("track") as HTMLInputElement | null;
+      const enabledNode = getField("enabled") as HTMLInputElement | null;
       const injectNode = getField("includeInInjection") as HTMLInputElement | null;
-      const cardNode = getField("showOnCard") as HTMLInputElement | null;
-      const graphNode = getField("showInGraph") as HTMLInputElement | null;
       const colorNode = getField("color");
       const templateNode = getField("sequentialPromptTemplate");
       draft.label = String(labelNode?.value ?? "");
@@ -4581,10 +4597,8 @@ export function openSettingsModal(input: {
       draft.description = String(descriptionNode?.value ?? "");
       draft.defaultValue = String(defaultNode?.value ?? "");
       draft.maxDeltaPerTurn = String(maxDeltaNode?.value ?? "");
-      draft.track = Boolean(trackNode?.checked);
+      draft.enabled = Boolean(enabledNode?.checked);
       draft.includeInInjection = Boolean(injectNode?.checked);
-      draft.showOnCard = Boolean(cardNode?.checked);
-      draft.showInGraph = Boolean(graphNode?.checked);
       draft.color = String(colorNode?.value ?? "");
       draft.sequentialPromptTemplate = String(templateNode?.value ?? "");
     };
@@ -4728,14 +4742,16 @@ export function openSettingsModal(input: {
       ((modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "").trim();
     const readExtra = (k: string): string =>
       ((modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "").trim();
-    const readBool = (k: keyof BetterSimTrackerSettings): boolean => {
+    const readBool = (k: keyof BetterSimTrackerSettings, fallback: boolean): boolean => {
       const node = modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null;
       if (node instanceof HTMLInputElement && node.type === "checkbox") return node.checked;
+      if (!node) return fallback;
       return read(k) === "true";
     };
-    const readBoolExtra = (k: string): boolean => {
+    const readBoolExtra = (k: string, fallback: boolean): boolean => {
       const node = modal.querySelector(`[data-k="${k}"]`) as HTMLInputElement | HTMLSelectElement | null;
       if (node instanceof HTMLInputElement && node.type === "checkbox") return node.checked;
+      if (!node) return fallback;
       return readExtra(k) === "true";
     };
     const readNumber = (k: keyof BetterSimTrackerSettings, fallback: number, min?: number, max?: number): number => {
@@ -4761,30 +4777,30 @@ export function openSettingsModal(input: {
     return {
       ...input.settings,
       connectionProfile: read("connectionProfile"),
-      sequentialExtraction: readBool("sequentialExtraction"),
+      sequentialExtraction: readBool("sequentialExtraction", input.settings.sequentialExtraction),
       maxConcurrentCalls: readNumber("maxConcurrentCalls", input.settings.maxConcurrentCalls, 1, 8),
-      strictJsonRepair: readBool("strictJsonRepair"),
+      strictJsonRepair: readBool("strictJsonRepair", input.settings.strictJsonRepair),
       maxRetriesPerStat: readNumber("maxRetriesPerStat", input.settings.maxRetriesPerStat, 0, 4),
       contextMessages: readNumber("contextMessages", input.settings.contextMessages, 1, 40),
       injectPromptDepth: readNumber("injectPromptDepth", input.settings.injectPromptDepth, 0, 8),
       maxDeltaPerTurn: readNumber("maxDeltaPerTurn", input.settings.maxDeltaPerTurn, 1, 30),
       maxTokensOverride: readNumber("maxTokensOverride", input.settings.maxTokensOverride, 0, 100000),
       truncationLengthOverride: readNumber("truncationLengthOverride", input.settings.truncationLengthOverride, 0, 200000),
-      includeCharacterCardsInPrompt: readBool("includeCharacterCardsInPrompt"),
+      includeCharacterCardsInPrompt: readBool("includeCharacterCardsInPrompt", input.settings.includeCharacterCardsInPrompt),
       confidenceDampening: readNumber("confidenceDampening", input.settings.confidenceDampening, 0, 1),
       moodStickiness: readNumber("moodStickiness", input.settings.moodStickiness, 0, 1),
-      injectTrackerIntoPrompt: readBool("injectTrackerIntoPrompt"),
-      autoDetectActive: readBool("autoDetectActive"),
+      injectTrackerIntoPrompt: readBool("injectTrackerIntoPrompt", input.settings.injectTrackerIntoPrompt),
+      autoDetectActive: readBool("autoDetectActive", input.settings.autoDetectActive),
       activityLookback: readNumber("activityLookback", input.settings.activityLookback, 1, 25),
-      showInactive: readBool("showInactive"),
+      showInactive: readBool("showInactive", input.settings.showInactive),
       inactiveLabel: read("inactiveLabel") || input.settings.inactiveLabel,
-      showLastThought: readBool("showLastThought"),
-      trackAffection: readBool("trackAffection"),
-      trackTrust: readBool("trackTrust"),
-      trackDesire: readBool("trackDesire"),
-      trackConnection: readBool("trackConnection"),
-      trackMood: readBool("trackMood"),
-      trackLastThought: readBool("trackLastThought"),
+      showLastThought: readBool("showLastThought", input.settings.showLastThought),
+      trackAffection: readBool("trackAffection", input.settings.trackAffection),
+      trackTrust: readBool("trackTrust", input.settings.trackTrust),
+      trackDesire: readBool("trackDesire", input.settings.trackDesire),
+      trackConnection: readBool("trackConnection", input.settings.trackConnection),
+      trackMood: readBool("trackMood", input.settings.trackMood),
+      trackLastThought: readBool("trackLastThought", input.settings.trackLastThought),
       builtInNumericStatUi: cloneBuiltInNumericStatUi(builtInNumericStatUiState),
       moodSource: read("moodSource") === "st_expressions" ? "st_expressions" : "bst_images",
       moodExpressionMap: readGlobalMoodExpressionMap(),
@@ -4795,16 +4811,16 @@ export function openSettingsModal(input: {
       cardOpacity: readNumber("cardOpacity", input.settings.cardOpacity, 0.1, 1),
       borderRadius: readNumber("borderRadius", input.settings.borderRadius, 0, 32),
       fontSize: readNumber("fontSize", input.settings.fontSize, 10, 22),
-      debug: readBool("debug"),
+      debug: readBool("debug", input.settings.debug),
       debugFlags: {
-        extraction: readBoolExtra("debugExtraction"),
-        prompts: readBoolExtra("debugPrompts"),
-        ui: readBoolExtra("debugUi"),
-        moodImages: readBoolExtra("debugMoodImages"),
-        storage: readBoolExtra("debugStorage"),
+        extraction: readBoolExtra("debugExtraction", input.settings.debugFlags?.extraction ?? true),
+        prompts: readBoolExtra("debugPrompts", input.settings.debugFlags?.prompts ?? true),
+        ui: readBoolExtra("debugUi", input.settings.debugFlags?.ui ?? true),
+        moodImages: readBoolExtra("debugMoodImages", input.settings.debugFlags?.moodImages ?? true),
+        storage: readBoolExtra("debugStorage", input.settings.debugFlags?.storage ?? true),
       },
-      includeContextInDiagnostics: readBool("includeContextInDiagnostics"),
-      includeGraphInDiagnostics: readBool("includeGraphInDiagnostics"),
+      includeContextInDiagnostics: readBool("includeContextInDiagnostics", input.settings.includeContextInDiagnostics),
+      includeGraphInDiagnostics: readBool("includeGraphInDiagnostics", input.settings.includeGraphInDiagnostics),
       promptTemplateUnified: read("promptTemplateUnified") || DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
       promptTemplateSequentialAffection: read("promptTemplateSequentialAffection") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.affection,
       promptTemplateSequentialTrust: read("promptTemplateSequentialTrust") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.trust,
