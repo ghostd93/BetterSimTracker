@@ -14,7 +14,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Polished extension settings modal with sticky header/footer actions and one-click `Expand all` / `Collapse all` section control
 - Settings checkboxes now use consistent round accent-matched styling across ST themes/mobile UI overrides
 - Built-in stats manager wizard with unified `Enabled` toggle (`Track + Card + Graph`) plus `Inject` control for numeric built-ins
-- Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8)
+- Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8, color picker + hex input)
 - Retrack button (regenerate tracker for last AI message)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
@@ -187,6 +187,7 @@ Numeric scaling formula used by runtime:
 - `/bst toggle <stat>`: toggle `affection|trust|desire|connection|mood|lastThought|<custom_stat_id>`.
 - `/bst inject on|off`: toggle prompt injection.
 - `/bst debug on|off`: toggle debug mode.
+- Alias forms are also available: `/bst-status`, `/bst-extract`, `/bst-clear`, `/bst-toggle`, `/bst-inject`, `/bst-debug`.
 
 ## Settings Reference (Detailed)
 
@@ -300,7 +301,7 @@ Behavior notes:
   - Framer preview and tracker cards use the same positioning math, so preview framing matches tracker rendering
   - Positioning uses zoom-aware pan compensation (`object-position` + translated scale), and existing tracker cards update immediately when framing is changed
 
-You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only enabled stats.
+You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only stats that are both tracked and explicitly enabled for injection (`Inject` for built-ins, `includeInInjection` for custom stats).
 
 ### Display
 
@@ -386,7 +387,7 @@ Optional per-character mood source keys:
 Character-default records are resolved by stable character identity first (avatar), with legacy name-based fallback, so group-card and character-list entry paths stay consistent.
 In Advanced Definitions, the panel also follows the character ST reports as currently opened in the editor to avoid group-chat context bleed.
 
-If no advanced defaults are present, tracker baseline falls back to contextual inference.
+If no advanced defaults are present, tracker baseline falls back to global extension defaults.
 
 Mood images are optional per label; missing images fall back to emoji.  
 When source is `st_expressions`, tracker maps mood to expression and uses the character sprite if found; missing mappings/sprites also fall back to emoji.
@@ -399,9 +400,9 @@ If something looks wrong:
 
 1. Enable `Debug`.
 2. Use the debug category toggles to limit logs to the area you need.
-2. Reproduce the issue once.
-3. Click `Dump Diagnostics`.
-4. Share the diagnostics output.
+3. Reproduce the issue once.
+4. Click `Dump Diagnostics`.
+5. Share the diagnostics output.
 
 Common checks:
 
