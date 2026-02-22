@@ -855,6 +855,8 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       contextText,
       previousStatistics: previousSeededStatistics,
       previousCustomStatistics: previousSeededCustomStatistics,
+      previousCustomStatisticsRaw: previousEntry?.data?.customStatistics ?? null,
+      hasPriorTrackerData: Boolean(previousEntry?.data),
       history: seededHistory,
       isCancelled: () => cancelledExtractionRuns.has(runId),
       onProgress: (done, total, label) => {

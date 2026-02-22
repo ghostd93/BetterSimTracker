@@ -132,6 +132,8 @@ export async function extractStatisticsParallel(input: {
   contextText: string;
   previousStatistics: Statistics | null;
   previousCustomStatistics?: CustomStatistics | null;
+  previousCustomStatisticsRaw?: CustomStatistics | null;
+  hasPriorTrackerData?: boolean;
   history: TrackerData[];
   isCancelled?: () => boolean;
   onProgress?: (done: number, total: number, label?: string) => void;
@@ -143,6 +145,8 @@ export async function extractStatisticsParallel(input: {
     contextText,
     previousStatistics,
     previousCustomStatistics,
+    previousCustomStatisticsRaw,
+    hasPriorTrackerData,
     history,
     onProgress,
   } = input;
@@ -283,6 +287,7 @@ export async function extractStatisticsParallel(input: {
     const applyParsedForCustomStat = (
       statDef: CustomStatDefinition,
       parsedOne: ReturnType<typeof parseCustomDeltaResponse>,
+      requestCharacters: string[],
     ): void => {
       const statId = statDef.id;
       if (!parsed.deltas.custom[statId]) parsed.deltas.custom[statId] = {};
@@ -291,7 +296,7 @@ export async function extractStatisticsParallel(input: {
       for (const [name, value] of Object.entries(parsedOne.confidence)) {
         parsed.confidence[name] = value;
       }
-      for (const name of activeCharacters) {
+      for (const name of requestCharacters) {
         const delta = parsedOne.delta[name];
         if (delta === undefined) continue;
         parsed.deltas.custom[statId][name] = delta;
@@ -301,6 +306,38 @@ export async function extractStatisticsParallel(input: {
         outputCustom[statId][name] = next;
         applied.customStatistics[statId][name] = next;
       }
+    };
+
+    const seedCustomStatDefaultsForNames = (
+      statDef: CustomStatDefinition,
+      names: string[],
+    ): void => {
+      if (!names.length) return;
+      const statId = statDef.id;
+      if (!applied.customStatistics[statId]) applied.customStatistics[statId] = {};
+      if (!outputCustom[statId]) outputCustom[statId] = {};
+      for (const name of names) {
+        const seedValue = clamp(Number(previousCustomStatistics?.[statId]?.[name] ?? statDef.defaultValue));
+        outputCustom[statId][name] = seedValue;
+        applied.customStatistics[statId][name] = seedValue;
+      }
+    };
+
+    const splitCustomCharactersByBaseline = (
+      statId: string,
+    ): { existing: string[]; firstRunSeedOnly: string[] } => {
+      const hasPrior = Boolean(hasPriorTrackerData);
+      const rawMap = previousCustomStatisticsRaw?.[statId] ?? {};
+      const existing: string[] = [];
+      const firstRunSeedOnly: string[] = [];
+      for (const name of activeCharacters) {
+        if (hasPrior && rawMap[name] !== undefined) {
+          existing.push(name);
+        } else {
+          firstRunSeedOnly.push(name);
+        }
+      }
+      return { existing, firstRunSeedOnly };
     };
 
     let attempts = 0;
@@ -442,6 +479,7 @@ export async function extractStatisticsParallel(input: {
 
     const runOneCustomRequest = async (
       statDef: CustomStatDefinition,
+      requestCharacters: string[],
     ): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseCustomDeltaResponse> }> => {
       checkCancelled();
       const label = statDef.label || statDef.id;
@@ -453,7 +491,7 @@ export async function extractStatisticsParallel(input: {
         statDefault: statDef.defaultValue,
         maxDeltaPerTurn: statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
         userName,
-        characters: activeCharacters,
+        characters: requestCharacters,
         contextText,
         current: previousStatistics,
         currentCustom: previousCustomStatistics ?? {},
@@ -467,7 +505,7 @@ export async function extractStatisticsParallel(input: {
       checkCancelled();
       let raw = rawResponse.text;
       tickProgress(`Parsing ${label}`);
-      let parsedOne = parseCustomDeltaResponse(raw, activeCharacters, statId, statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn);
+      let parsedOne = parseCustomDeltaResponse(raw, requestCharacters, statId, statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn);
       const firstHasValues = hasAnyValues(parsedOne.delta);
       firstParseHadValues = firstParseHadValues && firstHasValues;
       let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
@@ -479,7 +517,7 @@ export async function extractStatisticsParallel(input: {
         checkCancelled();
         const strictParsed = parseCustomDeltaResponse(
           strictResponse.text,
-          activeCharacters,
+          requestCharacters,
           statId,
           statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
         );
@@ -511,11 +549,20 @@ export async function extractStatisticsParallel(input: {
           checkCancelled();
           const statDef = customQueue.shift();
           if (!statDef) return;
-          const one = await runOneCustomRequest(statDef);
+          const split = splitCustomCharactersByBaseline(statDef.id);
+          seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          if (!split.existing.length) {
+            const label = statDef.label || statDef.id;
+            tickProgress(`Seeding ${label}`);
+            tickProgress(`Seeding ${label}`);
+            tickProgress(`Applying ${label}`);
+            continue;
+          }
+          const one = await runOneCustomRequest(statDef, split.existing);
           checkCancelled();
           rawBlocks.push({ label: `custom:${statDef.id}`, raw: one.raw });
           promptBlocks.push({ label: `custom:${statDef.id}`, prompt: one.prompt });
-          applyParsedForCustomStat(statDef, one.parsedOne);
+          applyParsedForCustomStat(statDef, one.parsedOne, split.existing);
         }
       };
       await Promise.all(Array.from({ length: customWorkers }, () => runCustomWorker()));
@@ -543,11 +590,20 @@ export async function extractStatisticsParallel(input: {
           checkCancelled();
           const statDef = customQueue.shift();
           if (!statDef) return;
-          const one = await runOneCustomRequest(statDef);
+          const split = splitCustomCharactersByBaseline(statDef.id);
+          seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          if (!split.existing.length) {
+            const label = statDef.label || statDef.id;
+            tickProgress(`Seeding ${label}`);
+            tickProgress(`Seeding ${label}`);
+            tickProgress(`Applying ${label}`);
+            continue;
+          }
+          const one = await runOneCustomRequest(statDef, split.existing);
           checkCancelled();
           rawBlocks.push({ label: `custom:${statDef.id}`, raw: one.raw });
           promptBlocks.push({ label: `custom:${statDef.id}`, prompt: one.prompt });
-          applyParsedForCustomStat(statDef, one.parsedOne);
+          applyParsedForCustomStat(statDef, one.parsedOne, split.existing);
         }
       };
       await Promise.all(Array.from({ length: customWorkers }, () => runCustomWorker()));
