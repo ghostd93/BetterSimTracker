@@ -16,6 +16,8 @@ All notable changes to BetterSimTracker are documented here.
 - Baseline seeding and history fallback now include configured custom stat defaults (global + per-character overrides) to keep first-run behavior consistent.
 - Tracker cards and graph now keep enabled numeric stat definitions visible with default-value fallback when older snapshots lack explicit values.
 - Custom stat wizard now shows available sequential-template macros directly in the Tracking Behavior step.
+- Custom stat wizard color field now includes a synchronized color picker + hex input pair.
+- Custom stat wizard `Sequential Prompt Override` placeholder now shows a clearly marked literal example snippet.
 - Added global `Seq: Custom Numeric` prompt template setting used as fallback for custom stat sequential extraction when a stat has no per-stat override.
 - Prompt injection now respects built-in per-stat injection toggles from the built-in stats manager.
 - Tracked Stats settings section now shows a centered `Manage Built-in Stats` control (global built-in toggles removed from the section body).
