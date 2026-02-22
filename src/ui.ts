@@ -522,28 +522,36 @@ function ensureStyles(): void {
   gap: 8px;
   margin-bottom: 4px;
 }
-.bst-root-action-main {
+.bst-root-actions .bst-root-action-main {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   border-radius: 999px;
-  padding: 4px 11px;
-  border: 1px solid color-mix(in srgb, var(--bst-accent) 45%, rgba(255,255,255,0.25) 55%);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--bst-accent) 16%, rgba(14,18,28,0.84) 84%), rgba(12,16,24,0.92));
-  box-shadow: 0 8px 18px rgba(0,0,0,0.28), inset 0 0 0 1px rgba(255,255,255,0.05);
-  color: #eef6ff;
+  padding: 5px 13px;
+  border: 1px solid color-mix(in srgb, var(--bst-accent) 50%, rgba(255,255,255,0.30) 50%);
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--bst-accent) 30%, transparent 70%), transparent 55%),
+    linear-gradient(145deg, rgba(16,22,34,0.95), rgba(9,13,22,0.92));
+  box-shadow:
+    0 10px 20px rgba(0,0,0,0.30),
+    0 0 0 1px rgba(255,255,255,0.05) inset,
+    0 1px 0 rgba(255,255,255,0.08) inset;
+  color: #f1f7ff;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.15px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.45);
 }
-.bst-root-action-main:hover {
-  border-color: color-mix(in srgb, var(--bst-accent) 62%, rgba(255,255,255,0.38) 38%);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--bst-accent) 24%, rgba(16,22,34,0.86) 76%), rgba(14,20,30,0.96));
+.bst-root-actions .bst-root-action-main:hover {
+  border-color: color-mix(in srgb, var(--bst-accent) 76%, rgba(255,255,255,0.24) 24%);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
 }
-.bst-root-action-main:active {
+.bst-root-actions .bst-root-action-main:active {
   transform: translateY(1px);
 }
-.bst-root-action-icon {
+.bst-root-actions .bst-root-action-icon {
   width: 14px;
   min-width: 14px;
   display: inline-flex;
@@ -552,35 +560,43 @@ function ensureStyles(): void {
   font-size: 11px;
   opacity: 0.95;
 }
-.bst-root-action-label {
+.bst-root-actions .bst-root-action-label {
   white-space: nowrap;
 }
-.bst-root-action-retrack {
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
+.bst-root-actions .bst-root-action-retrack {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
   border-radius: 999px;
   padding: 0;
   font-size: 15px;
   line-height: 1;
-  border-color: color-mix(in srgb, var(--bst-accent) 62%, #ffffff 38%);
-  background: radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--bst-accent) 30%, #ffffff 70%), color-mix(in srgb, var(--bst-accent) 44%, #131a28 56%));
-  box-shadow: 0 8px 18px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.08);
+  border: 1px solid color-mix(in srgb, var(--bst-accent) 72%, #ffffff 28%);
+  background:
+    radial-gradient(85% 85% at 28% 24%, rgba(255,255,255,0.28), transparent 48%),
+    radial-gradient(circle at 70% 76%, color-mix(in srgb, var(--bst-accent) 32%, #0f1523 68%), #0f1523);
+  box-shadow:
+    0 10px 20px rgba(0,0,0,0.33),
+    0 0 0 1px rgba(255,255,255,0.07) inset;
 }
-.bst-root-action-retrack:hover {
-  border-color: color-mix(in srgb, var(--bst-accent) 80%, #ffffff 20%);
-  filter: brightness(1.06);
+.bst-root-actions .bst-root-action-retrack:hover {
+  border-color: color-mix(in srgb, var(--bst-accent) 88%, #ffffff 12%);
+  filter: brightness(1.08);
+  transform: translateY(-1px);
 }
-.bst-root-action-retrack span {
+.bst-root-actions .bst-root-action-retrack:active {
+  transform: translateY(1px);
+}
+.bst-root-actions .bst-root-action-retrack span {
   display: inline-block;
-  transition: transform .16s ease;
+  transition: transform .18s ease;
 }
-.bst-root-action-retrack:hover span {
-  transform: rotate(-22deg);
+.bst-root-actions .bst-root-action-retrack:hover span {
+  transform: rotate(-38deg);
 }
-.bst-root-action-retrack:focus-visible,
-.bst-root-action-main:focus-visible {
-  outline: 2px solid rgba(125, 211, 252, 0.82);
+.bst-root-actions .bst-root-action-retrack:focus-visible,
+.bst-root-actions .bst-root-action-main:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.88);
   outline-offset: 1px;
 }
 .bst-card {
