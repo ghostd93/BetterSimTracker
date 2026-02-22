@@ -3,8 +3,14 @@
 All notable changes to BetterSimTracker are documented here.
 
 ## [Unreleased]
+### Changed
+- Character defaults panel now shows ST-expression controls and BST mood-image controls conditionally based on the effective mood source.
+- Character defaults input normalization now applies canonical mood labels and clamped numeric values directly in the UI.
+
 ### Fixed
 - Character defaults now resolve consistently across group-card and character-list Advanced Definitions paths by using stable character identity matching.
+- Character-default writes in mood image/map/framing actions now always use the latest in-memory settings to prevent stale overwrite inconsistencies.
+- Global ST framing preview candidate filtering now respects per-character mood-source overrides keyed by stable character identity.
 
 ## [1.2.0] - 2026-02-21
 ### Added

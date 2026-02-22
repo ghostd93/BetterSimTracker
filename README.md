@@ -350,6 +350,10 @@ Optional per-character mood source keys:
   - UI path: enable `Advanced image options (override global)` and use `Adjust ST Expression Framing`
   - Character defaults framing preview uses one of that character's ST expression sprites
   - `moodSource = st_expressions` is blocked when the character has no ST expression sprites
+  - In Advanced Definitions UI, ST-expression mapping/framing controls are shown only when the effective mood source resolves to `st_expressions`
+  - BST mood-image upload controls are shown only when the effective mood source resolves to `bst_images`
+
+Character-default records are resolved by stable character identity first (avatar), with legacy name-based fallback, so group-card and character-list entry paths stay consistent.
 
 If no advanced defaults are present, tracker baseline falls back to contextual inference.
 
