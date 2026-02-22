@@ -202,6 +202,15 @@ export const DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS: Record<StatKey, string> = {
   ].join("\n"),
 };
 
+export const DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION = [
+  "- Propose incremental changes to {{statLabel}} from the recent messages.",
+  "- Only update {{statId}} deltas. Ignore other stats.",
+  "- Keep updates conservative and realistic.",
+  "- It is valid to return 0 or negative deltas if the interaction is neutral or negative.",
+  "- Do not reuse the same delta for all characters unless strongly justified by context.",
+  "- Use recent messages first; use character cards only to disambiguate when context is unclear.",
+].join("\n");
+
 function commonEnvelope(userName: string, characters: string[], contextText: string): string {
   return [
     `User: ${userName}`,
@@ -404,5 +413,90 @@ export function buildSequentialPrompt(
     textStats: textStats.length ? textStats.join(", ") : "none",
     maxDelta: String(safeMaxDelta),
     moodOptions: moodOptions.join(", "),
+  });
+}
+
+export function buildSequentialCustomNumericPrompt(input: {
+  statId: string;
+  statLabel: string;
+  statDescription?: string;
+  statDefault: number;
+  maxDeltaPerTurn: number;
+  userName: string;
+  characters: string[];
+  contextText: string;
+  current: Statistics | null;
+  currentCustom?: Record<string, Record<string, number>> | null;
+  history: TrackerData[];
+  template?: string;
+}): string {
+  const statId = input.statId.trim();
+  const statLabel = input.statLabel.trim() || statId;
+  const statDescription = String(input.statDescription ?? "").trim();
+  const defaultValue = Math.max(0, Math.min(100, Math.round(Number(input.statDefault) || 50)));
+  const envelope = commonEnvelope(input.userName, input.characters, input.contextText);
+  const safeMaxDelta = Math.max(1, Math.round(Number(input.maxDeltaPerTurn) || 15));
+
+  const currentLines = input.characters.map(name => {
+    const affection = Number(input.current?.affection?.[name] ?? 50);
+    const trust = Number(input.current?.trust?.[name] ?? 50);
+    const desire = Number(input.current?.desire?.[name] ?? 50);
+    const connection = Number(input.current?.connection?.[name] ?? 50);
+    const mood = String(input.current?.mood?.[name] ?? "Neutral");
+    const customValueRaw = Number(input.currentCustom?.[statId]?.[name] ?? defaultValue);
+    const customValue = Math.max(0, Math.min(100, Math.round(customValueRaw)));
+    return `- ${name}: affection=${Math.max(0, Math.min(100, Math.round(affection)))}, trust=${Math.max(0, Math.min(100, Math.round(trust)))}, desire=${Math.max(0, Math.min(100, Math.round(desire)))}, connection=${Math.max(0, Math.min(100, Math.round(connection)))}, mood=${mood}, ${statId}=${customValue}`;
+  }).join("\n");
+
+  const historyLines = input.history.slice(0, 3).map((entry, idx) => {
+    const header = `Snapshot ${idx + 1} (newest-${idx}):`;
+    const rows = input.characters.map(name => {
+      const affection = Number(entry.statistics.affection?.[name] ?? 50);
+      const trust = Number(entry.statistics.trust?.[name] ?? 50);
+      const desire = Number(entry.statistics.desire?.[name] ?? 50);
+      const connection = Number(entry.statistics.connection?.[name] ?? 50);
+      const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
+      const customValueRaw = Number(entry.customStatistics?.[statId]?.[name] ?? defaultValue);
+      const customValue = Math.max(0, Math.min(100, Math.round(customValueRaw)));
+      return `  - ${name}: affection=${Math.round(affection)}, trust=${Math.round(trust)}, desire=${Math.round(desire)}, connection=${Math.round(connection)}, mood=${mood}, ${statId}=${customValue}`;
+    }).join("\n");
+    return `${header}\n${rows}`;
+  }).join("\n");
+
+  const instructionTemplate = input.template?.trim() || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION;
+  const instruction = renderTemplate(instructionTemplate, {
+    statId,
+    statLabel,
+    statDescription,
+    statDefault: String(defaultValue),
+    maxDelta: String(safeMaxDelta),
+    characters: input.characters.join(", "),
+    envelope,
+    contextText: input.contextText,
+  });
+
+  const assembled = [
+    MAIN_PROMPT,
+    "",
+    "{{envelope}}",
+    "Current tracker state:",
+    "{{currentLines}}",
+    "",
+    "Recent tracker snapshots:",
+    "{{historyLines}}",
+    "",
+    "Task:",
+    "{{instruction}}",
+    "",
+    NUMERIC_PROMPT_PROTOCOL(statId),
+  ].join("\n");
+
+  return renderTemplate(assembled, {
+    envelope,
+    currentLines,
+    historyLines: historyLines || "- none",
+    instruction,
+    maxDelta: String(safeMaxDelta),
+    characters: input.characters.join(", "),
   });
 }

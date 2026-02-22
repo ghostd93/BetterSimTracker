@@ -3,6 +3,7 @@ import { STAT_KEYS } from "./constants";
 export type StatKey = (typeof STAT_KEYS)[number];
 export type NumericStatKey = "affection" | "trust" | "desire" | "connection";
 export type TextStatKey = "mood" | "lastThought";
+export type CustomStatKey = string;
 export type MoodLabel =
   | "Happy"
   | "Sad"
@@ -24,11 +25,27 @@ export type MoodSource = "bst_images" | "st_expressions";
 export type StatValue = number | string;
 export type CharacterStatMap = Record<string, StatValue>;
 export type Statistics = Record<StatKey, CharacterStatMap>;
+export type CustomStatistics = Record<CustomStatKey, Record<string, number>>;
+
+export interface CustomStatDefinition {
+  id: CustomStatKey;
+  label: string;
+  description?: string;
+  defaultValue: number;
+  maxDeltaPerTurn?: number;
+  track: boolean;
+  showOnCard: boolean;
+  showInGraph: boolean;
+  includeInInjection: boolean;
+  color?: string;
+  sequentialPromptTemplate?: string;
+}
 
 export interface TrackerData {
   timestamp: number;
   activeCharacters: string[];
   statistics: Statistics;
+  customStatistics?: CustomStatistics;
 }
 
 export interface BetterSimTrackerSettings {
@@ -84,6 +101,7 @@ export interface BetterSimTrackerSettings {
   promptTemplateSequentialMood: string;
   promptTemplateSequentialLastThought: string;
   promptTemplateInjection: string;
+  customStats: CustomStatDefinition[];
   characterDefaults: Record<string, CharacterDefaults>;
 }
 
@@ -109,6 +127,7 @@ export interface CharacterDefaults {
   desire?: number;
   connection?: number;
   mood?: string;
+  customStatDefaults?: Record<CustomStatKey, number>;
   moodSource?: MoodSource;
   moodExpressionMap?: MoodExpressionMap;
   stExpressionImageOptions?: StExpressionImageOptions;
@@ -201,6 +220,7 @@ export interface DeltaDebugRecord {
       trust: Record<string, number>;
       desire: Record<string, number>;
       connection: Record<string, number>;
+      custom?: Record<string, Record<string, number>>;
     };
     mood: Record<string, string>;
     lastThought: Record<string, string>;
@@ -212,13 +232,14 @@ export interface DeltaDebugRecord {
     connection: Record<string, number>;
     mood: Record<string, string>;
     lastThought: Record<string, string>;
+    customStatistics?: Record<string, Record<string, number>>;
   };
   meta?: {
     promptChars: number;
     contextChars: number;
     historySnapshots: number;
     activeCharacters: string[];
-    statsRequested: StatKey[];
+    statsRequested: string[];
     attempts: number;
     extractionMode: "unified" | "sequential";
     retryUsed: boolean;
@@ -232,6 +253,7 @@ export interface DeltaDebugRecord {
       connection: number;
       mood: number;
       lastThought: number;
+      customByStat?: Record<string, number>;
     };
     appliedCounts: {
       affection: number;
@@ -240,9 +262,10 @@ export interface DeltaDebugRecord {
       connection: number;
       mood: number;
       lastThought: number;
+      customByStat?: Record<string, number>;
     };
     moodFallbackApplied?: string[];
-    requests?: Array<GenerateRequestMeta & { statList: StatKey[]; attempt: number; retryType: string }>;
+    requests?: Array<GenerateRequestMeta & { statList: string[]; attempt: number; retryType: string }>;
   };
   trace?: string[];
 }

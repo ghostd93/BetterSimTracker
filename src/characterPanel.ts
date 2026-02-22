@@ -14,6 +14,7 @@ import {
 import { fetchExpressionSpritePaths, fetchFirstExpressionSprite } from "./stExpressionSprites";
 import type {
   BetterSimTrackerSettings,
+  CustomStatDefinition,
   MoodExpressionMap,
   MoodLabel,
   MoodSource,
@@ -240,6 +241,17 @@ function clampStat(value: string): number | null {
   const num = Number(value);
   if (Number.isNaN(num)) return null;
   return Math.max(0, Math.min(100, Math.round(num)));
+}
+
+function clampPercentInputElement(input: HTMLInputElement): void {
+  const value = input.value.trim();
+  if (!value) return;
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return;
+  const clamped = Math.max(0, Math.min(100, Math.round(parsed)));
+  if (String(clamped) !== input.value) {
+    input.value = String(clamped);
+  }
 }
 
 function sanitizeMoodDefaultValue(value: string): string | null {
@@ -530,6 +542,24 @@ function renderPanel(input: InitInput, force = false): void {
   const stExpressionImageOptionsOverride = sanitizeStExpressionImageOptions(defaults.stExpressionImageOptions, globalStImageDefaults);
   const hasStExpressionImageOverride = Boolean(stExpressionImageOptionsOverride);
   const stExpressionImageOptions = stExpressionImageOptionsOverride ?? globalStImageDefaults;
+  const customStatDefinitions = Array.isArray(settings.customStats)
+    ? settings.customStats as CustomStatDefinition[]
+    : [];
+  const customStatDefaultsRaw = defaults.customStatDefaults && typeof defaults.customStatDefaults === "object"
+    ? defaults.customStatDefaults as Record<string, unknown>
+    : {};
+  const customStatFieldsHtml = customStatDefinitions.map(definition => {
+    const id = String(definition.id ?? "").trim().toLowerCase();
+    const label = String(definition.label ?? "").trim();
+    if (!id || !label) return "";
+    const rawValue = customStatDefaultsRaw[id];
+    const value = typeof rawValue === "number" && Number.isFinite(rawValue)
+      ? String(Math.max(0, Math.min(100, Math.round(rawValue))))
+      : "";
+    return `
+      <label>${escapeHtml(label)} Default <input type="number" min="0" max="100" step="1" data-bst-custom-default="${escapeHtml(id)}" value="${escapeHtml(value)}"></label>
+    `;
+  }).filter(Boolean).join("");
   const getLiveSettings = (): BetterSimTrackerSettings => input.getSettings() ?? settings;
   const persistSettings = (next: BetterSimTrackerSettings): void => {
     input.setSettings(next);
@@ -551,6 +581,10 @@ function renderPanel(input: InitInput, force = false): void {
       <label>Connection Default <input type="number" min="0" max="100" step="1" data-bst-default="connection" value="${defaults.connection ?? ""}"></label>
       <label class="bst-character-wide">Mood Default <input type="text" data-bst-default="mood" value="${defaults.mood ?? ""}" placeholder="Neutral"></label>
     </div>
+    <div class="bst-character-divider">Custom Stat Defaults</div>
+    ${customStatFieldsHtml
+      ? `<div class="bst-character-grid bst-character-grid-three">${customStatFieldsHtml}</div>`
+      : `<div class="bst-character-help">No custom stats configured in extension settings yet.</div>`}
     <div class="bst-character-divider">Mood Source Override</div>
     <div class="bst-character-grid">
       <label class="bst-character-wide">Mood Source
@@ -645,6 +679,14 @@ function renderPanel(input: InitInput, force = false): void {
     nameInput.addEventListener("input", () => renderPanel(input, false));
   }
 
+  panel.querySelectorAll<HTMLInputElement>('input[type="number"][data-bst-default], input[type="number"][data-bst-custom-default]').forEach(node => {
+    node.min = "0";
+    node.max = "100";
+    node.step = "1";
+    node.addEventListener("input", () => clampPercentInputElement(node));
+    node.addEventListener("blur", () => clampPercentInputElement(node));
+  });
+
   panel.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-bst-default]").forEach(node => {
     node.addEventListener("change", async () => {
       const key = node.dataset.bstDefault ?? "";
@@ -689,6 +731,33 @@ function renderPanel(input: InitInput, force = false): void {
           } else {
             copy[key] = num;
           }
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLInputElement>("[data-bst-custom-default]").forEach(node => {
+    node.addEventListener("change", () => {
+      const id = String(node.dataset.bstCustomDefault ?? "").trim().toLowerCase();
+      if (!id) return;
+      const num = clampStat(node.value);
+      node.value = num == null ? "" : String(num);
+      const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
+        const copy = { ...current };
+        const existing = copy.customStatDefaults && typeof copy.customStatDefaults === "object"
+          ? { ...(copy.customStatDefaults as Record<string, unknown>) }
+          : {};
+        if (num == null) {
+          delete existing[id];
+        } else {
+          existing[id] = num;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.customStatDefaults;
+        } else {
+          copy.customStatDefaults = existing;
         }
         return copy;
       });

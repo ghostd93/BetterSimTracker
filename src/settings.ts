@@ -1,4 +1,4 @@
-import { EXTENSION_KEY } from "./constants";
+import { CUSTOM_STAT_ID_REGEX, EXTENSION_KEY, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS } from "./constants";
 import {
   DEFAULT_INJECTION_PROMPT_TEMPLATE,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
@@ -94,6 +94,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
   promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
   promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
+  customStats: [],
   characterDefaults: {}
 };
 
@@ -375,6 +376,7 @@ function sanitizeStExpressionPosition(raw: unknown, fallback: number): number {
 }
 
 export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): BetterSimTrackerSettings {
+  const customStats = sanitizeCustomStats(input.customStats);
   return {
     ...defaultSettings,
     ...input,
@@ -430,7 +432,8 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     promptTemplateSequentialMood: normalizeInstruction(input.promptTemplateSequentialMood, defaultSettings.promptTemplateSequentialMood).slice(0, 20000),
     promptTemplateSequentialLastThought: normalizeInstruction(input.promptTemplateSequentialLastThought, defaultSettings.promptTemplateSequentialLastThought).slice(0, 20000),
     promptTemplateInjection: normalizeInstruction(input.promptTemplateInjection, defaultSettings.promptTemplateInjection).slice(0, 20000),
-    characterDefaults: sanitizeCharacterDefaults(input.characterDefaults),
+    customStats,
+    characterDefaults: sanitizeCharacterDefaults(input.characterDefaults, customStats),
   };
 }
 
@@ -496,9 +499,75 @@ function sanitizeDebugFlags(input: unknown): DebugFlags {
   };
 }
 
-function sanitizeCharacterDefaults(raw: unknown): Record<string, CharacterDefaults> {
+function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStats"] {
+  if (!Array.isArray(raw)) return [];
+  const out: BetterSimTrackerSettings["customStats"] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const obj = item as Record<string, unknown>;
+    const idRaw = typeof obj.id === "string" ? obj.id.trim() : "";
+    const id = idRaw.toLowerCase();
+    if (!id || !CUSTOM_STAT_ID_REGEX.test(id)) continue;
+    if (RESERVED_CUSTOM_STAT_IDS.has(id)) continue;
+    if (seen.has(id)) continue;
+
+    const label = typeof obj.label === "string" ? obj.label.trim().slice(0, 40) : "";
+    if (label.length < 2) continue;
+
+    const description = typeof obj.description === "string"
+      ? obj.description.trim().slice(0, 200)
+      : "";
+    const color = typeof obj.color === "string"
+      ? obj.color.trim().slice(0, 32)
+      : "";
+    const template = typeof obj.sequentialPromptTemplate === "string"
+      ? obj.sequentialPromptTemplate.trim().slice(0, 20000)
+      : "";
+
+    const entry = {
+      id,
+      label,
+      description: description || undefined,
+      defaultValue: clampInt(obj.defaultValue, 50, 0, 100),
+      maxDeltaPerTurn: obj.maxDeltaPerTurn === undefined
+        ? undefined
+        : clampInt(obj.maxDeltaPerTurn, 15, 1, 30),
+      track: asBool(obj.track, true),
+      showOnCard: asBool(obj.showOnCard, true),
+      showInGraph: asBool(obj.showInGraph, true),
+      includeInInjection: asBool(obj.includeInInjection, true),
+      color: color || undefined,
+      sequentialPromptTemplate: template || undefined,
+    };
+    out.push(entry);
+    seen.add(id);
+    if (out.length >= MAX_CUSTOM_STATS) break;
+  }
+  return out;
+}
+
+function sanitizeCustomStatDefaults(
+  raw: unknown,
+  allowedIds: Set<string>,
+): Record<string, number> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const id = key.trim().toLowerCase();
+    if (!id || !allowedIds.has(id)) continue;
+    out[id] = clampInt(value, 50, 0, 100);
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function sanitizeCharacterDefaults(
+  raw: unknown,
+  customStats: BetterSimTrackerSettings["customStats"],
+): Record<string, CharacterDefaults> {
   if (!raw || typeof raw !== "object") return {};
   const out: Record<string, CharacterDefaults> = {};
+  const allowedCustomStatIds = new Set(customStats.map(stat => stat.id));
   for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
     const key = typeof name === "string" ? name.trim() : "";
     if (!key) continue;
@@ -510,6 +579,8 @@ function sanitizeCharacterDefaults(raw: unknown): Record<string, CharacterDefaul
     if (obj.desire !== undefined) entry.desire = clampInt(obj.desire, defaultSettings.defaultDesire, 0, 100);
     if (obj.connection !== undefined) entry.connection = clampInt(obj.connection, defaultSettings.defaultConnection, 0, 100);
     if (obj.mood !== undefined) entry.mood = asText(obj.mood, defaultSettings.defaultMood).slice(0, 80);
+    const customStatDefaults = sanitizeCustomStatDefaults(obj.customStatDefaults, allowedCustomStatIds);
+    if (customStatDefaults) entry.customStatDefaults = customStatDefaults;
     if (obj.moodSource !== undefined) entry.moodSource = sanitizeMoodSource(obj.moodSource, defaultSettings.moodSource);
     const moodExpressionMap = sanitizeMoodExpressionMap(obj.moodExpressionMap);
     if (moodExpressionMap) entry.moodExpressionMap = moodExpressionMap;

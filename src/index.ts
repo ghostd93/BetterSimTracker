@@ -6,8 +6,8 @@ import { isTrackableAiMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from "./promptInjection";
 import { upsertSettingsPanel } from "./settingsPanel";
 import { discoverConnectionProfiles, getActiveConnectionProfileId, getContext, getSettingsProvenance, loadSettings, logDebug, saveSettings } from "./settings";
-import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLatestTrackerDataWithIndexBefore, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getRecentTrackerHistoryEntries, getTrackerDataFromMessage, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
-import type { BetterSimTrackerSettings, DeltaDebugRecord, STContext, Statistics, TrackerData } from "./types";
+import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLatestTrackerDataWithIndexBefore, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getRecentTrackerHistoryEntries, getTrackerDataFromMessage, mergeCustomStatisticsWithFallback, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
+import type { BetterSimTrackerSettings, CustomStatistics, DeltaDebugRecord, STContext, Statistics, TrackerData } from "./types";
 import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
 import { cancelActiveGenerations } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
@@ -396,7 +396,14 @@ function getConfiguredCharacterDefaults(
   context: STContext | null,
   settingsInput: BetterSimTrackerSettings,
   name: string,
-): { affection?: number; trust?: number; desire?: number; connection?: number; mood?: string } {
+): {
+  affection?: number;
+  trust?: number;
+  desire?: number;
+  connection?: number;
+  mood?: string;
+  customStatDefaults?: Record<string, number>;
+} {
   const character = findCharacterByName(context, name);
   const extFromCharacter = character?.extensions as Record<string, unknown> | undefined;
   const extFromData = character?.data?.extensions as Record<string, unknown> | undefined;
@@ -412,12 +419,24 @@ function getConfiguredCharacterDefaults(
   const desire = parseDefaultNumber(merged.desire);
   const connection = parseDefaultNumber(merged.connection);
   const mood = parseDefaultText(merged.mood);
+  const customStatDefaultsRaw = merged.customStatDefaults;
+  const customStatDefaults: Record<string, number> = {};
+  if (customStatDefaultsRaw && typeof customStatDefaultsRaw === "object") {
+    for (const [key, value] of Object.entries(customStatDefaultsRaw as Record<string, unknown>)) {
+      const id = String(key ?? "").trim().toLowerCase();
+      if (!id) continue;
+      const parsed = parseDefaultNumber(value);
+      if (parsed == null) continue;
+      customStatDefaults[id] = parsed;
+    }
+  }
   return {
     ...(affection != null ? { affection } : {}),
     ...(trust != null ? { trust } : {}),
     ...(desire != null ? { desire } : {}),
     ...(connection != null ? { connection } : {}),
     ...(mood != null ? { mood } : {}),
+    ...(Object.keys(customStatDefaults).length ? { customStatDefaults } : {}),
   };
 }
 
@@ -461,6 +480,33 @@ function buildSeededStatisticsForActiveCharacters(
   return seeded;
 }
 
+function buildSeededCustomStatisticsForActiveCharacters(
+  base: CustomStatistics | null | undefined,
+  activeCharacters: string[],
+  settingsInput: BetterSimTrackerSettings,
+  context: STContext | null,
+): CustomStatistics {
+  const seeded: CustomStatistics = {};
+  for (const [statId, values] of Object.entries(base ?? {})) {
+    seeded[statId] = { ...(values ?? {}) };
+  }
+
+  const customDefs = Array.isArray(settingsInput.customStats) ? settingsInput.customStats : [];
+  for (const def of customDefs) {
+    const statId = String(def.id ?? "").trim().toLowerCase();
+    if (!statId) continue;
+    if (!seeded[statId]) seeded[statId] = {};
+    for (const name of activeCharacters) {
+      if (seeded[statId][name] !== undefined) continue;
+      const configured = getConfiguredCharacterDefaults(context, settingsInput, name);
+      const configuredValue = configured.customStatDefaults?.[statId];
+      seeded[statId][name] = configuredValue ?? def.defaultValue;
+    }
+  }
+
+  return seeded;
+}
+
 function seedHistoryForActiveCharacters(
   history: TrackerData[],
   activeCharacters: string[],
@@ -470,6 +516,12 @@ function seedHistoryForActiveCharacters(
   return history.map(entry => ({
     ...entry,
     statistics: buildSeededStatisticsForActiveCharacters(entry.statistics, activeCharacters, settingsInput, context),
+    customStatistics: buildSeededCustomStatisticsForActiveCharacters(
+      entry.customStatistics,
+      activeCharacters,
+      settingsInput,
+      context,
+    ),
   }));
 }
 
@@ -526,15 +578,24 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
     desire: number;
     connection: number;
     mood: string;
+    custom: Record<string, number>;
   } => {
     const contextual = inferFromContext(name);
     const defaults = getConfiguredCharacterDefaults(context, s, name);
+    const customDefaults: Record<string, number> = {};
+    for (const def of s.customStats ?? []) {
+      const statId = String(def.id ?? "").trim().toLowerCase();
+      if (!statId) continue;
+      const configuredCustom = defaults.customStatDefaults?.[statId];
+      customDefaults[statId] = pickNumber(configuredCustom, def.defaultValue);
+    }
     const hasAnyExplicitDefaults =
       defaults.affection !== undefined ||
       defaults.trust !== undefined ||
       defaults.desire !== undefined ||
       defaults.connection !== undefined ||
-      defaults.mood !== undefined;
+      defaults.mood !== undefined ||
+      Object.keys(defaults.customStatDefaults ?? {}).length > 0;
 
     if (hasAnyExplicitDefaults) {
       return {
@@ -542,24 +603,40 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
         trust: pickNumber(defaults.trust, contextual.trust),
         desire: pickNumber(defaults.desire, contextual.desire),
         connection: pickNumber(defaults.connection, contextual.connection),
-        mood: pickText(defaults.mood, contextual.mood)
+        mood: pickText(defaults.mood, contextual.mood),
+        custom: customDefaults,
       };
     }
 
-    return contextual;
+    return { ...contextual, custom: customDefaults };
   };
+
+  const baselinePerCharacter = new Map<string, ReturnType<typeof getCardDefaults>>();
+  for (const name of activeCharacters) {
+    baselinePerCharacter.set(name, getCardDefaults(name));
+  }
+
+  const customStatistics: CustomStatistics = {};
+  for (const def of s.customStats ?? []) {
+    const statId = String(def.id ?? "").trim().toLowerCase();
+    if (!statId) continue;
+    customStatistics[statId] = Object.fromEntries(
+      activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.custom?.[statId] ?? def.defaultValue]),
+    );
+  }
 
   return {
     timestamp: Date.now(),
     activeCharacters,
     statistics: {
-      affection: Object.fromEntries(activeCharacters.map(name => [name, getCardDefaults(name).affection])),
-      trust: Object.fromEntries(activeCharacters.map(name => [name, getCardDefaults(name).trust])),
-      desire: Object.fromEntries(activeCharacters.map(name => [name, getCardDefaults(name).desire])),
-      connection: Object.fromEntries(activeCharacters.map(name => [name, getCardDefaults(name).connection])),
-      mood: Object.fromEntries(activeCharacters.map(name => [name, getCardDefaults(name).mood])),
+      affection: Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.affection ?? s.defaultAffection])),
+      trust: Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.trust ?? s.defaultTrust])),
+      desire: Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.desire ?? s.defaultDesire])),
+      connection: Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.connection ?? s.defaultConnection])),
+      mood: Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.mood ?? s.defaultMood])),
       lastThought: Object.fromEntries(activeCharacters.map(name => [name, ""]))
-    }
+    },
+    customStatistics,
   };
 }
 
@@ -716,6 +793,12 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       settings,
       context,
     );
+    const previousSeededCustomStatistics = buildSeededCustomStatisticsForActiveCharacters(
+      previous?.customStatistics ?? null,
+      activeCharacters,
+      settings,
+      context,
+    );
     const seededHistory = seedHistoryForActiveCharacters(
       getRecentTrackerHistory(context, 6),
       activeCharacters,
@@ -752,6 +835,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       activeCharacters,
       contextText,
       previousStatistics: previousSeededStatistics,
+      previousCustomStatistics: previousSeededCustomStatistics,
       history: seededHistory,
       isCancelled: () => cancelledExtractionRuns.has(runId),
       onProgress: (done, total, label) => {
@@ -764,6 +848,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       }
     });
     const extracted = extractedResult.statistics;
+    const extractedCustom = extractedResult.customStatistics;
     lastDebugRecord = extractedResult.debug;
     if (lastDebugRecord) {
       const persistedTail = readTraceLines(context).slice(-200);
@@ -777,11 +862,13 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     }
 
     const merged = mergeStatisticsWithFallback(extracted, previous?.statistics ?? null, settings);
+    const mergedCustom = mergeCustomStatisticsWithFallback(extractedCustom, previous?.customStatistics ?? null);
 
     latestData = {
       timestamp: Date.now(),
       activeCharacters,
-      statistics: merged
+      statistics: merged,
+      customStatistics: mergedCustom,
     };
     latestDataMessageIndex = lastIndex;
 
@@ -1179,7 +1266,8 @@ function openSettings(): void {
           desire: entry.data.statistics.desire,
           connection: entry.data.statistics.connection,
           mood: entry.data.statistics.mood
-        }
+        },
+        customStatistics: entry.data.customStatistics ?? {}
       }));
       const filterGraphTrace = (lines: string[]): string[] => {
         if (currentSettings.includeGraphInDiagnostics) return lines;
@@ -1233,7 +1321,8 @@ function openSettings(): void {
           stExpressionImagePositionX: currentSettings.stExpressionImagePositionX,
           stExpressionImagePositionY: currentSettings.stExpressionImagePositionY,
           strictJsonRepair: currentSettings.strictJsonRepair,
-          maxRetriesPerStat: currentSettings.maxRetriesPerStat
+          maxRetriesPerStat: currentSettings.maxRetriesPerStat,
+          customStats: currentSettings.customStats
         },
         activity: lastActivityAnalysis,
         promptInjectionPreview: currentSettings.debug ? getLastInjectedPrompt() : undefined,

@@ -265,3 +265,70 @@ export function parseUnifiedDeltaResponse(
 
   return result;
 }
+
+export function parseCustomDeltaResponse(
+  rawText: string,
+  activeCharacters: string[],
+  statId: string,
+  maxDelta = 15,
+): {
+  confidence: Record<string, number>;
+  delta: Record<string, number>;
+} {
+  const parsed = safeJsonParse(rawText);
+  const byName = new Map<string, Record<string, unknown>>();
+  const result = {
+    confidence: {} as Record<string, number>,
+    delta: {} as Record<string, number>,
+  };
+  if (!parsed || typeof parsed !== "object") return result;
+
+  const source = parsed as Record<string, unknown>;
+  const list = Array.isArray(source.characters) ? source.characters : null;
+  if (list) {
+    for (const row of list) {
+      if (!row || typeof row !== "object") continue;
+      const obj = row as Record<string, unknown>;
+      const name = String(obj.name ?? "").trim();
+      if (!name) continue;
+      byName.set(name, obj);
+    }
+  } else {
+    for (const name of activeCharacters) {
+      const row = source[name];
+      if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+      byName.set(name, row as Record<string, unknown>);
+    }
+  }
+
+  const safeMaxDelta = Math.max(1, Math.round(Number(maxDelta) || 15));
+  const clampDelta = (n: number): number => Math.max(-safeMaxDelta, Math.min(safeMaxDelta, Math.round(n)));
+  const coerceDelta = (value: unknown): number | null => {
+    if (typeof value === "number" && Number.isFinite(value)) return clampDelta(value);
+    if (typeof value === "string") {
+      const n = Number(value);
+      if (!Number.isNaN(n)) return clampDelta(n);
+    }
+    return null;
+  };
+
+  for (const name of activeCharacters) {
+    const row = byName.get(name);
+    if (!row) continue;
+
+    const confRaw = Number(row.confidence);
+    if (!Number.isNaN(confRaw)) {
+      result.confidence[name] = Math.max(0, Math.min(1, confRaw));
+    }
+
+    const deltaObj = (row.delta && typeof row.delta === "object" ? row.delta : null) as Record<string, unknown> | null;
+    const valueFromDeltaObject = deltaObj?.[statId];
+    const fallbackValue = row[statId] ?? row.value;
+    const v = coerceDelta(valueFromDeltaObject ?? fallbackValue);
+    if (v !== null) {
+      result.delta[name] = v;
+    }
+  }
+
+  return result;
+}
