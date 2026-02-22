@@ -22,6 +22,7 @@ All notable changes to BetterSimTracker are documented here.
 - Mood image preview modal now handles mobile touch input without instant close from synthetic follow-up clicks.
 - Mood image preview overlay z-index now stays above SillyTavern interface layers on mobile.
 - Mood image preview modal now applies inline fixed-position/top-layer fallback styles to avoid being hidden by mobile UI stacking/stylesheet timing issues.
+- Mood image preview now uses a native top-layer `dialog` path on supported browsers, fixing mobile cases where chat layers still rendered above the modal.
 - Tracker mood-image preview trigger now enforces compact frame sizing and no longer expands to full-card image dimensions.
 - Character defaults now resolve consistently across group-card and character-list Advanced Definitions paths by using stable character identity matching.
 - Character-default writes in mood image/map/framing actions now always use the latest in-memory settings to prevent stale overwrite inconsistencies.
