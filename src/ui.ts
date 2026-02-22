@@ -105,6 +105,7 @@ const expandedThoughtKeys = new Set<string>();
 const renderedCardKeys = new Set<string>();
 const MOOD_PREVIEW_BACKDROP_CLASS = "bst-mood-preview-backdrop";
 const MOOD_PREVIEW_MODAL_CLASS = "bst-mood-preview-modal";
+const MOOD_PREVIEW_DIALOG_CLASS = "bst-mood-preview-dialog";
 const MOOD_PREVIEW_BODY_CLASS = "bst-mood-preview-open";
 let moodPreviewKeyListener: ((event: KeyboardEvent) => void) | null = null;
 let moodPreviewOpenedAt = 0;
@@ -1409,6 +1410,27 @@ function ensureStyles(): void {
   opacity: 1;
   animation: bst-fade-in .16s ease forwards;
 }
+.bst-mood-preview-dialog {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: 100vw;
+  max-height: 100dvh;
+  padding: 12px;
+  border: 0;
+  background: transparent;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  z-index: 2147483647;
+  animation: bst-fade-in .16s ease forwards;
+}
+.bst-mood-preview-dialog::backdrop {
+  background: rgba(0,0,0,0.72);
+}
 .bst-mood-preview-modal {
   position: relative;
   z-index: 2147483647;
@@ -1779,6 +1801,9 @@ function ensureStyles(): void {
   .bst-mood-preview-backdrop {
     padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
   }
+  .bst-mood-preview-dialog {
+    padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
+  }
   .bst-mood-preview-modal {
     width: min(100%, calc(100vw - 16px));
     max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 14px);
@@ -1889,6 +1914,7 @@ function ensureStyles(): void {
   .bst-loading-track-indeterminate .bst-loading-fill,
   .bst-row.bst-row-changed .bst-track,
   .bst-card.bst-card-new,
+  .bst-mood-preview-dialog,
   .bst-mood-preview-backdrop,
   .bst-mood-preview-modal,
   .bst-mood-preview-backdrop.is-closing,
@@ -2324,9 +2350,6 @@ function openMoodImageModal(imageUrl: string, altText: string, characterName?: s
   closeMoodImageModal(true);
   moodPreviewOpenedAt = Date.now();
 
-  const backdrop = document.createElement("div");
-  backdrop.className = MOOD_PREVIEW_BACKDROP_CLASS;
-
   const modal = document.createElement("div");
   modal.className = MOOD_PREVIEW_MODAL_CLASS;
 
@@ -2352,15 +2375,6 @@ function openMoodImageModal(imageUrl: string, altText: string, characterName?: s
   caption.textContent = captionParts.length ? captionParts.join(" - ") : (altText || "Mood image");
 
   // Inline fallback for environments where extension CSS is delayed/overridden on mobile.
-  backdrop.style.setProperty("position", "fixed", "important");
-  backdrop.style.setProperty("inset", "0", "important");
-  backdrop.style.setProperty("display", "grid", "important");
-  backdrop.style.setProperty("place-items", "center", "important");
-  backdrop.style.setProperty("padding", "12px", "important");
-  backdrop.style.setProperty("background", "rgba(0,0,0,0.72)", "important");
-  backdrop.style.setProperty("z-index", "2147483647", "important");
-  backdrop.style.setProperty("overflow", "auto", "important");
-
   modal.style.setProperty("position", "relative", "important");
   modal.style.setProperty("width", "min(960px, 94vw)", "important");
   modal.style.setProperty("max-height", "calc(100dvh - 24px)", "important");
@@ -2377,23 +2391,79 @@ function openMoodImageModal(imageUrl: string, altText: string, characterName?: s
   modal.appendChild(closeButton);
   modal.appendChild(image);
   modal.appendChild(caption);
-  backdrop.appendChild(modal);
-  backdrop.addEventListener("click", event => {
-    if (Date.now() - moodPreviewOpenedAt < 220) return;
-    if (event.target === backdrop) {
+
+  const canUseDialog = typeof window.HTMLDialogElement !== "undefined"
+    && typeof document.createElement("dialog").showModal === "function";
+
+  if (canUseDialog) {
+    const dialog = document.createElement("dialog");
+    dialog.className = MOOD_PREVIEW_DIALOG_CLASS;
+    dialog.style.setProperty("position", "fixed", "important");
+    dialog.style.setProperty("inset", "0", "important");
+    dialog.style.setProperty("display", "grid", "important");
+    dialog.style.setProperty("place-items", "center", "important");
+    dialog.style.setProperty("margin", "0", "important");
+    dialog.style.setProperty("width", "100vw", "important");
+    dialog.style.setProperty("height", "100dvh", "important");
+    dialog.style.setProperty("max-width", "100vw", "important");
+    dialog.style.setProperty("max-height", "100dvh", "important");
+    dialog.style.setProperty("padding", "12px", "important");
+    dialog.style.setProperty("border", "0", "important");
+    dialog.style.setProperty("background", "transparent", "important");
+    dialog.style.setProperty("overflow", "auto", "important");
+    dialog.style.setProperty("z-index", "2147483647", "important");
+    dialog.style.setProperty("pointer-events", "auto", "important");
+
+    dialog.appendChild(modal);
+    dialog.addEventListener("click", event => {
+      if (Date.now() - moodPreviewOpenedAt < 220) return;
+      if (event.target === dialog) {
+        closeMoodImageModal();
+      }
+    });
+    dialog.addEventListener("cancel", event => {
+      event.preventDefault();
       closeMoodImageModal();
+    });
+    document.body.appendChild(dialog);
+    try {
+      dialog.showModal();
+    } catch {
+      dialog.setAttribute("open", "");
     }
-  });
-  backdrop.addEventListener("touchend", event => {
-    if (Date.now() - moodPreviewOpenedAt < 220) return;
-    if (event.target === backdrop) {
-      closeMoodImageModal();
-    }
-  }, { passive: true });
-  (document.documentElement ?? document.body).appendChild(backdrop);
-  document.body.classList.add(MOOD_PREVIEW_BODY_CLASS);
-  // Fallback for environments where CSS animations are disabled/not applied.
-  backdrop.style.opacity = "1";
+    document.body.classList.add(MOOD_PREVIEW_BODY_CLASS);
+    document.documentElement.classList.add(MOOD_PREVIEW_BODY_CLASS);
+  } else {
+    const backdrop = document.createElement("div");
+    backdrop.className = MOOD_PREVIEW_BACKDROP_CLASS;
+    backdrop.style.setProperty("position", "fixed", "important");
+    backdrop.style.setProperty("inset", "0", "important");
+    backdrop.style.setProperty("display", "grid", "important");
+    backdrop.style.setProperty("place-items", "center", "important");
+    backdrop.style.setProperty("padding", "12px", "important");
+    backdrop.style.setProperty("background", "rgba(0,0,0,0.72)", "important");
+    backdrop.style.setProperty("z-index", "2147483647", "important");
+    backdrop.style.setProperty("overflow", "auto", "important");
+    backdrop.appendChild(modal);
+    backdrop.addEventListener("click", event => {
+      if (Date.now() - moodPreviewOpenedAt < 220) return;
+      if (event.target === backdrop) {
+        closeMoodImageModal();
+      }
+    });
+    backdrop.addEventListener("touchend", event => {
+      if (Date.now() - moodPreviewOpenedAt < 220) return;
+      if (event.target === backdrop) {
+        closeMoodImageModal();
+      }
+    }, { passive: true });
+    document.body.appendChild(backdrop);
+    document.body.classList.add(MOOD_PREVIEW_BODY_CLASS);
+    document.documentElement.classList.add(MOOD_PREVIEW_BODY_CLASS);
+    // Fallback for environments where CSS animations are disabled/not applied.
+    backdrop.style.opacity = "1";
+  }
+
   modal.style.transform = "none";
 
   moodPreviewKeyListener = (event: KeyboardEvent) => {
@@ -2405,22 +2475,44 @@ function openMoodImageModal(imageUrl: string, altText: string, characterName?: s
 }
 
 function closeMoodImageModal(immediate = false): void {
+  const dialog = document.querySelector(`.${MOOD_PREVIEW_DIALOG_CLASS}`) as HTMLDialogElement | null;
   const backdrop = document.querySelector(`.${MOOD_PREVIEW_BACKDROP_CLASS}`) as HTMLElement | null;
-  if (!backdrop) {
+  if (!dialog && !backdrop) {
     document.body.classList.remove(MOOD_PREVIEW_BODY_CLASS);
+    document.documentElement.classList.remove(MOOD_PREVIEW_BODY_CLASS);
     if (moodPreviewKeyListener) {
       document.removeEventListener("keydown", moodPreviewKeyListener);
       moodPreviewKeyListener = null;
     }
+    moodPreviewOpenedAt = 0;
     return;
   }
   if (moodPreviewKeyListener) {
     document.removeEventListener("keydown", moodPreviewKeyListener);
     moodPreviewKeyListener = null;
   }
+
+  if (dialog) {
+    if (dialog.open) {
+      try {
+        dialog.close();
+      } catch {
+        // Ignore close errors from already-closing dialog.
+      }
+    }
+    dialog.remove();
+  }
+
+  if (!backdrop) {
+    document.body.classList.remove(MOOD_PREVIEW_BODY_CLASS);
+    document.documentElement.classList.remove(MOOD_PREVIEW_BODY_CLASS);
+    moodPreviewOpenedAt = 0;
+    return;
+  }
   if (immediate) {
     backdrop.remove();
     document.body.classList.remove(MOOD_PREVIEW_BODY_CLASS);
+    document.documentElement.classList.remove(MOOD_PREVIEW_BODY_CLASS);
     moodPreviewOpenedAt = 0;
     return;
   }
@@ -2429,6 +2521,7 @@ function closeMoodImageModal(immediate = false): void {
   window.setTimeout(() => {
     backdrop.remove();
     document.body.classList.remove(MOOD_PREVIEW_BODY_CLASS);
+    document.documentElement.classList.remove(MOOD_PREVIEW_BODY_CLASS);
     moodPreviewOpenedAt = 0;
   }, 150);
 }
