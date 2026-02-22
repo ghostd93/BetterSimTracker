@@ -14,9 +14,11 @@ All notable changes to BetterSimTracker are documented here.
 - Tracker cards now sort visible characters active-first while preserving stable order for equal-priority entries.
 - Tracker card stat bars now use per-stat colors and include subtle change highlights; mobile card density was tightened for small screens.
 - Mood image trigger is now keyboard-accessible (`button` semantics) instead of image-click only.
+- Tracker root action buttons (`Collapse cards` and `Retrack`) were visually refreshed with clearer iconography and stronger focus/hover states.
 
 ### Fixed
 - Mood image preview modal now remains visible when `prefers-reduced-motion` is enabled (no longer animation-dependent for visibility).
+- Mood image preview modal now renders correctly on mobile layouts with safe-area aware spacing and non-animation visibility fallback.
 - Tracker mood-image preview trigger now enforces compact frame sizing and no longer expands to full-card image dimensions.
 - Character defaults now resolve consistently across group-card and character-list Advanced Definitions paths by using stable character identity matching.
 - Character-default writes in mood image/map/framing actions now always use the latest in-memory settings to prevent stale overwrite inconsistencies.
