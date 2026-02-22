@@ -2724,10 +2724,11 @@ export function renderTracker(
           const defDefault = defaultValue ?? 50;
           const value = toPercent(getNumericRawValue(data, key, name) ?? defDefault);
           const prevValueRaw = previousData ? getNumericRawValue(previousData, key, name) : undefined;
-          const prevValue = toPercent(prevValueRaw ?? defDefault);
+          const hasPrevValue = prevValueRaw !== undefined;
+          const prevValue = toPercent(hasPrevValue ? prevValueRaw : value);
           const delta = Math.round(value - prevValue);
           const deltaClass = delta > 0 ? "bst-delta bst-delta-up" : delta < 0 ? "bst-delta bst-delta-down" : "bst-delta bst-delta-flat";
-          const showDelta = latestAiIndex != null && entry.messageIndex === latestAiIndex;
+          const showDelta = latestAiIndex != null && entry.messageIndex === latestAiIndex && hasPrevValue;
           const rowClass = showDelta && delta !== 0 ? "bst-row bst-row-changed" : "bst-row";
           return `
             <div class="${rowClass}">
