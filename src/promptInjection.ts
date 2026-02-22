@@ -30,6 +30,12 @@ function renderTemplate(template: string, values: Record<string, string>): strin
 }
 
 function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): string {
+  const builtInUi = settings.builtInNumericStatUi ?? {
+    affection: { showOnCard: true, showInGraph: true, includeInInjection: true },
+    trust: { showOnCard: true, showInGraph: true, includeInInjection: true },
+    desire: { showOnCard: true, showInGraph: true, includeInInjection: true },
+    connection: { showOnCard: true, showInGraph: true, includeInInjection: true },
+  };
   const allEnabledCustom = (settings.customStats ?? [])
     .filter(stat => stat.track && stat.includeInInjection)
     .slice(0, 8);
@@ -44,22 +50,22 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings): str
     {
       key: "affection",
       label: "affection",
-      enabled: settings.trackAffection && settings.builtInNumericStatUi.affection.includeInInjection,
+      enabled: settings.trackAffection && builtInUi.affection.includeInInjection,
     },
     {
       key: "trust",
       label: "trust",
-      enabled: settings.trackTrust && settings.builtInNumericStatUi.trust.includeInInjection,
+      enabled: settings.trackTrust && builtInUi.trust.includeInInjection,
     },
     {
       key: "desire",
       label: "desire",
-      enabled: settings.trackDesire && settings.builtInNumericStatUi.desire.includeInInjection,
+      enabled: settings.trackDesire && builtInUi.desire.includeInInjection,
     },
     {
       key: "connection",
       label: "connection",
-      enabled: settings.trackConnection && settings.builtInNumericStatUi.connection.includeInInjection,
+      enabled: settings.trackConnection && builtInUi.connection.includeInInjection,
     },
   ];
   const enabledBuiltIns = numericKeys.filter(entry => entry.enabled);

@@ -295,28 +295,28 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
   };
 }
 
-function cloneBuiltInNumericStatUi(settings: BuiltInNumericStatUiSettings): BuiltInNumericStatUiSettings {
+const DEFAULT_BUILT_IN_NUMERIC_STAT_UI: BuiltInNumericStatUiSettings = {
+  affection: { showOnCard: true, showInGraph: true, includeInInjection: true },
+  trust: { showOnCard: true, showInGraph: true, includeInInjection: true },
+  desire: { showOnCard: true, showInGraph: true, includeInInjection: true },
+  connection: { showOnCard: true, showInGraph: true, includeInInjection: true },
+};
+
+function cloneBuiltInNumericStatUi(settings: Partial<BuiltInNumericStatUiSettings> | null | undefined): BuiltInNumericStatUiSettings {
+  const row = (key: keyof BuiltInNumericStatUiSettings): BuiltInNumericStatUiSettings[typeof key] => {
+    const fallback = DEFAULT_BUILT_IN_NUMERIC_STAT_UI[key];
+    const raw = settings?.[key];
+    return {
+      showOnCard: Boolean(raw?.showOnCard ?? fallback.showOnCard),
+      showInGraph: Boolean(raw?.showInGraph ?? fallback.showInGraph),
+      includeInInjection: Boolean(raw?.includeInInjection ?? fallback.includeInInjection),
+    };
+  };
   return {
-    affection: {
-      showOnCard: Boolean(settings.affection.showOnCard),
-      showInGraph: Boolean(settings.affection.showInGraph),
-      includeInInjection: Boolean(settings.affection.includeInInjection),
-    },
-    trust: {
-      showOnCard: Boolean(settings.trust.showOnCard),
-      showInGraph: Boolean(settings.trust.showInGraph),
-      includeInInjection: Boolean(settings.trust.includeInInjection),
-    },
-    desire: {
-      showOnCard: Boolean(settings.desire.showOnCard),
-      showInGraph: Boolean(settings.desire.showInGraph),
-      includeInInjection: Boolean(settings.desire.includeInInjection),
-    },
-    connection: {
-      showOnCard: Boolean(settings.connection.showOnCard),
-      showInGraph: Boolean(settings.connection.showInGraph),
-      includeInInjection: Boolean(settings.connection.includeInInjection),
-    },
+    affection: row("affection"),
+    trust: row("trust"),
+    desire: row("desire"),
+    connection: row("connection"),
   };
 }
 
