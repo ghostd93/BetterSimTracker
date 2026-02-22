@@ -1,6 +1,7 @@
 import { CUSTOM_STAT_ID_REGEX, EXTENSION_KEY, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS } from "./constants";
 import {
   DEFAULT_INJECTION_PROMPT_TEMPLATE,
+  DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
   moodOptions,
@@ -91,6 +92,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   promptTemplateSequentialTrust: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.trust,
   promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.desire,
   promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
+  promptTemplateSequentialCustomNumeric: DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
   promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
   promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
   promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
@@ -429,6 +431,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     promptTemplateSequentialTrust: normalizeInstruction(input.promptTemplateSequentialTrust, defaultSettings.promptTemplateSequentialTrust).slice(0, 20000),
     promptTemplateSequentialDesire: normalizeInstruction(input.promptTemplateSequentialDesire, defaultSettings.promptTemplateSequentialDesire).slice(0, 20000),
     promptTemplateSequentialConnection: normalizeInstruction(input.promptTemplateSequentialConnection, defaultSettings.promptTemplateSequentialConnection).slice(0, 20000),
+    promptTemplateSequentialCustomNumeric: normalizeInstruction(input.promptTemplateSequentialCustomNumeric, defaultSettings.promptTemplateSequentialCustomNumeric).slice(0, 20000),
     promptTemplateSequentialMood: normalizeInstruction(input.promptTemplateSequentialMood, defaultSettings.promptTemplateSequentialMood).slice(0, 20000),
     promptTemplateSequentialLastThought: normalizeInstruction(input.promptTemplateSequentialLastThought, defaultSettings.promptTemplateSequentialLastThought).slice(0, 20000),
     promptTemplateInjection: normalizeInstruction(input.promptTemplateInjection, defaultSettings.promptTemplateInjection).slice(0, 20000),

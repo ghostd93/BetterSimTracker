@@ -4,6 +4,7 @@ import { parseCustomDeltaResponse, parseUnifiedDeltaResponse } from "./parse";
 import {
   DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE,
   DEFAULT_REPAIR_MOOD_TEMPLATE,
+  DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_STRICT_RETRY_TEMPLATE,
   buildSequentialCustomNumericPrompt,
@@ -457,7 +458,9 @@ export async function extractStatisticsParallel(input: {
         current: previousStatistics,
         currentCustom: previousCustomStatistics ?? {},
         history,
-        template: statDef.sequentialPromptTemplate,
+        template: statDef.sequentialPromptTemplate
+          || settings.promptTemplateSequentialCustomNumeric
+          || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
       });
       tickProgress(`Requesting ${label}`);
       let rawResponse = await callGenerate(prompt, [statId], "initial");

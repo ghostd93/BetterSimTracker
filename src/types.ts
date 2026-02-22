@@ -98,6 +98,7 @@ export interface BetterSimTrackerSettings {
   promptTemplateSequentialTrust: string;
   promptTemplateSequentialDesire: string;
   promptTemplateSequentialConnection: string;
+  promptTemplateSequentialCustomNumeric: string;
   promptTemplateSequentialMood: string;
   promptTemplateSequentialLastThought: string;
   promptTemplateInjection: string;

@@ -14,6 +14,7 @@ import type {
 } from "./types";
 import {
   DEFAULT_INJECTION_PROMPT_TEMPLATE,
+  DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
   LAST_THOUGHT_PROMPT_PROTOCOL,
@@ -3525,6 +3526,8 @@ export function openSettingsModal(input: {
           <li><code>{{textStats}}</code> — requested text stats list</li>
           <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
           <li><code>{{moodOptions}}</code> — allowed mood labels</li>
+          <li><code>{{statId}}</code>/<code>{{statLabel}}</code> — custom stat identity (custom sequential template)</li>
+          <li><code>{{statDescription}}</code>/<code>{{statDefault}}</code> — custom stat metadata (custom sequential template)</li>
         </ul>
       </details>
       <div class="bst-settings-grid bst-settings-grid-single bst-prompts-stack">
@@ -3591,6 +3594,19 @@ export function openSettingsModal(input: {
             <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("connection"))}</pre>
+          </div>
+        </label>
+        <label class="bst-prompt-group">
+          <div class="bst-prompt-head">
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-sliders"></span>Seq: Custom Numeric</span>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialCustomNumeric" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+          </div>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable default used when a custom stat has no per-stat override)</div>
+            <textarea data-k="promptTemplateSequentialCustomNumeric" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("custom_stat"))}</pre>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -3971,6 +3987,7 @@ export function openSettingsModal(input: {
   set("promptTemplateSequentialTrust", input.settings.promptTemplateSequentialTrust);
   set("promptTemplateSequentialDesire", input.settings.promptTemplateSequentialDesire);
   set("promptTemplateSequentialConnection", input.settings.promptTemplateSequentialConnection);
+  set("promptTemplateSequentialCustomNumeric", input.settings.promptTemplateSequentialCustomNumeric);
   set("promptTemplateSequentialMood", input.settings.promptTemplateSequentialMood);
   set("promptTemplateSequentialLastThought", input.settings.promptTemplateSequentialLastThought);
   set("promptTemplateInjection", input.settings.promptTemplateInjection);
@@ -4629,6 +4646,7 @@ export function openSettingsModal(input: {
       promptTemplateSequentialTrust: read("promptTemplateSequentialTrust") || input.settings.promptTemplateSequentialTrust,
       promptTemplateSequentialDesire: read("promptTemplateSequentialDesire") || input.settings.promptTemplateSequentialDesire,
       promptTemplateSequentialConnection: read("promptTemplateSequentialConnection") || input.settings.promptTemplateSequentialConnection,
+      promptTemplateSequentialCustomNumeric: read("promptTemplateSequentialCustomNumeric") || input.settings.promptTemplateSequentialCustomNumeric,
       promptTemplateSequentialMood: read("promptTemplateSequentialMood") || input.settings.promptTemplateSequentialMood,
       promptTemplateSequentialLastThought: read("promptTemplateSequentialLastThought") || input.settings.promptTemplateSequentialLastThought,
       promptTemplateInjection: read("promptTemplateInjection") || input.settings.promptTemplateInjection,
@@ -4802,6 +4820,7 @@ export function openSettingsModal(input: {
     promptTemplateSequentialTrust: "Sequential Trust instruction (protocol block is fixed).",
     promptTemplateSequentialDesire: "Sequential Desire instruction (protocol block is fixed).",
     promptTemplateSequentialConnection: "Sequential Connection instruction (protocol block is fixed).",
+    promptTemplateSequentialCustomNumeric: "Sequential default instruction for custom numeric stats (per-stat override in custom stat wizard still wins).",
     promptTemplateSequentialMood: "Sequential Mood instruction (protocol block is fixed).",
     promptTemplateSequentialLastThought: "Sequential LastThought instruction (protocol block is fixed)."
   };
@@ -4847,6 +4866,7 @@ export function openSettingsModal(input: {
     promptTemplateSequentialTrust: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.trust,
     promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.desire,
     promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
+    promptTemplateSequentialCustomNumeric: DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
     promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
     promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
     promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
