@@ -2,6 +2,22 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Added
+- Internal groundwork for upcoming custom stats: schema/types for `customStats`, safe sanitization for custom stat definitions and character-level custom defaults, and numeric stat registry helpers.
+- Custom stats management in extension settings with step-by-step add/edit/clone wizard and a guided soft-remove confirmation flow.
+- Character defaults panel support for per-character custom-stat default values (for configured custom stats).
+- End-to-end custom stat runtime support: extraction parsing/application, storage payloads (`customStatistics`), tracker card rows, graph series, and prompt injection lines/semantics.
+- Slash command toggle now supports custom stat IDs (`/bst toggle <custom_stat_id>`).
+
+### Changed
+- Settings now persist `customStats` as part of live autosave, while keeping existing built-in stat behavior unchanged.
+- Baseline seeding and history fallback now include configured custom stat defaults (global + per-character overrides) to keep first-run behavior consistent.
+
+### Fixed
+- Character defaults numeric inputs (built-in and custom stat defaults) now clamp visually and on save to `0..100`.
+- Diagnostics dumps now include custom-stat settings and history payloads for easier debugging of custom-stat runs.
+
 ## [1.2.3] - 2026-02-22
 ### Added
 - Configurable `Injection Depth` setting for prompt injection in extension settings.

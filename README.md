@@ -13,12 +13,14 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Polished tracker action controls for `Collapse cards` and `Retrack`
 - Polished extension settings modal with sticky header/footer actions and one-click `Expand all` / `Collapse all` section control
 - Settings checkboxes now use consistent round accent-matched styling across ST themes/mobile UI overrides
+- Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8)
 - Retrack button (regenerate tracker for last AI message)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
   - raw/smoothed view
-  - multi-stat lines (Affection/Trust/Desire/Connection)
+  - multi-stat lines (built-ins + enabled custom graph stats)
 - Prompt injection (optional) for behavior consistency
+- Prompt injection includes enabled custom stats marked `includeInInjection`
 - Prompt templates (unified + per-stat) with per-prompt reset
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
 - Interactive ST expression framing editor with live preview (global + per-character override)
@@ -167,6 +169,7 @@ Numeric scaling formula used by runtime:
 - `Injection Depth`: controls prompt-injection depth in the in-chat prompt stack (`0..8`)
 - `Injection Prompt Template`: editable template for injected guidance (shown only when injection is enabled)
 - `Prompt Templates`: edit unified + per-stat sequential prompt instructions (protocol blocks are fixed; repair prompts are fixed)
+- `Custom Stats`: create and manage additional numeric percentage stats via step-by-step wizard in settings
 - `Profile Token Limits`: extraction now respects profile max tokens and truncation length (when available)
 - `Max Tokens Override`: force max tokens for extraction (0 = auto)
 - `Context Size Override`: force truncation length for extraction (0 = auto)
@@ -177,7 +180,7 @@ Numeric scaling formula used by runtime:
 - `/bst status`: show enabled stats, mode, injection, debug, and last tracked message index.
 - `/bst extract`: manual extraction on the latest AI message.
 - `/bst clear`: clear tracker data for the current chat.
-- `/bst toggle <stat>`: toggle `affection|trust|desire|connection|mood|lastThought`.
+- `/bst toggle <stat>`: toggle `affection|trust|desire|connection|mood|lastThought|<custom_stat_id>`.
 - `/bst inject on|off`: toggle prompt injection.
 - `/bst debug on|off`: toggle debug mode.
 
@@ -279,6 +282,11 @@ Behavior notes:
 - `Track Connection`
 - `Track Mood`
 - `Track Last Thought`
+- `Custom Stats` section:
+  - `Add Custom Stat` wizard (Basics, Numeric Behavior, Tracking Behavior, Display, Review)
+  - `Edit` and `Clone` for faster setup reuse
+  - `Remove` uses soft-remove flow (historical payload remains stored, active tracking stops)
+  - `track`, `showOnCard`, `showInGraph`, and `includeInInjection` flags are respected by extraction, card rendering, graph rendering, and prompt injection
 - `Mood Source` (`BST mood images` or `ST expressions`)
 - `Global Mood -> ST Expression Map` (editable in settings when `Mood Source = ST expressions`)
 - `Preview Character` selector (inside framing modal, below preview): includes only characters with ST expressions and drives global framing preview
@@ -343,6 +351,9 @@ Per-character defaults can be set in character card Advanced definitions:
 - `desire`
 - `connection`
 - `mood`
+- `customStatDefaults` (for configured custom stats; key = stat id, value = 0..100)
+
+All numeric character defaults are limited to `0..100` (UI + save sanitization).
 
 Direct key path:
 
