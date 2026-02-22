@@ -15,6 +15,8 @@ All notable changes to BetterSimTracker are documented here.
 - Tracker card stat bars now use per-stat colors and include subtle change highlights; mobile card density was tightened for small screens.
 - Mood image trigger is now keyboard-accessible (`button` semantics) instead of image-click only.
 - Tracker root action buttons (`Collapse cards` and `Retrack`) were visually refreshed with clearer iconography and stronger focus/hover states.
+- Extension settings modal visuals were polished (improved section cards/controls, sticky header, and sticky footer actions).
+- Settings now include a global `Expand all` / `Collapse all` section toggle in the modal header.
 
 ### Fixed
 - Mood image preview modal now remains visible when `prefers-reduced-motion` is enabled (no longer animation-dependent for visibility).
@@ -33,6 +35,7 @@ All notable changes to BetterSimTracker are documented here.
 - First-time-active characters in existing chats now seed from per-character defaults (including 0 values) instead of falling back to global 50s during extraction and prompt state/snapshot prep.
 - Stop extraction now hard-cancels the active run in one click (including queued sequential workers/retries), with abort-like transport errors normalized as cancellation.
 - Tracker card rerenders now skip unchanged payloads via render signatures, reducing unnecessary DOM churn/flicker.
+- Settings `Close` and `Retrack` actions now bind correctly across all duplicated action buttons (header/footer/debug area).
 
 ## [1.2.0] - 2026-02-21
 ### Added
