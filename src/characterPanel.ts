@@ -1,6 +1,11 @@
 import { moodOptions } from "./prompts";
 import { logDebug } from "./settings";
 import {
+  type CharacterDefaultsIdentity,
+  resolveCharacterDefaultsEntry,
+  updateCharacterDefaultsEntry,
+} from "./characterDefaults";
+import {
   closeStExpressionFrameEditor,
   formatStExpressionFrameSummary,
   openStExpressionFrameEditor,
@@ -207,26 +212,16 @@ function findPanelContainer(popup: HTMLElement): HTMLElement {
   return popup;
 }
 
-function getDefaults(settings: BetterSimTrackerSettings, name: string): Record<string, unknown> {
-  return (settings.characterDefaults?.[name] as Record<string, unknown> | undefined) ?? {};
+function getDefaults(settings: BetterSimTrackerSettings, identity: CharacterDefaultsIdentity): Record<string, unknown> {
+  return resolveCharacterDefaultsEntry(settings, identity);
 }
 
 function withUpdatedDefaults(
   settings: BetterSimTrackerSettings,
-  name: string,
+  identity: CharacterDefaultsIdentity,
   updater: (current: Record<string, unknown>) => Record<string, unknown>,
 ): BetterSimTrackerSettings {
-  const current = getDefaults(settings, name);
-  const nextDefaults = updater(current);
-  const trimmedName = name.trim();
-  const nextMap = { ...(settings.characterDefaults ?? {}) };
-  if (!trimmedName) return settings;
-  if (Object.keys(nextDefaults).length === 0) {
-    delete nextMap[trimmedName];
-  } else {
-    nextMap[trimmedName] = nextDefaults;
-  }
-  return { ...settings, characterDefaults: nextMap };
+  return updateCharacterDefaultsEntry(settings, identity, updater);
 }
 
 function clampStat(value: string): number | null {
@@ -413,6 +408,15 @@ function renderPanel(input: InitInput, force = false): void {
     context.name2?.trim() ||
     context.name1?.trim() ||
     "";
+  const normalizedName = characterName.trim().toLowerCase();
+  const namedCharacter = normalizedName
+    ? context.characters?.find(character => String(character?.name ?? "").trim().toLowerCase() === normalizedName) ?? null
+    : null;
+  const characterAvatar =
+    contextCharacter?.avatar?.trim() ||
+    namedCharacter?.avatar?.trim() ||
+    "";
+  const characterIdentity: CharacterDefaultsIdentity = { name: characterName, avatar: characterAvatar };
   if (!characterName) {
     panel.innerHTML = `
       <div class="bst-character-title">BetterSimTracker</div>
@@ -421,7 +425,7 @@ function renderPanel(input: InitInput, force = false): void {
     return;
   }
 
-  const defaults = getDefaults(settings, characterName);
+  const defaults = getDefaults(settings, characterIdentity);
   const moodImages = (defaults.moodImages as MoodImageSet | undefined) ?? {};
   const moodCount = countMoodImages(moodImages);
   const moodSourceOverride = normalizeMoodSource(String(defaults.moodSource ?? ""));
@@ -534,7 +538,7 @@ function renderPanel(input: InitInput, force = false): void {
       const key = node.dataset.bstDefault ?? "";
       const value = node.value;
       const liveSettings = input.getSettings() ?? settings;
-      const liveDefaults = getDefaults(liveSettings, characterName);
+      const liveDefaults = getDefaults(liveSettings, characterIdentity);
       const currentMoodSource = normalizeMoodSource(String(liveDefaults.moodSource ?? "")) ?? "";
       if (key === "moodSource") {
         const selectedSource = normalizeMoodSource(value);
@@ -547,7 +551,7 @@ function renderPanel(input: InitInput, force = false): void {
           }
         }
       }
-      const next = withUpdatedDefaults(liveSettings, characterName, current => {
+      const next = withUpdatedDefaults(liveSettings, characterIdentity, current => {
         const copy = { ...current };
         if (key === "mood") {
           if (!value.trim()) {
@@ -591,7 +595,7 @@ function renderPanel(input: InitInput, force = false): void {
         if (!hasExpressions && moodSourceSelect.value === "st_expressions") {
           moodSourceSelect.value = "";
           const liveSettings = input.getSettings() ?? settings;
-          const next = withUpdatedDefaults(liveSettings, characterName, current => {
+          const next = withUpdatedDefaults(liveSettings, characterIdentity, current => {
             const copy = { ...current };
             delete copy.moodSource;
             return copy;
@@ -614,7 +618,7 @@ function renderPanel(input: InitInput, force = false): void {
       if (!mood) return;
       const expression = sanitizeExpressionValue(node.value);
       const liveSettings = input.getSettings() ?? settings;
-      const next = withUpdatedDefaults(liveSettings, characterName, current => {
+      const next = withUpdatedDefaults(liveSettings, characterIdentity, current => {
         const copy = { ...current };
         const map = { ...((copy.moodExpressionMap as MoodExpressionMap | undefined) ?? {}) };
         if (!expression) {
@@ -654,7 +658,7 @@ function renderPanel(input: InitInput, force = false): void {
       closeStExpressionFrameEditor();
     }
     const liveSettings = input.getSettings() ?? settings;
-    const next = withUpdatedDefaults(liveSettings, characterName, current => {
+    const next = withUpdatedDefaults(liveSettings, characterIdentity, current => {
       const copy = { ...current };
       if (!enabled) {
         delete copy.stExpressionImageOptions;
@@ -681,7 +685,7 @@ function renderPanel(input: InitInput, force = false): void {
       button.textContent = "Loading preview...";
     }
     const liveSettings = input.getSettings() ?? settings;
-    const liveDefaults = getDefaults(liveSettings, characterName);
+    const liveDefaults = getDefaults(liveSettings, characterIdentity);
     const liveOverride = sanitizeStExpressionImageOptions(liveDefaults.stExpressionImageOptions, globalStImageDefaults);
     const initialFrame = liveOverride ?? globalStImageDefaults;
     let previewSpriteUrl: string | null = null;
@@ -710,7 +714,7 @@ function renderPanel(input: InitInput, force = false): void {
         const sanitized = sanitizeStExpressionFrame(nextFrame, globalStImageDefaults);
         setStImageSummary(sanitized);
         const currentSettings = input.getSettings() ?? settings;
-        const next = withUpdatedDefaults(currentSettings, characterName, current => {
+        const next = withUpdatedDefaults(currentSettings, characterIdentity, current => {
           const copy = { ...current };
           copy.stExpressionImageOptions = sanitized;
           return copy;
@@ -749,7 +753,7 @@ function renderPanel(input: InitInput, force = false): void {
       try {
         notify(`Uploading ${mood} image...`, "info");
         const url = await uploadMoodImage(context, settings, characterName, mood, file);
-        const next = withUpdatedDefaults(settings, characterName, current => {
+        const next = withUpdatedDefaults(settings, characterIdentity, current => {
           const copy = { ...current };
           const existing = (copy.moodImages as MoodImageSet | undefined) ?? {};
           copy.moodImages = { ...existing, [mood]: url };
@@ -774,7 +778,7 @@ function renderPanel(input: InitInput, force = false): void {
       if (!mood) return;
       deleteMoodImage(context, settings, characterName, mood)
         .then(() => {
-          const next = withUpdatedDefaults(settings, characterName, current => {
+          const next = withUpdatedDefaults(settings, characterIdentity, current => {
             const copy = { ...current };
             const existing = { ...((copy.moodImages as MoodImageSet | undefined) ?? {}) };
             delete existing[mood];
@@ -811,7 +815,7 @@ function renderPanel(input: InitInput, force = false): void {
             failed.push(moods[index]);
           }
         });
-        const next = withUpdatedDefaults(settings, characterName, current => {
+        const next = withUpdatedDefaults(settings, characterIdentity, current => {
           const copy = { ...current };
           if (failed.length === 0) {
             delete copy.moodImages;

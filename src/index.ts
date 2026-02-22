@@ -1,4 +1,5 @@
 import { getAllTrackedCharacterNames, buildRecentContext, resolveActiveCharacterAnalysis } from "./activity";
+import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
 import { isTrackableAiMessage } from "./messageFilter";
@@ -239,6 +240,14 @@ function queueRender(): void {
 
     const latestAiIndex = context ? getLastAiMessageIndex(context) : null;
     renderTracker(entries, settings, allCharacterNames, Boolean(context?.groupId), trackerUiState, latestAiIndex, characterName => {
+      const liveContext = getSafeContext();
+      if (!liveContext?.characters?.length) return null;
+      const normalized = String(characterName ?? "").trim().toLowerCase();
+      if (!normalized) return null;
+      const character = liveContext.characters.find(item => String(item?.name ?? "").trim().toLowerCase() === normalized);
+      const avatar = String(character?.avatar ?? "").trim();
+      return avatar || null;
+    }, characterName => {
       const context = getSafeContext();
       if (!context || !settings) return;
       const history = getRecentTrackerHistory(context, 120);
@@ -423,7 +432,10 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
     const extFromData = character?.data?.extensions as Record<string, unknown> | undefined;
     const own = ((extFromCharacter?.bettersimtracker ?? extFromData?.bettersimtracker) as Record<string, unknown> | undefined);
     const defaultsFromExtensions = (own?.defaults as Record<string, unknown> | undefined) ?? {};
-    const defaultsFromSettings = (s.characterDefaults?.[name] as Record<string, unknown> | undefined) ?? {};
+    const defaultsFromSettings = resolveCharacterDefaultsEntry(s, {
+      name,
+      avatar: character?.avatar,
+    });
     const defaults = { ...defaultsFromSettings, ...defaultsFromExtensions };
     const hasAnyExplicitDefaults =
       defaults.affection !== undefined ||
