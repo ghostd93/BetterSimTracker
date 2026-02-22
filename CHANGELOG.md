@@ -2,16 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [Unreleased]
+## [1.2.3] - 2026-02-22
 ### Added
-- New `Injection Depth` setting for prompt injection, allowing users to adjust insertion depth without editing code.
+- Configurable `Injection Depth` setting for prompt injection in extension settings.
 
 ### Changed
-- `Injection Depth` is now a constrained selector (`0..8`) and is clamped to the same range in settings sanitize/runtime prompt injection.
+- `Injection Depth` now uses a constrained selector with practical values (`0..8`) and matching runtime clamping.
 
 ### Fixed
-- Extraction now falls back to SillyTavern's active connection profile when BetterSimTracker `Connection Profile` is empty, instead of failing with a profile-selection error.
-- Diagnostics `resolvedProfileId` now reflects the active profile fallback when no explicit BetterSimTracker profile is selected.
+- Extraction now falls back to SillyTavern's active connection profile when BetterSimTracker `Connection Profile` is empty.
+- Diagnostics `resolvedProfileId` now reflects the active-profile fallback when no explicit BetterSimTracker profile is selected.
 
 ## [1.2.2] - 2026-02-22
 ### Added
