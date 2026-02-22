@@ -157,11 +157,11 @@ export function getSettingsProvenance(context: STContext): Record<string, "conte
   return provenance;
 }
 
-export function getActiveConnectionProfileId(context: STContext): string | null {
-  const extSettings = context.extensionSettings as Record<string, unknown> | undefined;
+export function getActiveConnectionProfileId(context: STContext | null): string | null {
+  const extSettings = context?.extensionSettings as Record<string, unknown> | undefined;
   const extConnectionManager = extSettings?.connectionManager as Record<string, unknown> | undefined;
 
-  const cc = context.chatCompletionSettings as Record<string, unknown> | undefined;
+  const cc = context?.chatCompletionSettings as Record<string, unknown> | undefined;
 
   const globalObj = globalThis as Record<string, unknown>;
   const globalExt = globalObj.extension_settings as Record<string, unknown> | undefined;

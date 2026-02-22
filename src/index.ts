@@ -1168,7 +1168,7 @@ function openSettings(): void {
       const profileCandidate = currentSettings.connectionProfile?.trim() ?? "";
       const resolvedProfileId = profileCandidate && profileCandidate.toLowerCase() !== "default"
         ? profileCandidate
-        : null;
+        : (activeProfileId ?? null);
       const historySample = getRecentTrackerHistoryEntries(activeContext, 10).map(entry => ({
         messageIndex: entry.messageIndex,
         timestamp: entry.timestamp,

@@ -2,7 +2,7 @@ import type { BetterSimTrackerSettings, GenerateRequestMeta } from "./types";
 import type { STContext } from "./types";
 import { Generator } from "sillytavern-utils-lib";
 import type { Message } from "sillytavern-utils-lib";
-import { getContext } from "./settings";
+import { getActiveConnectionProfileId, getContext } from "./settings";
 
 interface GenerateResponse {
   content?: string;
@@ -23,6 +23,13 @@ function normalizeProfileId(settings: BetterSimTrackerSettings): string | undefi
   if (!raw) return undefined;
   if (raw.toLowerCase() === "default") return undefined;
   return raw;
+}
+
+function resolveProfileId(settings: BetterSimTrackerSettings, context: STContext | null): string | undefined {
+  const explicit = normalizeProfileId(settings);
+  if (explicit) return explicit;
+  const active = getActiveConnectionProfileId(context);
+  return active?.trim() || undefined;
 }
 
 function extractResponseMeta(data: unknown): Record<string, unknown> | undefined {
@@ -278,11 +285,11 @@ export async function generateJson(
   prompt: string,
   settings: BetterSimTrackerSettings,
 ): Promise<{ text: string; meta: GenerateRequestMeta }> {
-  const profileId = normalizeProfileId(settings);
+  const context = getContext();
+  const profileId = resolveProfileId(settings, context);
   if (!profileId) {
     throw new Error("Please select a connection profile in BetterSimTracker settings.");
   }
-  const context = getContext();
   const limits = resolveProfileLimits(profileId, context, settings);
   return generateViaGenerator(prompt, profileId, limits);
 }
