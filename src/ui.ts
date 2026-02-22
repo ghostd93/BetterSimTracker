@@ -1154,9 +1154,14 @@ function ensureStyles(): void {
 .bst-settings label { font-size: 12px; display: flex; flex-direction: column; gap: 6px; color: rgba(241, 246, 255, 0.94); }
 .bst-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
 .bst-check input[type="checkbox"] {
-  all: unset;
   appearance: none !important;
   -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex: 0 0 18px;
   width: 18px;
   height: 18px;
   min-width: 18px;
@@ -1171,14 +1176,12 @@ function ensureStyles(): void {
 }
 .bst-check input[type="checkbox"]::before {
   content: "";
-  position: absolute;
-  left: 5px;
-  top: 2px;
+  display: block;
   width: 5px;
   height: 9px;
   border-right: 2px solid #0b1020;
   border-bottom: 2px solid #0b1020;
-  transform: rotate(45deg) scale(0);
+  transform: translateY(-1px) rotate(45deg) scale(0);
   transform-origin: center;
   opacity: 0;
   transition: transform .14s ease, opacity .14s ease;
@@ -1202,7 +1205,7 @@ function ensureStyles(): void {
 }
 .bst-check input[type="checkbox"]:checked::before {
   opacity: 1;
-  transform: rotate(45deg) scale(1);
+  transform: translateY(-1px) rotate(45deg) scale(1);
 }
 .bst-check input[type="checkbox"]:active {
   transform: scale(0.94);
