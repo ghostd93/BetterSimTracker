@@ -2250,7 +2250,7 @@ export function closeGraphModal(): void {
 export function openSettingsModal(input: {
   settings: BetterSimTrackerSettings;
   profileOptions: ConnectionProfileOption[];
-  previewCharacterCandidates?: string[];
+  previewCharacterCandidates?: Array<{ name: string; avatar?: string | null }>;
   debugRecord?: DeltaDebugRecord | null;
   injectedPrompt?: string;
   onSave: (next: BetterSimTrackerSettings) => void;
@@ -2866,19 +2866,19 @@ export function openSettingsModal(input: {
   let globalPreviewSelected = "";
   const noPreviewFoundText = "No ST expressions found. Add at least one character with ST expressions to use preview framing.";
   const loadGlobalPreviewCharacters = async (): Promise<GlobalPreviewCharacter[]> => {
-    const candidateNames = Array.from(
-      new Set(
-        (input.previewCharacterCandidates ?? [])
-          .map(name => String(name ?? "").trim())
-          .filter(name => Boolean(name))
-          .filter(name => getResolvedMoodSource(input.settings, name) === "st_expressions"),
-      ),
-    );
-    if (!candidateNames.length) return [];
-    const resolved = await Promise.all(candidateNames.map(async name => {
+    const candidates = (input.previewCharacterCandidates ?? [])
+      .map(entry => ({
+        name: String(entry?.name ?? "").trim(),
+        avatar: String(entry?.avatar ?? "").trim() || undefined,
+      }))
+      .filter(entry => Boolean(entry.name))
+      .filter(entry => getResolvedMoodSource(input.settings, entry.name, entry.avatar) === "st_expressions");
+    const deduped = Array.from(new Map(candidates.map(entry => [entry.name.toLowerCase(), entry])).values());
+    if (!deduped.length) return [];
+    const resolved = await Promise.all(deduped.map(async entry => {
       try {
-        const spriteUrl = await fetchFirstExpressionSprite(name);
-        return spriteUrl ? { name, spriteUrl } : null;
+        const spriteUrl = await fetchFirstExpressionSprite(entry.name);
+        return spriteUrl ? { name: entry.name, spriteUrl } : null;
       } catch {
         return null;
       }

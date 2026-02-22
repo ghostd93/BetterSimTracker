@@ -231,6 +231,16 @@ function clampStat(value: string): number | null {
   return Math.max(0, Math.min(100, Math.round(num)));
 }
 
+function sanitizeMoodDefaultValue(value: string): string | null {
+  const trimmed = value.trim().slice(0, 80);
+  if (!trimmed) return null;
+  return normalizeMoodLabel(trimmed) ?? trimmed;
+}
+
+function resolveEffectiveMoodSource(settings: BetterSimTrackerSettings, defaults: Record<string, unknown>): MoodSource {
+  return normalizeMoodSource(String(defaults.moodSource ?? "")) ?? normalizeMoodSource(String(settings.moodSource ?? "")) ?? "bst_images";
+}
+
 function normalizeSpriteList(data: unknown): Array<{ label?: string; path?: string }> {
   if (Array.isArray(data)) return data as Array<{ label?: string; path?: string }>;
   if (data && typeof data === "object") {
@@ -429,6 +439,9 @@ function renderPanel(input: InitInput, force = false): void {
   const moodImages = (defaults.moodImages as MoodImageSet | undefined) ?? {};
   const moodCount = countMoodImages(moodImages);
   const moodSourceOverride = normalizeMoodSource(String(defaults.moodSource ?? ""));
+  const effectiveMoodSource = resolveEffectiveMoodSource(settings, defaults);
+  const showStExpressionControls = effectiveMoodSource === "st_expressions";
+  const showBstMoodImageControls = effectiveMoodSource === "bst_images";
   const moodExpressionMap = (defaults.moodExpressionMap as MoodExpressionMap | undefined) ?? {};
   const globalMoodExpressionMap = (settings.moodExpressionMap as MoodExpressionMap | undefined) ?? DEFAULT_MOOD_EXPRESSION_MAP;
   const globalStImageDefaults: StExpressionImageOptions = {
@@ -439,6 +452,16 @@ function renderPanel(input: InitInput, force = false): void {
   const stExpressionImageOptionsOverride = sanitizeStExpressionImageOptions(defaults.stExpressionImageOptions, globalStImageDefaults);
   const hasStExpressionImageOverride = Boolean(stExpressionImageOptionsOverride);
   const stExpressionImageOptions = stExpressionImageOptionsOverride ?? globalStImageDefaults;
+  const getLiveSettings = (): BetterSimTrackerSettings => input.getSettings() ?? settings;
+  const persistSettings = (next: BetterSimTrackerSettings): void => {
+    input.setSettings(next);
+    input.saveSettings(context, next);
+    input.onSettingsUpdated();
+  };
+  const updateDefaults = (updater: (current: Record<string, unknown>) => Record<string, unknown>): void => {
+    const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, updater);
+    persistSettings(next);
+  };
 
   panel.innerHTML = `
     <div class="bst-character-title">BetterSimTracker Defaults</div>
@@ -460,71 +483,82 @@ function renderPanel(input: InitInput, force = false): void {
         </select>
       </label>
     </div>
-    <div class="bst-character-divider">Mood to ST Expression Map</div>
     <div class="bst-character-help">
-      Optional per-character overrides. Leave empty to use the global map from extension settings.
-      Used only when source is ST expressions.
+      Effective mood source right now: <strong>${effectiveMoodSource === "st_expressions" ? "ST expressions" : "BST mood images"}</strong>.
     </div>
-    <div class="bst-character-map">
-      ${moodLabels.map(label => {
-        const safeLabel = escapeHtml(label);
-        const value = typeof moodExpressionMap[label] === "string" ? moodExpressionMap[label] ?? "" : "";
-        const safeValue = value ? escapeHtml(value) : "";
-        const placeholder = globalMoodExpressionMap[label] || DEFAULT_MOOD_EXPRESSION_MAP[label];
-        const safePlaceholder = escapeHtml(placeholder);
-        return `
-          <label class="bst-character-map-row">
-            <span>${safeLabel}</span>
-            <input type="text" data-bst-mood-map="${safeLabel}" value="${safeValue}" placeholder="${safePlaceholder}">
-          </label>
-        `;
-      }).join("")}
-    </div>
-    <div class="bst-character-divider">ST Expression Image Options</div>
-    <div class="bst-character-help">
-      Optional per-character override for expression image framing.
-      Used only when mood source resolves to ST expressions.
-    </div>
-    <label class="bst-character-check">
-      <input type="checkbox" data-bst-st-image-override ${hasStExpressionImageOverride ? "checked" : ""}>
-      <span>Advanced image options (override global)</span>
-    </label>
-    <div class="bst-character-grid" data-bst-st-image-options style="display:${hasStExpressionImageOverride ? "grid" : "none"};">
-      <div class="bst-character-wide bst-character-st-tools">
-        <button type="button" class="bst-btn bst-btn-soft" data-action="open-st-image-editor">Adjust ST Expression Framing</button>
-        <div class="bst-character-help bst-character-help-compact" data-bst-st-image-summary>
-          Current override: ${formatStExpressionFrameSummary(stExpressionImageOptions)}
+    <div style="display:${showStExpressionControls ? "grid" : "none"}; gap:8px;">
+      <div class="bst-character-divider">Mood to ST Expression Map</div>
+      <div class="bst-character-help">
+        Optional per-character overrides. Leave empty to use the global map from extension settings.
+      </div>
+      <div class="bst-character-map">
+        ${moodLabels.map(label => {
+          const safeLabel = escapeHtml(label);
+          const value = typeof moodExpressionMap[label] === "string" ? moodExpressionMap[label] ?? "" : "";
+          const safeValue = value ? escapeHtml(value) : "";
+          const placeholder = globalMoodExpressionMap[label] || DEFAULT_MOOD_EXPRESSION_MAP[label];
+          const safePlaceholder = escapeHtml(placeholder);
+          return `
+            <label class="bst-character-map-row">
+              <span>${safeLabel}</span>
+              <input type="text" data-bst-mood-map="${safeLabel}" value="${safeValue}" placeholder="${safePlaceholder}">
+            </label>
+          `;
+        }).join("")}
+      </div>
+      <div class="bst-character-divider">ST Expression Image Options</div>
+      <div class="bst-character-help">
+        Optional per-character override for expression image framing.
+      </div>
+      <label class="bst-character-check">
+        <input type="checkbox" data-bst-st-image-override ${hasStExpressionImageOverride ? "checked" : ""}>
+        <span>Advanced image options (override global)</span>
+      </label>
+      <div class="bst-character-grid" data-bst-st-image-options style="display:${hasStExpressionImageOverride ? "grid" : "none"};">
+        <div class="bst-character-wide bst-character-st-tools">
+          <button type="button" class="bst-btn bst-btn-soft" data-action="open-st-image-editor">Adjust ST Expression Framing</button>
+          <div class="bst-character-help bst-character-help-compact" data-bst-st-image-summary>
+            Current override: ${formatStExpressionFrameSummary(stExpressionImageOptions)}
+          </div>
         </div>
       </div>
     </div>
-    <div class="bst-character-divider">Mood Images</div>
-    <div class="bst-character-help">
-      Upload one image per mood label. Missing images fall back to emoji.
-      Max ${formatBytes(MAX_IMAGE_BYTES)} and ${MAX_IMAGE_WIDTH}x${MAX_IMAGE_HEIGHT}px. PNG/JPG/WebP only.
+    <div class="bst-character-help" style="display:${showStExpressionControls ? "none" : "block"};">
+      Switch effective mood source to ST expressions to edit expression mapping and framing.
     </div>
-    <div class="bst-character-help">Configured mood images: ${moodCount}/${moodLabels.length}</div>
-    <div class="bst-character-moods">
-      ${moodLabels.map(label => {
-        const url = moodImages[label] ?? "";
-        const safeUrl = url ? escapeHtml(url) : "";
-        const safeLabel = escapeHtml(label);
-        return `
-          <div class="bst-mood-slot" data-mood="${safeLabel}">
-            <div class="bst-mood-thumb">
-              ${url ? `<img src="${safeUrl}" alt="${safeLabel} mood">` : `<span>No image</span>`}
+    <div style="display:${showBstMoodImageControls ? "grid" : "none"}; gap:8px;">
+      <div class="bst-character-divider">Mood Images</div>
+      <div class="bst-character-help">
+        Upload one image per mood label. Missing images fall back to emoji.
+        Max ${formatBytes(MAX_IMAGE_BYTES)} and ${MAX_IMAGE_WIDTH}x${MAX_IMAGE_HEIGHT}px. PNG/JPG/WebP only.
+      </div>
+      <div class="bst-character-help">Configured mood images: ${moodCount}/${moodLabels.length}</div>
+      <div class="bst-character-moods">
+        ${moodLabels.map(label => {
+          const url = moodImages[label] ?? "";
+          const safeUrl = url ? escapeHtml(url) : "";
+          const safeLabel = escapeHtml(label);
+          return `
+            <div class="bst-mood-slot" data-mood="${safeLabel}">
+              <div class="bst-mood-thumb">
+                ${url ? `<img src="${safeUrl}" alt="${safeLabel} mood">` : `<span>No image</span>`}
+              </div>
+              <div class="bst-mood-label">${safeLabel}</div>
+              <div class="bst-mood-actions">
+                <button type="button" class="bst-btn bst-btn-soft bst-mood-upload" data-action="upload" data-mood="${safeLabel}">Upload</button>
+                <button type="button" class="bst-btn bst-btn-danger bst-mood-clear" data-action="clear" data-mood="${safeLabel}">Clear</button>
+                <input class="bst-mood-input" type="file" accept="image/*" data-mood="${safeLabel}">
+              </div>
             </div>
-            <div class="bst-mood-label">${safeLabel}</div>
-            <div class="bst-mood-actions">
-              <button type="button" class="bst-btn bst-btn-soft bst-mood-upload" data-action="upload" data-mood="${safeLabel}">Upload</button>
-              <button type="button" class="bst-btn bst-btn-danger bst-mood-clear" data-action="clear" data-mood="${safeLabel}">Clear</button>
-              <input class="bst-mood-input" type="file" accept="image/*" data-mood="${safeLabel}">
-            </div>
-          </div>
-        `;
-      }).join("")}
+          `;
+        }).join("")}
+      </div>
+      <div class="bst-character-actions">
+        <button type="button" class="bst-btn bst-btn-danger" data-action="clear-all">Clear All Mood Images</button>
+      </div>
     </div>
-    <div class="bst-character-actions">
-      <button type="button" class="bst-btn bst-btn-danger" data-action="clear-all">Clear All Mood Images</button>
+    <div class="bst-character-help" style="display:${showBstMoodImageControls ? "none" : "block"};">
+      Switch effective mood source to BST mood images to manage per-mood image uploads.
     </div>
   `;
 
@@ -537,7 +571,7 @@ function renderPanel(input: InitInput, force = false): void {
     node.addEventListener("change", async () => {
       const key = node.dataset.bstDefault ?? "";
       const value = node.value;
-      const liveSettings = input.getSettings() ?? settings;
+      const liveSettings = getLiveSettings();
       const liveDefaults = getDefaults(liveSettings, characterIdentity);
       const currentMoodSource = normalizeMoodSource(String(liveDefaults.moodSource ?? "")) ?? "";
       if (key === "moodSource") {
@@ -554,13 +588,16 @@ function renderPanel(input: InitInput, force = false): void {
       const next = withUpdatedDefaults(liveSettings, characterIdentity, current => {
         const copy = { ...current };
         if (key === "mood") {
-          if (!value.trim()) {
+          const sanitized = sanitizeMoodDefaultValue(value);
+          node.value = sanitized ?? "";
+          if (!sanitized) {
             delete copy.mood;
           } else {
-            copy.mood = value.trim().slice(0, 80);
+            copy.mood = sanitized;
           }
         } else if (key === "moodSource") {
           const source = normalizeMoodSource(value);
+          node.value = source ?? "";
           if (!source) {
             delete copy.moodSource;
           } else {
@@ -568,6 +605,7 @@ function renderPanel(input: InitInput, force = false): void {
           }
         } else {
           const num = clampStat(value);
+          node.value = num == null ? "" : String(num);
           if (num == null) {
             delete copy[key];
           } else {
@@ -576,9 +614,7 @@ function renderPanel(input: InitInput, force = false): void {
         }
         return copy;
       });
-      input.setSettings(next);
-      input.saveSettings(context, next);
-      input.onSettingsUpdated();
+      persistSettings(next);
     });
   });
 
@@ -594,15 +630,12 @@ function renderPanel(input: InitInput, force = false): void {
         moodSourceStOption.textContent = hasExpressions ? "ST expressions" : "ST expressions (no sprites)";
         if (!hasExpressions && moodSourceSelect.value === "st_expressions") {
           moodSourceSelect.value = "";
-          const liveSettings = input.getSettings() ?? settings;
-          const next = withUpdatedDefaults(liveSettings, characterIdentity, current => {
+          const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
             const copy = { ...current };
             delete copy.moodSource;
             return copy;
           });
-          input.setSettings(next);
-          input.saveSettings(context, next);
-          input.onSettingsUpdated();
+          persistSettings(next);
         }
       })
       .catch(() => {
@@ -617,8 +650,8 @@ function renderPanel(input: InitInput, force = false): void {
       const mood = normalizeMoodLabel(node.dataset.bstMoodMap ?? "");
       if (!mood) return;
       const expression = sanitizeExpressionValue(node.value);
-      const liveSettings = input.getSettings() ?? settings;
-      const next = withUpdatedDefaults(liveSettings, characterIdentity, current => {
+      node.value = expression;
+      const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
         const copy = { ...current };
         const map = { ...((copy.moodExpressionMap as MoodExpressionMap | undefined) ?? {}) };
         if (!expression) {
@@ -633,9 +666,7 @@ function renderPanel(input: InitInput, force = false): void {
         }
         return copy;
       });
-      input.setSettings(next);
-      input.saveSettings(context, next);
-      input.onSettingsUpdated();
+      persistSettings(next);
     });
   });
 
@@ -657,8 +688,7 @@ function renderPanel(input: InitInput, force = false): void {
     if (!enabled) {
       closeStExpressionFrameEditor();
     }
-    const liveSettings = input.getSettings() ?? settings;
-    const next = withUpdatedDefaults(liveSettings, characterIdentity, current => {
+    const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
       const copy = { ...current };
       if (!enabled) {
         delete copy.stExpressionImageOptions;
@@ -671,9 +701,7 @@ function renderPanel(input: InitInput, force = false): void {
       }
       return copy;
     });
-    input.setSettings(next);
-    input.saveSettings(context, next);
-    input.onSettingsUpdated();
+    persistSettings(next);
   });
 
   panel.querySelector('[data-action="open-st-image-editor"]')?.addEventListener("click", async event => {
@@ -684,7 +712,7 @@ function renderPanel(input: InitInput, force = false): void {
       button.disabled = true;
       button.textContent = "Loading preview...";
     }
-    const liveSettings = input.getSettings() ?? settings;
+    const liveSettings = getLiveSettings();
     const liveDefaults = getDefaults(liveSettings, characterIdentity);
     const liveOverride = sanitizeStExpressionImageOptions(liveDefaults.stExpressionImageOptions, globalStImageDefaults);
     const initialFrame = liveOverride ?? globalStImageDefaults;
@@ -713,15 +741,12 @@ function renderPanel(input: InitInput, force = false): void {
         if (!stImageOverrideToggle?.checked) return;
         const sanitized = sanitizeStExpressionFrame(nextFrame, globalStImageDefaults);
         setStImageSummary(sanitized);
-        const currentSettings = input.getSettings() ?? settings;
-        const next = withUpdatedDefaults(currentSettings, characterIdentity, current => {
+        const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
           const copy = { ...current };
           copy.stExpressionImageOptions = sanitized;
           return copy;
         });
-        input.setSettings(next);
-        input.saveSettings(context, next);
-        input.onSettingsUpdated();
+        persistSettings(next);
       },
     });
   });
@@ -751,17 +776,16 @@ function renderPanel(input: InitInput, force = false): void {
         return;
       }
       try {
+        const liveSettings = getLiveSettings();
         notify(`Uploading ${mood} image...`, "info");
-        const url = await uploadMoodImage(context, settings, characterName, mood, file);
-        const next = withUpdatedDefaults(settings, characterIdentity, current => {
+        const url = await uploadMoodImage(context, liveSettings, characterName, mood, file);
+        const next = withUpdatedDefaults(liveSettings, characterIdentity, current => {
           const copy = { ...current };
           const existing = (copy.moodImages as MoodImageSet | undefined) ?? {};
           copy.moodImages = { ...existing, [mood]: url };
           return copy;
         });
-        input.setSettings(next);
-        input.saveSettings(context, next);
-        input.onSettingsUpdated();
+        persistSettings(next);
         notify(`${mood} image saved.`, "success");
         renderPanel(input, true);
       } catch (error) {
@@ -776,9 +800,10 @@ function renderPanel(input: InitInput, force = false): void {
       const moodRaw = button.dataset.mood ?? "";
       const mood = normalizeMoodLabel(moodRaw);
       if (!mood) return;
-      deleteMoodImage(context, settings, characterName, mood)
+      const liveSettings = getLiveSettings();
+      deleteMoodImage(context, liveSettings, characterName, mood)
         .then(() => {
-          const next = withUpdatedDefaults(settings, characterIdentity, current => {
+          const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
             const copy = { ...current };
             const existing = { ...((copy.moodImages as MoodImageSet | undefined) ?? {}) };
             delete existing[mood];
@@ -789,9 +814,7 @@ function renderPanel(input: InitInput, force = false): void {
             }
             return copy;
           });
-          input.setSettings(next);
-          input.saveSettings(context, next);
-          input.onSettingsUpdated();
+          persistSettings(next);
           renderPanel(input, true);
         })
         .catch(error => {
@@ -802,12 +825,14 @@ function renderPanel(input: InitInput, force = false): void {
 
   panel.querySelector<HTMLButtonElement>("[data-action='clear-all']")?.addEventListener("click", event => {
     event.preventDefault();
-    const existing = (defaults.moodImages as MoodImageSet | undefined) ?? {};
+    const currentDefaults = getDefaults(getLiveSettings(), characterIdentity);
+    const existing = (currentDefaults.moodImages as MoodImageSet | undefined) ?? {};
     const moods = Object.keys(existing)
       .map(label => normalizeMoodLabel(label))
       .filter((label): label is MoodLabel => Boolean(label));
     if (!moods.length) return;
-    Promise.allSettled(moods.map(mood => deleteMoodImage(context, settings, characterName, mood)))
+    const liveSettings = getLiveSettings();
+    Promise.allSettled(moods.map(mood => deleteMoodImage(context, liveSettings, characterName, mood)))
       .then(results => {
         const failed: MoodLabel[] = [];
         results.forEach((result, index) => {
@@ -835,9 +860,7 @@ function renderPanel(input: InitInput, force = false): void {
           }
           return copy;
         });
-        input.setSettings(next);
-        input.saveSettings(context, next);
-        input.onSettingsUpdated();
+        persistSettings(next);
         if (failed.length) {
           notify(`Failed to delete ${failed.length} image(s).`, "warning");
         }
