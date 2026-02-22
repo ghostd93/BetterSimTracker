@@ -354,6 +354,7 @@ Optional per-character mood source keys:
   - BST mood-image upload controls are shown only when the effective mood source resolves to `bst_images`
 
 Character-default records are resolved by stable character identity first (avatar), with legacy name-based fallback, so group-card and character-list entry paths stay consistent.
+In Advanced Definitions, the panel also follows the character ST reports as currently opened in the editor to avoid group-chat context bleed.
 
 If no advanced defaults are present, tracker baseline falls back to contextual inference.
 
