@@ -25,6 +25,7 @@ All notable changes to BetterSimTracker are documented here.
 - Graph debug traces now include custom stat series/latest values alongside built-in stat series.
 - Prompt injection now applies a safe-size guard that trims custom-stat injection lines first when the injected block grows too large.
 - Built-in stat UI/injection fallback defaults now guard legacy/partial settings payloads to prevent runtime crashes.
+- Settings checkbox visuals now stay stable on hover (checked toggles no longer appear unchecked while hovered).
 
 ## [1.2.3] - 2026-02-22
 ### Added
