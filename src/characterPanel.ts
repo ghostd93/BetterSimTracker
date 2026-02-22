@@ -60,6 +60,8 @@ const MAX_IMAGE_HEIGHT = 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const EXPRESSION_CHECK_TTL_MS = 30_000;
 const expressionAvailabilityCache = new Map<string, { checkedAt: number; hasExpressions: boolean }>();
+let lastEditorCharacterId: number | null = null;
+let editorListenerBound = false;
 
 function notify(message: string, type: "info" | "success" | "warning" | "error" = "info"): void {
   const anyGlobal = globalThis as Record<string, unknown>;
@@ -359,6 +361,18 @@ function countMoodImages(images: MoodImageSet | undefined): number {
   return Object.values(images).filter(value => typeof value === "string" && value.trim()).length;
 }
 
+function parseCharacterEditorId(payload: unknown): number | null {
+  if (typeof payload === "number" && Number.isInteger(payload)) return payload;
+  if (!payload || typeof payload !== "object") return null;
+  const obj = payload as Record<string, unknown>;
+  const candidate = obj.detail && typeof obj.detail === "object"
+    ? (obj.detail as Record<string, unknown>).id
+    : obj.id;
+  if (typeof candidate === "number" && Number.isInteger(candidate)) return candidate;
+  const parsed = Number(candidate);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
 export function initCharacterPanel(input: InitInput): void {
   let renderTimer: number | null = null;
 
@@ -374,6 +388,22 @@ export function initCharacterPanel(input: InitInput): void {
 
   const observer = new MutationObserver(() => scheduleRender());
   observer.observe(document.body, { childList: true, subtree: true });
+  if (!editorListenerBound) {
+    const context = input.getContext();
+    const events = context?.event_types ?? {};
+    const source = context?.eventSource;
+    const eventName = events.CHARACTER_EDITOR_OPENED;
+    if (source && eventName) {
+      source.on(eventName, (payload: unknown) => {
+        const id = parseCharacterEditorId(payload);
+        if (id != null) {
+          lastEditorCharacterId = id;
+          scheduleRender();
+        }
+      });
+      editorListenerBound = true;
+    }
+  }
   scheduleRender();
 }
 
@@ -412,8 +442,12 @@ function renderPanel(input: InitInput, force = false): void {
   const contextCharacter = typeof context.characterId === "number"
     ? context.characters?.[context.characterId]
     : null;
+  const editorCharacter = typeof lastEditorCharacterId === "number"
+    ? context.characters?.[lastEditorCharacterId] ?? null
+    : null;
   const characterName =
     nameFromInput ||
+    editorCharacter?.name?.trim() ||
     contextCharacter?.name?.trim() ||
     context.name2?.trim() ||
     context.name1?.trim() ||
@@ -422,17 +456,30 @@ function renderPanel(input: InitInput, force = false): void {
   const namedCharacter = normalizedName
     ? context.characters?.find(character => String(character?.name ?? "").trim().toLowerCase() === normalizedName) ?? null
     : null;
+  const editorCharacterName = String(editorCharacter?.name ?? "").trim().toLowerCase();
+  const editorCharacterMatchesSelection = Boolean(
+    editorCharacterName &&
+    normalizedName &&
+    editorCharacterName === normalizedName,
+  );
   const contextCharacterName = String(contextCharacter?.name ?? "").trim().toLowerCase();
   const contextCharacterMatchesSelection = Boolean(
     normalizedName &&
     contextCharacterName &&
     contextCharacterName === normalizedName,
   );
+  const resolvedCharacter =
+    (editorCharacterMatchesSelection ? editorCharacter : null) ??
+    namedCharacter ??
+    (contextCharacterMatchesSelection ? contextCharacter : null) ??
+    editorCharacter ??
+    contextCharacter ??
+    null;
+  const resolvedCharacterName = String(resolvedCharacter?.name ?? "").trim() || characterName;
   const characterAvatar =
-    namedCharacter?.avatar?.trim() ||
-    (contextCharacterMatchesSelection ? contextCharacter?.avatar?.trim() : "") ||
+    resolvedCharacter?.avatar?.trim() ||
     "";
-  const characterIdentity: CharacterDefaultsIdentity = { name: characterName, avatar: characterAvatar };
+  const characterIdentity: CharacterDefaultsIdentity = { name: resolvedCharacterName, avatar: characterAvatar };
   if (!characterName) {
     panel.innerHTML = `
       <div class="bst-character-title">BetterSimTracker</div>
@@ -583,7 +630,7 @@ function renderPanel(input: InitInput, force = false): void {
       if (key === "moodSource") {
         const selectedSource = normalizeMoodSource(value);
         if (selectedSource === "st_expressions") {
-          const hasExpressions = await hasExpressionSpritesForCharacter(characterName);
+          const hasExpressions = await hasExpressionSpritesForCharacter(resolvedCharacterName);
           if (!hasExpressions) {
             node.value = currentMoodSource;
             notify("This character has no ST expression sprites. Set expressions first, then enable ST expressions.", "warning");
@@ -629,7 +676,7 @@ function renderPanel(input: InitInput, force = false): void {
   if (moodSourceSelect && moodSourceStOption) {
     moodSourceStOption.disabled = true;
     moodSourceStOption.textContent = "ST expressions (checking...)";
-    void hasExpressionSpritesForCharacter(characterName)
+    void hasExpressionSpritesForCharacter(resolvedCharacterName)
       .then(hasExpressions => {
         if (!panel.isConnected) return;
         moodSourceStOption.disabled = !hasExpressions;
@@ -724,7 +771,7 @@ function renderPanel(input: InitInput, force = false): void {
     const initialFrame = liveOverride ?? globalStImageDefaults;
     let previewSpriteUrl: string | null = null;
     try {
-      previewSpriteUrl = await fetchFirstExpressionSprite(characterName);
+      previewSpriteUrl = await fetchFirstExpressionSprite(resolvedCharacterName);
     } catch {
       previewSpriteUrl = null;
     } finally {
@@ -734,14 +781,14 @@ function renderPanel(input: InitInput, force = false): void {
       }
     }
     openStExpressionFrameEditor({
-      title: `${characterName}: ST Expression Framing`,
+      title: `${resolvedCharacterName}: ST Expression Framing`,
       description: previewSpriteUrl
         ? "Per-character framing override with this character's ST expression preview."
         : "Per-character framing override used when this character resolves to ST expressions.",
       initial: initialFrame,
       fallback: globalStImageDefaults,
-      previewChoices: previewSpriteUrl ? [{ name: characterName, imageUrl: previewSpriteUrl }] : [],
-      selectedPreviewName: characterName,
+      previewChoices: previewSpriteUrl ? [{ name: resolvedCharacterName, imageUrl: previewSpriteUrl }] : [],
+      selectedPreviewName: resolvedCharacterName,
       emptyPreviewText: "No ST expressions found for this character. Add at least one expression sprite and try again.",
       onChange: nextFrame => {
         if (!stImageOverrideToggle?.checked) return;
@@ -784,7 +831,7 @@ function renderPanel(input: InitInput, force = false): void {
       try {
         const liveSettings = getLiveSettings();
         notify(`Uploading ${mood} image...`, "info");
-        const url = await uploadMoodImage(context, liveSettings, characterName, mood, file);
+        const url = await uploadMoodImage(context, liveSettings, resolvedCharacterName, mood, file);
         const next = withUpdatedDefaults(liveSettings, characterIdentity, current => {
           const copy = { ...current };
           const existing = (copy.moodImages as MoodImageSet | undefined) ?? {};
@@ -807,7 +854,7 @@ function renderPanel(input: InitInput, force = false): void {
       const mood = normalizeMoodLabel(moodRaw);
       if (!mood) return;
       const liveSettings = getLiveSettings();
-      deleteMoodImage(context, liveSettings, characterName, mood)
+      deleteMoodImage(context, liveSettings, resolvedCharacterName, mood)
         .then(() => {
           const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
             const copy = { ...current };
@@ -838,7 +885,7 @@ function renderPanel(input: InitInput, force = false): void {
       .filter((label): label is MoodLabel => Boolean(label));
     if (!moods.length) return;
     const liveSettings = getLiveSettings();
-    Promise.allSettled(moods.map(mood => deleteMoodImage(context, liveSettings, characterName, mood)))
+    Promise.allSettled(moods.map(mood => deleteMoodImage(context, liveSettings, resolvedCharacterName, mood)))
       .then(results => {
         const failed: MoodLabel[] = [];
         results.forEach((result, index) => {
