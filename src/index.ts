@@ -37,6 +37,7 @@ let chatGenerationStartLastAiIndex: number | null = null;
 let swipeGenerationActive = false;
 let slashCommandsRegistered = false;
 let activeExtractionRunId: number | null = null;
+const cancelledExtractionRuns = new Set<number>();
 
 function getTraceStorageKey(context: STContext): string {
   return `${getDebugScopeKey(context)}:trace`;
@@ -275,8 +276,11 @@ function queueRender(): void {
       void runExtraction("manual_refresh", messageIndex);
     }, () => {
       if (!isExtracting) return;
+      if (activeExtractionRunId != null) {
+        cancelledExtractionRuns.add(activeExtractionRunId);
+      }
       const canceled = cancelActiveGenerations();
-      pushTrace("extract.cancel", { canceled, source: "ui" });
+      pushTrace("extract.cancel", { canceled, source: "ui", runId: activeExtractionRunId });
     }, () => {
       queueRender();
     });
@@ -664,6 +668,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   isExtracting = true;
   const runId = ++runSequence;
   activeExtractionRunId = runId;
+  cancelledExtractionRuns.delete(runId);
   pushTrace("extract.start", {
     runId,
     reason,
@@ -748,6 +753,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       contextText,
       previousStatistics: previousSeededStatistics,
       history: seededHistory,
+      isCancelled: () => cancelledExtractionRuns.has(runId),
       onProgress: (done, total, label) => {
         if (!isExtracting || activeExtractionRunId !== runId) {
           return;
@@ -804,6 +810,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     });
     console.error("[BetterSimTracker] Extraction failed:", error);
   } finally {
+    cancelledExtractionRuns.delete(runId);
     if (activeExtractionRunId === runId) {
       activeExtractionRunId = null;
     }
