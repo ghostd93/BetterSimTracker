@@ -3739,14 +3739,14 @@ export function openSettingsModal(input: {
         <div class="bst-check-grid">
           <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
           <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
-          <label class="bst-check"><input data-k="summarizationNoteVisibleForAI" type="checkbox">Summarization Note Visible for AI</label>
+          <label class="bst-check"><input data-k="summarizationNoteVisibleForAI" type="checkbox">Summarization Note Visible for AI (future notes)</label>
           <label class="bst-check" data-bst-row="injectSummarizationNote"><input data-k="injectSummarizationNote" type="checkbox">Inject Summarization Note</label>
           <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
           <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
         </div>
-        <div class="bst-help-line bst-toggle-help"><code>Summarization Note Visible for AI</code> updates all BetterSimTracker summary notes in the current chat (existing + future).</div>
-        <div class="bst-help-line bst-toggle-help"><code>Inject Summarization Note</code> only affects hidden tracker prompt injection guidance.</div>
+        <div class="bst-help-line bst-toggle-help"><code>Summarization Note Visible for AI</code> affects only newly generated BetterSimTracker summary notes. Existing notes are not modified for safety.</div>
+        <div class="bst-help-line bst-toggle-help"><code>Inject Summarization Note</code> only affects hidden tracker prompt injection guidance and does not edit chat messages.</div>
         <div class="bst-section-divider" data-bst-row="injectPromptDivider">Injection Prompt</div>
         <div class="bst-injection-prompt" data-bst-row="injectPromptBlock">
           <div class="bst-help-line">Shown only when Inject Tracker Into Prompt is enabled.</div>
@@ -5552,8 +5552,8 @@ export function openSettingsModal(input: {
     confidenceDampening: "How strongly model confidence scales stat deltas (0 = ignore confidence, 1 = full effect).",
     moodStickiness: "Higher values keep previous mood unless confidence is strong.",
     injectTrackerIntoPrompt: "Inject current relationship state into generation prompt for behavioral coherence.",
-    summarizationNoteVisibleForAI: "When enabled, newly generated BetterSimTracker summary notes are AI-visible in this chat.",
-    injectSummarizationNote: "Include the latest BetterSimTracker summary note in hidden tracker prompt injection guidance.",
+    summarizationNoteVisibleForAI: "When enabled, only newly generated BetterSimTracker summary notes are AI-visible in this chat. Existing notes are unchanged for safety.",
+    injectSummarizationNote: "Include the latest BetterSimTracker summary note in hidden tracker prompt injection guidance only (no chat-message edits).",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",
     activityLookback: "How many recent messages are scanned for active-speaker detection.",
     trackAffection: "Enable Affection stat extraction and updates.",
