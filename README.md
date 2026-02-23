@@ -24,6 +24,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Prompt injection includes enabled custom stats marked `includeInInjection`
   - when injected guidance grows too large, custom stat lines are trimmed first to keep prompt size safe
 - Prompt templates (unified + per-stat + custom numeric default) with per-prompt reset
+- AI-assisted generation for built-in sequential prompt instructions (`Affection`, `Trust`, `Desire`, `Connection`, `Mood`, `LastThought`)
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
 - Interactive ST expression framing editor with live preview (global + per-character override)
 - Click-to-preview mood image lightbox with close button / backdrop / Esc support (native top-layer dialog path on supported browsers)
@@ -334,6 +335,7 @@ Two editable prompt types are supported:
 - Default desire prompt guardrail: only increase desire when the recent messages are explicitly romantic/sexual; non-romantic context should be 0 or negative.
 
 Each prompt instruction can be reset to its default with the per-prompt reset button. Protocol blocks are read-only.
+Built-in sequential prompt sections also include `Generate with AI` to draft a stat-specific instruction using your current connection profile.
 
 Available placeholders:
 
