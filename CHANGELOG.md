@@ -26,6 +26,7 @@ All notable changes to BetterSimTracker are documented here.
 - Summary note visibility sync now persists chat changes immediately, so AI-visible/hidden icon state survives page reloads.
 - Summary-toggle help lines are now full-width and aligned correctly in the settings grid.
 - Summary-note visibility sync no longer runs/saves during periodic refresh; it now applies only on explicit toggle changes to avoid chat corruption during load transitions.
+- Summary-note sync matching is now strict (BST-tagged messages only), preventing accidental flag changes on non-BST notes/messages.
 
 ## [2.0.1] - 2026-02-23
 ### Added
