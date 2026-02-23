@@ -1453,6 +1453,8 @@ function refreshFromStoredData(): void {
   }
   const summaryVisibilitySynced = syncSummaryNoteVisibilityForCurrentChat(context, settings.summarizationNoteVisibleForAI);
   if (summaryVisibilitySynced > 0) {
+    context.saveChatDebounced?.();
+    void context.saveChat?.();
     pushTrace("summary.visibility.sync", {
       mode: settings.summarizationNoteVisibleForAI ? "ai-visible" : "hidden-system",
       updatedMessages: summaryVisibilitySynced,

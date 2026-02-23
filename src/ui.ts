@@ -1247,6 +1247,9 @@ function ensureStyles(): void {
 .bst-settings-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bst-settings-grid-compact { gap: 8px; }
 .bst-settings-grid-single { grid-template-columns: minmax(0, 1fr); }
+.bst-settings-grid .bst-check-grid {
+  grid-column: 1 / -1;
+}
 .bst-settings-grid .bst-toggle-help {
   grid-column: 1 / -1;
   margin-top: -4px;
