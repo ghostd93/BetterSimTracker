@@ -4762,7 +4762,7 @@ export function openSettingsModal(input: {
         <div class="bst-custom-ai-row">
           <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-improve-description" data-loading="false">
             <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
-            <span class="bst-custom-ai-btn-label" data-bst-custom-description-btn-label>Improve description by AI</span>
+            <span class="bst-custom-ai-btn-label" data-bst-custom-description-btn-label>Improve description with AI</span>
           </button>
           <span class="bst-custom-ai-status" data-bst-custom-description-status>Uses current connection profile.</span>
         </div>
@@ -4958,7 +4958,7 @@ export function openSettingsModal(input: {
         improveDescriptionLabelNode,
         loading,
         "Improving...",
-        "Improve description by AI",
+        "Improve description with AI",
       );
     };
 
