@@ -16,7 +16,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Built-in stats manager wizard with unified `Enabled` toggle (`Track + Card + Graph`) plus `Inject` control for numeric built-ins
 - Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8, color picker + hex input, AI-assisted description improvement, AI generation for stat-specific Sequential Prompt Override, optional behavior-injection guidance with AI generation)
 - Retrack button (regenerate tracker for last AI message)
-- Summarize button (AI-generated prose summary, no numeric stat values, with settings to make the note AI-visible and/or inject it into prompt guidance)
+- Summarize button (AI-generated detailed prose summary, 4-6 sentences, grounded in currently tracked dimensions, no numeric stat values; with settings to make the note AI-visible and/or inject it into prompt guidance)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
   - raw/smoothed view

@@ -18,6 +18,8 @@ All notable changes to BetterSimTracker are documented here.
 - `Summarization Note Visible for AI` now applies to newly generated BetterSimTracker summary notes only (no retroactive note conversion).
 - Prompt injection custom-stat behavior guidance now uses optional per-stat behavior lines (instead of generic low/high fallback wording).
 - Custom-stat behavior-guidance AI generation now produces richer guidance (low/medium/high behavior plus increase/decrease evidence cues).
+- Summarize generation now targets longer output (`4-6` sentences) and uses a lengthen pass when summaries are too short.
+- Summarize prompts are now dimension-aware and reference only currently tracked/enabled dimensions (no hardcoded stat assumptions).
 
 ### Fixed
 - Summary output now avoids numeric stat reporting (prose-only summary behavior).
