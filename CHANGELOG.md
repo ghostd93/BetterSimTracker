@@ -3,41 +3,23 @@
 All notable changes to BetterSimTracker are documented here.
 
 ## [Unreleased]
+
+## [2.0.5] - 2026-02-23
 ### Added
-- `Summarize` now generates tracker summary text with AI (using the currently selected/active connection profile) and posts it to chat as descriptive prose.
-- New settings toggles: `Summarization Note Visible for AI` and `Inject Summarization Note`.
-- Custom stat wizard now includes a dedicated optional `Behavior Instruction` step with `Generate with AI` support.
+- New AI-powered `Summarize` action that generates prose summary notes from the current tracked state.
+- New summary controls: `Summarization Note Visible for AI` and `Inject Summarization Note`.
+- Custom stat wizard now includes an optional `Behavior Instruction` step with `Generate with AI`.
 
 ### Changed
-- Custom stat wizard wording now uses `Improve description with AI` for clearer phrasing.
-- Summary output is now sanitized for hidden reasoning tags and normalized to concise prose wrapped as a system-style narrative line.
-- `Summarize` button now shows a loading state while generation is in progress.
-- Summary prose now gets an extra normalization pass (bullet/markdown cleanup, whitespace/punctuation correction) before sending.
-- Summary delivery now uses validated chat-message payloads for both hidden and AI-visible note modes.
-- Injection prompt templates now support `{{summarizationNote}}` for optional summary-note context.
-- `Summarization Note Visible for AI` now applies to newly generated BetterSimTracker summary notes only (no retroactive note conversion).
-- Prompt injection custom-stat behavior guidance now uses optional per-stat behavior lines (instead of generic low/high fallback wording).
-- Custom-stat behavior-guidance AI generation now produces richer guidance (low/medium/high behavior plus increase/decrease evidence cues).
-- Summarize generation now targets longer output (`4-6` sentences) and uses a lengthen pass when summaries are too short.
-- Summarize prompts are now dimension-aware and reference only currently tracked/enabled dimensions (no hardcoded stat assumptions).
-- Summarize wording/help text was clarified across UI and README to explicitly describe it as a prose summary of current tracked stats.
+- Summary generation is now prose-first and more robust: normalization pass, longer target output (`4-6` sentences), and tracked-dimension-aware prompting.
+- Custom stat AI helpers were improved for clearer, stat-specific generation (description + sequential/behavior guidance).
+- Injection templates now support `{{summarizationNote}}` for optional summary context.
 
 ### Fixed
-- Summary output now avoids numeric stat reporting (prose-only summary behavior).
-- Editing non-trackable messages (including summary system notes) no longer triggers tracker re-extraction on the nearest AI message.
-- Summary note messages are now always excluded from tracker extraction targets, including AI-visible mode.
-- Summary note delivery now avoids ST `sendSystemMessage("comment")` to prevent undefined-message insertion and downstream extension crashes.
-- Summary-toggle help lines are now full-width and aligned correctly in the settings grid.
-- Emergency safety hardening: BetterSimTracker no longer retroactively edits existing chat messages for summary-note visibility, and no longer auto-cleans invalid chat entries during refresh.
-- Summary-note settings copy now explicitly explains future-only behavior and no chat-message edits.
-- Swipe-back / swipe-change events no longer auto-trigger tracker extraction; swipes now refresh state only unless retrack is requested manually.
-- Summary notes are now explicitly non-swipeable (`extra.swipeable=false`) and no longer carry swipe metadata, preventing swipe-based regeneration from Note messages.
-- `MESSAGE_EDITED` retrack is now strictly scoped to the edited AI message only (and only if that edited message already contains tracker data), preventing regeneration on other messages.
-- Tracker UI now auto-recovers from stale `Generating AI response` state when generation tracking ends without an extraction run.
-- Swipe events now hard-reset stale generation flags/UI state, preventing tracker cards from getting stuck on `Generating AI response` after swipes.
-- Swipe-generated new variants now re-extract tracker data correctly even when message index is unchanged.
-- Swipe tracker lookup is now swipe-specific and no longer reuses fallback data from swipe `0` for other swipe variants.
-- Custom stat color selection now persists correctly on first create in color-picker flows (cross-browser).
+- Swipe/edit stability improvements: prevented unwanted retracks, fixed stale `Generating AI response` UI state, and made tracker lookup swipe-specific.
+- Summary note safety hardening: safe message payload handling, exclusion from tracker extraction targets, non-swipeable note metadata, and no retroactive chat mutation.
+- Custom stat color picker persistence now works reliably on first create across browsers.
+And more...
 
 ## [2.0.1] - 2026-02-23
 ### Added
