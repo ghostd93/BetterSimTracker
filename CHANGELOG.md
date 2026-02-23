@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Changed
+- Custom stat wizard wording now uses `Improve description with AI` for clearer phrasing.
+
 ## [2.0.1] - 2026-02-23
 ### Added
 - AI-assisted prompt authoring for custom stats:
