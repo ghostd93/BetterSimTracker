@@ -5160,9 +5160,14 @@ export function openSettingsModal(input: {
       idTouched = true;
       idInput.value = idInput.value.toLowerCase().replace(/[^a-z0-9_]/g, "_");
     });
-    colorPickerNode?.addEventListener("input", () => {
+    const applyPickerColor = (): void => {
+      // Firefox may emit only "change" for <input type="color"> dialog commits.
       syncColorTextFromPicker();
-    });
+      syncDraftFromFields();
+      writeReview();
+    };
+    colorPickerNode?.addEventListener("input", applyPickerColor);
+    colorPickerNode?.addEventListener("change", applyPickerColor);
     colorTextInput?.addEventListener("input", () => {
       syncColorPickerFromText();
     });
