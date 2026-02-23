@@ -6,6 +6,12 @@ All notable changes to BetterSimTracker are documented here.
 ### Added
 - Custom stat wizard now supports AI generation for `Sequential Prompt Override` from required stat metadata (`Label`, `ID`, `Description`) using the currently resolved connection profile.
 
+### Changed
+- AI generation prompt for custom sequential overrides is now stricter and more stat-focused, with stronger anti-generic guidance.
+
+### Fixed
+- Generated custom sequential overrides now strip hidden reasoning blocks (for example `<think>...</think>`) and auto-keep the main bullet instruction block when extra chatter is returned.
+
 ## [2.0.0] - 2026-02-22
 ### Added
 - Full custom numeric stats support: definition schema, add/edit/clone/remove wizards, extraction/runtime processing, persistence (`customStatistics`), tracker cards, graphs, and prompt injection.
