@@ -4,10 +4,16 @@ All notable changes to BetterSimTracker are documented here.
 
 ## [Unreleased]
 ### Added
-- Tracker root actions now include `Summarize` near `Collapse`/`Retrack` to post a prose system summary of the current tracker state directly into chat.
+- `Summarize` now generates tracker summary text with AI (using the currently selected/active connection profile) and posts it to chat as descriptive prose.
 
 ### Changed
 - Custom stat wizard wording now uses `Improve description with AI` for clearer phrasing.
+- Summary output is now sanitized for hidden reasoning tags and normalized to concise prose wrapped as a system-style narrative line.
+- `Summarize` button now shows a loading state while generation is in progress.
+
+### Fixed
+- Summary output now avoids numeric stat reporting (prose-only summary behavior).
+- Summary delivery now uses the ST comment-message flow, so generated summary entries behave like normal deletable chat comments.
 
 ## [2.0.1] - 2026-02-23
 ### Added
