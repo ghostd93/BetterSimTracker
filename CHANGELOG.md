@@ -17,6 +17,7 @@ All notable changes to BetterSimTracker are documented here.
 - Injection prompt templates now support `{{summarizationNote}}` for optional summary-note context.
 - `Summarization Note Visible for AI` now applies to newly generated BetterSimTracker summary notes only (no retroactive note conversion).
 - Prompt injection custom-stat behavior guidance now uses optional per-stat behavior lines (instead of generic low/high fallback wording).
+- Custom-stat behavior-guidance AI generation now produces richer guidance (low/medium/high behavior plus increase/decrease evidence cues).
 
 ### Fixed
 - Summary output now avoids numeric stat reporting (prose-only summary behavior).
@@ -31,6 +32,8 @@ All notable changes to BetterSimTracker are documented here.
 - `MESSAGE_EDITED` retrack is now strictly scoped to the edited AI message only (and only if that edited message already contains tracker data), preventing regeneration on other messages.
 - Tracker UI now auto-recovers from stale `Generating AI response` state when generation tracking ends without an extraction run.
 - Swipe events now hard-reset stale generation flags/UI state, preventing tracker cards from getting stuck on `Generating AI response` after swipes.
+- Swipe-generated new variants now re-extract tracker data correctly even when message index is unchanged.
+- Swipe tracker lookup is now swipe-specific and no longer reuses fallback data from swipe `0` for other swipe variants.
 
 ## [2.0.1] - 2026-02-23
 ### Added
