@@ -2,8 +2,6 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [Unreleased]
-
 ## [2.0.5] - 2026-02-23
 ### Added
 - New AI-powered `Summarize` action that generates prose summary notes from the current tracked state.
