@@ -34,6 +34,7 @@ All notable changes to BetterSimTracker are documented here.
 - Swipe events now hard-reset stale generation flags/UI state, preventing tracker cards from getting stuck on `Generating AI response` after swipes.
 - Swipe-generated new variants now re-extract tracker data correctly even when message index is unchanged.
 - Swipe tracker lookup is now swipe-specific and no longer reuses fallback data from swipe `0` for other swipe variants.
+- Custom stat color selection now persists correctly on first create in Firefox color-picker flows.
 
 ## [2.0.1] - 2026-02-23
 ### Added
