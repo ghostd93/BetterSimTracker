@@ -1264,11 +1264,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   const lastMessage = context.chat[lastIndex];
   const forceRetrack =
     reason === "manual_refresh" ||
-    reason === "MESSAGE_EDITED" ||
-    reason === "MESSAGE_SWIPED" ||
-    reason === "SWIPE_CHANGED" ||
-    reason === "MESSAGE_SWIPE_CHANGED" ||
-    reason === "MESSAGE_SWIPE_DELETED";
+    reason === "MESSAGE_EDITED";
   if (!forceRetrack && getTrackerDataFromMessage(lastMessage)) {
     pushTrace("extract.skip", { reason: "tracker_already_present", trigger: reason, messageIndex: lastIndex });
     return;
@@ -1740,14 +1736,13 @@ function registerEvents(context: STContext): void {
     source.on(eventName, (payload: unknown) => {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.swipe", { event: key, messageIndex });
-      if (context && trackerUiState.phase !== "generating") {
-        const baseTargetIndex = getGenerationTargetMessageIndex(context);
-        const targetIndex = getLastAiMessageIndex(context) ?? baseTargetIndex;
-        setTrackerUi(context, { phase: "generating", done: 0, total: 0, messageIndex: targetIndex, stepLabel: "Generating AI response" });
-        queueRender();
-      }
+      clearPendingSwipeExtraction();
       scheduleRefresh();
-      scheduleSwipeExtraction(key, messageIndex ?? undefined);
+      pushTrace("extract.skip", {
+        reason: "swipe_event_no_auto_retrack",
+        trigger: key,
+        messageIndex: messageIndex ?? null,
+      });
     });
   }
 }
