@@ -4,13 +4,18 @@ import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
 import { isTrackableAiMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from "./promptInjection";
+import {
+  buildTrackerSummaryGenerationPrompt,
+  buildTrackerSummaryLengthenPrompt,
+  buildTrackerSummaryNoNumbersRewritePrompt,
+} from "./prompts";
 import { upsertSettingsPanel } from "./settingsPanel";
 import { discoverConnectionProfiles, getActiveConnectionProfileId, getContext, getSettingsProvenance, loadSettings, logDebug, saveSettings } from "./settings";
 import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLatestTrackerDataWithIndexBefore, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getRecentTrackerHistoryEntries, getTrackerDataFromMessage, mergeCustomStatisticsWithFallback, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
 import { getAllNumericStatDefinitions } from "./statRegistry";
 import type { BetterSimTrackerSettings, CustomStatistics, DeltaDebugRecord, STContext, Statistics, TrackerData } from "./types";
 import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
-import { cancelActiveGenerations } from "./generator";
+import { cancelActiveGenerations, generateJson } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
 import { initCharacterPanel } from "./characterPanel";
 
@@ -39,6 +44,342 @@ let swipeGenerationActive = false;
 let slashCommandsRegistered = false;
 let activeExtractionRunId: number | null = null;
 const cancelledExtractionRuns = new Set<number>();
+const activeSummaryRuns = new Set<number>();
+let summaryVisibilityReloadInFlight = false;
+
+function collectSummaryCharacters(data: TrackerData): string[] {
+  const names = new Set<string>();
+  for (const name of data.activeCharacters ?? []) {
+    if (typeof name === "string" && name.trim()) names.add(name.trim());
+  }
+  const addKeys = (map: Record<string, unknown> | undefined): void => {
+    if (!map || typeof map !== "object") return;
+    for (const key of Object.keys(map)) {
+      if (key.trim()) names.add(key.trim());
+    }
+  };
+  addKeys(data.statistics.affection);
+  addKeys(data.statistics.trust);
+  addKeys(data.statistics.desire);
+  addKeys(data.statistics.connection);
+  addKeys(data.statistics.mood);
+  for (const statValues of Object.values(data.customStatistics ?? {})) {
+    addKeys(statValues as Record<string, unknown>);
+  }
+  return Array.from(names).sort((a, b) => a.localeCompare(b));
+}
+
+function stripHiddenReasoningBlocks(raw: string): string {
+  return String(raw ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/<\s*(think|analysis|reasoning)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*\/?\s*(think|analysis|reasoning)[^>]*>/gi, "")
+    .trim();
+}
+
+function sanitizeGeneratedSummaryText(raw: string): string {
+  let text = stripHiddenReasoningBlocks(raw);
+  if (!text) return "";
+
+  const fencedBlock = text.match(/^```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```$/);
+  if (fencedBlock?.[1]) {
+    text = fencedBlock[1].trim();
+  }
+
+  text = text
+    .replace(/^summary\s*[:\-]\s*/i, "")
+    .replace(/^system\s*summary\s*[:\-]\s*/i, "")
+    .replace(/^["'`]+/, "")
+    .replace(/["'`]+$/, "")
+    .trim();
+
+  return text.slice(0, 1200).trim();
+}
+
+function normalizeSummaryProse(text: string): string {
+  let prose = String(text ?? "").replace(/\r\n/g, "\n").trim();
+  if (!prose) return "";
+
+  // Remove line-based markdown/list artifacts, then flatten to prose.
+  prose = prose
+    .split("\n")
+    .map(line => line.trim().replace(/^[-*]\s+/, ""))
+    .filter(Boolean)
+    .join(" ");
+
+  // Remove common structured wrappers.
+  prose = prose
+    .replace(/^["'`]+/, "")
+    .replace(/["'`]+$/, "")
+    .replace(/^\{[\s\S]*\}$/m, "")
+    .trim();
+
+  // Keep plain prose formatting.
+  prose = prose
+    .replace(/\s+/g, " ")
+    .replace(/\s+([,.;!?])/g, "$1")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
+  if (!prose) return "";
+  if (!/[.!?]$/.test(prose)) {
+    prose = `${prose}.`;
+  }
+  return prose.slice(0, 1000).trim();
+}
+
+function wrapAsSystemNarrativeText(text: string): string {
+  const cleaned = text.replace(/^\*+/, "").replace(/\*+$/, "").trim();
+  return `*${cleaned}*`;
+}
+
+function hasNumericCharacters(text: string): boolean {
+  return /\d/.test(text);
+}
+
+function countSummarySentences(text: string): number {
+  const matches = String(text ?? "").match(/[.!?]+(?:\s|$)/g);
+  return matches?.length ?? 0;
+}
+
+function buildSummaryTrackerStateLines(data: TrackerData, currentSettings: BetterSimTrackerSettings): string {
+  const customLabelMap = new Map<string, string>();
+  for (const stat of currentSettings.customStats ?? []) {
+    const id = String(stat.id ?? "").trim().toLowerCase();
+    if (!id) continue;
+    customLabelMap.set(id, String(stat.label ?? id).trim() || id);
+  }
+
+  const builtInStats: Array<{ key: "affection" | "trust" | "desire" | "connection"; label: string }> = [
+    { key: "affection", label: "affection" },
+    { key: "trust", label: "trust" },
+    { key: "desire", label: "desire" },
+    { key: "connection", label: "connection" },
+  ];
+
+  const lines = collectSummaryCharacters(data).map(name => {
+    const parts: string[] = [];
+    const mood = String(data.statistics.mood?.[name] ?? "").trim().replace(/\s+/g, " ");
+    if (mood) {
+      parts.push(`mood=${mood}`);
+    }
+    const lastThought = String(data.statistics.lastThought?.[name] ?? "").trim().replace(/\s+/g, " ");
+    if (lastThought) {
+      parts.push(`lastThought="${lastThought.slice(0, 180)}"`);
+    }
+
+    for (const { key, label } of builtInStats) {
+      const raw = data.statistics[key]?.[name];
+      const value = Number(raw);
+      if (raw === undefined || Number.isNaN(value)) continue;
+      parts.push(`${label}=${Math.max(0, Math.min(100, Math.round(value)))}`);
+    }
+
+    for (const [statId, byCharacter] of Object.entries(data.customStatistics ?? {})) {
+      const raw = byCharacter?.[name];
+      const value = Number(raw);
+      if (raw === undefined || Number.isNaN(value)) continue;
+      const label = (customLabelMap.get(statId) ?? statId).replace(/\s+/g, "_").toLowerCase();
+      parts.push(`${label}=${Math.max(0, Math.min(100, Math.round(value)))}`);
+    }
+
+    return `- ${name}: ${parts.length ? parts.join(", ") : "no tracked values"}`;
+  });
+
+  return lines.length ? lines.join("\n") : "- no tracked values are available";
+}
+
+function buildRecentContextUpToMessageIndex(context: STContext, messageIndex: number, messageCount: number): string {
+  const maxCount = Math.max(1, messageCount);
+  const endExclusive = Math.min(context.chat.length, Math.max(0, messageIndex) + 1);
+  const start = Math.max(0, endExclusive - maxCount);
+  const chunk = context.chat.slice(start, endExclusive);
+  return chunk
+    .map(message => {
+      if (!message.is_user && !isTrackableAiMessage(message)) return null;
+      const speaker = message.is_user ? context.name1 ?? "User" : message.name ?? "Character";
+      return `${speaker}: ${message.mes}`;
+    })
+    .filter((line): line is string => Boolean(line))
+    .join("\n\n");
+}
+
+function describeBand(value: number, low: string, medium: string, high: string): string {
+  if (value <= 30) return low;
+  if (value <= 60) return medium;
+  return high;
+}
+
+function buildFallbackSummaryProse(data: TrackerData, currentSettings: BetterSimTrackerSettings): string {
+  const names = collectSummaryCharacters(data);
+  if (!names.length) {
+    return "The current relationship state is quiet and there are no meaningful tracked shifts yet.";
+  }
+  const customLabelMap = new Map<string, string>();
+  for (const stat of currentSettings.customStats ?? []) {
+    const id = String(stat.id ?? "").trim().toLowerCase();
+    if (!id) continue;
+    customLabelMap.set(id, String(stat.label ?? id).trim() || id);
+  }
+
+  const sentences = names.map(name => {
+    const affection = Number(data.statistics.affection?.[name] ?? currentSettings.defaultAffection);
+    const trust = Number(data.statistics.trust?.[name] ?? currentSettings.defaultTrust);
+    const desire = Number(data.statistics.desire?.[name] ?? currentSettings.defaultDesire);
+    const connection = Number(data.statistics.connection?.[name] ?? currentSettings.defaultConnection);
+    const mood = String(data.statistics.mood?.[name] ?? currentSettings.defaultMood).trim();
+
+    const warmth = describeBand(affection, "guarded warmth", "measured warmth", "clear warmth");
+    const safety = describeBand(trust, "careful trust", "steady trust", "strong trust");
+    const bond = describeBand(connection, "distant", "steady", "close");
+    const tension = describeBand(desire, "without notable romantic tension", "with mild romantic tension", "with noticeable romantic tension");
+
+    const customBits: string[] = [];
+    for (const [statId, byCharacter] of Object.entries(data.customStatistics ?? {})) {
+      const raw = Number(byCharacter?.[name]);
+      if (Number.isNaN(raw)) continue;
+      const label = customLabelMap.get(statId) ?? statId;
+      const tone = describeBand(raw, "low", "moderate", "high");
+      customBits.push(`${label} feels ${tone}`);
+      if (customBits.length >= 2) break;
+    }
+
+    const customClause = customBits.length ? ` ${name}'s custom-state cues suggest ${customBits.join(" and ")}.` : "";
+    const moodClause = mood ? `${name} currently feels ${mood.toLowerCase()}. ` : "";
+    return `${moodClause}${name} shows ${warmth} toward the user, ${safety}, and a ${bond} overall bond, ${tension}.${customClause}`;
+  });
+
+  return sentences.join(" ");
+}
+
+async function generateTrackerSummaryProse(input: {
+  context: STContext;
+  settings: BetterSimTrackerSettings;
+  data: TrackerData;
+  messageIndex: number;
+}): Promise<{ text: string; profileId: string | null }> {
+  const { context, settings, data, messageIndex } = input;
+  const characters = collectSummaryCharacters(data);
+  const trackedDimensions: string[] = [];
+  if (settings.trackAffection) trackedDimensions.push("warmth/care");
+  if (settings.trackTrust) trackedDimensions.push("trust/safety");
+  if (settings.trackDesire) trackedDimensions.push("desire/tension");
+  if (settings.trackConnection) trackedDimensions.push("connection/closeness");
+  if (settings.trackMood) trackedDimensions.push("mood tone");
+  const trackedCustomLabels = (settings.customStats ?? [])
+    .filter(stat => Boolean(stat.track))
+    .map(stat => String(stat.label ?? stat.id).trim() || stat.id)
+    .filter(Boolean)
+    .slice(0, 8);
+  if (trackedCustomLabels.length) {
+    trackedDimensions.push(`custom cues (${trackedCustomLabels.join(", ")})`);
+  }
+  const contextText = buildRecentContextUpToMessageIndex(context, messageIndex, settings.contextMessages);
+  const trackerStateLines = buildSummaryTrackerStateLines(data, settings);
+  const prompt = buildTrackerSummaryGenerationPrompt({
+    userName: context.name1 ?? "User",
+    activeCharacters: data.activeCharacters ?? [],
+    characters,
+    contextText,
+    trackerStateLines,
+    trackedDimensions,
+  });
+
+  const first = await generateJson(prompt, settings);
+  let summary = sanitizeGeneratedSummaryText(first.text);
+  let profileId: string | null = first.meta.profileId;
+  if (!summary) {
+    throw new Error("Summary generation returned empty text.");
+  }
+
+  if (hasNumericCharacters(summary)) {
+    const rewrite = await generateJson(
+      buildTrackerSummaryNoNumbersRewritePrompt({ draftSummary: summary }),
+      settings,
+    );
+    const rewritten = sanitizeGeneratedSummaryText(rewrite.text);
+    if (rewritten) {
+      summary = rewritten;
+      profileId = rewrite.meta.profileId || profileId;
+    }
+  }
+
+  if (hasNumericCharacters(summary)) {
+    throw new Error("Summary still contains numeric output.");
+  }
+
+  const normalized = normalizeSummaryProse(summary);
+  if (!normalized) {
+    throw new Error("Summary normalization produced empty text.");
+  }
+  let finalSummary = normalized;
+  const sentenceCount = countSummarySentences(finalSummary);
+  if (sentenceCount < 4 || finalSummary.length < 260) {
+    const expand = await generateJson(
+      buildTrackerSummaryLengthenPrompt({ draftSummary: finalSummary }),
+      settings,
+    );
+    let expanded = sanitizeGeneratedSummaryText(expand.text);
+    if (expanded) {
+      if (hasNumericCharacters(expanded)) {
+        const rewriteExpanded = await generateJson(
+          buildTrackerSummaryNoNumbersRewritePrompt({ draftSummary: expanded }),
+          settings,
+        );
+        const rewrittenExpanded = sanitizeGeneratedSummaryText(rewriteExpanded.text);
+        if (rewrittenExpanded) {
+          expanded = rewrittenExpanded;
+          profileId = rewriteExpanded.meta.profileId || profileId;
+        }
+      }
+      if (!hasNumericCharacters(expanded)) {
+        const normalizedExpanded = normalizeSummaryProse(expanded);
+        if (normalizedExpanded && countSummarySentences(normalizedExpanded) >= 4) {
+          finalSummary = normalizedExpanded;
+          profileId = expand.meta.profileId || profileId;
+        }
+      }
+    }
+  }
+  return { text: finalSummary, profileId };
+}
+
+async function sendSummaryAsSystemMessage(
+  context: STContext,
+  summaryText: string,
+  visibleForAi: boolean,
+): Promise<"comment-system" | "comment-ai-visible"> {
+  const anyContext = context as STContext & {
+    sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
+    addOneMessage?: (message: Record<string, unknown>, options?: Record<string, unknown>) => void;
+  };
+
+  const compactText = summaryText.replace(/\s+/g, " ").trim();
+  const now = Date.now();
+  const commonExtra = {
+    gen_id: now,
+    api: "manual",
+    model: "bettersimtracker.summary",
+    bstSummaryNote: true,
+    bst_summary_note: true,
+    swipeable: false,
+  };
+
+  const commentMessage = {
+    name: "Note",
+    is_user: false,
+    is_system: !visibleForAi,
+    send_date: now,
+    mes: compactText,
+    force_avatar: "img/quill.png",
+    extra: visibleForAi
+      ? commonExtra
+      : { ...commonExtra, type: "comment", isSmallSys: false },
+  };
+  context.chat.push(commentMessage);
+  anyContext.addOneMessage?.(commentMessage);
+  return visibleForAi ? "comment-ai-visible" : "comment-system";
+}
 
 function getTraceStorageKey(context: STContext): string {
   return `${getDebugScopeKey(context)}:trace`;
@@ -241,7 +582,7 @@ function queueRender(): void {
     });
 
     const latestAiIndex = context ? getLastAiMessageIndex(context) : null;
-    renderTracker(entries, settings, allCharacterNames, Boolean(context?.groupId), trackerUiState, latestAiIndex, characterName => {
+    renderTracker(entries, settings, allCharacterNames, Boolean(context?.groupId), trackerUiState, latestAiIndex, activeSummaryRuns, characterName => {
       const liveContext = getSafeContext();
       if (!liveContext?.characters?.length) return null;
       const normalized = String(characterName ?? "").trim().toLowerCase();
@@ -275,6 +616,8 @@ function queueRender(): void {
       });
     }, messageIndex => {
       void runExtraction("manual_refresh", messageIndex);
+    }, messageIndex => {
+      void sendTrackerSummaryToChat(messageIndex);
     }, () => {
       if (!isExtracting) return;
       if (activeExtractionRunId != null) {
@@ -645,6 +988,149 @@ function getSafeContext(): STContext | null {
   return getContext();
 }
 
+function sanitizeInvalidChatEntries(context: STContext): number {
+  if (!Array.isArray(context.chat) || context.chat.length === 0) return 0;
+  let removed = 0;
+  for (let i = context.chat.length - 1; i >= 0; i -= 1) {
+    const message = context.chat[i] as unknown;
+    if (!message || typeof message !== "object") {
+      context.chat.splice(i, 1);
+      removed += 1;
+    }
+  }
+  if (removed > 0) {
+    context.saveChatDebounced?.();
+  }
+  return removed;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  return value as Record<string, unknown>;
+}
+
+function isSummaryNoteMessage(message: unknown): message is Record<string, unknown> {
+  const obj = asRecord(message);
+  if (!obj) return false;
+  const extra = asRecord(obj.extra);
+  if (extra) {
+    if (extra.bstSummaryNote === true || extra.bst_summary_note === true) return true;
+    if (String(extra.model ?? "").trim().toLowerCase() === "bettersimtracker.summary") return true;
+  }
+  return false;
+}
+
+async function reloadCurrentChatViewAfterSummarySync(): Promise<void> {
+  if (summaryVisibilityReloadInFlight) return;
+  summaryVisibilityReloadInFlight = true;
+  try {
+    const loadScriptModule = Function("return import('/script.js')") as () => Promise<unknown>;
+    const module = await loadScriptModule() as { reloadCurrentChat?: () => Promise<void> | void };
+    if (typeof module.reloadCurrentChat === "function") {
+      await module.reloadCurrentChat();
+    }
+  } catch {
+    // ignore: best-effort UI refresh only
+  } finally {
+    summaryVisibilityReloadInFlight = false;
+  }
+}
+
+function syncSummaryNoteVisibilityForCurrentChat(context: STContext, visibleForAi: boolean): number {
+  if (!Array.isArray(context.chat) || context.chat.length === 0) return 0;
+  let changedCount = 0;
+
+  for (let i = 0; i < context.chat.length; i += 1) {
+    const message = context.chat[i] as unknown as Record<string, unknown>;
+    if (!isSummaryNoteMessage(message)) continue;
+
+    let changed = false;
+    const targetIsSystem = !visibleForAi;
+
+    if (message.is_user !== false) {
+      message.is_user = false;
+      changed = true;
+    }
+    if (message.is_system !== targetIsSystem) {
+      message.is_system = targetIsSystem;
+      changed = true;
+    }
+    if (String(message.name ?? "").trim() !== "Note") {
+      message.name = "Note";
+      changed = true;
+    }
+    if (String(message.force_avatar ?? "").trim() !== "img/quill.png") {
+      message.force_avatar = "img/quill.png";
+      changed = true;
+    }
+
+    let extra = asRecord(message.extra);
+    if (!extra) {
+      extra = {};
+      message.extra = extra;
+      changed = true;
+    }
+
+    if (extra.bstSummaryNote !== true) {
+      extra.bstSummaryNote = true;
+      changed = true;
+    }
+    if (extra.bst_summary_note !== true) {
+      extra.bst_summary_note = true;
+      changed = true;
+    }
+    if (String(extra.model ?? "").trim() !== "bettersimtracker.summary") {
+      extra.model = "bettersimtracker.summary";
+      changed = true;
+    }
+    if (String(extra.api ?? "").trim() !== "manual") {
+      extra.api = "manual";
+      changed = true;
+    }
+    if (extra.swipeable !== false) {
+      extra.swipeable = false;
+      changed = true;
+    }
+    if (extra.isSmallSys !== false) {
+      extra.isSmallSys = false;
+      changed = true;
+    }
+
+    const currentType = String(extra.type ?? "").trim();
+    if (targetIsSystem) {
+      if (currentType !== "comment") {
+        extra.type = "comment";
+        changed = true;
+      }
+    } else if ("type" in extra) {
+      delete extra.type;
+      changed = true;
+    }
+
+    if ("swipes" in message) {
+      delete message.swipes;
+      changed = true;
+    }
+    if ("swipe_id" in message) {
+      delete message.swipe_id;
+      changed = true;
+    }
+    if ("swipe_info" in message) {
+      delete message.swipe_info;
+      changed = true;
+    }
+
+    if (changed) {
+      changedCount += 1;
+    }
+  }
+
+  if (changedCount > 0) {
+    context.saveChatDebounced?.();
+  }
+  return changedCount;
+}
+
 function getEventMessageIndex(payload: unknown): number | null {
   if (typeof payload === "number") return Number.isInteger(payload) ? payload : null;
   if (!payload || typeof payload !== "object") return null;
@@ -724,13 +1210,88 @@ function summarizeGraphSeries(history: TrackerData[], characterName: string): {
   };
 }
 
+async function sendTrackerSummaryToChat(messageIndex: number): Promise<void> {
+  const context = getSafeContext();
+  if (!context || !settings) return;
+  if (!Number.isInteger(messageIndex) || messageIndex < 0 || messageIndex >= context.chat.length) return;
+  if (activeSummaryRuns.has(messageIndex)) {
+    pushTrace("summary.skip", { reason: "already_running", messageIndex });
+    return;
+  }
+
+  const message = context.chat[messageIndex];
+  const messageData = getTrackerDataFromMessage(message);
+  const data = messageData ?? (latestDataMessageIndex === messageIndex ? latestData : null);
+  if (!data) {
+    pushTrace("summary.skip", { reason: "no_tracker_data", messageIndex });
+    return;
+  }
+  pushTrace("summary.start", { messageIndex });
+  activeSummaryRuns.add(messageIndex);
+  queueRender();
+  try {
+    let summaryBody = "";
+    let aiProfileId: string | null = null;
+    let usedFallback = false;
+
+    try {
+      const generated = await generateTrackerSummaryProse({
+        context,
+        settings,
+        data,
+        messageIndex,
+      });
+      summaryBody = generated.text;
+      aiProfileId = generated.profileId;
+    } catch (error) {
+      usedFallback = true;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      pushTrace("summary.ai.error", {
+        messageIndex,
+        error: errorMessage,
+      });
+      summaryBody = buildFallbackSummaryProse(data, settings);
+    }
+
+    const normalizedBody = normalizeSummaryProse(summaryBody) || "The current relationship state remains steady with no major shifts to report.";
+    const summaryText = wrapAsSystemNarrativeText(normalizedBody);
+    const delivery = await sendSummaryAsSystemMessage(context, summaryText, settings.summarizationNoteVisibleForAI);
+    context.saveChatDebounced?.();
+    await context.saveChat?.();
+    pushTrace("summary.sent", {
+      messageIndex,
+      activeCharacters: data.activeCharacters.length,
+      charCount: collectSummaryCharacters(data).length,
+      textChars: summaryText.length,
+      delivery,
+      aiProfileId,
+      usedFallback,
+    });
+  } finally {
+    activeSummaryRuns.delete(messageIndex);
+    queueRender();
+  }
+}
+
 async function runExtraction(reason: string, targetMessageIndex?: number): Promise<void> {
   const context = getSafeContext();
   if (!context) return;
+  const clearGeneratingUiIfStale = (skipReason: string): void => {
+    if (trackerUiState.phase !== "generating") return;
+    if (chatGenerationInFlight) return;
+    pushTrace("ui.generating.clear", {
+      reason: skipReason,
+      trigger: reason,
+      messageIndex: latestDataMessageIndex,
+    });
+    setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
+    queueRender();
+  };
   if (!settings?.enabled) return;
   if (context.chat.length === 0) return;
   if (isExtracting) {
     pushTrace("extract.skip", { reason: "already_extracting", trigger: reason });
+    clearGeneratingUiIfStale("already_extracting");
     return;
   }
 
@@ -746,18 +1307,17 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   }
   if (lastIndex == null) {
     pushTrace("extract.skip", { reason: "no_ai_message", trigger: reason });
+    clearGeneratingUiIfStale("no_ai_message");
     return;
   }
   const lastMessage = context.chat[lastIndex];
   const forceRetrack =
     reason === "manual_refresh" ||
-    reason === "MESSAGE_EDITED" ||
-    reason === "MESSAGE_SWIPED" ||
-    reason === "SWIPE_CHANGED" ||
-    reason === "MESSAGE_SWIPE_CHANGED" ||
-    reason === "MESSAGE_SWIPE_DELETED";
+    reason === "SWIPE_GENERATION_ENDED" ||
+    (reason === "MESSAGE_EDITED" && typeof targetMessageIndex === "number");
   if (!forceRetrack && getTrackerDataFromMessage(lastMessage)) {
     pushTrace("extract.skip", { reason: "tracker_already_present", trigger: reason, messageIndex: lastIndex });
+    clearGeneratingUiIfStale("tracker_already_present");
     return;
   }
 
@@ -989,6 +1549,8 @@ function refreshFromStoredData(): void {
   }
   if (trackerUiState.phase === "idle") {
     trackerUiState = { ...trackerUiState, messageIndex: latestDataMessageIndex };
+  } else if (trackerUiState.phase === "generating" && !chatGenerationInFlight && !isExtracting) {
+    setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
   }
   pushTrace("refresh.resolve", {
     source,
@@ -1031,13 +1593,6 @@ function registerEvents(context: STContext): void {
         pushTrace("event.generation_started_ignored", { reason: dryRun ? "dry_run" : "quiet_generation", type, dryRun });
         return;
       }
-      if (type === "swipe" && pendingSwipeExtraction) {
-        pendingSwipeExtraction.waitForGenerationEnd = true;
-        if (swipeExtractionTimer !== null) {
-          window.clearTimeout(swipeExtractionTimer);
-          swipeExtractionTimer = null;
-        }
-      }
       swipeGenerationActive = type === "swipe";
       chatGenerationInFlight = true;
       chatGenerationSawCharacterRender = false;
@@ -1060,6 +1615,15 @@ function registerEvents(context: STContext): void {
     }
     if (!chatGenerationInFlight) {
       pushTrace("event.generation_ended_ignored", { reason: "non_chat_or_quiet_generation" });
+      if (trackerUiState.phase === "generating") {
+        pushTrace("ui.generating.clear", {
+          reason: "generation_ended_without_inflight",
+          trigger: "GENERATION_ENDED",
+          messageIndex: latestDataMessageIndex,
+        });
+        setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
+        queueRender();
+      }
       return;
     }
     if (!chatGenerationSawCharacterRender) {
@@ -1073,15 +1637,16 @@ function registerEvents(context: STContext): void {
     chatGenerationInFlight = false;
     chatGenerationStartLastAiIndex = null;
     pushTrace("event.generation_ended");
-    if (swipeGenerationActive && pendingSwipeExtraction) {
-      const pending = pendingSwipeExtraction;
-      pendingSwipeExtraction = null;
-      if (swipeExtractionTimer !== null) {
-        window.clearTimeout(swipeExtractionTimer);
-        swipeExtractionTimer = null;
-      }
+    if (swipeGenerationActive) {
       swipeGenerationActive = false;
-      scheduleExtraction(pending.reason, pending.messageIndex, 2000);
+      if (pendingSwipeExtraction?.waitForGenerationEnd) {
+        pendingSwipeExtraction = null;
+        if (swipeExtractionTimer !== null) {
+          window.clearTimeout(swipeExtractionTimer);
+          swipeExtractionTimer = null;
+        }
+      }
+      scheduleExtraction("SWIPE_GENERATION_ENDED", undefined, 2000);
       return;
     }
     swipeGenerationActive = false;
@@ -1205,7 +1770,32 @@ function registerEvents(context: STContext): void {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.message_edited", { messageIndex });
       scheduleRefresh();
-      scheduleExtraction("MESSAGE_EDITED", messageIndex ?? undefined);
+      if (messageIndex == null || messageIndex < 0 || messageIndex >= context.chat.length) {
+        pushTrace("extract.skip", {
+          reason: "edited_message_index_unknown",
+          trigger: "MESSAGE_EDITED",
+          messageIndex: messageIndex ?? null,
+        });
+        return;
+      }
+      const editedMessage = context.chat[messageIndex];
+      if (!isTrackableAiMessage(editedMessage)) {
+        pushTrace("extract.skip", {
+          reason: "edited_message_not_trackable",
+          trigger: "MESSAGE_EDITED",
+          messageIndex,
+        });
+        return;
+      }
+      if (!getTrackerDataFromMessage(editedMessage)) {
+        pushTrace("extract.skip", {
+          reason: "edited_message_has_no_tracker_data",
+          trigger: "MESSAGE_EDITED",
+          messageIndex,
+        });
+        return;
+      }
+      scheduleExtraction("MESSAGE_EDITED", messageIndex);
     });
   }
 
@@ -1216,14 +1806,27 @@ function registerEvents(context: STContext): void {
     source.on(eventName, (payload: unknown) => {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.swipe", { event: key, messageIndex });
-      if (context && trackerUiState.phase !== "generating") {
-        const baseTargetIndex = getGenerationTargetMessageIndex(context);
-        const targetIndex = getLastAiMessageIndex(context) ?? baseTargetIndex;
-        setTrackerUi(context, { phase: "generating", done: 0, total: 0, messageIndex: targetIndex, stepLabel: "Generating AI response" });
-        queueRender();
+      clearPendingSwipeExtraction();
+      if (!chatGenerationInFlight) {
+        chatGenerationSawCharacterRender = false;
+        chatGenerationStartLastAiIndex = null;
+        swipeGenerationActive = false;
+        if (trackerUiState.phase === "generating") {
+          pushTrace("ui.generating.clear", {
+            reason: "swipe_event_force_idle",
+            trigger: key,
+            messageIndex: latestDataMessageIndex,
+          });
+          setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
+          queueRender();
+        }
       }
       scheduleRefresh();
-      scheduleSwipeExtraction(key, messageIndex ?? undefined);
+      pushTrace("extract.skip", {
+        reason: "swipe_event_no_auto_retrack",
+        trigger: key,
+        messageIndex: messageIndex ?? null,
+      });
     });
   }
 }
@@ -1328,6 +1931,8 @@ function openSettings(): void {
           includeGraphInDiagnostics: currentSettings.includeGraphInDiagnostics,
           injectTrackerIntoPrompt: currentSettings.injectTrackerIntoPrompt,
           injectPromptDepth: currentSettings.injectPromptDepth,
+          summarizationNoteVisibleForAI: currentSettings.summarizationNoteVisibleForAI,
+          injectSummarizationNote: currentSettings.injectSummarizationNote,
           contextMessages: currentSettings.contextMessages,
           maxConcurrentCalls: currentSettings.maxConcurrentCalls,
           maxDeltaPerTurn: currentSettings.maxDeltaPerTurn,

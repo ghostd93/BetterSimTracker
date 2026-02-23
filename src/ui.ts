@@ -24,6 +24,7 @@ import {
   NUMERIC_PROMPT_PROTOCOL,
   UNIFIED_PROMPT_PROTOCOL,
   buildBuiltInSequentialPromptGenerationPrompt,
+  buildCustomStatBehaviorGuidanceGenerationPrompt,
   buildCustomStatDescriptionGenerationPrompt,
   buildSequentialCustomOverrideGenerationPrompt,
   moodOptions,
@@ -288,6 +289,7 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     id: String(definition.id ?? "").trim().toLowerCase(),
     label: String(definition.label ?? "").trim(),
     description: typeof definition.description === "string" ? definition.description : undefined,
+    behaviorGuidance: typeof definition.behaviorGuidance === "string" ? definition.behaviorGuidance : undefined,
     defaultValue: Number(definition.defaultValue),
     maxDeltaPerTurn: definition.maxDeltaPerTurn === undefined ? undefined : Number(definition.maxDeltaPerTurn),
     track: Boolean(definition.track),
@@ -436,6 +438,33 @@ function sanitizeGeneratedCustomDescription(raw: string): string {
   text = text.replace(/\s+/g, " ").trim();
   if (!text) return "";
   return text.slice(0, 200).trim();
+}
+
+function sanitizeGeneratedBehaviorGuidance(raw: string): string {
+  let text = stripHiddenReasoningBlocks(raw);
+  if (!text) return "";
+
+  const fenceMatch = text.match(/^```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```$/);
+  if (fenceMatch?.[1]) {
+    text = fenceMatch[1].trim();
+  }
+
+  const lines = text
+    .split("\n")
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => line.replace(/^[-*]\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 6)
+    .map(line => `- ${line}`);
+
+  if (lines.length) {
+    return lines.join("\n").slice(0, 2000);
+  }
+
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (!compact) return "";
+  return `- ${compact}`.slice(0, 2000);
 }
 
 function getGlobalStExpressionImageOptions(settings: BetterSimTrackerSettings): StExpressionImageOptions {
@@ -789,6 +818,49 @@ function ensureStyles(): void {
     0 10px 20px rgba(0,0,0,0.33),
     0 0 0 1px rgba(255,255,255,0.07) inset;
 }
+.bst-root-actions .bst-root-action-summary {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  border: 1px solid color-mix(in srgb, var(--bst-accent) 55%, #ffffff 45%);
+  background:
+    radial-gradient(86% 86% at 28% 24%, rgba(255,255,255,0.24), transparent 50%),
+    linear-gradient(145deg, rgba(14,20,31,0.96), rgba(10,14,24,0.94));
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.30),
+    0 0 0 1px rgba(255,255,255,0.06) inset;
+}
+.bst-root-actions .bst-root-action-summary:hover {
+  border-color: color-mix(in srgb, var(--bst-accent) 76%, #ffffff 24%);
+  filter: brightness(1.07);
+  transform: translateY(-1px);
+}
+.bst-root-actions .bst-root-action-summary:active {
+  transform: translateY(1px);
+}
+.bst-root-actions .bst-root-action-summary.is-loading {
+  cursor: progress;
+  opacity: 0.86;
+  filter: saturate(0.9);
+  transform: none;
+}
+.bst-root-actions .bst-root-action-summary.is-loading:hover,
+.bst-root-actions .bst-root-action-summary.is-loading:active {
+  transform: none;
+  filter: saturate(0.9);
+}
+.bst-root-actions .bst-root-action-summary.is-loading span {
+  display: inline-block;
+  animation: bst-summary-spin 1s linear infinite;
+}
+@keyframes bst-summary-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 .bst-root-actions .bst-root-action-retrack:hover {
   border-color: color-mix(in srgb, var(--bst-accent) 88%, #ffffff 12%);
   filter: brightness(1.08);
@@ -805,6 +877,7 @@ function ensureStyles(): void {
   transform: rotate(-38deg);
 }
 .bst-root-actions .bst-root-action-retrack:focus-visible,
+.bst-root-actions .bst-root-action-summary:focus-visible,
 .bst-root-actions .bst-root-action-main:focus-visible {
   outline: 2px solid rgba(125, 211, 252, 0.88);
   outline-offset: 1px;
@@ -1203,6 +1276,13 @@ function ensureStyles(): void {
 .bst-settings-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bst-settings-grid-compact { gap: 8px; }
 .bst-settings-grid-single { grid-template-columns: minmax(0, 1fr); }
+.bst-settings-grid .bst-check-grid {
+  grid-column: 1 / -1;
+}
+.bst-settings-grid .bst-toggle-help {
+  grid-column: 1 / -1;
+  margin-top: -4px;
+}
 .bst-check-grid {
   display: grid;
   column-gap: 22px;
@@ -2433,6 +2513,11 @@ function ensureStyles(): void {
     min-width: 28px;
     height: 28px;
   }
+  .bst-root-action-summary {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+  }
   .bst-mood-preview-backdrop {
     padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
   }
@@ -2665,9 +2750,11 @@ export function renderTracker(
   isGroupChat: boolean,
   uiState: TrackerUiState,
   latestAiIndex: number | null,
+  summaryBusyMessageIndices: Set<number> | undefined,
   resolveCharacterAvatar?: (characterName: string) => string | null,
   onOpenGraph?: (characterName: string) => void,
   onRetrackMessage?: (messageIndex: number) => void,
+  onSendSummaryMessage?: (messageIndex: number) => void,
   onCancelExtraction?: () => void,
   onRequestRerender?: () => void,
 ): void {
@@ -2762,6 +2849,17 @@ export function renderTracker(
           const idx = Number(root.dataset.messageIndex);
           if (!Number.isNaN(idx)) {
             onRetrackMessage?.(idx);
+          }
+          return;
+        }
+        const sendSummary = target?.closest('[data-bst-action="send-summary"]') as HTMLButtonElement | null;
+        if (sendSummary) {
+          if (sendSummary.disabled || sendSummary.dataset.loading === "true") {
+            return;
+          }
+          const idx = Number(root.dataset.messageIndex);
+          if (!Number.isNaN(idx)) {
+            onSendSummaryMessage?.(idx);
           }
           return;
         }
@@ -2866,6 +2964,7 @@ export function renderTracker(
     }
 
     const showRetrack = latestAiIndex != null && entry.messageIndex === latestAiIndex;
+    const summaryBusy = Boolean(showRetrack && summaryBusyMessageIndices?.has(entry.messageIndex));
     const collapsed = root.classList.contains("bst-root-collapsed");
     const activeSet = new Set(data.activeCharacters.map(normalizeName));
     const allNumericDefs = getNumericStatDefinitions(settings);
@@ -2899,6 +2998,7 @@ export function renderTracker(
       `msg:${entry.messageIndex}`,
       `collapsed:${collapsed ? "1" : "0"}`,
       `retrack:${showRetrack ? "1" : "0"}`,
+      `summarybusy:${summaryBusy ? "1" : "0"}`,
       `inactive:${settings.showInactive ? "1" : "0"}`,
       `thought:${settings.showLastThought ? "1" : "0"}`,
       `inactivelabel:${settings.inactiveLabel}`,
@@ -3003,6 +3103,7 @@ export function renderTracker(
         <span class="bst-root-action-icon" aria-hidden="true">${collapsed ? "&#9656;" : "&#9662;"}</span>
         <span class="bst-root-action-label">${collapsed ? "Expand cards" : "Collapse cards"}</span>
       </button>
+      ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-root-action-summary${summaryBusy ? " is-loading" : ""}" data-bst-action="send-summary" data-loading="${summaryBusy ? "true" : "false"}" title="${summaryBusy ? "Generating prose summary of current tracked stats..." : "Generate prose summary of current tracked stats and post as a Note"}" aria-label="${summaryBusy ? "Generating prose summary of current tracked stats..." : "Generate prose summary of current tracked stats and post as a Note"}"${summaryBusy ? " disabled" : ""}><span aria-hidden="true">${summaryBusy ? "&#8987;" : "&#128221;"}</span></button>` : ""}
       ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-mini-btn-accent bst-root-action-retrack" data-bst-action="retrack" title="Retrack latest AI message" aria-label="Retrack latest AI message"><span aria-hidden="true">&#x21BB;</span></button>` : ""}
     `;
     root.appendChild(actions);
@@ -3667,10 +3768,15 @@ export function openSettingsModal(input: {
         <div class="bst-check-grid">
           <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
           <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
+          <label class="bst-check"><input data-k="summarizationNoteVisibleForAI" type="checkbox">Summarization Note Visible for AI (future notes)</label>
+          <label class="bst-check" data-bst-row="injectSummarizationNote"><input data-k="injectSummarizationNote" type="checkbox">Inject Summarization Note</label>
           <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
           <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
         </div>
+        <div class="bst-help-line bst-toggle-help"><strong>Summarize</strong> creates a prose note of current tracked stats (no numbers), typically 4-6 sentences, grounded in recent messages.</div>
+        <div class="bst-help-line bst-toggle-help"><code>Summarization Note Visible for AI</code> affects only newly generated BetterSimTracker summary notes. Existing notes are not modified for safety.</div>
+        <div class="bst-help-line bst-toggle-help"><code>Inject Summarization Note</code> only affects hidden tracker prompt injection guidance and does not edit chat messages.</div>
         <div class="bst-section-divider" data-bst-row="injectPromptDivider">Injection Prompt</div>
         <div class="bst-injection-prompt" data-bst-row="injectPromptBlock">
           <div class="bst-help-line">Shown only when Inject Tracker Into Prompt is enabled.</div>
@@ -3682,6 +3788,7 @@ export function openSettingsModal(input: {
             <li><code>{{reactRules}}</code> — how-to-react rules</li>
             <li><code>{{priorityRules}}</code> — priority rules block</li>
             <li><code>{{lines}}</code> — per-character state lines</li>
+            <li><code>{{summarizationNote}}</code> — optional latest tracker summary note (when enabled)</li>
           </ul>
           <div class="bst-prompt-group bst-prompt-inline">
             <div class="bst-prompt-head">
@@ -4243,6 +4350,8 @@ export function openSettingsModal(input: {
   set("confidenceDampening", String(input.settings.confidenceDampening));
   set("moodStickiness", String(input.settings.moodStickiness));
   set("injectTrackerIntoPrompt", String(input.settings.injectTrackerIntoPrompt));
+  set("summarizationNoteVisibleForAI", String(input.settings.summarizationNoteVisibleForAI));
+  set("injectSummarizationNote", String(input.settings.injectSummarizationNote));
   set("autoDetectActive", String(input.settings.autoDetectActive));
   set("activityLookback", String(input.settings.activityLookback));
   set("showInactive", String(input.settings.showInactive));
@@ -4338,6 +4447,7 @@ export function openSettingsModal(input: {
     label: string;
     id: string;
     description: string;
+    behaviorGuidance: string;
     defaultValue: string;
     maxDeltaPerTurn: string;
     enabled: boolean;
@@ -4353,6 +4463,7 @@ export function openSettingsModal(input: {
         label: "",
         id: "",
         description: "",
+        behaviorGuidance: "",
         defaultValue: "50",
         maxDeltaPerTurn: "",
         enabled: true,
@@ -4370,6 +4481,7 @@ export function openSettingsModal(input: {
       label: clone.label,
       id: duplicateId,
       description: clone.description ?? "",
+      behaviorGuidance: clone.behaviorGuidance ?? "",
       defaultValue: String(Number.isFinite(clone.defaultValue) ? Math.round(clone.defaultValue) : 50),
       maxDeltaPerTurn: clone.maxDeltaPerTurn == null ? "" : String(Math.round(clone.maxDeltaPerTurn)),
       enabled: clone.track || clone.showOnCard || clone.showInGraph,
@@ -4434,6 +4546,12 @@ export function openSettingsModal(input: {
     }
 
     if (step >= 4) {
+      if (draft.behaviorGuidance.length > 2000) {
+        errors.push("Behavior instruction is too long.");
+      }
+    }
+
+    if (step >= 5) {
       const color = draft.color.trim();
       if (color && !/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color)) {
         errors.push("Color must be empty or a hex value like #66ccff.");
@@ -4446,12 +4564,14 @@ export function openSettingsModal(input: {
   const toCustomStatDefinition = (draft: CustomStatDraft): CustomStatDefinition => {
     const maxDeltaText = draft.maxDeltaPerTurn.trim();
     const maxDeltaValue = maxDeltaText ? Number(maxDeltaText) : null;
+    const behaviorGuidance = draft.behaviorGuidance.trim();
     const color = draft.color.trim();
     const template = draft.sequentialPromptTemplate.trim();
     return {
       id: draft.id.trim().toLowerCase(),
       label: draft.label.trim(),
       description: draft.description.trim(),
+      behaviorGuidance: behaviorGuidance || undefined,
       defaultValue: Math.max(0, Math.min(100, Math.round(Number(draft.defaultValue)))),
       maxDeltaPerTurn: maxDeltaValue == null || !Number.isFinite(maxDeltaValue)
         ? undefined
@@ -4741,7 +4861,7 @@ export function openSettingsModal(input: {
       <div class="bst-custom-wizard-head">
         <div>
           <div class="bst-custom-wizard-title">${mode === "edit" ? "Edit" : mode === "duplicate" ? "Clone" : "Add"} Custom Stat</div>
-          <div class="bst-custom-wizard-step" data-bst-custom-step>Step 1 / 5</div>
+          <div class="bst-custom-wizard-step" data-bst-custom-step>Step 1 / 6</div>
         </div>
         <button type="button" class="bst-btn bst-close-btn" data-action="custom-close" aria-label="Close">&times;</button>
       </div>
@@ -4798,6 +4918,20 @@ export function openSettingsModal(input: {
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="4">
+        <div class="bst-help-line">Optional behavior instruction for prompt injection. Define low/medium/high behavior and optional increase/decrease evidence cues for this specific custom stat.</div>
+        <label>Behavior Instruction (optional)
+          <textarea data-bst-custom-field="behaviorGuidance" rows="6" placeholder="Optional. Example:\n- low focus -> easily distracted, short replies, weak follow-through.\n- medium focus -> generally attentive but can drift during long exchanges.\n- high focus -> sustained attention, user-first responses, clear follow-through.\n- increase cues -> direct user engagement, clarifying questions, consistent follow-up.\n- decrease cues -> evasive replies, frequent topic drift, delayed/partial engagement.">${escapeHtml(draft.behaviorGuidance)}</textarea>
+        </label>
+        <div class="bst-custom-ai-row">
+          <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-generate-behavior" data-loading="false">
+            <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
+            <span class="bst-custom-ai-btn-label" data-bst-custom-behavior-btn-label>Generate with AI</span>
+          </button>
+          <span class="bst-custom-ai-status" data-bst-custom-behavior-status>Uses current connection profile.</span>
+        </div>
+      </div>
+
+      <div class="bst-custom-wizard-panel" data-bst-custom-panel="5">
         <div class="bst-help-line">Color helps visually distinguish this stat in cards and graph.</div>
         <label>Color (optional)
           <div class="bst-color-inputs">
@@ -4807,7 +4941,7 @@ export function openSettingsModal(input: {
         </label>
       </div>
 
-      <div class="bst-custom-wizard-panel" data-bst-custom-panel="5">
+      <div class="bst-custom-wizard-panel" data-bst-custom-panel="6">
         <div class="bst-help-line">Review before saving:</div>
         <pre class="bst-custom-wizard-review" data-bst-custom-review></pre>
       </div>
@@ -4833,13 +4967,18 @@ export function openSettingsModal(input: {
     const generateTemplateBtn = wizard.querySelector('[data-action="custom-generate-template"]') as HTMLButtonElement | null;
     const generateTemplateLabelNode = wizard.querySelector("[data-bst-custom-template-btn-label]") as HTMLElement | null;
     const generateStatusNode = wizard.querySelector("[data-bst-custom-template-status]") as HTMLElement | null;
+    const generateBehaviorBtn = wizard.querySelector('[data-action="custom-generate-behavior"]') as HTMLButtonElement | null;
+    const generateBehaviorLabelNode = wizard.querySelector("[data-bst-custom-behavior-btn-label]") as HTMLElement | null;
+    const generateBehaviorStatusNode = wizard.querySelector("[data-bst-custom-behavior-status]") as HTMLElement | null;
     const getField = (name: string): HTMLInputElement | HTMLTextAreaElement | null =>
       wizard.querySelector(`[data-bst-custom-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
     const colorPickerNode = wizard.querySelector('[data-bst-custom-color-picker]') as HTMLInputElement | null;
     let generateDescriptionRequestId = 0;
     let generateTemplateRequestId = 0;
+    let generateBehaviorRequestId = 0;
     let generatingDescription = false;
     let generatingTemplate = false;
+    let generatingBehavior = false;
 
     const toPickerHex = (raw: string, fallback: string): string => {
       const value = raw.trim();
@@ -4857,6 +4996,7 @@ export function openSettingsModal(input: {
       const labelNode = getField("label");
       const idNode = getField("id");
       const descriptionNode = getField("description");
+      const behaviorGuidanceNode = getField("behaviorGuidance");
       const defaultNode = getField("defaultValue");
       const maxDeltaNode = getField("maxDeltaPerTurn");
       const enabledNode = getField("enabled") as HTMLInputElement | null;
@@ -4866,6 +5006,7 @@ export function openSettingsModal(input: {
       draft.label = String(labelNode?.value ?? "");
       draft.id = String(idNode?.value ?? "").toLowerCase();
       draft.description = String(descriptionNode?.value ?? "");
+      draft.behaviorGuidance = String(behaviorGuidanceNode?.value ?? "");
       draft.defaultValue = String(defaultNode?.value ?? "");
       draft.maxDeltaPerTurn = String(maxDeltaNode?.value ?? "");
       draft.enabled = Boolean(enabledNode?.checked);
@@ -4894,15 +5035,15 @@ export function openSettingsModal(input: {
     };
 
     const syncStepUi = (): void => {
-      if (stepLabel) stepLabel.textContent = `Step ${step} / 5`;
+      if (stepLabel) stepLabel.textContent = `Step ${step} / 6`;
       Array.from(wizard.querySelectorAll("[data-bst-custom-panel]")).forEach(panel => {
         const element = panel as HTMLElement;
         const panelStep = Number(element.dataset.bstCustomPanel ?? "1");
         element.classList.toggle("is-active", panelStep === step);
       });
       if (prevBtn) prevBtn.style.visibility = step === 1 ? "hidden" : "visible";
-      if (nextBtn) nextBtn.style.display = step === 5 ? "none" : "";
-      if (saveBtn) saveBtn.style.display = step === 5 ? "" : "none";
+      if (nextBtn) nextBtn.style.display = step === 6 ? "none" : "";
+      if (saveBtn) saveBtn.style.display = step === 6 ? "" : "none";
       writeReview();
     };
 
@@ -4973,11 +5114,24 @@ export function openSettingsModal(input: {
       );
     };
 
+    const setBehaviorGenerateLoading = (loading: boolean): void => {
+      generatingBehavior = loading;
+      setButtonLoading(
+        generateBehaviorBtn,
+        generateBehaviorLabelNode,
+        loading,
+        "Generating...",
+        "Generate with AI",
+      );
+    };
+
     const close = (): void => {
       generateDescriptionRequestId += 1;
       generateTemplateRequestId += 1;
+      generateBehaviorRequestId += 1;
       setDescriptionGenerateLoading(false);
       setTemplateGenerateLoading(false);
+      setBehaviorGenerateLoading(false);
       closeCustomWizard();
     };
     const currentId = source?.id;
@@ -4988,7 +5142,7 @@ export function openSettingsModal(input: {
 
     const validateAll = (): boolean => {
       syncDraftFromFields();
-      return setErrors(validateCustomStatDraft(draft, mode, 4, currentId));
+      return setErrors(validateCustomStatDraft(draft, mode, 5, currentId));
     };
 
     const labelInput = getField("label") as HTMLInputElement | null;
@@ -5007,15 +5161,21 @@ export function openSettingsModal(input: {
       idTouched = true;
       idInput.value = idInput.value.toLowerCase().replace(/[^a-z0-9_]/g, "_");
     });
-    colorPickerNode?.addEventListener("input", () => {
+    const applyPickerColor = (): void => {
+      // Firefox may emit only "change" for <input type="color"> dialog commits.
       syncColorTextFromPicker();
-    });
+      syncDraftFromFields();
+      writeReview();
+    };
+    colorPickerNode?.addEventListener("input", applyPickerColor);
+    colorPickerNode?.addEventListener("change", applyPickerColor);
     colorTextInput?.addEventListener("input", () => {
       syncColorPickerFromText();
     });
     syncColorPickerFromText();
     setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "idle");
     setGenerateStatus(generateStatusNode, "Uses current connection profile.", "idle");
+    setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "idle");
 
     improveDescriptionBtn?.addEventListener("click", async () => {
       if (generatingDescription) return;
@@ -5156,6 +5316,79 @@ export function openSettingsModal(input: {
       }
     });
 
+    generateBehaviorBtn?.addEventListener("click", async () => {
+      if (generatingBehavior) return;
+      syncDraftFromFields();
+
+      const generationErrors: string[] = [];
+      const label = draft.label.trim();
+      const statId = draft.id.trim().toLowerCase();
+      const description = draft.description.trim();
+      const behaviorGuidance = draft.behaviorGuidance.trim();
+
+      if (!label) generationErrors.push("Label is required before AI generation.");
+      if (!statId) generationErrors.push("ID is required before AI generation.");
+      if (statId && !CUSTOM_STAT_ID_REGEX.test(statId)) {
+        generationErrors.push("ID must match: start with a letter, then lowercase letters/numbers/underscore (2..32 chars).");
+      }
+      if (statId && RESERVED_CUSTOM_STAT_IDS.has(statId)) {
+        generationErrors.push(`ID '${statId}' is reserved.`);
+      }
+      if (!description) generationErrors.push("Description is required before AI generation.");
+      if (!setErrors(generationErrors)) {
+        setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "error", "Fill Label, ID, and Description first.");
+        return;
+      }
+
+      const requestId = ++generateBehaviorRequestId;
+      setBehaviorGenerateLoading(true);
+      setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "loading", "Generating behavior instruction...");
+      try {
+        const settingsForRequest = collectSettings();
+        const prompt = buildCustomStatBehaviorGuidanceGenerationPrompt({
+          statId,
+          statLabel: label,
+          statDescription: description,
+          currentGuidance: behaviorGuidance,
+        });
+        const response = await generateJson(prompt, settingsForRequest);
+        if (requestId !== generateBehaviorRequestId) return;
+
+        const cleaned = sanitizeGeneratedBehaviorGuidance(response.text);
+        if (!cleaned) {
+          throw new Error("AI returned empty behavior instruction text. Try again.");
+        }
+
+        const resolvedGuidance = cleaned
+          .replaceAll("{{statId}}", statId)
+          .replaceAll("{{statLabel}}", label)
+          .replaceAll("{{statDescription}}", description);
+
+        const behaviorNode = getField("behaviorGuidance") as HTMLTextAreaElement | null;
+        if (!behaviorNode) {
+          throw new Error("Behavior instruction field is unavailable.");
+        }
+        behaviorNode.value = resolvedGuidance;
+        behaviorNode.dispatchEvent(new Event("input", { bubbles: true }));
+        syncDraftFromFields();
+        writeReview();
+        setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "success", "Generated. Review and edit if needed.");
+        logDebug(settingsForRequest, "prompts", "custom.stat.behavior.generated", {
+          statId,
+          profileId: response.meta.profileId,
+          outputChars: resolvedGuidance.length,
+        });
+      } catch (error) {
+        if (requestId !== generateBehaviorRequestId) return;
+        const message = error instanceof Error ? error.message : String(error);
+        setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "error", message || "Generation failed. Try again.");
+      } finally {
+        if (requestId === generateBehaviorRequestId) {
+          setBehaviorGenerateLoading(false);
+        }
+      }
+    });
+
     backdropNode.addEventListener("click", close);
     wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
     prevBtn?.addEventListener("click", () => {
@@ -5166,7 +5399,7 @@ export function openSettingsModal(input: {
     });
     nextBtn?.addEventListener("click", () => {
       if (!validateCurrentStep()) return;
-      if (step >= 5) return;
+      if (step >= 6) return;
       step += 1;
       setErrors([]);
       syncStepUi();
@@ -5284,6 +5517,8 @@ export function openSettingsModal(input: {
       confidenceDampening: readNumber("confidenceDampening", input.settings.confidenceDampening, 0, 1),
       moodStickiness: readNumber("moodStickiness", input.settings.moodStickiness, 0, 1),
       injectTrackerIntoPrompt: readBool("injectTrackerIntoPrompt", input.settings.injectTrackerIntoPrompt),
+      summarizationNoteVisibleForAI: readBool("summarizationNoteVisibleForAI", input.settings.summarizationNoteVisibleForAI),
+      injectSummarizationNote: readBool("injectSummarizationNote", input.settings.injectSummarizationNote),
       autoDetectActive: readBool("autoDetectActive", input.settings.autoDetectActive),
       activityLookback: readNumber("activityLookback", input.settings.activityLookback, 1, 25),
       showInactive: readBool("showInactive", input.settings.showInactive),
@@ -5340,6 +5575,7 @@ export function openSettingsModal(input: {
     const graphDiagRow = modal.querySelector('[data-bst-row="includeGraphInDiagnostics"]') as HTMLElement | null;
     const injectPromptBlock = modal.querySelector('[data-bst-row="injectPromptBlock"]') as HTMLElement | null;
     const injectPromptDivider = modal.querySelector('[data-bst-row="injectPromptDivider"]') as HTMLElement | null;
+    const injectSummarizationNoteRow = modal.querySelector('[data-bst-row="injectSummarizationNote"]') as HTMLElement | null;
     const moodAdvancedBlock = modal.querySelector('[data-bst-row="moodAdvancedBlock"]') as HTMLElement | null;
     const globalMoodExpressionMap = modal.querySelector('[data-bst-row="globalMoodExpressionMap"]') as HTMLElement | null;
     const stExpressionImageOptions = modal.querySelector('[data-bst-row="stExpressionImageOptions"]') as HTMLElement | null;
@@ -5386,6 +5622,9 @@ export function openSettingsModal(input: {
     }
     if (injectPromptDivider) {
       injectPromptDivider.style.display = current.injectTrackerIntoPrompt ? "block" : "none";
+    }
+    if (injectSummarizationNoteRow) {
+      injectSummarizationNoteRow.style.display = current.injectTrackerIntoPrompt ? "" : "none";
     }
     if (moodAdvancedBlock) {
       moodAdvancedBlock.style.display = current.trackMood ? "block" : "none";
@@ -5467,6 +5706,8 @@ export function openSettingsModal(input: {
     confidenceDampening: "How strongly model confidence scales stat deltas (0 = ignore confidence, 1 = full effect).",
     moodStickiness: "Higher values keep previous mood unless confidence is strong.",
     injectTrackerIntoPrompt: "Inject current relationship state into generation prompt for behavioral coherence.",
+    summarizationNoteVisibleForAI: "Controls visibility mode for newly generated Summarize notes (prose summaries of current tracked stats). Existing notes are unchanged for safety.",
+    injectSummarizationNote: "Include the latest Summarize note (prose summary of current tracked stats) in hidden tracker prompt injection guidance only (no chat-message edits).",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",
     activityLookback: "How many recent messages are scanned for active-speaker detection.",
     trackAffection: "Enable Affection stat extraction and updates.",

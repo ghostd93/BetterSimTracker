@@ -3,8 +3,23 @@
 All notable changes to BetterSimTracker are documented here.
 
 ## [Unreleased]
+
+## [2.0.5] - 2026-02-23
+### Added
+- New AI-powered `Summarize` action that generates prose summary notes from the current tracked state.
+- New summary controls: `Summarization Note Visible for AI` and `Inject Summarization Note`.
+- Custom stat wizard now includes an optional `Behavior Instruction` step with `Generate with AI`.
+
 ### Changed
-- Custom stat wizard wording now uses `Improve description with AI` for clearer phrasing.
+- Summary generation is now prose-first and more robust: normalization pass, longer target output (`4-6` sentences), and tracked-dimension-aware prompting.
+- Custom stat AI helpers were improved for clearer, stat-specific generation (description + sequential/behavior guidance).
+- Injection templates now support `{{summarizationNote}}` for optional summary context.
+
+### Fixed
+- Swipe/edit stability improvements: prevented unwanted retracks, fixed stale `Generating AI response` UI state, and made tracker lookup swipe-specific.
+- Summary note safety hardening: safe message payload handling, exclusion from tracker extraction targets, non-swipeable note metadata, and no retroactive chat mutation.
+- Custom stat color picker persistence now works reliably on first create across browsers.
+And more...
 
 ## [2.0.1] - 2026-02-23
 ### Added

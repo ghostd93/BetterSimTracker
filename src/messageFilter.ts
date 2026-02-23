@@ -22,8 +22,18 @@ function hasGeneratedMediaAttachment(message: ChatMessage): boolean {
   return false;
 }
 
-export function isTrackableAiMessage(message: ChatMessage): boolean {
+function isTrackerSummaryNote(message: ChatMessage): boolean {
+  const extra = asRecord((message as unknown as { extra?: unknown }).extra);
+  if (!extra) return false;
+  if (extra.bstSummaryNote === true) return true;
+  if (extra.bst_summary_note === true) return true;
+  return String(extra.model ?? "").trim().toLowerCase() === "bettersimtracker.summary";
+}
+
+export function isTrackableAiMessage(message: ChatMessage | null | undefined): boolean {
+  if (!message || typeof message !== "object") return false;
   if (message.is_user || message.is_system) return false;
+  if (isTrackerSummaryNote(message)) return false;
   if (hasGeneratedMediaAttachment(message)) return false;
   return true;
 }

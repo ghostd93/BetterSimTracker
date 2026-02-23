@@ -31,6 +31,7 @@ export interface CustomStatDefinition {
   id: CustomStatKey;
   label: string;
   description?: string;
+  behaviorGuidance?: string;
   defaultValue: number;
   maxDeltaPerTurn?: number;
   track: boolean;
@@ -63,6 +64,8 @@ export interface BetterSimTrackerSettings {
   connectionProfile: string;
   injectTrackerIntoPrompt: boolean;
   injectPromptDepth: number;
+  summarizationNoteVisibleForAI: boolean;
+  injectSummarizationNote: boolean;
   sequentialExtraction: boolean;
   maxDeltaPerTurn: number;
   maxTokensOverride: number;
@@ -203,6 +206,8 @@ export interface STContext {
   groups?: Group[];
   eventSource?: STEventSource;
   event_types?: Record<string, string>;
+  addOneMessage?: (message: ChatMessage, options?: Record<string, unknown>) => void;
+  sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
   saveChat?: () => Promise<void> | void;
   saveChatDebounced?: () => void;
   saveSettingsDebounced?: () => void;

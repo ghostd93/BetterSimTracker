@@ -43,6 +43,8 @@ export const defaultSettings: BetterSimTrackerSettings = {
   connectionProfile: "",
   injectTrackerIntoPrompt: true,
   injectPromptDepth: 0,
+  summarizationNoteVisibleForAI: false,
+  injectSummarizationNote: false,
   sequentialExtraction: false,
   maxDeltaPerTurn: 15,
   maxTokensOverride: 0,
@@ -394,6 +396,8 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     connectionProfile: typeof input.connectionProfile === "string" ? input.connectionProfile.trim() : defaultSettings.connectionProfile,
     injectTrackerIntoPrompt: asBool(input.injectTrackerIntoPrompt, defaultSettings.injectTrackerIntoPrompt),
     injectPromptDepth: clampInt(input.injectPromptDepth, defaultSettings.injectPromptDepth, 0, 8),
+    summarizationNoteVisibleForAI: asBool(input.summarizationNoteVisibleForAI, defaultSettings.summarizationNoteVisibleForAI),
+    injectSummarizationNote: asBool(input.injectSummarizationNote, defaultSettings.injectSummarizationNote),
     sequentialExtraction: asBool(input.sequentialExtraction, defaultSettings.sequentialExtraction),
     maxDeltaPerTurn: clampInt(input.maxDeltaPerTurn, defaultSettings.maxDeltaPerTurn, 1, 30),
     maxTokensOverride: clampInt(input.maxTokensOverride, defaultSettings.maxTokensOverride, 0, 100000),
@@ -548,6 +552,9 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
     const description = typeof obj.description === "string"
       ? obj.description.trim().slice(0, 200)
       : "";
+    const behaviorGuidance = typeof obj.behaviorGuidance === "string"
+      ? obj.behaviorGuidance.trim().slice(0, 2000)
+      : "";
     const color = typeof obj.color === "string"
       ? obj.color.trim().slice(0, 32)
       : "";
@@ -559,6 +566,7 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       id,
       label,
       description: description || undefined,
+      behaviorGuidance: behaviorGuidance || undefined,
       defaultValue: clampInt(obj.defaultValue, 50, 0, 100),
       maxDeltaPerTurn: obj.maxDeltaPerTurn === undefined
         ? undefined

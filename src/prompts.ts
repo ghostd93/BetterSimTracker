@@ -57,7 +57,9 @@ export const DEFAULT_INJECTION_PROMPT_TEMPLATE = [
   "Priority rules:",
   "{{priorityRules}}",
   "",
-  "{{lines}}"
+  "{{lines}}",
+  "",
+  "{{summarizationNote}}"
 ].join("\n");
 
 export const UNIFIED_PROMPT_PROTOCOL = `Numeric stats to update ({{numericStats}}):
@@ -646,5 +648,152 @@ export function buildBuiltInSequentialPromptGenerationPrompt(input: {
     "- Do not mention this generator prompt or meta instructions.",
     "",
     "Return the 6-line instruction block only.",
+  ].join("\n");
+}
+
+export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
+  statId: string;
+  statLabel: string;
+  statDescription: string;
+  currentGuidance?: string;
+}): string {
+  const statId = input.statId.trim().toLowerCase();
+  const statLabel = input.statLabel.trim();
+  const statDescription = input.statDescription.trim();
+  const currentGuidance = String(input.currentGuidance ?? "").trim();
+
+  return [
+    "SYSTEM:",
+    "You write behavior-guidance lines for BetterSimTracker prompt injection.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Custom stat:",
+    `- ID: ${statId}`,
+    `- Label: ${statLabel}`,
+    `- Description: ${statDescription}`,
+    `- Current guidance: ${currentGuidance || "(empty)"}`,
+    "",
+    "Task:",
+    "Write exactly 5 short bullet lines for this exact stat.",
+    "Requirements:",
+    "- Each line must start with \"- \".",
+    `- Mention ${statId} and ${statLabel} literally at least once across the block.`,
+    `- Include one line for LOW ${statId} behavior, one for MEDIUM ${statId}, and one for HIGH ${statId}.`,
+    `- Include one line with strong increase cues for ${statId} (what evidence should raise it).`,
+    `- Include one line with strong decrease cues for ${statId} (what evidence should lower it).`,
+    "- Keep phrasing specific and practical, not generic (avoid \"more/less [label]\" wording).",
+    "- Keep wording model-facing, actionable, and neutral (no roleplay narration).",
+    "- Do not mention JSON, confidence, output schema, or this generator prompt.",
+    "",
+    "Return only the 5 bullet lines.",
+  ].join("\n");
+}
+
+export function buildTrackerSummaryGenerationPrompt(input: {
+  userName: string;
+  activeCharacters: string[];
+  characters: string[];
+  contextText: string;
+  trackerStateLines: string;
+  trackedDimensions: string[];
+}): string {
+  const userName = String(input.userName ?? "").trim() || "User";
+  const activeCharacters = input.activeCharacters.filter(Boolean);
+  const allCharacters = input.characters.filter(Boolean);
+  const contextText = String(input.contextText ?? "").trim() || "(no recent context)";
+  const trackerStateLines = String(input.trackerStateLines ?? "").trim() || "- no tracker values available";
+  const trackedDimensions = input.trackedDimensions.filter(Boolean);
+
+  return [
+    "SYSTEM:",
+    "You write a relationship-status summary for a chat system comment.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Goal:",
+    "Write a concise descriptive prose summary of the current interpersonal dynamics.",
+    "The output will be posted directly in chat as a system-style note.",
+    "",
+    "Hard rules:",
+    "- Do not use numerals or percentages.",
+    "- Do not output score labels like affection/trust/desire/connection IDs with values.",
+    "- Keep it to 4-6 natural sentences.",
+    "- Keep tone neutral and observant, not roleplay dialogue.",
+    "- Mention relevant character names naturally.",
+    "- Ground the summary in both the recent messages and tracker state.",
+    "- Reflect only tracked dimensions listed below; do not invent dimensions that are absent.",
+    "",
+    "Tracked dimensions (only these):",
+    `- ${trackedDimensions.length ? trackedDimensions.join(", ") : "Use only dimensions explicitly present in the tracker snapshot."}`,
+    "",
+    "Inputs:",
+    `- User: ${userName}`,
+    `- Active characters: ${activeCharacters.length ? activeCharacters.join(", ") : "none"}`,
+    `- All tracked characters: ${allCharacters.length ? allCharacters.join(", ") : "none"}`,
+    "",
+    "Recent messages:",
+    contextText,
+    "",
+    "Tracker state snapshot:",
+    trackerStateLines,
+    "",
+    "Return only the final prose summary.",
+  ].join("\n");
+}
+
+export function buildTrackerSummaryNoNumbersRewritePrompt(input: {
+  draftSummary: string;
+}): string {
+  const draftSummary = String(input.draftSummary ?? "").trim();
+  return [
+    "SYSTEM:",
+    "Rewrite the text into clean prose for a chat system comment.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Hard rules:",
+    "- Remove all numerals and percentages.",
+    "- Keep meaning and tone intact.",
+    "- Keep it to 4-6 natural sentences.",
+    "- Preserve only dimensions already present in the draft (do not introduce new ones).",
+    "",
+    "Draft text:",
+    draftSummary || "(empty)",
+    "",
+    "Return only the rewritten prose.",
+  ].join("\n");
+}
+
+export function buildTrackerSummaryLengthenPrompt(input: {
+  draftSummary: string;
+}): string {
+  const draftSummary = String(input.draftSummary ?? "").trim();
+  return [
+    "SYSTEM:",
+    "Expand the summary into fuller prose for a chat system comment.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Hard rules:",
+    "- Keep it to 4-6 natural sentences.",
+    "- Do not use numerals or percentages.",
+    "- Keep tone neutral and observant, not roleplay dialogue.",
+    "- Keep existing meaning, but add useful detail grounded in context.",
+    "- Mention relevant character names naturally.",
+    "- Preserve only dimensions already present in the draft (do not introduce new ones).",
+    "",
+    "Draft summary:",
+    draftSummary || "(empty)",
+    "",
+    "Return only the expanded summary.",
   ].join("\n");
 }
