@@ -16,7 +16,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Built-in stats manager wizard with unified `Enabled` toggle (`Track + Card + Graph`) plus `Inject` control for numeric built-ins
 - Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8, color picker + hex input, AI-assisted description improvement, AI generation for stat-specific Sequential Prompt Override)
 - Retrack button (regenerate tracker for last AI message)
-- Summarize button (AI-generated prose summary, no numeric stat values, posted as a compact comment-style system note for proper formatting)
+- Summarize button (AI-generated prose summary, no numeric stat values, with settings to make the note AI-visible and/or inject it into prompt guidance)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
   - raw/smoothed view
@@ -172,6 +172,8 @@ Numeric scaling formula used by runtime:
 - `Auto Detect Active`: scene-based active character detection
 - `Inject Tracker Into Prompt`: uses current relationship state as hidden guidance
 - `Injection Depth`: controls prompt-injection depth in the in-chat prompt stack (`0..8`)
+- `Summarization Note Visible for AI`: posts summary notes as AI-visible note messages
+- `Inject Summarization Note`: appends the latest summary note into hidden prompt injection guidance
 - `Injection Prompt Template`: editable template for injected guidance (shown only when injection is enabled)
 - `Prompt Templates`: edit unified + per-stat sequential prompt instructions plus a global custom-numeric sequential default (protocol blocks are fixed; repair prompts are fixed)
 - `Manage Built-in Stats`: open a wizard to control built-in stat participation in extraction/cards/graph/injection
@@ -206,7 +208,9 @@ Numeric scaling formula used by runtime:
 - `Mood Stickiness`: keeps mood stable unless model confidence/context strongly supports change.
 - `Inject Tracker Into Prompt`: inject hidden relationship state guidance into chat generation prompts.
 - `Injection Depth`: depth value passed to ST extension prompt injection (`0` = nearest/top in-chat insertion, max `8`).
-- `Injection Prompt Template`: editable template that defines the injected guidance block (shown only when injection is enabled).
+- `Summarization Note Visible for AI`: when enabled, summary notes are posted as AI-visible note messages instead of hidden system notes.
+- `Inject Summarization Note`: when enabled, the latest summary note is added to prompt injection guidance.
+- `Injection Prompt Template`: editable template that defines the injected guidance block (shown only when injection is enabled). Supports `{{summarizationNote}}` for the latest summary note text.
 - `Auto Detect Active`: in group chat, tries to determine which characters are currently active in the scene.
 - `Activity Lookback`: recent-message window used for active character detection.
 - `Prompt Templates`: unified prompt instruction for one-shot extraction, per-stat instructions for sequential mode, and a global default template for custom numeric sequential extraction.
