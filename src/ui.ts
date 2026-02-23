@@ -4917,9 +4917,9 @@ export function openSettingsModal(input: {
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="4">
-        <div class="bst-help-line">Optional behavior instruction for prompt injection. Use this to define how low/high values should affect character behavior for this specific custom stat.</div>
+        <div class="bst-help-line">Optional behavior instruction for prompt injection. Define low/medium/high behavior and optional increase/decrease evidence cues for this specific custom stat.</div>
         <label>Behavior Instruction (optional)
-          <textarea data-bst-custom-field="behaviorGuidance" rows="5" placeholder="Optional. Example:\n- low respect_score -> more dismissive, less cooperative tone.\n- high respect_score -> more cooperative, considerate, and validating tone.">${escapeHtml(draft.behaviorGuidance)}</textarea>
+          <textarea data-bst-custom-field="behaviorGuidance" rows="6" placeholder="Optional. Example:\n- low focus -> easily distracted, short replies, weak follow-through.\n- medium focus -> generally attentive but can drift during long exchanges.\n- high focus -> sustained attention, user-first responses, clear follow-through.\n- increase cues -> direct user engagement, clarifying questions, consistent follow-up.\n- decrease cues -> evasive replies, frequent topic drift, delayed/partial engagement.">${escapeHtml(draft.behaviorGuidance)}</textarea>
         </label>
         <div class="bst-custom-ai-row">
           <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-generate-behavior" data-loading="false">

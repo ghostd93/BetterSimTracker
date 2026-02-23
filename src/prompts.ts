@@ -677,16 +677,18 @@ export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
     `- Current guidance: ${currentGuidance || "(empty)"}`,
     "",
     "Task:",
-    "Write exactly 2 short bullet lines for this exact stat.",
+    "Write exactly 5 short bullet lines for this exact stat.",
     "Requirements:",
     "- Each line must start with \"- \".",
-    `- Line 1 must describe LOW ${statId} behavior in practical terms.`,
-    `- Line 2 must describe HIGH ${statId} behavior in practical terms.`,
-    `- Mention ${statId} and ${statLabel} literally at least once across the 2 lines.`,
+    `- Mention ${statId} and ${statLabel} literally at least once across the block.`,
+    `- Include one line for LOW ${statId} behavior, one for MEDIUM ${statId}, and one for HIGH ${statId}.`,
+    `- Include one line with strong increase cues for ${statId} (what evidence should raise it).`,
+    `- Include one line with strong decrease cues for ${statId} (what evidence should lower it).`,
+    "- Keep phrasing specific and practical, not generic (avoid \"more/less [label]\" wording).",
     "- Keep wording model-facing, actionable, and neutral (no roleplay narration).",
     "- Do not mention JSON, confidence, output schema, or this generator prompt.",
     "",
-    "Return only the 2 bullet lines.",
+    "Return only the 5 bullet lines.",
   ].join("\n");
 }
 

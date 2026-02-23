@@ -72,12 +72,11 @@ function resolveTrackerDataForSwipe(message: ChatMessage, raw: unknown): Partial
 
   const exact = storage[swipeKey];
   if (isTrackerPayload(exact)) return exact;
-
-  const zero = storage["0"];
-  if (isTrackerPayload(zero)) return zero;
-
-  for (const value of Object.values(storage)) {
-    if (isTrackerPayload(value)) return value;
+  // Do not fall back to another swipe entry when the current swipe has no tracker payload.
+  // This prevents reusing stale tracker data from a different swipe variant.
+  if (swipeKey === "0") {
+    const zero = storage["0"];
+    if (isTrackerPayload(zero)) return zero;
   }
   return null;
 }

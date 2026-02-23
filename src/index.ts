@@ -1263,6 +1263,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   const lastMessage = context.chat[lastIndex];
   const forceRetrack =
     reason === "manual_refresh" ||
+    reason === "SWIPE_GENERATION_ENDED" ||
     (reason === "MESSAGE_EDITED" && typeof targetMessageIndex === "number");
   if (!forceRetrack && getTrackerDataFromMessage(lastMessage)) {
     pushTrace("extract.skip", { reason: "tracker_already_present", trigger: reason, messageIndex: lastIndex });
@@ -1542,18 +1543,6 @@ function registerEvents(context: STContext): void {
         pushTrace("event.generation_started_ignored", { reason: dryRun ? "dry_run" : "quiet_generation", type, dryRun });
         return;
       }
-      if (type === "swipe") {
-        chatGenerationInFlight = false;
-        chatGenerationSawCharacterRender = false;
-        chatGenerationStartLastAiIndex = null;
-        swipeGenerationActive = false;
-        pushTrace("event.generation_started_ignored", { reason: "swipe_generation_tracking_disabled", type });
-        if (trackerUiState.phase === "generating") {
-          setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
-          queueRender();
-        }
-        return;
-      }
       swipeGenerationActive = type === "swipe";
       chatGenerationInFlight = true;
       chatGenerationSawCharacterRender = false;
@@ -1598,15 +1587,16 @@ function registerEvents(context: STContext): void {
     chatGenerationInFlight = false;
     chatGenerationStartLastAiIndex = null;
     pushTrace("event.generation_ended");
-    if (swipeGenerationActive && pendingSwipeExtraction) {
-      const pending = pendingSwipeExtraction;
-      pendingSwipeExtraction = null;
-      if (swipeExtractionTimer !== null) {
-        window.clearTimeout(swipeExtractionTimer);
-        swipeExtractionTimer = null;
-      }
+    if (swipeGenerationActive) {
       swipeGenerationActive = false;
-      scheduleExtraction(pending.reason, pending.messageIndex, 2000);
+      if (pendingSwipeExtraction?.waitForGenerationEnd) {
+        pendingSwipeExtraction = null;
+        if (swipeExtractionTimer !== null) {
+          window.clearTimeout(swipeExtractionTimer);
+          swipeExtractionTimer = null;
+        }
+      }
+      scheduleExtraction("SWIPE_GENERATION_ENDED", undefined, 2000);
       return;
     }
     swipeGenerationActive = false;
@@ -1767,18 +1757,19 @@ function registerEvents(context: STContext): void {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.swipe", { event: key, messageIndex });
       clearPendingSwipeExtraction();
-      chatGenerationInFlight = false;
-      chatGenerationSawCharacterRender = false;
-      chatGenerationStartLastAiIndex = null;
-      swipeGenerationActive = false;
-      if (trackerUiState.phase === "generating") {
-        pushTrace("ui.generating.clear", {
-          reason: "swipe_event_force_idle",
-          trigger: key,
-          messageIndex: latestDataMessageIndex,
-        });
-        setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
-        queueRender();
+      if (!chatGenerationInFlight) {
+        chatGenerationSawCharacterRender = false;
+        chatGenerationStartLastAiIndex = null;
+        swipeGenerationActive = false;
+        if (trackerUiState.phase === "generating") {
+          pushTrace("ui.generating.clear", {
+            reason: "swipe_event_force_idle",
+            trigger: key,
+            messageIndex: latestDataMessageIndex,
+          });
+          setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
+          queueRender();
+        }
       }
       scheduleRefresh();
       pushTrace("extract.skip", {
