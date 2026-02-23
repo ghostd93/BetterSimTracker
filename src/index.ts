@@ -962,6 +962,120 @@ function sanitizeInvalidChatEntries(context: STContext): number {
   return removed;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  return value as Record<string, unknown>;
+}
+
+function isSummaryNoteMessage(message: unknown): message is Record<string, unknown> {
+  const obj = asRecord(message);
+  if (!obj) return false;
+  const extra = asRecord(obj.extra);
+  if (!extra) return false;
+  if (extra.bstSummaryNote === true || extra.bst_summary_note === true) return true;
+  return String(extra.model ?? "").trim().toLowerCase() === "bettersimtracker.summary";
+}
+
+function syncSummaryNoteVisibilityForCurrentChat(context: STContext, visibleForAi: boolean): number {
+  if (!Array.isArray(context.chat) || context.chat.length === 0) return 0;
+  let changedCount = 0;
+
+  for (let i = 0; i < context.chat.length; i += 1) {
+    const message = context.chat[i] as unknown as Record<string, unknown>;
+    if (!isSummaryNoteMessage(message)) continue;
+
+    let changed = false;
+    const targetIsSystem = !visibleForAi;
+
+    if (message.is_user !== false) {
+      message.is_user = false;
+      changed = true;
+    }
+    if (message.is_system !== targetIsSystem) {
+      message.is_system = targetIsSystem;
+      changed = true;
+    }
+    if (String(message.name ?? "").trim() !== "Note") {
+      message.name = "Note";
+      changed = true;
+    }
+    if (String(message.force_avatar ?? "").trim() !== "img/quill.png") {
+      message.force_avatar = "img/quill.png";
+      changed = true;
+    }
+
+    let extra = asRecord(message.extra);
+    if (!extra) {
+      extra = {};
+      message.extra = extra;
+      changed = true;
+    }
+
+    if (extra.bstSummaryNote !== true) {
+      extra.bstSummaryNote = true;
+      changed = true;
+    }
+    if (extra.bst_summary_note !== true) {
+      extra.bst_summary_note = true;
+      changed = true;
+    }
+    if (String(extra.model ?? "").trim() !== "bettersimtracker.summary") {
+      extra.model = "bettersimtracker.summary";
+      changed = true;
+    }
+    if (String(extra.api ?? "").trim() !== "manual") {
+      extra.api = "manual";
+      changed = true;
+    }
+    if (extra.isSmallSys !== false) {
+      extra.isSmallSys = false;
+      changed = true;
+    }
+
+    const currentType = String(extra.type ?? "").trim();
+    if (targetIsSystem) {
+      if (currentType !== "comment") {
+        extra.type = "comment";
+        changed = true;
+      }
+    } else if ("type" in extra) {
+      delete extra.type;
+      changed = true;
+    }
+
+    const mesText = String(message.mes ?? "").trim();
+    if (!Array.isArray(message.swipes) || message.swipes.length === 0) {
+      message.swipes = [mesText];
+      changed = true;
+    } else if (message.swipes[0] !== mesText) {
+      message.swipes[0] = mesText;
+      changed = true;
+    }
+    if (typeof message.swipe_id !== "number") {
+      message.swipe_id = 0;
+      changed = true;
+    }
+    if (!Array.isArray(message.swipe_info) || message.swipe_info.length === 0) {
+      message.swipe_info = [{
+        send_date: message.send_date ?? Date.now(),
+        gen_started: null,
+        gen_finished: null,
+        extra: { ...extra },
+      }];
+      changed = true;
+    }
+
+    if (changed) {
+      changedCount += 1;
+    }
+  }
+
+  if (changedCount > 0) {
+    context.saveChatDebounced?.();
+  }
+  return changedCount;
+}
+
 function getEventMessageIndex(payload: unknown): number | null {
   if (typeof payload === "number") return Number.isInteger(payload) ? payload : null;
   if (!payload || typeof payload !== "object") return null;
@@ -1314,6 +1428,13 @@ function refreshFromStoredData(): void {
   const removedInvalidMessages = sanitizeInvalidChatEntries(context);
   if (removedInvalidMessages > 0) {
     pushTrace("chat.sanitize", { removedInvalidMessages });
+  }
+  const summaryVisibilitySynced = syncSummaryNoteVisibilityForCurrentChat(context, settings.summarizationNoteVisibleForAI);
+  if (summaryVisibilitySynced > 0) {
+    pushTrace("summary.visibility.sync", {
+      mode: settings.summarizationNoteVisibleForAI ? "ai-visible" : "hidden-system",
+      updatedMessages: summaryVisibilitySynced,
+    });
   }
 
   allCharacterNames = getAllTrackedCharacterNames(context);

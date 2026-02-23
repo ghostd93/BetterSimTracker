@@ -3738,6 +3738,8 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
         </div>
+        <div class="bst-help-line"><code>Summarization Note Visible for AI</code> updates all BetterSimTracker summary notes in the current chat (existing + future).</div>
+        <div class="bst-help-line"><code>Inject Summarization Note</code> only affects hidden tracker prompt injection guidance.</div>
         <div class="bst-section-divider" data-bst-row="injectPromptDivider">Injection Prompt</div>
         <div class="bst-injection-prompt" data-bst-row="injectPromptBlock">
           <div class="bst-help-line">Shown only when Inject Tracker Into Prompt is enabled.</div>
@@ -5543,8 +5545,8 @@ export function openSettingsModal(input: {
     confidenceDampening: "How strongly model confidence scales stat deltas (0 = ignore confidence, 1 = full effect).",
     moodStickiness: "Higher values keep previous mood unless confidence is strong.",
     injectTrackerIntoPrompt: "Inject current relationship state into generation prompt for behavioral coherence.",
-    summarizationNoteVisibleForAI: "When enabled, summary notes are posted as AI-visible note messages instead of hidden system notes.",
-    injectSummarizationNote: "Include the latest generated summary note in prompt injection as additional hidden guidance.",
+    summarizationNoteVisibleForAI: "When enabled, BetterSimTracker summary notes are AI-visible in this chat (existing and newly generated notes are synced).",
+    injectSummarizationNote: "Include the latest BetterSimTracker summary note in hidden tracker prompt injection guidance.",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",
     activityLookback: "How many recent messages are scanned for active-speaker detection.",
     trackAffection: "Enable Affection stat extraction and updates.",
