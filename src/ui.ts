@@ -366,6 +366,12 @@ function sanitizeGeneratedSequentialTemplate(raw: string): string {
   let text = String(raw ?? "").replace(/\r\n/g, "\n").trim();
   if (!text) return "";
 
+  // Strip hidden reasoning tags that some models still emit despite instructions.
+  text = text
+    .replace(/<\s*(think|analysis|reasoning)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*\/?\s*(think|analysis|reasoning)[^>]*>/gi, "")
+    .trim();
+
   const fenceMatch = text.match(/^```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```$/);
   if (fenceMatch?.[1]) {
     text = fenceMatch[1].trim();
@@ -379,6 +385,15 @@ function sanitizeGeneratedSequentialTemplate(raw: string): string {
 
   if (text.startsWith("[") && text.endsWith("]")) {
     text = text.slice(1, -1).trim();
+  }
+
+  // Prefer the generated bullet block when extra chatter appears.
+  const bulletLines = text
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line.startsWith("- "));
+  if (bulletLines.length >= 3) {
+    text = bulletLines.slice(0, 6).join("\n");
   }
 
   return text.slice(0, 20_000);
