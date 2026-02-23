@@ -14,7 +14,7 @@ All notable changes to BetterSimTracker are documented here.
 - Summary prose now gets an extra normalization pass (bullet/markdown cleanup, whitespace/punctuation correction) before sending.
 - Summary delivery now uses validated chat-message payloads for both hidden and AI-visible note modes.
 - Injection prompt templates now support `{{summarizationNote}}` for optional summary-note context.
-- `Summarization Note Visible for AI` now syncs existing BetterSimTracker summary notes in the current chat, not just newly generated notes.
+- `Summarization Note Visible for AI` now applies to newly generated BetterSimTracker summary notes only (no retroactive note conversion).
 
 ### Fixed
 - Summary output now avoids numeric stat reporting (prose-only summary behavior).
@@ -22,12 +22,9 @@ All notable changes to BetterSimTracker are documented here.
 - Summary note messages are now always excluded from tracker extraction targets, including AI-visible mode.
 - Summary note delivery now avoids ST `sendSystemMessage("comment")` to prevent undefined-message insertion and downstream extension crashes.
 - Existing chats are now auto-sanitized from invalid/undefined message entries created by earlier broken summary delivery paths.
-- Legacy summary notes (without explicit BST markers) are now included in visibility sync, and chat view reload is triggered after sync so ghost/system icon state updates immediately.
-- Summary note visibility sync now persists chat changes immediately, so AI-visible/hidden icon state survives page reloads.
 - Summary-toggle help lines are now full-width and aligned correctly in the settings grid.
-- Summary-note visibility sync no longer runs/saves during periodic refresh; it now applies only on explicit toggle changes to avoid chat corruption during load transitions.
-- Summary-note sync matching is now strict (BST-tagged messages only), preventing accidental flag changes on non-BST notes/messages.
 - Emergency safety hardening: BetterSimTracker no longer retroactively edits existing chat messages for summary-note visibility, and no longer auto-cleans invalid chat entries during refresh.
+- Summary-note settings copy now explicitly explains future-only behavior and no chat-message edits.
 
 ## [2.0.1] - 2026-02-23
 ### Added
