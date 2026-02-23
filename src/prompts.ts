@@ -698,16 +698,18 @@ export function buildTrackerSummaryGenerationPrompt(input: {
   characters: string[];
   contextText: string;
   trackerStateLines: string;
+  trackedDimensions: string[];
 }): string {
   const userName = String(input.userName ?? "").trim() || "User";
   const activeCharacters = input.activeCharacters.filter(Boolean);
   const allCharacters = input.characters.filter(Boolean);
   const contextText = String(input.contextText ?? "").trim() || "(no recent context)";
   const trackerStateLines = String(input.trackerStateLines ?? "").trim() || "- no tracker values available";
+  const trackedDimensions = input.trackedDimensions.filter(Boolean);
 
   return [
     "SYSTEM:",
-    "You write a short relationship-status summary for a chat system comment.",
+    "You write a relationship-status summary for a chat system comment.",
     "Return plain text only.",
     "Do not return JSON.",
     "Do not return markdown code fences.",
@@ -720,10 +722,14 @@ export function buildTrackerSummaryGenerationPrompt(input: {
     "Hard rules:",
     "- Do not use numerals or percentages.",
     "- Do not output score labels like affection/trust/desire/connection IDs with values.",
-    "- Keep it to 2-4 natural sentences.",
+    "- Keep it to 4-6 natural sentences.",
     "- Keep tone neutral and observant, not roleplay dialogue.",
     "- Mention relevant character names naturally.",
     "- Ground the summary in both the recent messages and tracker state.",
+    "- Reflect only tracked dimensions listed below; do not invent dimensions that are absent.",
+    "",
+    "Tracked dimensions (only these):",
+    `- ${trackedDimensions.length ? trackedDimensions.join(", ") : "Use only dimensions explicitly present in the tracker snapshot."}`,
     "",
     "Inputs:",
     `- User: ${userName}`,
@@ -755,11 +761,39 @@ export function buildTrackerSummaryNoNumbersRewritePrompt(input: {
     "Hard rules:",
     "- Remove all numerals and percentages.",
     "- Keep meaning and tone intact.",
-    "- Keep it concise (2-4 sentences).",
+    "- Keep it to 4-6 natural sentences.",
+    "- Preserve only dimensions already present in the draft (do not introduce new ones).",
     "",
     "Draft text:",
     draftSummary || "(empty)",
     "",
     "Return only the rewritten prose.",
+  ].join("\n");
+}
+
+export function buildTrackerSummaryLengthenPrompt(input: {
+  draftSummary: string;
+}): string {
+  const draftSummary = String(input.draftSummary ?? "").trim();
+  return [
+    "SYSTEM:",
+    "Expand the summary into fuller prose for a chat system comment.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Hard rules:",
+    "- Keep it to 4-6 natural sentences.",
+    "- Do not use numerals or percentages.",
+    "- Keep tone neutral and observant, not roleplay dialogue.",
+    "- Keep existing meaning, but add useful detail grounded in context.",
+    "- Mention relevant character names naturally.",
+    "- Preserve only dimensions already present in the draft (do not introduce new ones).",
+    "",
+    "Draft summary:",
+    draftSummary || "(empty)",
+    "",
+    "Return only the expanded summary.",
   ].join("\n");
 }

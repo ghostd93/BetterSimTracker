@@ -6,6 +6,7 @@ import { isTrackableAiMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from "./promptInjection";
 import {
   buildTrackerSummaryGenerationPrompt,
+  buildTrackerSummaryLengthenPrompt,
   buildTrackerSummaryNoNumbersRewritePrompt,
 } from "./prompts";
 import { upsertSettingsPanel } from "./settingsPanel";
@@ -136,6 +137,11 @@ function hasNumericCharacters(text: string): boolean {
   return /\d/.test(text);
 }
 
+function countSummarySentences(text: string): number {
+  const matches = String(text ?? "").match(/[.!?]+(?:\s|$)/g);
+  return matches?.length ?? 0;
+}
+
 function buildSummaryTrackerStateLines(data: TrackerData, currentSettings: BetterSimTrackerSettings): string {
   const customLabelMap = new Map<string, string>();
   for (const stat of currentSettings.customStats ?? []) {
@@ -254,6 +260,20 @@ async function generateTrackerSummaryProse(input: {
 }): Promise<{ text: string; profileId: string | null }> {
   const { context, settings, data, messageIndex } = input;
   const characters = collectSummaryCharacters(data);
+  const trackedDimensions: string[] = [];
+  if (settings.trackAffection) trackedDimensions.push("warmth/care");
+  if (settings.trackTrust) trackedDimensions.push("trust/safety");
+  if (settings.trackDesire) trackedDimensions.push("desire/tension");
+  if (settings.trackConnection) trackedDimensions.push("connection/closeness");
+  if (settings.trackMood) trackedDimensions.push("mood tone");
+  const trackedCustomLabels = (settings.customStats ?? [])
+    .filter(stat => Boolean(stat.track))
+    .map(stat => String(stat.label ?? stat.id).trim() || stat.id)
+    .filter(Boolean)
+    .slice(0, 8);
+  if (trackedCustomLabels.length) {
+    trackedDimensions.push(`custom cues (${trackedCustomLabels.join(", ")})`);
+  }
   const contextText = buildRecentContextUpToMessageIndex(context, messageIndex, settings.contextMessages);
   const trackerStateLines = buildSummaryTrackerStateLines(data, settings);
   const prompt = buildTrackerSummaryGenerationPrompt({
@@ -262,6 +282,7 @@ async function generateTrackerSummaryProse(input: {
     characters,
     contextText,
     trackerStateLines,
+    trackedDimensions,
   });
 
   const first = await generateJson(prompt, settings);
@@ -291,7 +312,36 @@ async function generateTrackerSummaryProse(input: {
   if (!normalized) {
     throw new Error("Summary normalization produced empty text.");
   }
-  return { text: normalized, profileId };
+  let finalSummary = normalized;
+  const sentenceCount = countSummarySentences(finalSummary);
+  if (sentenceCount < 4 || finalSummary.length < 260) {
+    const expand = await generateJson(
+      buildTrackerSummaryLengthenPrompt({ draftSummary: finalSummary }),
+      settings,
+    );
+    let expanded = sanitizeGeneratedSummaryText(expand.text);
+    if (expanded) {
+      if (hasNumericCharacters(expanded)) {
+        const rewriteExpanded = await generateJson(
+          buildTrackerSummaryNoNumbersRewritePrompt({ draftSummary: expanded }),
+          settings,
+        );
+        const rewrittenExpanded = sanitizeGeneratedSummaryText(rewriteExpanded.text);
+        if (rewrittenExpanded) {
+          expanded = rewrittenExpanded;
+          profileId = rewriteExpanded.meta.profileId || profileId;
+        }
+      }
+      if (!hasNumericCharacters(expanded)) {
+        const normalizedExpanded = normalizeSummaryProse(expanded);
+        if (normalizedExpanded && countSummarySentences(normalizedExpanded) >= 4) {
+          finalSummary = normalizedExpanded;
+          profileId = expand.meta.profileId || profileId;
+        }
+      }
+    }
+  }
+  return { text: finalSummary, profileId };
 }
 
 async function sendSummaryAsSystemMessage(
