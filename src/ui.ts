@@ -3103,7 +3103,7 @@ export function renderTracker(
         <span class="bst-root-action-icon" aria-hidden="true">${collapsed ? "&#9656;" : "&#9662;"}</span>
         <span class="bst-root-action-label">${collapsed ? "Expand cards" : "Collapse cards"}</span>
       </button>
-      ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-root-action-summary${summaryBusy ? " is-loading" : ""}" data-bst-action="send-summary" data-loading="${summaryBusy ? "true" : "false"}" title="${summaryBusy ? "Generating detailed summary..." : "Send detailed tracker summary note to chat"}" aria-label="${summaryBusy ? "Generating detailed summary..." : "Send detailed tracker summary note to chat"}"${summaryBusy ? " disabled" : ""}><span aria-hidden="true">${summaryBusy ? "&#8987;" : "&#128221;"}</span></button>` : ""}
+      ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-root-action-summary${summaryBusy ? " is-loading" : ""}" data-bst-action="send-summary" data-loading="${summaryBusy ? "true" : "false"}" title="${summaryBusy ? "Generating prose summary of current tracked stats..." : "Generate prose summary of current tracked stats and post as a Note"}" aria-label="${summaryBusy ? "Generating prose summary of current tracked stats..." : "Generate prose summary of current tracked stats and post as a Note"}"${summaryBusy ? " disabled" : ""}><span aria-hidden="true">${summaryBusy ? "&#8987;" : "&#128221;"}</span></button>` : ""}
       ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-mini-btn-accent bst-root-action-retrack" data-bst-action="retrack" title="Retrack latest AI message" aria-label="Retrack latest AI message"><span aria-hidden="true">&#x21BB;</span></button>` : ""}
     `;
     root.appendChild(actions);
@@ -3774,6 +3774,7 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
         </div>
+        <div class="bst-help-line bst-toggle-help"><strong>Summarize</strong> creates a prose note of current tracked stats (no numbers), typically 4-6 sentences, grounded in recent messages.</div>
         <div class="bst-help-line bst-toggle-help"><code>Summarization Note Visible for AI</code> affects only newly generated BetterSimTracker summary notes. Existing notes are not modified for safety.</div>
         <div class="bst-help-line bst-toggle-help"><code>Inject Summarization Note</code> only affects hidden tracker prompt injection guidance and does not edit chat messages.</div>
         <div class="bst-section-divider" data-bst-row="injectPromptDivider">Injection Prompt</div>
@@ -5705,8 +5706,8 @@ export function openSettingsModal(input: {
     confidenceDampening: "How strongly model confidence scales stat deltas (0 = ignore confidence, 1 = full effect).",
     moodStickiness: "Higher values keep previous mood unless confidence is strong.",
     injectTrackerIntoPrompt: "Inject current relationship state into generation prompt for behavioral coherence.",
-    summarizationNoteVisibleForAI: "When enabled, only newly generated BetterSimTracker summary notes are AI-visible in this chat. Existing notes are unchanged for safety.",
-    injectSummarizationNote: "Include the latest BetterSimTracker summary note in hidden tracker prompt injection guidance only (no chat-message edits).",
+    summarizationNoteVisibleForAI: "Controls visibility mode for newly generated Summarize notes (prose summaries of current tracked stats). Existing notes are unchanged for safety.",
+    injectSummarizationNote: "Include the latest Summarize note (prose summary of current tracked stats) in hidden tracker prompt injection guidance only (no chat-message edits).",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",
     activityLookback: "How many recent messages are scanned for active-speaker detection.",
     trackAffection: "Enable Affection stat extraction and updates.",
