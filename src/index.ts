@@ -89,10 +89,41 @@ function sanitizeGeneratedSummaryText(raw: string): string {
     .replace(/^system\s*summary\s*[:\-]\s*/i, "")
     .replace(/^["'`]+/, "")
     .replace(/["'`]+$/, "")
-    .replace(/\s+/g, " ")
     .trim();
 
   return text.slice(0, 1200).trim();
+}
+
+function normalizeSummaryProse(text: string): string {
+  let prose = String(text ?? "").replace(/\r\n/g, "\n").trim();
+  if (!prose) return "";
+
+  // Remove line-based markdown/list artifacts, then flatten to prose.
+  prose = prose
+    .split("\n")
+    .map(line => line.trim().replace(/^[-*]\s+/, ""))
+    .filter(Boolean)
+    .join(" ");
+
+  // Remove common structured wrappers.
+  prose = prose
+    .replace(/^["'`]+/, "")
+    .replace(/["'`]+$/, "")
+    .replace(/^\{[\s\S]*\}$/m, "")
+    .trim();
+
+  // Keep plain prose formatting.
+  prose = prose
+    .replace(/\s+/g, " ")
+    .replace(/\s+([,.;!?])/g, "$1")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
+  if (!prose) return "";
+  if (!/[.!?]$/.test(prose)) {
+    prose = `${prose}.`;
+  }
+  return prose.slice(0, 1000).trim();
 }
 
 function wrapAsSystemNarrativeText(text: string): string {
@@ -255,32 +286,23 @@ async function generateTrackerSummaryProse(input: {
     throw new Error("Summary still contains numeric output.");
   }
 
-  return { text: summary, profileId };
+  const normalized = normalizeSummaryProse(summary);
+  if (!normalized) {
+    throw new Error("Summary normalization produced empty text.");
+  }
+  return { text: normalized, profileId };
 }
 
-async function sendSummaryAsChatComment(context: STContext, summaryText: string): Promise<"slash-comment" | "system-message" | "manual-fallback"> {
+async function sendSummaryAsSystemMessage(context: STContext, summaryText: string): Promise<"system-message" | "manual-fallback"> {
   const anyContext = context as STContext & {
-    executeSlashCommandsWithOptions?: (text: string, options?: Record<string, unknown>) => Promise<unknown> | unknown;
     sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
     addOneMessage?: (message: Record<string, unknown>, options?: Record<string, unknown>) => void;
   };
 
   const compactText = summaryText.replace(/\s+/g, " ").trim();
-  if (typeof anyContext.executeSlashCommandsWithOptions === "function") {
-    const escaped = compactText
-      .replace(/\\/g, "\\\\")
-      .replace(/"/g, '\\"');
-    await anyContext.executeSlashCommandsWithOptions(`/comment compact=true "${escaped}"`, { handleExecutionErrors: true });
-    return "slash-comment";
-  }
 
   if (typeof anyContext.sendSystemMessage === "function") {
-    anyContext.sendSystemMessage("generic", compactText, {
-      isSmallSys: true,
-      swipeable: false,
-      api: "manual",
-      model: "bettersimtracker.summary",
-    });
+    anyContext.sendSystemMessage("generic", compactText);
     return "system-message";
   }
 
@@ -290,13 +312,7 @@ async function sendSummaryAsChatComment(context: STContext, summaryText: string)
     is_system: true,
     send_date: Date.now(),
     mes: compactText,
-    extra: {
-      type: "comment",
-      isSmallSys: true,
-      swipeable: false,
-      api: "manual",
-      model: "bettersimtracker.summary",
-    },
+    extra: {},
   };
   context.chat.push(fallbackMessage);
   anyContext.addOneMessage?.(fallbackMessage);
@@ -1032,8 +1048,9 @@ async function sendTrackerSummaryToChat(messageIndex: number): Promise<void> {
       summaryBody = buildFallbackSummaryProse(data, settings);
     }
 
-    const summaryText = wrapAsSystemNarrativeText(summaryBody);
-    const delivery = await sendSummaryAsChatComment(context, summaryText);
+    const normalizedBody = normalizeSummaryProse(summaryBody) || "The current relationship state remains steady with no major shifts to report.";
+    const summaryText = wrapAsSystemNarrativeText(normalizedBody);
+    const delivery = await sendSummaryAsSystemMessage(context, summaryText);
     context.saveChatDebounced?.();
     await context.saveChat?.();
     pushTrace("summary.sent", {
