@@ -2,23 +2,24 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [Unreleased]
+## [2.0.1] - 2026-02-23
 ### Added
-- Custom stat wizard now supports AI generation for `Sequential Prompt Override` from required stat metadata (`Label`, `ID`, `Description`) using the currently resolved connection profile.
-- Custom stat wizard step 1 now includes `Improve description by AI` to rewrite the stat description from current draft text.
-- Prompt editor now includes `Generate with AI` for built-in sequential prompts: `Seq: Affection`, `Seq: Trust`, `Seq: Desire`, `Seq: Connection`, `Seq: Mood`, and `Seq: LastThought`.
+- AI-assisted prompt authoring for custom stats:
+  - `Improve description by AI` in wizard step 1
+  - `Generate with AI` for stat-specific `Sequential Prompt Override`
+- AI generation for built-in sequential prompt instructions:
+  - `Seq: Affection`, `Seq: Trust`, `Seq: Desire`, `Seq: Connection`, `Seq: Mood`, `Seq: LastThought`
 
 ### Changed
-- AI generation prompt for custom sequential overrides is now stricter and more stat-focused, with stronger anti-generic guidance.
-- `Generate with AI` button in the custom stat wizard now has polished styling and clearer loading-state feedback.
-- AI-generated sequential overrides are now tailored to the specific custom stat (literal `ID`/`Label` context), not a universal placeholder-style template.
-- Built-in sequential prompt generation now uses stat-specific AI instructions and sanitizes noisy model output before applying it to the prompt field.
-- Dev-run versioning is now aligned to the `2.0.0-dev.x` scheme.
+- Custom sequential override generation is now stricter, stat-focused, and tailored to literal stat identity (`ID`/`Label`) instead of universal placeholder-style output.
+- Built-in sequential prompt generation now uses stat-specific generation prompts and applies output sanitization before filling prompt fields.
+- Dev-run versioning is aligned to semver-safe `2.0.0-dev.x`.
 
 ### Fixed
-- Generated custom sequential overrides now strip hidden reasoning blocks (for example `<think>...</think>`) and auto-keep the main bullet instruction block when extra chatter is returned.
-- Custom wizard `Generate with AI` button no longer shifts position on hover and now has consistent spacing below it.
-- Custom stat wizard no longer shows the macro-hint line in per-stat override context, and the override placeholder now clearly reflects stat-specific literal usage.
+- Generated override text now strips hidden reasoning blocks (`<think>...</think>`) and keeps clean instruction output.
+- Custom stat override UX clarity improved by removing macro-hint noise in per-stat context and correcting the placeholder.
+- Custom wizard AI button spacing/hover behavior is stabilized (no jump on hover).
+And more...
 
 ## [2.0.0] - 2026-02-22
 ### Added
