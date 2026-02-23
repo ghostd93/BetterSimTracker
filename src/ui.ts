@@ -813,6 +813,25 @@ function ensureStyles(): void {
 .bst-root-actions .bst-root-action-summary:active {
   transform: translateY(1px);
 }
+.bst-root-actions .bst-root-action-summary.is-loading {
+  cursor: progress;
+  opacity: 0.86;
+  filter: saturate(0.9);
+  transform: none;
+}
+.bst-root-actions .bst-root-action-summary.is-loading:hover,
+.bst-root-actions .bst-root-action-summary.is-loading:active {
+  transform: none;
+  filter: saturate(0.9);
+}
+.bst-root-actions .bst-root-action-summary.is-loading span {
+  display: inline-block;
+  animation: bst-summary-spin 1s linear infinite;
+}
+@keyframes bst-summary-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 .bst-root-actions .bst-root-action-retrack:hover {
   border-color: color-mix(in srgb, var(--bst-accent) 88%, #ffffff 12%);
   filter: brightness(1.08);
@@ -2695,6 +2714,7 @@ export function renderTracker(
   isGroupChat: boolean,
   uiState: TrackerUiState,
   latestAiIndex: number | null,
+  summaryBusyMessageIndices: Set<number> | undefined,
   resolveCharacterAvatar?: (characterName: string) => string | null,
   onOpenGraph?: (characterName: string) => void,
   onRetrackMessage?: (messageIndex: number) => void,
@@ -2796,8 +2816,11 @@ export function renderTracker(
           }
           return;
         }
-        const sendSummary = target?.closest('[data-bst-action="send-summary"]') as HTMLElement | null;
+        const sendSummary = target?.closest('[data-bst-action="send-summary"]') as HTMLButtonElement | null;
         if (sendSummary) {
+          if (sendSummary.disabled || sendSummary.dataset.loading === "true") {
+            return;
+          }
           const idx = Number(root.dataset.messageIndex);
           if (!Number.isNaN(idx)) {
             onSendSummaryMessage?.(idx);
@@ -2905,6 +2928,7 @@ export function renderTracker(
     }
 
     const showRetrack = latestAiIndex != null && entry.messageIndex === latestAiIndex;
+    const summaryBusy = Boolean(showRetrack && summaryBusyMessageIndices?.has(entry.messageIndex));
     const collapsed = root.classList.contains("bst-root-collapsed");
     const activeSet = new Set(data.activeCharacters.map(normalizeName));
     const allNumericDefs = getNumericStatDefinitions(settings);
@@ -2938,6 +2962,7 @@ export function renderTracker(
       `msg:${entry.messageIndex}`,
       `collapsed:${collapsed ? "1" : "0"}`,
       `retrack:${showRetrack ? "1" : "0"}`,
+      `summarybusy:${summaryBusy ? "1" : "0"}`,
       `inactive:${settings.showInactive ? "1" : "0"}`,
       `thought:${settings.showLastThought ? "1" : "0"}`,
       `inactivelabel:${settings.inactiveLabel}`,
@@ -3042,7 +3067,7 @@ export function renderTracker(
         <span class="bst-root-action-icon" aria-hidden="true">${collapsed ? "&#9656;" : "&#9662;"}</span>
         <span class="bst-root-action-label">${collapsed ? "Expand cards" : "Collapse cards"}</span>
       </button>
-      ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-root-action-summary" data-bst-action="send-summary" title="Send current tracker summary to chat" aria-label="Send current tracker summary to chat"><span aria-hidden="true">&#128221;</span></button>` : ""}
+      ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-root-action-summary${summaryBusy ? " is-loading" : ""}" data-bst-action="send-summary" data-loading="${summaryBusy ? "true" : "false"}" title="${summaryBusy ? "Generating summary..." : "Send current tracker summary to chat"}" aria-label="${summaryBusy ? "Generating summary..." : "Send current tracker summary to chat"}"${summaryBusy ? " disabled" : ""}><span aria-hidden="true">${summaryBusy ? "&#8987;" : "&#128221;"}</span></button>` : ""}
       ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-mini-btn-accent bst-root-action-retrack" data-bst-action="retrack" title="Retrack latest AI message" aria-label="Retrack latest AI message"><span aria-hidden="true">&#x21BB;</span></button>` : ""}
     `;
     root.appendChild(actions);

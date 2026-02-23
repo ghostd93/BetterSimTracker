@@ -205,6 +205,7 @@ export interface STContext {
   event_types?: Record<string, string>;
   addOneMessage?: (message: ChatMessage, options?: Record<string, unknown>) => void;
   sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
+  executeSlashCommandsWithOptions?: (text: string, options?: Record<string, unknown>) => Promise<unknown> | unknown;
   saveChat?: () => Promise<void> | void;
   saveChatDebounced?: () => void;
   saveSettingsDebounced?: () => void;

@@ -648,3 +648,75 @@ export function buildBuiltInSequentialPromptGenerationPrompt(input: {
     "Return the 6-line instruction block only.",
   ].join("\n");
 }
+
+export function buildTrackerSummaryGenerationPrompt(input: {
+  userName: string;
+  activeCharacters: string[];
+  characters: string[];
+  contextText: string;
+  trackerStateLines: string;
+}): string {
+  const userName = String(input.userName ?? "").trim() || "User";
+  const activeCharacters = input.activeCharacters.filter(Boolean);
+  const allCharacters = input.characters.filter(Boolean);
+  const contextText = String(input.contextText ?? "").trim() || "(no recent context)";
+  const trackerStateLines = String(input.trackerStateLines ?? "").trim() || "- no tracker values available";
+
+  return [
+    "SYSTEM:",
+    "You write a short relationship-status summary for a chat system comment.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Goal:",
+    "Write a concise descriptive prose summary of the current interpersonal dynamics.",
+    "The output will be posted directly in chat as a system-style note.",
+    "",
+    "Hard rules:",
+    "- Do not use numerals or percentages.",
+    "- Do not output score labels like affection/trust/desire/connection IDs with values.",
+    "- Keep it to 2-4 natural sentences.",
+    "- Keep tone neutral and observant, not roleplay dialogue.",
+    "- Mention relevant character names naturally.",
+    "- Ground the summary in both the recent messages and tracker state.",
+    "",
+    "Inputs:",
+    `- User: ${userName}`,
+    `- Active characters: ${activeCharacters.length ? activeCharacters.join(", ") : "none"}`,
+    `- All tracked characters: ${allCharacters.length ? allCharacters.join(", ") : "none"}`,
+    "",
+    "Recent messages:",
+    contextText,
+    "",
+    "Tracker state snapshot:",
+    trackerStateLines,
+    "",
+    "Return only the final prose summary.",
+  ].join("\n");
+}
+
+export function buildTrackerSummaryNoNumbersRewritePrompt(input: {
+  draftSummary: string;
+}): string {
+  const draftSummary = String(input.draftSummary ?? "").trim();
+  return [
+    "SYSTEM:",
+    "Rewrite the text into clean prose for a chat system comment.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Hard rules:",
+    "- Remove all numerals and percentages.",
+    "- Keep meaning and tone intact.",
+    "- Keep it concise (2-4 sentences).",
+    "",
+    "Draft text:",
+    draftSummary || "(empty)",
+    "",
+    "Return only the rewritten prose.",
+  ].join("\n");
+}

@@ -4,13 +4,17 @@ import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
 import { isTrackableAiMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from "./promptInjection";
+import {
+  buildTrackerSummaryGenerationPrompt,
+  buildTrackerSummaryNoNumbersRewritePrompt,
+} from "./prompts";
 import { upsertSettingsPanel } from "./settingsPanel";
 import { discoverConnectionProfiles, getActiveConnectionProfileId, getContext, getSettingsProvenance, loadSettings, logDebug, saveSettings } from "./settings";
 import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLatestTrackerDataWithIndexBefore, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getRecentTrackerHistoryEntries, getTrackerDataFromMessage, mergeCustomStatisticsWithFallback, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
 import { getAllNumericStatDefinitions } from "./statRegistry";
 import type { BetterSimTrackerSettings, CustomStatistics, DeltaDebugRecord, STContext, Statistics, TrackerData } from "./types";
 import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
-import { cancelActiveGenerations } from "./generator";
+import { cancelActiveGenerations, generateJson } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
 import { initCharacterPanel } from "./characterPanel";
 
@@ -39,23 +43,7 @@ let swipeGenerationActive = false;
 let slashCommandsRegistered = false;
 let activeExtractionRunId: number | null = null;
 const cancelledExtractionRuns = new Set<number>();
-const BUILT_IN_SUMMARY_LABELS: Array<{ key: "affection" | "trust" | "desire" | "connection"; label: string }> = [
-  { key: "affection", label: "affection" },
-  { key: "trust", label: "trust" },
-  { key: "desire", label: "desire" },
-  { key: "connection", label: "connection" },
-];
-
-function clampPercent(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-function formatHumanList(parts: string[]): string {
-  if (!parts.length) return "";
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
-  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
-}
+const activeSummaryRuns = new Set<number>();
 
 function collectSummaryCharacters(data: TrackerData): string[] {
   const names = new Set<string>();
@@ -79,7 +67,44 @@ function collectSummaryCharacters(data: TrackerData): string[] {
   return Array.from(names).sort((a, b) => a.localeCompare(b));
 }
 
-function buildTrackerStatusSummaryText(data: TrackerData, currentSettings: BetterSimTrackerSettings): string {
+function stripHiddenReasoningBlocks(raw: string): string {
+  return String(raw ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/<\s*(think|analysis|reasoning)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*\/?\s*(think|analysis|reasoning)[^>]*>/gi, "")
+    .trim();
+}
+
+function sanitizeGeneratedSummaryText(raw: string): string {
+  let text = stripHiddenReasoningBlocks(raw);
+  if (!text) return "";
+
+  const fencedBlock = text.match(/^```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```$/);
+  if (fencedBlock?.[1]) {
+    text = fencedBlock[1].trim();
+  }
+
+  text = text
+    .replace(/^summary\s*[:\-]\s*/i, "")
+    .replace(/^system\s*summary\s*[:\-]\s*/i, "")
+    .replace(/^["'`]+/, "")
+    .replace(/["'`]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text.slice(0, 1200).trim();
+}
+
+function wrapAsSystemNarrativeText(text: string): string {
+  const cleaned = text.replace(/^\*+/, "").replace(/\*+$/, "").trim();
+  return `*${cleaned}*`;
+}
+
+function hasNumericCharacters(text: string): boolean {
+  return /\d/.test(text);
+}
+
+function buildSummaryTrackerStateLines(data: TrackerData, currentSettings: BetterSimTrackerSettings): string {
   const customLabelMap = new Map<string, string>();
   for (const stat of currentSettings.customStats ?? []) {
     const id = String(stat.id ?? "").trim().toLowerCase();
@@ -87,46 +112,195 @@ function buildTrackerStatusSummaryText(data: TrackerData, currentSettings: Bette
     customLabelMap.set(id, String(stat.label ?? id).trim() || id);
   }
 
-  const perCharacter = collectSummaryCharacters(data).map(name => {
-    const clauses: string[] = [];
-    const mood = String(data.statistics.mood?.[name] ?? "").trim();
+  const builtInStats: Array<{ key: "affection" | "trust" | "desire" | "connection"; label: string }> = [
+    { key: "affection", label: "affection" },
+    { key: "trust", label: "trust" },
+    { key: "desire", label: "desire" },
+    { key: "connection", label: "connection" },
+  ];
+
+  const lines = collectSummaryCharacters(data).map(name => {
+    const parts: string[] = [];
+    const mood = String(data.statistics.mood?.[name] ?? "").trim().replace(/\s+/g, " ");
     if (mood) {
-      clauses.push(`mood is ${mood}`);
+      parts.push(`mood=${mood}`);
+    }
+    const lastThought = String(data.statistics.lastThought?.[name] ?? "").trim().replace(/\s+/g, " ");
+    if (lastThought) {
+      parts.push(`lastThought="${lastThought.slice(0, 180)}"`);
     }
 
-    const builtInParts: string[] = [];
-    for (const { key, label } of BUILT_IN_SUMMARY_LABELS) {
+    for (const { key, label } of builtInStats) {
       const raw = data.statistics[key]?.[name];
       const value = Number(raw);
       if (raw === undefined || Number.isNaN(value)) continue;
-      builtInParts.push(`${label} ${clampPercent(value)}%`);
-    }
-    if (builtInParts.length) {
-      clauses.push(`relationship stats are ${formatHumanList(builtInParts)}`);
+      parts.push(`${label}=${Math.max(0, Math.min(100, Math.round(value)))}`);
     }
 
-    const customParts: string[] = [];
     for (const [statId, byCharacter] of Object.entries(data.customStatistics ?? {})) {
       const raw = byCharacter?.[name];
       const value = Number(raw);
       if (raw === undefined || Number.isNaN(value)) continue;
-      const label = customLabelMap.get(statId) ?? statId;
-      customParts.push(`${label} ${clampPercent(value)}%`);
-    }
-    if (customParts.length) {
-      clauses.push(`custom stats are ${formatHumanList(customParts)}`);
+      const label = (customLabelMap.get(statId) ?? statId).replace(/\s+/g, "_").toLowerCase();
+      parts.push(`${label}=${Math.max(0, Math.min(100, Math.round(value)))}`);
     }
 
-    if (!clauses.length) {
-      return `${name} has no tracked values yet`;
-    }
-    return `${name} has ${clauses.join(", ")}`;
+    return `- ${name}: ${parts.length ? parts.join(", ") : "no tracked values"}`;
   });
 
-  const body = perCharacter.length
-    ? perCharacter.join(". ")
-    : "no tracked values are available yet";
-  return `*System summary of current tracker state: ${body}.*`;
+  return lines.length ? lines.join("\n") : "- no tracked values are available";
+}
+
+function buildRecentContextUpToMessageIndex(context: STContext, messageIndex: number, messageCount: number): string {
+  const maxCount = Math.max(1, messageCount);
+  const endExclusive = Math.min(context.chat.length, Math.max(0, messageIndex) + 1);
+  const start = Math.max(0, endExclusive - maxCount);
+  const chunk = context.chat.slice(start, endExclusive);
+  return chunk
+    .map(message => {
+      if (!message.is_user && !isTrackableAiMessage(message)) return null;
+      const speaker = message.is_user ? context.name1 ?? "User" : message.name ?? "Character";
+      return `${speaker}: ${message.mes}`;
+    })
+    .filter((line): line is string => Boolean(line))
+    .join("\n\n");
+}
+
+function describeBand(value: number, low: string, medium: string, high: string): string {
+  if (value <= 30) return low;
+  if (value <= 60) return medium;
+  return high;
+}
+
+function buildFallbackSummaryProse(data: TrackerData, currentSettings: BetterSimTrackerSettings): string {
+  const names = collectSummaryCharacters(data);
+  if (!names.length) {
+    return "The current relationship state is quiet and there are no meaningful tracked shifts yet.";
+  }
+  const customLabelMap = new Map<string, string>();
+  for (const stat of currentSettings.customStats ?? []) {
+    const id = String(stat.id ?? "").trim().toLowerCase();
+    if (!id) continue;
+    customLabelMap.set(id, String(stat.label ?? id).trim() || id);
+  }
+
+  const sentences = names.map(name => {
+    const affection = Number(data.statistics.affection?.[name] ?? currentSettings.defaultAffection);
+    const trust = Number(data.statistics.trust?.[name] ?? currentSettings.defaultTrust);
+    const desire = Number(data.statistics.desire?.[name] ?? currentSettings.defaultDesire);
+    const connection = Number(data.statistics.connection?.[name] ?? currentSettings.defaultConnection);
+    const mood = String(data.statistics.mood?.[name] ?? currentSettings.defaultMood).trim();
+
+    const warmth = describeBand(affection, "guarded warmth", "measured warmth", "clear warmth");
+    const safety = describeBand(trust, "careful trust", "steady trust", "strong trust");
+    const bond = describeBand(connection, "distant", "steady", "close");
+    const tension = describeBand(desire, "without notable romantic tension", "with mild romantic tension", "with noticeable romantic tension");
+
+    const customBits: string[] = [];
+    for (const [statId, byCharacter] of Object.entries(data.customStatistics ?? {})) {
+      const raw = Number(byCharacter?.[name]);
+      if (Number.isNaN(raw)) continue;
+      const label = customLabelMap.get(statId) ?? statId;
+      const tone = describeBand(raw, "low", "moderate", "high");
+      customBits.push(`${label} feels ${tone}`);
+      if (customBits.length >= 2) break;
+    }
+
+    const customClause = customBits.length ? ` ${name}'s custom-state cues suggest ${customBits.join(" and ")}.` : "";
+    const moodClause = mood ? `${name} currently feels ${mood.toLowerCase()}. ` : "";
+    return `${moodClause}${name} shows ${warmth} toward the user, ${safety}, and a ${bond} overall bond, ${tension}.${customClause}`;
+  });
+
+  return sentences.join(" ");
+}
+
+async function generateTrackerSummaryProse(input: {
+  context: STContext;
+  settings: BetterSimTrackerSettings;
+  data: TrackerData;
+  messageIndex: number;
+}): Promise<{ text: string; profileId: string | null }> {
+  const { context, settings, data, messageIndex } = input;
+  const characters = collectSummaryCharacters(data);
+  const contextText = buildRecentContextUpToMessageIndex(context, messageIndex, settings.contextMessages);
+  const trackerStateLines = buildSummaryTrackerStateLines(data, settings);
+  const prompt = buildTrackerSummaryGenerationPrompt({
+    userName: context.name1 ?? "User",
+    activeCharacters: data.activeCharacters ?? [],
+    characters,
+    contextText,
+    trackerStateLines,
+  });
+
+  const first = await generateJson(prompt, settings);
+  let summary = sanitizeGeneratedSummaryText(first.text);
+  let profileId: string | null = first.meta.profileId;
+  if (!summary) {
+    throw new Error("Summary generation returned empty text.");
+  }
+
+  if (hasNumericCharacters(summary)) {
+    const rewrite = await generateJson(
+      buildTrackerSummaryNoNumbersRewritePrompt({ draftSummary: summary }),
+      settings,
+    );
+    const rewritten = sanitizeGeneratedSummaryText(rewrite.text);
+    if (rewritten) {
+      summary = rewritten;
+      profileId = rewrite.meta.profileId || profileId;
+    }
+  }
+
+  if (hasNumericCharacters(summary)) {
+    throw new Error("Summary still contains numeric output.");
+  }
+
+  return { text: summary, profileId };
+}
+
+async function sendSummaryAsChatComment(context: STContext, summaryText: string): Promise<"slash-comment" | "system-message" | "manual-fallback"> {
+  const anyContext = context as STContext & {
+    executeSlashCommandsWithOptions?: (text: string, options?: Record<string, unknown>) => Promise<unknown> | unknown;
+    sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
+    addOneMessage?: (message: Record<string, unknown>, options?: Record<string, unknown>) => void;
+  };
+
+  const compactText = summaryText.replace(/\s+/g, " ").trim();
+  if (typeof anyContext.executeSlashCommandsWithOptions === "function") {
+    const escaped = compactText
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"');
+    await anyContext.executeSlashCommandsWithOptions(`/comment compact=true "${escaped}"`, { handleExecutionErrors: true });
+    return "slash-comment";
+  }
+
+  if (typeof anyContext.sendSystemMessage === "function") {
+    anyContext.sendSystemMessage("generic", compactText, {
+      isSmallSys: true,
+      swipeable: false,
+      api: "manual",
+      model: "bettersimtracker.summary",
+    });
+    return "system-message";
+  }
+
+  const fallbackMessage = {
+    name: "System",
+    is_user: false,
+    is_system: true,
+    send_date: Date.now(),
+    mes: compactText,
+    extra: {
+      type: "comment",
+      isSmallSys: true,
+      swipeable: false,
+      api: "manual",
+      model: "bettersimtracker.summary",
+    },
+  };
+  context.chat.push(fallbackMessage);
+  anyContext.addOneMessage?.(fallbackMessage);
+  return "manual-fallback";
 }
 
 function getTraceStorageKey(context: STContext): string {
@@ -330,7 +504,7 @@ function queueRender(): void {
     });
 
     const latestAiIndex = context ? getLastAiMessageIndex(context) : null;
-    renderTracker(entries, settings, allCharacterNames, Boolean(context?.groupId), trackerUiState, latestAiIndex, characterName => {
+    renderTracker(entries, settings, allCharacterNames, Boolean(context?.groupId), trackerUiState, latestAiIndex, activeSummaryRuns, characterName => {
       const liveContext = getSafeContext();
       if (!liveContext?.characters?.length) return null;
       const normalized = String(characterName ?? "").trim().toLowerCase();
@@ -819,6 +993,10 @@ async function sendTrackerSummaryToChat(messageIndex: number): Promise<void> {
   const context = getSafeContext();
   if (!context || !settings) return;
   if (!Number.isInteger(messageIndex) || messageIndex < 0 || messageIndex >= context.chat.length) return;
+  if (activeSummaryRuns.has(messageIndex)) {
+    pushTrace("summary.skip", { reason: "already_running", messageIndex });
+    return;
+  }
 
   const message = context.chat[messageIndex];
   const messageData = getTrackerDataFromMessage(message);
@@ -827,45 +1005,50 @@ async function sendTrackerSummaryToChat(messageIndex: number): Promise<void> {
     pushTrace("summary.skip", { reason: "no_tracker_data", messageIndex });
     return;
   }
+  pushTrace("summary.start", { messageIndex });
+  activeSummaryRuns.add(messageIndex);
+  queueRender();
+  try {
+    let summaryBody = "";
+    let aiProfileId: string | null = null;
+    let usedFallback = false;
 
-  const summaryText = buildTrackerStatusSummaryText(data, settings);
-  const anyContext = context as STContext & {
-    sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
-    addOneMessage?: (message: Record<string, unknown>, options?: Record<string, unknown>) => void;
-  };
-
-  if (typeof anyContext.sendSystemMessage === "function") {
-    anyContext.sendSystemMessage("generic", summaryText, {
-      type: "comment",
-      isSmallSys: true,
-      swipeable: false,
-    });
-  } else {
-    const systemMessage = {
-      name: "System",
-      mes: summaryText,
-      is_user: false,
-      is_system: true,
-      extra: {
-        type: "comment",
-        isSmallSys: true,
-        swipeable: false,
-      },
-    };
-    context.chat.push(systemMessage);
-    if (typeof anyContext.addOneMessage === "function") {
-      anyContext.addOneMessage(systemMessage);
+    try {
+      const generated = await generateTrackerSummaryProse({
+        context,
+        settings,
+        data,
+        messageIndex,
+      });
+      summaryBody = generated.text;
+      aiProfileId = generated.profileId;
+    } catch (error) {
+      usedFallback = true;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      pushTrace("summary.ai.error", {
+        messageIndex,
+        error: errorMessage,
+      });
+      summaryBody = buildFallbackSummaryProse(data, settings);
     }
-  }
 
-  context.saveChatDebounced?.();
-  await context.saveChat?.();
-  pushTrace("summary.sent", {
-    messageIndex,
-    activeCharacters: data.activeCharacters.length,
-    charCount: collectSummaryCharacters(data).length,
-    textChars: summaryText.length,
-  });
+    const summaryText = wrapAsSystemNarrativeText(summaryBody);
+    const delivery = await sendSummaryAsChatComment(context, summaryText);
+    context.saveChatDebounced?.();
+    await context.saveChat?.();
+    pushTrace("summary.sent", {
+      messageIndex,
+      activeCharacters: data.activeCharacters.length,
+      charCount: collectSummaryCharacters(data).length,
+      textChars: summaryText.length,
+      delivery,
+      aiProfileId,
+      usedFallback,
+    });
+  } finally {
+    activeSummaryRuns.delete(messageIndex);
+    queueRender();
+  }
 }
 
 async function runExtraction(reason: string, targetMessageIndex?: number): Promise<void> {
