@@ -500,3 +500,40 @@ export function buildSequentialCustomNumericPrompt(input: {
     characters: input.characters.join(", "),
   });
 }
+
+export function buildSequentialCustomOverrideGenerationPrompt(input: {
+  statId: string;
+  statLabel: string;
+  statDescription: string;
+}): string {
+  const statId = input.statId.trim().toLowerCase();
+  const statLabel = input.statLabel.trim();
+  const statDescription = input.statDescription.trim();
+
+  return [
+    "SYSTEM:",
+    "You write instruction text for BetterSimTracker custom sequential extraction.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not add explanations before or after the instruction block.",
+    "",
+    "Custom stat:",
+    `- ID: ${statId}`,
+    `- Label: ${statLabel}`,
+    `- Description: ${statDescription}`,
+    "",
+    "Task:",
+    "Write exactly 6 short bullet lines. Every line must start with \"- \".",
+    "The instruction must:",
+    "- Be focused on this stat only.",
+    "- Include {{statLabel}} and {{statId}} macros (not hardcoded values).",
+    "- Tell the model to update only {{statId}} deltas and ignore other stats.",
+    "- Keep updates conservative and realistic from recent messages.",
+    "- Allow 0 or negative deltas when context is neutral/negative.",
+    "- Prefer recent messages first; use character cards only for disambiguation.",
+    "- Not mention JSON, response format, token limits, max delta bounds, or confidence math.",
+    "",
+    "Return the 6-line instruction block only.",
+  ].join("\n");
+}
