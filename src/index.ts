@@ -297,7 +297,7 @@ async function sendSummaryAsSystemMessage(
   context: STContext,
   summaryText: string,
   visibleForAi: boolean,
-): Promise<"comment-system" | "comment-ai-visible"> {
+): Promise<"comment-system" | "comment-ai-visible" | "comment-system-api"> {
   const anyContext = context as STContext & {
     sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
     addOneMessage?: (message: Record<string, unknown>, options?: Record<string, unknown>) => void;
@@ -305,6 +305,23 @@ async function sendSummaryAsSystemMessage(
 
   const compactText = summaryText.replace(/\s+/g, " ").trim();
   const now = Date.now();
+  const commonExtra = {
+    gen_id: now,
+    api: "manual",
+    model: "bettersimtracker.summary",
+    bstSummaryNote: true,
+    bst_summary_note: true,
+  };
+
+  if (!visibleForAi && typeof anyContext.sendSystemMessage === "function") {
+    anyContext.sendSystemMessage("comment", compactText, {
+      ...commonExtra,
+      // Keep it deletable/editable through standard message controls.
+      isSmallSys: false,
+    });
+    return "comment-system-api";
+  }
+
   const commentMessage = {
     name: "Note",
     is_user: false,
@@ -312,15 +329,19 @@ async function sendSummaryAsSystemMessage(
     send_date: now,
     mes: compactText,
     force_avatar: "img/quill.png",
-    extra: {
-      type: "comment",
-      gen_id: now,
-      isSmallSys: true,
-      api: "manual",
-      model: "bettersimtracker.summary",
-      bstSummaryNote: true,
-      bst_summary_note: true,
-    },
+    extra: visibleForAi
+      ? commonExtra
+      : { ...commonExtra, type: "comment" },
+    swipe_id: 0,
+    swipes: [compactText],
+    swipe_info: [
+      {
+        send_date: now,
+        gen_started: null,
+        gen_finished: null,
+        extra: commonExtra,
+      },
+    ],
   };
   context.chat.push(commentMessage);
   anyContext.addOneMessage?.(commentMessage);
