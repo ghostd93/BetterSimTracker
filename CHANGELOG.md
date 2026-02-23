@@ -10,10 +10,11 @@ All notable changes to BetterSimTracker are documented here.
 - Custom stat wizard wording now uses `Improve description with AI` for clearer phrasing.
 - Summary output is now sanitized for hidden reasoning tags and normalized to concise prose wrapped as a system-style narrative line.
 - `Summarize` button now shows a loading state while generation is in progress.
+- Summary prose now gets an extra normalization pass (bullet/markdown cleanup, whitespace/punctuation correction) before sending.
 
 ### Fixed
 - Summary output now avoids numeric stat reporting (prose-only summary behavior).
-- Summary delivery now uses the ST comment-message flow, so generated summary entries behave like normal deletable chat comments.
+- Summary delivery now uses native ST `sendSystemMessage` directly, so entries are literal system messages.
 
 ## [2.0.1] - 2026-02-23
 ### Added
