@@ -19,6 +19,7 @@ All notable changes to BetterSimTracker are documented here.
 - Summary output now avoids numeric stat reporting (prose-only summary behavior).
 - Editing non-trackable messages (including summary system notes) no longer triggers tracker re-extraction on the nearest AI message.
 - Summary note messages are now always excluded from tracker extraction targets, including AI-visible mode.
+- Summary note delivery now uses ST-native system comment path (hidden mode) and full chat-message payloads (AI-visible mode) to avoid undeletable-note edge cases.
 
 ## [2.0.1] - 2026-02-23
 ### Added
