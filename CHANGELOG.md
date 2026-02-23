@@ -3,6 +3,9 @@
 All notable changes to BetterSimTracker are documented here.
 
 ## [Unreleased]
+### Added
+- Tracker root actions now include `Summarize` near `Collapse`/`Retrack` to post a prose system summary of the current tracker state directly into chat.
+
 ### Changed
 - Custom stat wizard wording now uses `Improve description with AI` for clearer phrasing.
 

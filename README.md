@@ -10,12 +10,13 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Historical tracking (older AI messages keep their own past state)
 - Group chat support (multiple character cards in one message)
 - Scene activity detection (active vs inactive character state)
-- Polished tracker action controls for `Collapse cards` and `Retrack`
+- Polished tracker action controls for `Collapse cards`, `Summarize`, and `Retrack`
 - Polished extension settings modal with sticky header/footer actions and one-click `Expand all` / `Collapse all` section control
 - Settings checkboxes now use consistent round accent-matched styling across ST themes/mobile UI overrides
 - Built-in stats manager wizard with unified `Enabled` toggle (`Track + Card + Graph`) plus `Inject` control for numeric built-ins
 - Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8, color picker + hex input, AI-assisted description improvement, AI generation for stat-specific Sequential Prompt Override)
 - Retrack button (regenerate tracker for last AI message)
+- Summarize button (send a prose `System` summary of current tracker status into chat)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
   - raw/smoothed view
