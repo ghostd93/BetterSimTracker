@@ -293,30 +293,31 @@ async function generateTrackerSummaryProse(input: {
   return { text: normalized, profileId };
 }
 
-async function sendSummaryAsSystemMessage(context: STContext, summaryText: string): Promise<"system-message" | "manual-fallback"> {
+async function sendSummaryAsSystemMessage(context: STContext, summaryText: string): Promise<"comment-system"> {
   const anyContext = context as STContext & {
     sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
     addOneMessage?: (message: Record<string, unknown>, options?: Record<string, unknown>) => void;
   };
 
   const compactText = summaryText.replace(/\s+/g, " ").trim();
-
-  if (typeof anyContext.sendSystemMessage === "function") {
-    anyContext.sendSystemMessage("generic", compactText);
-    return "system-message";
-  }
-
-  const fallbackMessage = {
-    name: "System",
+  const commentMessage = {
+    name: "Note",
     is_user: false,
     is_system: true,
     send_date: Date.now(),
     mes: compactText,
-    extra: {},
+    force_avatar: "img/quill.png",
+    extra: {
+      type: "comment",
+      gen_id: Date.now(),
+      isSmallSys: true,
+      api: "manual",
+      model: "bettersimtracker.summary",
+    },
   };
-  context.chat.push(fallbackMessage);
-  anyContext.addOneMessage?.(fallbackMessage);
-  return "manual-fallback";
+  context.chat.push(commentMessage);
+  anyContext.addOneMessage?.(commentMessage);
+  return "comment-system";
 }
 
 function getTraceStorageKey(context: STContext): string {
@@ -1549,6 +1550,17 @@ function registerEvents(context: STContext): void {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.message_edited", { messageIndex });
       scheduleRefresh();
+      if (messageIndex != null && messageIndex >= 0 && messageIndex < context.chat.length) {
+        const editedMessage = context.chat[messageIndex];
+        if (!isTrackableAiMessage(editedMessage)) {
+          pushTrace("extract.skip", {
+            reason: "edited_message_not_trackable",
+            trigger: "MESSAGE_EDITED",
+            messageIndex,
+          });
+          return;
+        }
+      }
       scheduleExtraction("MESSAGE_EDITED", messageIndex ?? undefined);
     });
   }
