@@ -23,6 +23,7 @@ All notable changes to BetterSimTracker are documented here.
 - Summary note delivery now avoids ST `sendSystemMessage("comment")` to prevent undefined-message insertion and downstream extension crashes.
 - Existing chats are now auto-sanitized from invalid/undefined message entries created by earlier broken summary delivery paths.
 - Legacy summary notes (without explicit BST markers) are now included in visibility sync, and chat view reload is triggered after sync so ghost/system icon state updates immediately.
+- Summary note visibility sync now persists chat changes immediately, so AI-visible/hidden icon state survives page reloads.
 - Summary-toggle help lines are now full-width and aligned correctly in the settings grid.
 
 ## [2.0.1] - 2026-02-23
