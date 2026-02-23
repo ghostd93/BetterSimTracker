@@ -1,5 +1,6 @@
 import { CUSTOM_STAT_ID_REGEX, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS, STYLE_ID } from "./constants";
 import { resolveCharacterDefaultsEntry } from "./characterDefaults";
+import { generateJson } from "./generator";
 import { logDebug } from "./settings";
 import type {
   BetterSimTrackerSettings,
@@ -22,6 +23,9 @@ import {
   MOOD_PROMPT_PROTOCOL,
   NUMERIC_PROMPT_PROTOCOL,
   UNIFIED_PROMPT_PROTOCOL,
+  buildBuiltInSequentialPromptGenerationPrompt,
+  buildCustomStatDescriptionGenerationPrompt,
+  buildSequentialCustomOverrideGenerationPrompt,
   moodOptions,
 } from "./prompts";
 import {
@@ -358,6 +362,80 @@ function suggestUniqueCustomStatId(base: string, existing: Set<string>): string 
     return candidate;
   }
   return `stat_${Date.now().toString().slice(-4)}`;
+}
+
+function stripHiddenReasoningBlocks(raw: string): string {
+  return String(raw ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/<\s*(think|analysis|reasoning)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*\/?\s*(think|analysis|reasoning)[^>]*>/gi, "")
+    .trim();
+}
+
+function sanitizeGeneratedSequentialTemplate(raw: string): string {
+  let text = stripHiddenReasoningBlocks(raw);
+  if (!text) return "";
+
+  const fenceMatch = text.match(/^```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```$/);
+  if (fenceMatch?.[1]) {
+    text = fenceMatch[1].trim();
+  }
+
+  text = text
+    .replace(/^["'`]+/, "")
+    .replace(/["'`]+$/, "")
+    .replace(/^sequential\s+prompt\s+override\s*:?\s*/i, "")
+    .trim();
+
+  if (text.startsWith("[") && text.endsWith("]")) {
+    text = text.slice(1, -1).trim();
+  }
+
+  // Prefer the generated bullet block when extra chatter appears.
+  const bulletLines = text
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line.startsWith("- "));
+  if (bulletLines.length >= 3) {
+    text = bulletLines.slice(0, 6).join("\n");
+  }
+
+  return text.slice(0, 20_000);
+}
+
+function sanitizeGeneratedCustomDescription(raw: string): string {
+  let text = stripHiddenReasoningBlocks(raw);
+  if (!text) return "";
+
+  const fenceMatch = text.match(/^```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```$/);
+  if (fenceMatch?.[1]) {
+    text = fenceMatch[1].trim();
+  }
+
+  if (text.startsWith("{") && text.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(text) as { description?: unknown };
+      if (typeof parsed.description === "string" && parsed.description.trim()) {
+        text = parsed.description.trim();
+      }
+    } catch {
+      // Ignore malformed JSON and continue with raw text cleanup.
+    }
+  }
+
+  text = text
+    .replace(/^description\s*[:\-]\s*/i, "")
+    .replace(/^["'`]+/, "")
+    .replace(/["'`]+$/, "")
+    .trim();
+
+  if (text.startsWith("- ")) {
+    text = text.slice(2).trim();
+  }
+
+  text = text.replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.slice(0, 200).trim();
 }
 
 function getGlobalStExpressionImageOptions(settings: BetterSimTrackerSettings): StExpressionImageOptions {
@@ -1553,6 +1631,58 @@ function ensureStyles(): void {
   border-color: rgba(255,255,255,0.45);
   background: rgba(20,26,38,0.9);
 }
+.bst-prompt-generate {
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 8px;
+  background: rgba(14,18,28,0.8);
+  color: #fff;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease, opacity .16s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.bst-prompt-generate:hover {
+  border-color: color-mix(in srgb, var(--bst-accent) 68%, #ffffff 32%);
+  background: color-mix(in srgb, var(--bst-accent) 20%, rgba(20,26,38,0.9) 80%);
+}
+.bst-prompt-generate[data-loading="true"] {
+  cursor: wait;
+}
+.bst-prompt-generate[data-loading="true"] .fa-solid {
+  animation: bst-spin 0.9s linear infinite;
+}
+.bst-prompt-generate:disabled {
+  opacity: 0.82;
+}
+.bst-prompt-ai-row {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bst-prompt-ai-status {
+  font-size: 11px;
+  opacity: 0.8;
+  line-height: 1.35;
+}
+.bst-prompt-ai-status[data-state="loading"] {
+  opacity: 1;
+  color: #d4ecff;
+}
+.bst-prompt-ai-status[data-state="success"] {
+  opacity: 1;
+  color: #c4ffd4;
+}
+.bst-prompt-ai-status[data-state="error"] {
+  opacity: 1;
+  color: #ffcaca;
+}
 .bst-injection-prompt {
   display: flex;
   flex-direction: column;
@@ -1809,6 +1939,77 @@ function ensureStyles(): void {
 }
 .bst-custom-wizard-actions .bst-btn {
   min-width: 96px;
+}
+.bst-custom-ai-row {
+  margin-top: 8px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bst-custom-ai-btn {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--bst-accent) 62%, #ffffff 38%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--bst-accent) 26%, #182338 74%),
+    color-mix(in srgb, var(--bst-accent) 14%, #111b2b 86%)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 6px 16px rgba(0,0,0,0.28);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  padding-inline: 12px;
+  transition: transform .14s ease, box-shadow .16s ease, border-color .16s ease, filter .16s ease;
+}
+.bst-custom-ai-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--bst-accent) 74%, #ffffff 26%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    0 9px 20px rgba(0,0,0,0.34),
+    0 0 0 1px color-mix(in srgb, var(--bst-accent) 36%, transparent);
+  filter: brightness(1.03);
+}
+.bst-custom-ai-btn:active:not(:disabled) {
+  filter: brightness(0.98);
+}
+.bst-custom-ai-btn[data-loading="true"] {
+  cursor: wait;
+}
+.bst-custom-ai-btn:disabled {
+  opacity: 0.86;
+}
+.bst-custom-ai-btn .bst-custom-ai-btn-icon {
+  margin-right: 6px;
+  font-size: 12px;
+  opacity: 0.95;
+}
+.bst-custom-ai-btn[data-loading="true"] .bst-custom-ai-btn-icon {
+  animation: bst-spin 0.9s linear infinite;
+}
+@keyframes bst-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.bst-custom-ai-status {
+  font-size: 12px;
+  opacity: 0.84;
+  line-height: 1.35;
+}
+.bst-custom-ai-status[data-state="loading"] {
+  opacity: 1;
+  color: #d4ecff;
+}
+.bst-custom-ai-status[data-state="success"] {
+  opacity: 1;
+  color: #c4ffd4;
+}
+.bst-custom-ai-status[data-state="error"] {
+  opacity: 1;
+  color: #ffcaca;
 }
 .bst-graph-backdrop {
   position: fixed;
@@ -3611,11 +3812,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-heart"></span>Seq: Affection</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialAffection" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialAffection" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialAffection">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("affection"))}</pre>
           </div>
@@ -3624,11 +3829,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-shield-heart"></span>Seq: Trust</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialTrust" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialTrust" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialTrust">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("trust"))}</pre>
           </div>
@@ -3637,11 +3846,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-fire"></span>Seq: Desire</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialDesire" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialDesire" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialDesire">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("desire"))}</pre>
           </div>
@@ -3650,11 +3863,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-link"></span>Seq: Connection</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialConnection" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialConnection" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialConnection">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("connection"))}</pre>
           </div>
@@ -3676,11 +3893,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-face-smile"></span>Seq: Mood</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialMood" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialMood" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialMood" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialMood">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(MOOD_PROMPT_PROTOCOL)}</pre>
           </div>
@@ -3689,11 +3910,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-brain"></span>Seq: LastThought</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialLastThought" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialLastThought" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialLastThought" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialLastThought">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(LAST_THOUGHT_PROMPT_PROTOCOL)}</pre>
           </div>
@@ -3959,6 +4184,7 @@ export function openSettingsModal(input: {
       const toggle = (event: Event): void => {
         const target = event.target as HTMLElement | null;
         if (target?.closest(".bst-prompt-reset")) return;
+        if (target?.closest(".bst-prompt-generate")) return;
         event.preventDefault();
         event.stopPropagation();
         group.classList.toggle("collapsed");
@@ -4533,6 +4759,13 @@ export function openSettingsModal(input: {
         <label>Description
           <textarea data-bst-custom-field="description" rows="4" maxlength="200" placeholder="Required. Explain what this stat represents and how extraction should interpret it.">${escapeHtml(draft.description)}</textarea>
         </label>
+        <div class="bst-custom-ai-row">
+          <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-improve-description" data-loading="false">
+            <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
+            <span class="bst-custom-ai-btn-label" data-bst-custom-description-btn-label>Improve description by AI</span>
+          </button>
+          <span class="bst-custom-ai-status" data-bst-custom-description-status>Uses current connection profile.</span>
+        </div>
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="2">
@@ -4553,9 +4786,15 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
         </div>
         <label>Sequential Prompt Override (optional)
-          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. Literal example: [Propose incremental changes to {{statLabel}} from recent messages. Only update {{statId}}.] Leave empty to use the global Seq: Custom Numeric template fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
+          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. Per-stat override (not universal). Literal example: Update only respect_score deltas from recent messages, based on signs of respect. Leave empty to use global Seq: Custom Numeric fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
         </label>
-        <div class="bst-help-line">Template macros: <code>{{statId}}</code> <code>{{statLabel}}</code> <code>{{statDescription}}</code> <code>{{statDefault}}</code> <code>{{maxDelta}}</code> <code>{{characters}}</code> <code>{{envelope}}</code> <code>{{contextText}}</code>.</div>
+        <div class="bst-custom-ai-row">
+          <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-generate-template" data-loading="false">
+            <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
+            <span class="bst-custom-ai-btn-label" data-bst-custom-template-btn-label>Generate with AI</span>
+          </button>
+          <span class="bst-custom-ai-status" data-bst-custom-template-status>Uses current connection profile.</span>
+        </div>
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="4">
@@ -4588,9 +4827,19 @@ export function openSettingsModal(input: {
     const prevBtn = wizard.querySelector('[data-action="custom-prev"]') as HTMLButtonElement | null;
     const nextBtn = wizard.querySelector('[data-action="custom-next"]') as HTMLButtonElement | null;
     const saveBtn = wizard.querySelector('[data-action="custom-save"]') as HTMLButtonElement | null;
+    const improveDescriptionBtn = wizard.querySelector('[data-action="custom-improve-description"]') as HTMLButtonElement | null;
+    const improveDescriptionLabelNode = wizard.querySelector("[data-bst-custom-description-btn-label]") as HTMLElement | null;
+    const improveDescriptionStatusNode = wizard.querySelector("[data-bst-custom-description-status]") as HTMLElement | null;
+    const generateTemplateBtn = wizard.querySelector('[data-action="custom-generate-template"]') as HTMLButtonElement | null;
+    const generateTemplateLabelNode = wizard.querySelector("[data-bst-custom-template-btn-label]") as HTMLElement | null;
+    const generateStatusNode = wizard.querySelector("[data-bst-custom-template-status]") as HTMLElement | null;
     const getField = (name: string): HTMLInputElement | HTMLTextAreaElement | null =>
       wizard.querySelector(`[data-bst-custom-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
     const colorPickerNode = wizard.querySelector('[data-bst-custom-color-picker]') as HTMLInputElement | null;
+    let generateDescriptionRequestId = 0;
+    let generateTemplateRequestId = 0;
+    let generatingDescription = false;
+    let generatingTemplate = false;
 
     const toPickerHex = (raw: string, fallback: string): string => {
       const value = raw.trim();
@@ -4669,7 +4918,68 @@ export function openSettingsModal(input: {
       return false;
     };
 
-    const close = (): void => closeCustomWizard();
+    const setGenerateStatus = (
+      node: HTMLElement | null,
+      fallback: string,
+      state: "idle" | "loading" | "success" | "error",
+      message?: string,
+    ): void => {
+      if (!node) return;
+      const text = String(message ?? "").trim();
+      if (!text && state === "idle") {
+        node.textContent = fallback;
+        node.setAttribute("data-state", "idle");
+        return;
+      }
+      node.textContent = text;
+      node.setAttribute("data-state", state);
+    };
+
+    const setButtonLoading = (
+      button: HTMLButtonElement | null,
+      labelNode: HTMLElement | null,
+      loading: boolean,
+      loadingLabel: string,
+      idleLabel: string,
+    ): void => {
+      if (button) {
+        button.disabled = loading;
+        button.setAttribute("data-loading", loading ? "true" : "false");
+      }
+      if (labelNode) {
+        labelNode.textContent = loading ? loadingLabel : idleLabel;
+      }
+    };
+
+    const setDescriptionGenerateLoading = (loading: boolean): void => {
+      generatingDescription = loading;
+      setButtonLoading(
+        improveDescriptionBtn,
+        improveDescriptionLabelNode,
+        loading,
+        "Improving...",
+        "Improve description by AI",
+      );
+    };
+
+    const setTemplateGenerateLoading = (loading: boolean): void => {
+      generatingTemplate = loading;
+      setButtonLoading(
+        generateTemplateBtn,
+        generateTemplateLabelNode,
+        loading,
+        "Generating...",
+        "Generate with AI",
+      );
+    };
+
+    const close = (): void => {
+      generateDescriptionRequestId += 1;
+      generateTemplateRequestId += 1;
+      setDescriptionGenerateLoading(false);
+      setTemplateGenerateLoading(false);
+      closeCustomWizard();
+    };
     const currentId = source?.id;
     const validateCurrentStep = (): boolean => {
       syncDraftFromFields();
@@ -4704,6 +5014,147 @@ export function openSettingsModal(input: {
       syncColorPickerFromText();
     });
     syncColorPickerFromText();
+    setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "idle");
+    setGenerateStatus(generateStatusNode, "Uses current connection profile.", "idle");
+
+    improveDescriptionBtn?.addEventListener("click", async () => {
+      if (generatingDescription) return;
+      syncDraftFromFields();
+
+      const generationErrors: string[] = [];
+      const label = draft.label.trim();
+      const statId = draft.id.trim().toLowerCase();
+      const description = draft.description.trim();
+
+      if (!label) generationErrors.push("Label is required before AI description improvement.");
+      if (!statId) generationErrors.push("ID is required before AI description improvement.");
+      if (statId && !CUSTOM_STAT_ID_REGEX.test(statId)) {
+        generationErrors.push("ID must match: start with a letter, then lowercase letters/numbers/underscore (2..32 chars).");
+      }
+      if (statId && RESERVED_CUSTOM_STAT_IDS.has(statId)) {
+        generationErrors.push(`ID '${statId}' is reserved.`);
+      }
+      if (!description) generationErrors.push("Write a draft description before AI improvement.");
+      if (!setErrors(generationErrors)) {
+        setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "error", "Fill Label, ID, and Description first.");
+        return;
+      }
+
+      const requestId = ++generateDescriptionRequestId;
+      setDescriptionGenerateLoading(true);
+      setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "loading", "Improving description...");
+      try {
+        const settingsForRequest = collectSettings();
+        const prompt = buildCustomStatDescriptionGenerationPrompt({
+          statId,
+          statLabel: label,
+          currentDescription: description,
+        });
+        const response = await generateJson(prompt, settingsForRequest);
+        if (requestId !== generateDescriptionRequestId) return;
+
+        const cleaned = sanitizeGeneratedCustomDescription(response.text);
+        if (!cleaned) {
+          throw new Error("AI returned empty description text. Try again.");
+        }
+        if (cleaned.length < 3) {
+          throw new Error("AI description is too short. Try again.");
+        }
+
+        const descriptionNode = getField("description") as HTMLTextAreaElement | null;
+        if (!descriptionNode) {
+          throw new Error("Description field is unavailable.");
+        }
+        descriptionNode.value = cleaned;
+        descriptionNode.dispatchEvent(new Event("input", { bubbles: true }));
+        syncDraftFromFields();
+        writeReview();
+        setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "success", "Improved. Review and edit if needed.");
+        logDebug(settingsForRequest, "prompts", "custom.stat.description.generated", {
+          statId,
+          profileId: response.meta.profileId,
+          outputChars: cleaned.length,
+        });
+      } catch (error) {
+        if (requestId !== generateDescriptionRequestId) return;
+        const message = error instanceof Error ? error.message : String(error);
+        setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "error", message || "Description improvement failed. Try again.");
+      } finally {
+        if (requestId === generateDescriptionRequestId) {
+          setDescriptionGenerateLoading(false);
+        }
+      }
+    });
+
+    generateTemplateBtn?.addEventListener("click", async () => {
+      if (generatingTemplate) return;
+      syncDraftFromFields();
+
+      const generationErrors: string[] = [];
+      const label = draft.label.trim();
+      const statId = draft.id.trim().toLowerCase();
+      const description = draft.description.trim();
+
+      if (!label) generationErrors.push("Label is required before AI generation.");
+      if (!statId) generationErrors.push("ID is required before AI generation.");
+      if (statId && !CUSTOM_STAT_ID_REGEX.test(statId)) {
+        generationErrors.push("ID must match: start with a letter, then lowercase letters/numbers/underscore (2..32 chars).");
+      }
+      if (statId && RESERVED_CUSTOM_STAT_IDS.has(statId)) {
+        generationErrors.push(`ID '${statId}' is reserved.`);
+      }
+      if (!description) generationErrors.push("Description is required before AI generation.");
+      if (!setErrors(generationErrors)) {
+        setGenerateStatus(generateStatusNode, "Uses current connection profile.", "error", "Fill Label, ID, and Description first.");
+        return;
+      }
+
+      const requestId = ++generateTemplateRequestId;
+      setTemplateGenerateLoading(true);
+      setGenerateStatus(generateStatusNode, "Uses current connection profile.", "loading", "Generating instruction...");
+      try {
+        const settingsForRequest = collectSettings();
+        const prompt = buildSequentialCustomOverrideGenerationPrompt({
+          statId,
+          statLabel: label,
+          statDescription: description,
+        });
+        const response = await generateJson(prompt, settingsForRequest);
+        if (requestId !== generateTemplateRequestId) return;
+
+        const cleaned = sanitizeGeneratedSequentialTemplate(response.text);
+        if (!cleaned) {
+          throw new Error("AI returned empty instruction text. Try again.");
+        }
+        const statSpecificTemplate = cleaned
+          .replaceAll("{{statId}}", statId)
+          .replaceAll("{{statLabel}}", label)
+          .replaceAll("{{statDescription}}", description);
+
+        const templateNode = getField("sequentialPromptTemplate") as HTMLTextAreaElement | null;
+        if (!templateNode) {
+          throw new Error("Sequential template field is unavailable.");
+        }
+        templateNode.value = statSpecificTemplate;
+        templateNode.dispatchEvent(new Event("input", { bubbles: true }));
+        syncDraftFromFields();
+        writeReview();
+        setGenerateStatus(generateStatusNode, "Uses current connection profile.", "success", "Generated. Review and edit if needed.");
+        logDebug(settingsForRequest, "prompts", "custom.stat.override.generated", {
+          statId,
+          profileId: response.meta.profileId,
+          outputChars: statSpecificTemplate.length,
+        });
+      } catch (error) {
+        if (requestId !== generateTemplateRequestId) return;
+        const message = error instanceof Error ? error.message : String(error);
+        setGenerateStatus(generateStatusNode, "Uses current connection profile.", "error", message || "Generation failed. Try again.");
+      } finally {
+        if (requestId === generateTemplateRequestId) {
+          setTemplateGenerateLoading(false);
+        }
+      }
+    });
 
     backdropNode.addEventListener("click", close);
     wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
@@ -5095,6 +5546,106 @@ export function openSettingsModal(input: {
     promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
     promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
   };
+
+  type BuiltInSequentialPromptSettingKey =
+    | "promptTemplateSequentialAffection"
+    | "promptTemplateSequentialTrust"
+    | "promptTemplateSequentialDesire"
+    | "promptTemplateSequentialConnection"
+    | "promptTemplateSequentialMood"
+    | "promptTemplateSequentialLastThought";
+
+  const builtInSequentialPromptKeyToStat: Record<
+    BuiltInSequentialPromptSettingKey,
+    "affection" | "trust" | "desire" | "connection" | "mood" | "lastThought"
+  > = {
+    promptTemplateSequentialAffection: "affection",
+    promptTemplateSequentialTrust: "trust",
+    promptTemplateSequentialDesire: "desire",
+    promptTemplateSequentialConnection: "connection",
+    promptTemplateSequentialMood: "mood",
+    promptTemplateSequentialLastThought: "lastThought",
+  };
+
+  const setBuiltInSeqAiStatus = (
+    key: BuiltInSequentialPromptSettingKey,
+    state: "idle" | "loading" | "success" | "error",
+    message?: string,
+  ): void => {
+    const statusNode = modal.querySelector(`[data-bst-seq-ai-status="${key}"]`) as HTMLElement | null;
+    if (!statusNode) return;
+    const text = String(message ?? "").trim();
+    if (!text && state === "idle") {
+      statusNode.textContent = "Uses current connection profile.";
+      statusNode.setAttribute("data-state", "idle");
+      return;
+    }
+    statusNode.textContent = text;
+    statusNode.setAttribute("data-state", state);
+  };
+
+  (Object.keys(builtInSequentialPromptKeyToStat) as BuiltInSequentialPromptSettingKey[])
+    .forEach(key => setBuiltInSeqAiStatus(key, "idle"));
+
+  let builtInSeqGenerateRequestId = 0;
+  modal.querySelectorAll('[data-action="generate-seq-prompt"]').forEach(node => {
+    node.addEventListener("click", async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const button = event.currentTarget as HTMLButtonElement | null;
+      if (!button) return;
+      if (button.getAttribute("data-loading") === "true") return;
+
+      const key = button.getAttribute("data-generate-for") as BuiltInSequentialPromptSettingKey | null;
+      if (!key || !(key in builtInSequentialPromptKeyToStat)) return;
+      const stat = builtInSequentialPromptKeyToStat[key];
+
+      const textarea = modal.querySelector(`[data-k="${key}"]`) as HTMLTextAreaElement | null;
+      if (!textarea) {
+        setBuiltInSeqAiStatus(key, "error", "Prompt field unavailable.");
+        return;
+      }
+
+      const currentInstruction = textarea.value.trim() || String(promptDefaults[key] ?? "");
+      const requestId = ++builtInSeqGenerateRequestId;
+      button.disabled = true;
+      button.setAttribute("data-loading", "true");
+      setBuiltInSeqAiStatus(key, "loading", "Generating instruction...");
+      try {
+        const settingsForRequest = collectSettings();
+        const prompt = buildBuiltInSequentialPromptGenerationPrompt({
+          stat,
+          currentInstruction,
+        });
+        const response = await generateJson(prompt, settingsForRequest);
+        if (requestId !== builtInSeqGenerateRequestId) return;
+
+        const cleaned = sanitizeGeneratedSequentialTemplate(response.text);
+        if (!cleaned) {
+          throw new Error("AI returned empty instruction text. Try again.");
+        }
+
+        textarea.value = cleaned;
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        setBuiltInSeqAiStatus(key, "success", "Generated. Review and edit if needed.");
+        logDebug(settingsForRequest, "prompts", "builtin.seq.generated", {
+          stat,
+          key,
+          profileId: response.meta.profileId,
+          outputChars: cleaned.length,
+        });
+      } catch (error) {
+        if (requestId !== builtInSeqGenerateRequestId) return;
+        const message = error instanceof Error ? error.message : String(error);
+        setBuiltInSeqAiStatus(key, "error", message || "Generation failed. Try again.");
+      } finally {
+        if (requestId === builtInSeqGenerateRequestId) {
+          button.disabled = false;
+          button.setAttribute("data-loading", "false");
+        }
+      }
+    });
+  });
 
   modal.querySelectorAll('[data-action="reset-prompt"]').forEach(node => {
     node.addEventListener("click", event => {

@@ -500,3 +500,151 @@ export function buildSequentialCustomNumericPrompt(input: {
     characters: input.characters.join(", "),
   });
 }
+
+export function buildSequentialCustomOverrideGenerationPrompt(input: {
+  statId: string;
+  statLabel: string;
+  statDescription: string;
+}): string {
+  const statId = input.statId.trim().toLowerCase();
+  const statLabel = input.statLabel.trim();
+  const statDescription = input.statDescription.trim();
+
+  return [
+    "SYSTEM:",
+    "You write instruction text for BetterSimTracker custom sequential extraction.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not add explanations before or after the instruction block.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Custom stat:",
+    `- ID: ${statId}`,
+    `- Label: ${statLabel}`,
+    `- Description: ${statDescription}`,
+    "",
+    "Task:",
+    "Write exactly 6 short bullet lines. Every line must start with \"- \".",
+    "Write a stat-specific override for this exact stat, not a generic template.",
+    "The instruction must:",
+    `- Mention ${statLabel} and ${statId} directly (literal), not macro placeholders.`,
+    `- Use the provided description (${statDescription}) to define what evidence should move ${statId}.`,
+    `- Explicitly say to update only ${statId} deltas and ignore other stats.`,
+    "- Keep updates conservative and realistic from recent messages.",
+    "- Allow 0 or negative deltas when context is neutral/negative.",
+    "- Prefer recent messages first; use character cards only for disambiguation.",
+    "- Avoid generic filler and keep each bullet actionable.",
+    "- Not mention JSON, response format, confidence math, or this generator prompt.",
+    "",
+    "Return the 6-line instruction block only.",
+  ].join("\n");
+}
+
+export function buildCustomStatDescriptionGenerationPrompt(input: {
+  statId: string;
+  statLabel: string;
+  currentDescription: string;
+}): string {
+  const statId = input.statId.trim().toLowerCase();
+  const statLabel = input.statLabel.trim();
+  const currentDescription = input.currentDescription.trim();
+
+  return [
+    "SYSTEM:",
+    "You rewrite custom-stat descriptions for BetterSimTracker.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Custom stat:",
+    `- ID: ${statId}`,
+    `- Label: ${statLabel}`,
+    `- Current description: ${currentDescription}`,
+    "",
+    "Task:",
+    "Rewrite the description into one clear sentence for extraction logic.",
+    "Requirements:",
+    "- Keep the same meaning but make it precise and practical.",
+    "- Focus on what should increase/decrease this stat from conversational evidence.",
+    "- Keep it neutral and domain-agnostic (no roleplay flavor text).",
+    "- Keep it between 12 and 28 words.",
+    "- Avoid placeholders, bullets, quotes, and extra commentary.",
+    "",
+    "Return exactly one sentence.",
+  ].join("\n");
+}
+
+export function buildBuiltInSequentialPromptGenerationPrompt(input: {
+  stat: "affection" | "trust" | "desire" | "connection" | "mood" | "lastThought";
+  currentInstruction: string;
+}): string {
+  const stat = input.stat;
+  const currentInstruction = input.currentInstruction.trim();
+  const labelByStat: Record<typeof stat, string> = {
+    affection: "Affection",
+    trust: "Trust",
+    desire: "Desire",
+    connection: "Connection",
+    mood: "Mood",
+    lastThought: "Last Thought",
+  };
+  const statLabel = labelByStat[stat];
+  const statNotesByStat: Record<typeof stat, string[]> = {
+    affection: [
+      "- Focus on emotional warmth/care signals toward the user.",
+      "- Avoid overreacting to one polite line; keep conservative movement.",
+    ],
+    trust: [
+      "- Focus on safety/reliability/vulnerability signals toward the user.",
+      "- Distinguish polite compliance from genuine trust increases.",
+    ],
+    desire: [
+      "- Only increase when context is explicitly romantic/sexual.",
+      "- Non-romantic context should keep desire flat or lower.",
+    ],
+    connection: [
+      "- Focus on emotional attunement, continuity, and bond depth cues.",
+      "- Prefer sustained interaction patterns over one-off phrases.",
+    ],
+    mood: [
+      "- Focus on immediate emotional tone for this turn only.",
+      "- Keep mood interpretation anchored to recent explicit cues.",
+    ],
+    lastThought: [
+      "- Focus on one brief internal thought grounded in recent messages.",
+      "- Keep it concise, in-character, and tied to immediate context.",
+    ],
+  };
+  const statNotes = statNotesByStat[stat];
+
+  return [
+    "SYSTEM:",
+    "You write one instruction block for BetterSimTracker sequential extraction.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Target sequential prompt:",
+    `- Stat: ${stat} (${statLabel})`,
+    "",
+    "Current instruction:",
+    currentInstruction || "(empty)",
+    "",
+    "Task:",
+    "Rewrite this instruction into a stronger, practical, model-facing version for this stat only.",
+    "Output requirements:",
+    "- Write exactly 6 short bullet lines.",
+    "- Every line must start with \"- \".",
+    "- Keep wording concrete and extraction-focused.",
+    "- Prioritize recent messages; use character cards only for disambiguation.",
+    "- Keep updates conservative and realistic.",
+    ...statNotes,
+    "- Do not mention JSON/format/protocol/confidence math/token limits.",
+    "- Do not mention this generator prompt or meta instructions.",
+    "",
+    "Return the 6-line instruction block only.",
+  ].join("\n");
+}

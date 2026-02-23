@@ -2,6 +2,25 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.0.1] - 2026-02-23
+### Added
+- AI-assisted prompt authoring for custom stats:
+  - `Improve description by AI` in wizard step 1
+  - `Generate with AI` for stat-specific `Sequential Prompt Override`
+- AI generation for built-in sequential prompt instructions:
+  - `Seq: Affection`, `Seq: Trust`, `Seq: Desire`, `Seq: Connection`, `Seq: Mood`, `Seq: LastThought`
+
+### Changed
+- Custom sequential override generation is now stricter, stat-focused, and tailored to literal stat identity (`ID`/`Label`) instead of universal placeholder-style output.
+- Built-in sequential prompt generation now uses stat-specific generation prompts and applies output sanitization before filling prompt fields.
+- Dev-run versioning is aligned to semver-safe `2.0.0-dev.x`.
+
+### Fixed
+- Generated override text now strips hidden reasoning blocks (`<think>...</think>`) and keeps clean instruction output.
+- Custom stat override UX clarity improved by removing macro-hint noise in per-stat context and correcting the placeholder.
+- Custom wizard AI button spacing/hover behavior is stabilized (no jump on hover).
+And more...
+
 ## [2.0.0] - 2026-02-22
 ### Added
 - Full custom numeric stats support: definition schema, add/edit/clone/remove wizards, extraction/runtime processing, persistence (`customStatistics`), tracker cards, graphs, and prompt injection.
