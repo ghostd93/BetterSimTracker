@@ -23,6 +23,7 @@ import {
   MOOD_PROMPT_PROTOCOL,
   NUMERIC_PROMPT_PROTOCOL,
   UNIFIED_PROMPT_PROTOCOL,
+  buildBuiltInSequentialPromptGenerationPrompt,
   buildCustomStatDescriptionGenerationPrompt,
   buildSequentialCustomOverrideGenerationPrompt,
   moodOptions,
@@ -1629,6 +1630,58 @@ function ensureStyles(): void {
 .bst-prompt-reset:hover {
   border-color: rgba(255,255,255,0.45);
   background: rgba(20,26,38,0.9);
+}
+.bst-prompt-generate {
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 8px;
+  background: rgba(14,18,28,0.8);
+  color: #fff;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease, opacity .16s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.bst-prompt-generate:hover {
+  border-color: color-mix(in srgb, var(--bst-accent) 68%, #ffffff 32%);
+  background: color-mix(in srgb, var(--bst-accent) 20%, rgba(20,26,38,0.9) 80%);
+}
+.bst-prompt-generate[data-loading="true"] {
+  cursor: wait;
+}
+.bst-prompt-generate[data-loading="true"] .fa-solid {
+  animation: bst-spin 0.9s linear infinite;
+}
+.bst-prompt-generate:disabled {
+  opacity: 0.82;
+}
+.bst-prompt-ai-row {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bst-prompt-ai-status {
+  font-size: 11px;
+  opacity: 0.8;
+  line-height: 1.35;
+}
+.bst-prompt-ai-status[data-state="loading"] {
+  opacity: 1;
+  color: #d4ecff;
+}
+.bst-prompt-ai-status[data-state="success"] {
+  opacity: 1;
+  color: #c4ffd4;
+}
+.bst-prompt-ai-status[data-state="error"] {
+  opacity: 1;
+  color: #ffcaca;
 }
 .bst-injection-prompt {
   display: flex;
@@ -3759,11 +3812,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-heart"></span>Seq: Affection</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialAffection" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialAffection" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialAffection">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("affection"))}</pre>
           </div>
@@ -3772,11 +3829,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-shield-heart"></span>Seq: Trust</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialTrust" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialTrust" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialTrust">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("trust"))}</pre>
           </div>
@@ -3785,11 +3846,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-fire"></span>Seq: Desire</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialDesire" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialDesire" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialDesire">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("desire"))}</pre>
           </div>
@@ -3798,11 +3863,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-link"></span>Seq: Connection</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialConnection" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialConnection" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialConnection">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("connection"))}</pre>
           </div>
@@ -3824,11 +3893,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-face-smile"></span>Seq: Mood</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialMood" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialMood" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialMood" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialMood">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(MOOD_PROMPT_PROTOCOL)}</pre>
           </div>
@@ -3837,11 +3910,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-head">
             <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-brain"></span>Seq: LastThought</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-generate" data-action="generate-seq-prompt" data-generate-for="promptTemplateSequentialLastThought" title="Generate instruction with AI."><span class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span></button>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialLastThought" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialLastThought" rows="6"></textarea>
+            <div class="bst-prompt-ai-row">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialLastThought">Uses current connection profile.</span>
+            </div>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(LAST_THOUGHT_PROMPT_PROTOCOL)}</pre>
           </div>
@@ -4107,6 +4184,7 @@ export function openSettingsModal(input: {
       const toggle = (event: Event): void => {
         const target = event.target as HTMLElement | null;
         if (target?.closest(".bst-prompt-reset")) return;
+        if (target?.closest(".bst-prompt-generate")) return;
         event.preventDefault();
         event.stopPropagation();
         group.classList.toggle("collapsed");
@@ -5468,6 +5546,106 @@ export function openSettingsModal(input: {
     promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
     promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
   };
+
+  type BuiltInSequentialPromptSettingKey =
+    | "promptTemplateSequentialAffection"
+    | "promptTemplateSequentialTrust"
+    | "promptTemplateSequentialDesire"
+    | "promptTemplateSequentialConnection"
+    | "promptTemplateSequentialMood"
+    | "promptTemplateSequentialLastThought";
+
+  const builtInSequentialPromptKeyToStat: Record<
+    BuiltInSequentialPromptSettingKey,
+    "affection" | "trust" | "desire" | "connection" | "mood" | "lastThought"
+  > = {
+    promptTemplateSequentialAffection: "affection",
+    promptTemplateSequentialTrust: "trust",
+    promptTemplateSequentialDesire: "desire",
+    promptTemplateSequentialConnection: "connection",
+    promptTemplateSequentialMood: "mood",
+    promptTemplateSequentialLastThought: "lastThought",
+  };
+
+  const setBuiltInSeqAiStatus = (
+    key: BuiltInSequentialPromptSettingKey,
+    state: "idle" | "loading" | "success" | "error",
+    message?: string,
+  ): void => {
+    const statusNode = modal.querySelector(`[data-bst-seq-ai-status="${key}"]`) as HTMLElement | null;
+    if (!statusNode) return;
+    const text = String(message ?? "").trim();
+    if (!text && state === "idle") {
+      statusNode.textContent = "Uses current connection profile.";
+      statusNode.setAttribute("data-state", "idle");
+      return;
+    }
+    statusNode.textContent = text;
+    statusNode.setAttribute("data-state", state);
+  };
+
+  (Object.keys(builtInSequentialPromptKeyToStat) as BuiltInSequentialPromptSettingKey[])
+    .forEach(key => setBuiltInSeqAiStatus(key, "idle"));
+
+  let builtInSeqGenerateRequestId = 0;
+  modal.querySelectorAll('[data-action="generate-seq-prompt"]').forEach(node => {
+    node.addEventListener("click", async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const button = event.currentTarget as HTMLButtonElement | null;
+      if (!button) return;
+      if (button.getAttribute("data-loading") === "true") return;
+
+      const key = button.getAttribute("data-generate-for") as BuiltInSequentialPromptSettingKey | null;
+      if (!key || !(key in builtInSequentialPromptKeyToStat)) return;
+      const stat = builtInSequentialPromptKeyToStat[key];
+
+      const textarea = modal.querySelector(`[data-k="${key}"]`) as HTMLTextAreaElement | null;
+      if (!textarea) {
+        setBuiltInSeqAiStatus(key, "error", "Prompt field unavailable.");
+        return;
+      }
+
+      const currentInstruction = textarea.value.trim() || String(promptDefaults[key] ?? "");
+      const requestId = ++builtInSeqGenerateRequestId;
+      button.disabled = true;
+      button.setAttribute("data-loading", "true");
+      setBuiltInSeqAiStatus(key, "loading", "Generating instruction...");
+      try {
+        const settingsForRequest = collectSettings();
+        const prompt = buildBuiltInSequentialPromptGenerationPrompt({
+          stat,
+          currentInstruction,
+        });
+        const response = await generateJson(prompt, settingsForRequest);
+        if (requestId !== builtInSeqGenerateRequestId) return;
+
+        const cleaned = sanitizeGeneratedSequentialTemplate(response.text);
+        if (!cleaned) {
+          throw new Error("AI returned empty instruction text. Try again.");
+        }
+
+        textarea.value = cleaned;
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        setBuiltInSeqAiStatus(key, "success", "Generated. Review and edit if needed.");
+        logDebug(settingsForRequest, "prompts", "builtin.seq.generated", {
+          stat,
+          key,
+          profileId: response.meta.profileId,
+          outputChars: cleaned.length,
+        });
+      } catch (error) {
+        if (requestId !== builtInSeqGenerateRequestId) return;
+        const message = error instanceof Error ? error.message : String(error);
+        setBuiltInSeqAiStatus(key, "error", message || "Generation failed. Try again.");
+      } finally {
+        if (requestId === builtInSeqGenerateRequestId) {
+          button.disabled = false;
+          button.setAttribute("data-loading", "false");
+        }
+      }
+    });
+  });
 
   modal.querySelectorAll('[data-action="reset-prompt"]').forEach(node => {
     node.addEventListener("click", event => {
