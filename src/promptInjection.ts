@@ -160,15 +160,37 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
           "- 61-100 high: warm, open, engaged, proactive, intimate (where appropriate)",
         ].join("\n")
       : "";
-    const reactRules = hasAnyNumeric
+    const customBehaviorLines = enabledCustom.flatMap(stat => {
+      const guidance = String(stat.behaviorGuidance ?? "").trim();
+      if (!guidance) return [];
+      const label = String(stat.label ?? "").trim() || stat.id;
+      const description = String(stat.description ?? "").trim();
+      return guidance
+        .split("\n")
+        .map(line => line.trim())
+        .filter(Boolean)
+        .slice(0, 6)
+        .map(line => line.replace(/^[-*]\s*/, "").trim())
+        .filter(Boolean)
+        .map(line =>
+          line
+            .replaceAll("{{statId}}", stat.id)
+            .replaceAll("{{statLabel}}", label)
+            .replaceAll("{{statDescription}}", description),
+        )
+        .map(line => `- ${line}`);
+    });
+    const reactRuleItems = hasAnyNumeric
       ? [
-          "How to react:",
           ...(enabledBuiltInKeys.has("trust") ? ["- low trust -> avoid deep vulnerability; require proof/consistency", "- high trust -> share more, accept reassurance, collaborate"] : []),
           ...(enabledBuiltInKeys.has("affection") ? ["- low affection -> limited warmth; less caring language", "- high affection -> caring language, concern, emotional support"] : []),
           ...(enabledBuiltInKeys.has("desire") ? ["- low desire -> little/no flirtation; keep distance", "- high desire -> increased flirtation/attraction cues (respect context and consent)"] : []),
           ...(enabledBuiltInKeys.has("connection") ? ["- low connection -> conversations stay surface-level", "- high connection -> personal references, emotional continuity, deeper empathy"] : []),
-          ...enabledCustom.map(stat => `- low ${stat.id} -> less ${stat.label.toLowerCase()}; high ${stat.id} -> more ${stat.label.toLowerCase()}`),
-        ].join("\n")
+          ...customBehaviorLines,
+        ]
+      : [];
+    const reactRules = reactRuleItems.length
+      ? ["How to react:", ...reactRuleItems].join("\n")
       : "";
     const priorityRules = [
       "- mood modulates delivery now; relationship stats define longer-term pattern",

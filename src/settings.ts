@@ -552,6 +552,9 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
     const description = typeof obj.description === "string"
       ? obj.description.trim().slice(0, 200)
       : "";
+    const behaviorGuidance = typeof obj.behaviorGuidance === "string"
+      ? obj.behaviorGuidance.trim().slice(0, 2000)
+      : "";
     const color = typeof obj.color === "string"
       ? obj.color.trim().slice(0, 32)
       : "";
@@ -563,6 +566,7 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       id,
       label,
       description: description || undefined,
+      behaviorGuidance: behaviorGuidance || undefined,
       defaultValue: clampInt(obj.defaultValue, 50, 0, 100),
       maxDeltaPerTurn: obj.maxDeltaPerTurn === undefined
         ? undefined

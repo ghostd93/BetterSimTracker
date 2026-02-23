@@ -651,6 +651,45 @@ export function buildBuiltInSequentialPromptGenerationPrompt(input: {
   ].join("\n");
 }
 
+export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
+  statId: string;
+  statLabel: string;
+  statDescription: string;
+  currentGuidance?: string;
+}): string {
+  const statId = input.statId.trim().toLowerCase();
+  const statLabel = input.statLabel.trim();
+  const statDescription = input.statDescription.trim();
+  const currentGuidance = String(input.currentGuidance ?? "").trim();
+
+  return [
+    "SYSTEM:",
+    "You write behavior-guidance lines for BetterSimTracker prompt injection.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Custom stat:",
+    `- ID: ${statId}`,
+    `- Label: ${statLabel}`,
+    `- Description: ${statDescription}`,
+    `- Current guidance: ${currentGuidance || "(empty)"}`,
+    "",
+    "Task:",
+    "Write exactly 2 short bullet lines for this exact stat.",
+    "Requirements:",
+    "- Each line must start with \"- \".",
+    `- Line 1 must describe LOW ${statId} behavior in practical terms.`,
+    `- Line 2 must describe HIGH ${statId} behavior in practical terms.`,
+    `- Mention ${statId} and ${statLabel} literally at least once across the 2 lines.`,
+    "- Keep wording model-facing, actionable, and neutral (no roleplay narration).",
+    "- Do not mention JSON, confidence, output schema, or this generator prompt.",
+    "",
+    "Return only the 2 bullet lines.",
+  ].join("\n");
+}
+
 export function buildTrackerSummaryGenerationPrompt(input: {
   userName: string;
   activeCharacters: string[];

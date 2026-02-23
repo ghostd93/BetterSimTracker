@@ -31,6 +31,7 @@ export interface CustomStatDefinition {
   id: CustomStatKey;
   label: string;
   description?: string;
+  behaviorGuidance?: string;
   defaultValue: number;
   maxDeltaPerTurn?: number;
   track: boolean;

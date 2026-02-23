@@ -24,6 +24,7 @@ import {
   NUMERIC_PROMPT_PROTOCOL,
   UNIFIED_PROMPT_PROTOCOL,
   buildBuiltInSequentialPromptGenerationPrompt,
+  buildCustomStatBehaviorGuidanceGenerationPrompt,
   buildCustomStatDescriptionGenerationPrompt,
   buildSequentialCustomOverrideGenerationPrompt,
   moodOptions,
@@ -288,6 +289,7 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     id: String(definition.id ?? "").trim().toLowerCase(),
     label: String(definition.label ?? "").trim(),
     description: typeof definition.description === "string" ? definition.description : undefined,
+    behaviorGuidance: typeof definition.behaviorGuidance === "string" ? definition.behaviorGuidance : undefined,
     defaultValue: Number(definition.defaultValue),
     maxDeltaPerTurn: definition.maxDeltaPerTurn === undefined ? undefined : Number(definition.maxDeltaPerTurn),
     track: Boolean(definition.track),
@@ -436,6 +438,33 @@ function sanitizeGeneratedCustomDescription(raw: string): string {
   text = text.replace(/\s+/g, " ").trim();
   if (!text) return "";
   return text.slice(0, 200).trim();
+}
+
+function sanitizeGeneratedBehaviorGuidance(raw: string): string {
+  let text = stripHiddenReasoningBlocks(raw);
+  if (!text) return "";
+
+  const fenceMatch = text.match(/^```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```$/);
+  if (fenceMatch?.[1]) {
+    text = fenceMatch[1].trim();
+  }
+
+  const lines = text
+    .split("\n")
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => line.replace(/^[-*]\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 6)
+    .map(line => `- ${line}`);
+
+  if (lines.length) {
+    return lines.join("\n").slice(0, 2000);
+  }
+
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (!compact) return "";
+  return `- ${compact}`.slice(0, 2000);
 }
 
 function getGlobalStExpressionImageOptions(settings: BetterSimTrackerSettings): StExpressionImageOptions {
@@ -4417,6 +4446,7 @@ export function openSettingsModal(input: {
     label: string;
     id: string;
     description: string;
+    behaviorGuidance: string;
     defaultValue: string;
     maxDeltaPerTurn: string;
     enabled: boolean;
@@ -4432,6 +4462,7 @@ export function openSettingsModal(input: {
         label: "",
         id: "",
         description: "",
+        behaviorGuidance: "",
         defaultValue: "50",
         maxDeltaPerTurn: "",
         enabled: true,
@@ -4449,6 +4480,7 @@ export function openSettingsModal(input: {
       label: clone.label,
       id: duplicateId,
       description: clone.description ?? "",
+      behaviorGuidance: clone.behaviorGuidance ?? "",
       defaultValue: String(Number.isFinite(clone.defaultValue) ? Math.round(clone.defaultValue) : 50),
       maxDeltaPerTurn: clone.maxDeltaPerTurn == null ? "" : String(Math.round(clone.maxDeltaPerTurn)),
       enabled: clone.track || clone.showOnCard || clone.showInGraph,
@@ -4513,6 +4545,12 @@ export function openSettingsModal(input: {
     }
 
     if (step >= 4) {
+      if (draft.behaviorGuidance.length > 2000) {
+        errors.push("Behavior instruction is too long.");
+      }
+    }
+
+    if (step >= 5) {
       const color = draft.color.trim();
       if (color && !/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color)) {
         errors.push("Color must be empty or a hex value like #66ccff.");
@@ -4525,12 +4563,14 @@ export function openSettingsModal(input: {
   const toCustomStatDefinition = (draft: CustomStatDraft): CustomStatDefinition => {
     const maxDeltaText = draft.maxDeltaPerTurn.trim();
     const maxDeltaValue = maxDeltaText ? Number(maxDeltaText) : null;
+    const behaviorGuidance = draft.behaviorGuidance.trim();
     const color = draft.color.trim();
     const template = draft.sequentialPromptTemplate.trim();
     return {
       id: draft.id.trim().toLowerCase(),
       label: draft.label.trim(),
       description: draft.description.trim(),
+      behaviorGuidance: behaviorGuidance || undefined,
       defaultValue: Math.max(0, Math.min(100, Math.round(Number(draft.defaultValue)))),
       maxDeltaPerTurn: maxDeltaValue == null || !Number.isFinite(maxDeltaValue)
         ? undefined
@@ -4820,7 +4860,7 @@ export function openSettingsModal(input: {
       <div class="bst-custom-wizard-head">
         <div>
           <div class="bst-custom-wizard-title">${mode === "edit" ? "Edit" : mode === "duplicate" ? "Clone" : "Add"} Custom Stat</div>
-          <div class="bst-custom-wizard-step" data-bst-custom-step>Step 1 / 5</div>
+          <div class="bst-custom-wizard-step" data-bst-custom-step>Step 1 / 6</div>
         </div>
         <button type="button" class="bst-btn bst-close-btn" data-action="custom-close" aria-label="Close">&times;</button>
       </div>
@@ -4877,6 +4917,20 @@ export function openSettingsModal(input: {
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="4">
+        <div class="bst-help-line">Optional behavior instruction for prompt injection. Use this to define how low/high values should affect character behavior for this specific custom stat.</div>
+        <label>Behavior Instruction (optional)
+          <textarea data-bst-custom-field="behaviorGuidance" rows="5" placeholder="Optional. Example:\n- low respect_score -> more dismissive, less cooperative tone.\n- high respect_score -> more cooperative, considerate, and validating tone.">${escapeHtml(draft.behaviorGuidance)}</textarea>
+        </label>
+        <div class="bst-custom-ai-row">
+          <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-generate-behavior" data-loading="false">
+            <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
+            <span class="bst-custom-ai-btn-label" data-bst-custom-behavior-btn-label>Generate with AI</span>
+          </button>
+          <span class="bst-custom-ai-status" data-bst-custom-behavior-status>Uses current connection profile.</span>
+        </div>
+      </div>
+
+      <div class="bst-custom-wizard-panel" data-bst-custom-panel="5">
         <div class="bst-help-line">Color helps visually distinguish this stat in cards and graph.</div>
         <label>Color (optional)
           <div class="bst-color-inputs">
@@ -4886,7 +4940,7 @@ export function openSettingsModal(input: {
         </label>
       </div>
 
-      <div class="bst-custom-wizard-panel" data-bst-custom-panel="5">
+      <div class="bst-custom-wizard-panel" data-bst-custom-panel="6">
         <div class="bst-help-line">Review before saving:</div>
         <pre class="bst-custom-wizard-review" data-bst-custom-review></pre>
       </div>
@@ -4912,13 +4966,18 @@ export function openSettingsModal(input: {
     const generateTemplateBtn = wizard.querySelector('[data-action="custom-generate-template"]') as HTMLButtonElement | null;
     const generateTemplateLabelNode = wizard.querySelector("[data-bst-custom-template-btn-label]") as HTMLElement | null;
     const generateStatusNode = wizard.querySelector("[data-bst-custom-template-status]") as HTMLElement | null;
+    const generateBehaviorBtn = wizard.querySelector('[data-action="custom-generate-behavior"]') as HTMLButtonElement | null;
+    const generateBehaviorLabelNode = wizard.querySelector("[data-bst-custom-behavior-btn-label]") as HTMLElement | null;
+    const generateBehaviorStatusNode = wizard.querySelector("[data-bst-custom-behavior-status]") as HTMLElement | null;
     const getField = (name: string): HTMLInputElement | HTMLTextAreaElement | null =>
       wizard.querySelector(`[data-bst-custom-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
     const colorPickerNode = wizard.querySelector('[data-bst-custom-color-picker]') as HTMLInputElement | null;
     let generateDescriptionRequestId = 0;
     let generateTemplateRequestId = 0;
+    let generateBehaviorRequestId = 0;
     let generatingDescription = false;
     let generatingTemplate = false;
+    let generatingBehavior = false;
 
     const toPickerHex = (raw: string, fallback: string): string => {
       const value = raw.trim();
@@ -4936,6 +4995,7 @@ export function openSettingsModal(input: {
       const labelNode = getField("label");
       const idNode = getField("id");
       const descriptionNode = getField("description");
+      const behaviorGuidanceNode = getField("behaviorGuidance");
       const defaultNode = getField("defaultValue");
       const maxDeltaNode = getField("maxDeltaPerTurn");
       const enabledNode = getField("enabled") as HTMLInputElement | null;
@@ -4945,6 +5005,7 @@ export function openSettingsModal(input: {
       draft.label = String(labelNode?.value ?? "");
       draft.id = String(idNode?.value ?? "").toLowerCase();
       draft.description = String(descriptionNode?.value ?? "");
+      draft.behaviorGuidance = String(behaviorGuidanceNode?.value ?? "");
       draft.defaultValue = String(defaultNode?.value ?? "");
       draft.maxDeltaPerTurn = String(maxDeltaNode?.value ?? "");
       draft.enabled = Boolean(enabledNode?.checked);
@@ -4973,15 +5034,15 @@ export function openSettingsModal(input: {
     };
 
     const syncStepUi = (): void => {
-      if (stepLabel) stepLabel.textContent = `Step ${step} / 5`;
+      if (stepLabel) stepLabel.textContent = `Step ${step} / 6`;
       Array.from(wizard.querySelectorAll("[data-bst-custom-panel]")).forEach(panel => {
         const element = panel as HTMLElement;
         const panelStep = Number(element.dataset.bstCustomPanel ?? "1");
         element.classList.toggle("is-active", panelStep === step);
       });
       if (prevBtn) prevBtn.style.visibility = step === 1 ? "hidden" : "visible";
-      if (nextBtn) nextBtn.style.display = step === 5 ? "none" : "";
-      if (saveBtn) saveBtn.style.display = step === 5 ? "" : "none";
+      if (nextBtn) nextBtn.style.display = step === 6 ? "none" : "";
+      if (saveBtn) saveBtn.style.display = step === 6 ? "" : "none";
       writeReview();
     };
 
@@ -5052,11 +5113,24 @@ export function openSettingsModal(input: {
       );
     };
 
+    const setBehaviorGenerateLoading = (loading: boolean): void => {
+      generatingBehavior = loading;
+      setButtonLoading(
+        generateBehaviorBtn,
+        generateBehaviorLabelNode,
+        loading,
+        "Generating...",
+        "Generate with AI",
+      );
+    };
+
     const close = (): void => {
       generateDescriptionRequestId += 1;
       generateTemplateRequestId += 1;
+      generateBehaviorRequestId += 1;
       setDescriptionGenerateLoading(false);
       setTemplateGenerateLoading(false);
+      setBehaviorGenerateLoading(false);
       closeCustomWizard();
     };
     const currentId = source?.id;
@@ -5067,7 +5141,7 @@ export function openSettingsModal(input: {
 
     const validateAll = (): boolean => {
       syncDraftFromFields();
-      return setErrors(validateCustomStatDraft(draft, mode, 4, currentId));
+      return setErrors(validateCustomStatDraft(draft, mode, 5, currentId));
     };
 
     const labelInput = getField("label") as HTMLInputElement | null;
@@ -5095,6 +5169,7 @@ export function openSettingsModal(input: {
     syncColorPickerFromText();
     setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "idle");
     setGenerateStatus(generateStatusNode, "Uses current connection profile.", "idle");
+    setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "idle");
 
     improveDescriptionBtn?.addEventListener("click", async () => {
       if (generatingDescription) return;
@@ -5235,6 +5310,79 @@ export function openSettingsModal(input: {
       }
     });
 
+    generateBehaviorBtn?.addEventListener("click", async () => {
+      if (generatingBehavior) return;
+      syncDraftFromFields();
+
+      const generationErrors: string[] = [];
+      const label = draft.label.trim();
+      const statId = draft.id.trim().toLowerCase();
+      const description = draft.description.trim();
+      const behaviorGuidance = draft.behaviorGuidance.trim();
+
+      if (!label) generationErrors.push("Label is required before AI generation.");
+      if (!statId) generationErrors.push("ID is required before AI generation.");
+      if (statId && !CUSTOM_STAT_ID_REGEX.test(statId)) {
+        generationErrors.push("ID must match: start with a letter, then lowercase letters/numbers/underscore (2..32 chars).");
+      }
+      if (statId && RESERVED_CUSTOM_STAT_IDS.has(statId)) {
+        generationErrors.push(`ID '${statId}' is reserved.`);
+      }
+      if (!description) generationErrors.push("Description is required before AI generation.");
+      if (!setErrors(generationErrors)) {
+        setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "error", "Fill Label, ID, and Description first.");
+        return;
+      }
+
+      const requestId = ++generateBehaviorRequestId;
+      setBehaviorGenerateLoading(true);
+      setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "loading", "Generating behavior instruction...");
+      try {
+        const settingsForRequest = collectSettings();
+        const prompt = buildCustomStatBehaviorGuidanceGenerationPrompt({
+          statId,
+          statLabel: label,
+          statDescription: description,
+          currentGuidance: behaviorGuidance,
+        });
+        const response = await generateJson(prompt, settingsForRequest);
+        if (requestId !== generateBehaviorRequestId) return;
+
+        const cleaned = sanitizeGeneratedBehaviorGuidance(response.text);
+        if (!cleaned) {
+          throw new Error("AI returned empty behavior instruction text. Try again.");
+        }
+
+        const resolvedGuidance = cleaned
+          .replaceAll("{{statId}}", statId)
+          .replaceAll("{{statLabel}}", label)
+          .replaceAll("{{statDescription}}", description);
+
+        const behaviorNode = getField("behaviorGuidance") as HTMLTextAreaElement | null;
+        if (!behaviorNode) {
+          throw new Error("Behavior instruction field is unavailable.");
+        }
+        behaviorNode.value = resolvedGuidance;
+        behaviorNode.dispatchEvent(new Event("input", { bubbles: true }));
+        syncDraftFromFields();
+        writeReview();
+        setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "success", "Generated. Review and edit if needed.");
+        logDebug(settingsForRequest, "prompts", "custom.stat.behavior.generated", {
+          statId,
+          profileId: response.meta.profileId,
+          outputChars: resolvedGuidance.length,
+        });
+      } catch (error) {
+        if (requestId !== generateBehaviorRequestId) return;
+        const message = error instanceof Error ? error.message : String(error);
+        setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "error", message || "Generation failed. Try again.");
+      } finally {
+        if (requestId === generateBehaviorRequestId) {
+          setBehaviorGenerateLoading(false);
+        }
+      }
+    });
+
     backdropNode.addEventListener("click", close);
     wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
     prevBtn?.addEventListener("click", () => {
@@ -5245,7 +5393,7 @@ export function openSettingsModal(input: {
     });
     nextBtn?.addEventListener("click", () => {
       if (!validateCurrentStep()) return;
-      if (step >= 5) return;
+      if (step >= 6) return;
       step += 1;
       setErrors([]);
       syncStepUi();
