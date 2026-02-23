@@ -12,6 +12,7 @@ All notable changes to BetterSimTracker are documented here.
 
 ### Fixed
 - Generated custom sequential overrides now strip hidden reasoning blocks (for example `<think>...</think>`) and auto-keep the main bullet instruction block when extra chatter is returned.
+- Custom wizard `Generate with AI` button no longer shifts position on hover and now has consistent spacing below it.
 
 ## [2.0.0] - 2026-02-22
 ### Added
