@@ -14,7 +14,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Polished extension settings modal with sticky header/footer actions and one-click `Expand all` / `Collapse all` section control
 - Settings checkboxes now use consistent round accent-matched styling across ST themes/mobile UI overrides
 - Built-in stats manager wizard with unified `Enabled` toggle (`Track + Card + Graph`) plus `Inject` control for numeric built-ins
-- Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8, color picker + hex input, AI generation for Sequential Prompt Override)
+- Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8, color picker + hex input, AI-assisted description improvement, AI generation for stat-specific Sequential Prompt Override)
 - Retrack button (regenerate tracker for last AI message)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
@@ -291,7 +291,8 @@ Behavior notes:
   - `Edit` and `Clone` for faster setup reuse
   - `Remove` uses soft-remove flow (historical payload remains stored, active tracking stops)
   - custom stat wizard uses unified `Enabled` toggle (`Track + Card + Graph`) plus `includeInInjection`
-  - `Generate with AI` (Tracking Behavior step) can draft `Sequential Prompt Override` from required `Label`, `ID`, and `Description`
+  - `Improve description by AI` (Basics step) rewrites the current description draft into a clearer extraction-focused definition
+  - `Generate with AI` (Tracking Behavior step) drafts a stat-specific `Sequential Prompt Override` from required `Label`, `ID`, and `Description`
   - wizard includes macro hints for custom sequential prompt overrides (`{{statId}}`, `{{statLabel}}`, `{{characters}}`, `{{contextText}}`, etc.)
   - custom sequential prompt precedence: per-stat template override in wizard -> global `Seq: Custom Numeric` template -> built-in default template
 - `Mood Source` (`BST mood images` or `ST expressions`)
