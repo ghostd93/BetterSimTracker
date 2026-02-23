@@ -12,14 +12,14 @@ All notable changes to BetterSimTracker are documented here.
 - Summary output is now sanitized for hidden reasoning tags and normalized to concise prose wrapped as a system-style narrative line.
 - `Summarize` button now shows a loading state while generation is in progress.
 - Summary prose now gets an extra normalization pass (bullet/markdown cleanup, whitespace/punctuation correction) before sending.
-- Summary delivery now uses comment-style note formatting with ST-native delivery paths per visibility mode.
+- Summary delivery now uses validated chat-message payloads for both hidden and AI-visible note modes.
 - Injection prompt templates now support `{{summarizationNote}}` for optional summary-note context.
 
 ### Fixed
 - Summary output now avoids numeric stat reporting (prose-only summary behavior).
 - Editing non-trackable messages (including summary system notes) no longer triggers tracker re-extraction on the nearest AI message.
 - Summary note messages are now always excluded from tracker extraction targets, including AI-visible mode.
-- Summary note delivery now uses ST-native system comment path (hidden mode) and full chat-message payloads (AI-visible mode) to avoid undeletable-note edge cases.
+- Summary note delivery now avoids ST `sendSystemMessage("comment")` to prevent undefined-message insertion and downstream extension crashes.
 
 ## [2.0.1] - 2026-02-23
 ### Added
