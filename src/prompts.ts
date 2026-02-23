@@ -526,16 +526,52 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
     "",
     "Task:",
     "Write exactly 6 short bullet lines. Every line must start with \"- \".",
+    "Write a stat-specific override for this exact stat, not a generic template.",
     "The instruction must:",
-    "- Be focused on this stat only, based on the provided description.",
-    "- Include {{statLabel}}, {{statId}}, and {{statDescription}} macros (not hardcoded values).",
-    "- Explicitly tell the model to update only {{statId}} deltas and ignore other stats.",
-    "- Keep updates conservative and realistic from recent messages, with no generic filler wording.",
-    "- Allow 0 or negative deltas when context is neutral/negative, and avoid forced positive drift.",
+    `- Mention ${statLabel} and ${statId} directly (literal), not macro placeholders.`,
+    `- Use the provided description (${statDescription}) to define what evidence should move ${statId}.`,
+    `- Explicitly say to update only ${statId} deltas and ignore other stats.`,
+    "- Keep updates conservative and realistic from recent messages.",
+    "- Allow 0 or negative deltas when context is neutral/negative.",
     "- Prefer recent messages first; use character cards only for disambiguation.",
-    "- Not mention JSON, response format, token limits, max delta bounds, or confidence math.",
-    "- Not mention this generator prompt or meta instructions.",
+    "- Avoid generic filler and keep each bullet actionable.",
+    "- Not mention JSON, response format, confidence math, or this generator prompt.",
     "",
     "Return the 6-line instruction block only.",
+  ].join("\n");
+}
+
+export function buildCustomStatDescriptionGenerationPrompt(input: {
+  statId: string;
+  statLabel: string;
+  currentDescription: string;
+}): string {
+  const statId = input.statId.trim().toLowerCase();
+  const statLabel = input.statLabel.trim();
+  const currentDescription = input.currentDescription.trim();
+
+  return [
+    "SYSTEM:",
+    "You rewrite custom-stat descriptions for BetterSimTracker.",
+    "Return plain text only.",
+    "Do not return JSON.",
+    "Do not return markdown code fences.",
+    "Do not include any reasoning tags like <think>, <analysis>, or similar.",
+    "",
+    "Custom stat:",
+    `- ID: ${statId}`,
+    `- Label: ${statLabel}`,
+    `- Current description: ${currentDescription}`,
+    "",
+    "Task:",
+    "Rewrite the description into one clear sentence for extraction logic.",
+    "Requirements:",
+    "- Keep the same meaning but make it precise and practical.",
+    "- Focus on what should increase/decrease this stat from conversational evidence.",
+    "- Keep it neutral and domain-agnostic (no roleplay flavor text).",
+    "- Keep it between 12 and 28 words.",
+    "- Avoid placeholders, bullets, quotes, and extra commentary.",
+    "",
+    "Return exactly one sentence.",
   ].join("\n");
 }

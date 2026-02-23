@@ -23,6 +23,7 @@ import {
   MOOD_PROMPT_PROTOCOL,
   NUMERIC_PROMPT_PROTOCOL,
   UNIFIED_PROMPT_PROTOCOL,
+  buildCustomStatDescriptionGenerationPrompt,
   buildSequentialCustomOverrideGenerationPrompt,
   moodOptions,
 } from "./prompts";
@@ -362,15 +363,17 @@ function suggestUniqueCustomStatId(base: string, existing: Set<string>): string 
   return `stat_${Date.now().toString().slice(-4)}`;
 }
 
-function sanitizeGeneratedSequentialTemplate(raw: string): string {
-  let text = String(raw ?? "").replace(/\r\n/g, "\n").trim();
-  if (!text) return "";
-
-  // Strip hidden reasoning tags that some models still emit despite instructions.
-  text = text
+function stripHiddenReasoningBlocks(raw: string): string {
+  return String(raw ?? "")
+    .replace(/\r\n/g, "\n")
     .replace(/<\s*(think|analysis|reasoning)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
     .replace(/<\s*\/?\s*(think|analysis|reasoning)[^>]*>/gi, "")
     .trim();
+}
+
+function sanitizeGeneratedSequentialTemplate(raw: string): string {
+  let text = stripHiddenReasoningBlocks(raw);
+  if (!text) return "";
 
   const fenceMatch = text.match(/^```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```$/);
   if (fenceMatch?.[1]) {
@@ -397,6 +400,41 @@ function sanitizeGeneratedSequentialTemplate(raw: string): string {
   }
 
   return text.slice(0, 20_000);
+}
+
+function sanitizeGeneratedCustomDescription(raw: string): string {
+  let text = stripHiddenReasoningBlocks(raw);
+  if (!text) return "";
+
+  const fenceMatch = text.match(/^```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```$/);
+  if (fenceMatch?.[1]) {
+    text = fenceMatch[1].trim();
+  }
+
+  if (text.startsWith("{") && text.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(text) as { description?: unknown };
+      if (typeof parsed.description === "string" && parsed.description.trim()) {
+        text = parsed.description.trim();
+      }
+    } catch {
+      // Ignore malformed JSON and continue with raw text cleanup.
+    }
+  }
+
+  text = text
+    .replace(/^description\s*[:\-]\s*/i, "")
+    .replace(/^["'`]+/, "")
+    .replace(/["'`]+$/, "")
+    .trim();
+
+  if (text.startsWith("- ")) {
+    text = text.slice(2).trim();
+  }
+
+  text = text.replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.slice(0, 200).trim();
 }
 
 function getGlobalStExpressionImageOptions(settings: BetterSimTrackerSettings): StExpressionImageOptions {
@@ -4643,6 +4681,13 @@ export function openSettingsModal(input: {
         <label>Description
           <textarea data-bst-custom-field="description" rows="4" maxlength="200" placeholder="Required. Explain what this stat represents and how extraction should interpret it.">${escapeHtml(draft.description)}</textarea>
         </label>
+        <div class="bst-custom-ai-row">
+          <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-improve-description" data-loading="false">
+            <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
+            <span class="bst-custom-ai-btn-label" data-bst-custom-description-btn-label>Improve description by AI</span>
+          </button>
+          <span class="bst-custom-ai-status" data-bst-custom-description-status>Uses current connection profile.</span>
+        </div>
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="2">
@@ -4663,14 +4708,14 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
         </div>
         <label>Sequential Prompt Override (optional)
-          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. Literal example: [Propose incremental changes to {{statLabel}} from recent messages. Only update {{statId}}.] Leave empty to use the global Seq: Custom Numeric template fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
+          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. This override is for this stat only (not a universal template). Literal example: [Update only respect_score deltas based on signs of respect in recent messages.] Leave empty to use the global Seq: Custom Numeric template fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
         </label>
         <div class="bst-custom-ai-row">
           <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-generate-template" data-loading="false">
             <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
-            <span class="bst-custom-ai-btn-label">Generate with AI</span>
+            <span class="bst-custom-ai-btn-label" data-bst-custom-template-btn-label>Generate with AI</span>
           </button>
-          <span class="bst-custom-ai-status" data-bst-custom-generate-status>Uses current connection profile.</span>
+          <span class="bst-custom-ai-status" data-bst-custom-template-status>Uses current connection profile.</span>
         </div>
         <div class="bst-help-line">Template macros: <code>{{statId}}</code> <code>{{statLabel}}</code> <code>{{statDescription}}</code> <code>{{statDefault}}</code> <code>{{maxDelta}}</code> <code>{{characters}}</code> <code>{{envelope}}</code> <code>{{contextText}}</code>.</div>
       </div>
@@ -4705,13 +4750,18 @@ export function openSettingsModal(input: {
     const prevBtn = wizard.querySelector('[data-action="custom-prev"]') as HTMLButtonElement | null;
     const nextBtn = wizard.querySelector('[data-action="custom-next"]') as HTMLButtonElement | null;
     const saveBtn = wizard.querySelector('[data-action="custom-save"]') as HTMLButtonElement | null;
+    const improveDescriptionBtn = wizard.querySelector('[data-action="custom-improve-description"]') as HTMLButtonElement | null;
+    const improveDescriptionLabelNode = wizard.querySelector("[data-bst-custom-description-btn-label]") as HTMLElement | null;
+    const improveDescriptionStatusNode = wizard.querySelector("[data-bst-custom-description-status]") as HTMLElement | null;
     const generateTemplateBtn = wizard.querySelector('[data-action="custom-generate-template"]') as HTMLButtonElement | null;
-    const generateTemplateLabelNode = wizard.querySelector(".bst-custom-ai-btn-label") as HTMLElement | null;
-    const generateStatusNode = wizard.querySelector("[data-bst-custom-generate-status]") as HTMLElement | null;
+    const generateTemplateLabelNode = wizard.querySelector("[data-bst-custom-template-btn-label]") as HTMLElement | null;
+    const generateStatusNode = wizard.querySelector("[data-bst-custom-template-status]") as HTMLElement | null;
     const getField = (name: string): HTMLInputElement | HTMLTextAreaElement | null =>
       wizard.querySelector(`[data-bst-custom-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
     const colorPickerNode = wizard.querySelector('[data-bst-custom-color-picker]') as HTMLInputElement | null;
-    let generateRequestId = 0;
+    let generateDescriptionRequestId = 0;
+    let generateTemplateRequestId = 0;
+    let generatingDescription = false;
     let generatingTemplate = false;
 
     const toPickerHex = (raw: string, fallback: string): string => {
@@ -4792,34 +4842,65 @@ export function openSettingsModal(input: {
     };
 
     const setGenerateStatus = (
+      node: HTMLElement | null,
+      fallback: string,
       state: "idle" | "loading" | "success" | "error",
       message?: string,
     ): void => {
-      if (!generateStatusNode) return;
+      if (!node) return;
       const text = String(message ?? "").trim();
       if (!text && state === "idle") {
-        generateStatusNode.textContent = "Uses current connection profile.";
-        generateStatusNode.setAttribute("data-state", "idle");
+        node.textContent = fallback;
+        node.setAttribute("data-state", "idle");
         return;
       }
-      generateStatusNode.textContent = text;
-      generateStatusNode.setAttribute("data-state", state);
+      node.textContent = text;
+      node.setAttribute("data-state", state);
     };
 
-    const setGenerateLoading = (loading: boolean): void => {
+    const setButtonLoading = (
+      button: HTMLButtonElement | null,
+      labelNode: HTMLElement | null,
+      loading: boolean,
+      loadingLabel: string,
+      idleLabel: string,
+    ): void => {
+      if (button) {
+        button.disabled = loading;
+        button.setAttribute("data-loading", loading ? "true" : "false");
+      }
+      if (labelNode) {
+        labelNode.textContent = loading ? loadingLabel : idleLabel;
+      }
+    };
+
+    const setDescriptionGenerateLoading = (loading: boolean): void => {
+      generatingDescription = loading;
+      setButtonLoading(
+        improveDescriptionBtn,
+        improveDescriptionLabelNode,
+        loading,
+        "Improving...",
+        "Improve description by AI",
+      );
+    };
+
+    const setTemplateGenerateLoading = (loading: boolean): void => {
       generatingTemplate = loading;
-      if (generateTemplateBtn) {
-        generateTemplateBtn.disabled = loading;
-        generateTemplateBtn.setAttribute("data-loading", loading ? "true" : "false");
-      }
-      if (generateTemplateLabelNode) {
-        generateTemplateLabelNode.textContent = loading ? "Generating..." : "Generate with AI";
-      }
+      setButtonLoading(
+        generateTemplateBtn,
+        generateTemplateLabelNode,
+        loading,
+        "Generating...",
+        "Generate with AI",
+      );
     };
 
     const close = (): void => {
-      generateRequestId += 1;
-      setGenerateLoading(false);
+      generateDescriptionRequestId += 1;
+      generateTemplateRequestId += 1;
+      setDescriptionGenerateLoading(false);
+      setTemplateGenerateLoading(false);
       closeCustomWizard();
     };
     const currentId = source?.id;
@@ -4856,7 +4937,77 @@ export function openSettingsModal(input: {
       syncColorPickerFromText();
     });
     syncColorPickerFromText();
-    setGenerateStatus("idle");
+    setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "idle");
+    setGenerateStatus(generateStatusNode, "Uses current connection profile.", "idle");
+
+    improveDescriptionBtn?.addEventListener("click", async () => {
+      if (generatingDescription) return;
+      syncDraftFromFields();
+
+      const generationErrors: string[] = [];
+      const label = draft.label.trim();
+      const statId = draft.id.trim().toLowerCase();
+      const description = draft.description.trim();
+
+      if (!label) generationErrors.push("Label is required before AI description improvement.");
+      if (!statId) generationErrors.push("ID is required before AI description improvement.");
+      if (statId && !CUSTOM_STAT_ID_REGEX.test(statId)) {
+        generationErrors.push("ID must match: start with a letter, then lowercase letters/numbers/underscore (2..32 chars).");
+      }
+      if (statId && RESERVED_CUSTOM_STAT_IDS.has(statId)) {
+        generationErrors.push(`ID '${statId}' is reserved.`);
+      }
+      if (!description) generationErrors.push("Write a draft description before AI improvement.");
+      if (!setErrors(generationErrors)) {
+        setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "error", "Fill Label, ID, and Description first.");
+        return;
+      }
+
+      const requestId = ++generateDescriptionRequestId;
+      setDescriptionGenerateLoading(true);
+      setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "loading", "Improving description...");
+      try {
+        const settingsForRequest = collectSettings();
+        const prompt = buildCustomStatDescriptionGenerationPrompt({
+          statId,
+          statLabel: label,
+          currentDescription: description,
+        });
+        const response = await generateJson(prompt, settingsForRequest);
+        if (requestId !== generateDescriptionRequestId) return;
+
+        const cleaned = sanitizeGeneratedCustomDescription(response.text);
+        if (!cleaned) {
+          throw new Error("AI returned empty description text. Try again.");
+        }
+        if (cleaned.length < 3) {
+          throw new Error("AI description is too short. Try again.");
+        }
+
+        const descriptionNode = getField("description") as HTMLTextAreaElement | null;
+        if (!descriptionNode) {
+          throw new Error("Description field is unavailable.");
+        }
+        descriptionNode.value = cleaned;
+        descriptionNode.dispatchEvent(new Event("input", { bubbles: true }));
+        syncDraftFromFields();
+        writeReview();
+        setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "success", "Improved. Review and edit if needed.");
+        logDebug(settingsForRequest, "prompts", "custom.stat.description.generated", {
+          statId,
+          profileId: response.meta.profileId,
+          outputChars: cleaned.length,
+        });
+      } catch (error) {
+        if (requestId !== generateDescriptionRequestId) return;
+        const message = error instanceof Error ? error.message : String(error);
+        setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "error", message || "Description improvement failed. Try again.");
+      } finally {
+        if (requestId === generateDescriptionRequestId) {
+          setDescriptionGenerateLoading(false);
+        }
+      }
+    });
 
     generateTemplateBtn?.addEventListener("click", async () => {
       if (generatingTemplate) return;
@@ -4877,13 +5028,13 @@ export function openSettingsModal(input: {
       }
       if (!description) generationErrors.push("Description is required before AI generation.");
       if (!setErrors(generationErrors)) {
-        setGenerateStatus("error", "Fill Label, ID, and Description first.");
+        setGenerateStatus(generateStatusNode, "Uses current connection profile.", "error", "Fill Label, ID, and Description first.");
         return;
       }
 
-      const requestId = ++generateRequestId;
-      setGenerateLoading(true);
-      setGenerateStatus("loading", "Generating instruction...");
+      const requestId = ++generateTemplateRequestId;
+      setTemplateGenerateLoading(true);
+      setGenerateStatus(generateStatusNode, "Uses current connection profile.", "loading", "Generating instruction...");
       try {
         const settingsForRequest = collectSettings();
         const prompt = buildSequentialCustomOverrideGenerationPrompt({
@@ -4892,34 +5043,38 @@ export function openSettingsModal(input: {
           statDescription: description,
         });
         const response = await generateJson(prompt, settingsForRequest);
-        if (requestId !== generateRequestId) return;
+        if (requestId !== generateTemplateRequestId) return;
 
         const cleaned = sanitizeGeneratedSequentialTemplate(response.text);
         if (!cleaned) {
           throw new Error("AI returned empty instruction text. Try again.");
         }
+        const statSpecificTemplate = cleaned
+          .replaceAll("{{statId}}", statId)
+          .replaceAll("{{statLabel}}", label)
+          .replaceAll("{{statDescription}}", description);
 
         const templateNode = getField("sequentialPromptTemplate") as HTMLTextAreaElement | null;
         if (!templateNode) {
           throw new Error("Sequential template field is unavailable.");
         }
-        templateNode.value = cleaned;
+        templateNode.value = statSpecificTemplate;
         templateNode.dispatchEvent(new Event("input", { bubbles: true }));
         syncDraftFromFields();
         writeReview();
-        setGenerateStatus("success", "Generated. Review and edit if needed.");
+        setGenerateStatus(generateStatusNode, "Uses current connection profile.", "success", "Generated. Review and edit if needed.");
         logDebug(settingsForRequest, "prompts", "custom.stat.override.generated", {
           statId,
           profileId: response.meta.profileId,
-          outputChars: cleaned.length,
+          outputChars: statSpecificTemplate.length,
         });
       } catch (error) {
-        if (requestId !== generateRequestId) return;
+        if (requestId !== generateTemplateRequestId) return;
         const message = error instanceof Error ? error.message : String(error);
-        setGenerateStatus("error", message || "Generation failed. Try again.");
+        setGenerateStatus(generateStatusNode, "Uses current connection profile.", "error", message || "Generation failed. Try again.");
       } finally {
-        if (requestId === generateRequestId) {
-          setGenerateLoading(false);
+        if (requestId === generateTemplateRequestId) {
+          setTemplateGenerateLoading(false);
         }
       }
     });
