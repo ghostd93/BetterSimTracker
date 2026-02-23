@@ -1851,6 +1851,7 @@ function ensureStyles(): void {
 }
 .bst-custom-ai-row {
   margin-top: 8px;
+  margin-bottom: 6px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1874,7 +1875,6 @@ function ensureStyles(): void {
   transition: transform .14s ease, box-shadow .16s ease, border-color .16s ease, filter .16s ease;
 }
 .bst-custom-ai-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--bst-accent) 74%, #ffffff 26%);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.14),
@@ -1883,7 +1883,7 @@ function ensureStyles(): void {
   filter: brightness(1.03);
 }
 .bst-custom-ai-btn:active:not(:disabled) {
-  transform: translateY(0);
+  filter: brightness(0.98);
 }
 .bst-custom-ai-btn[data-loading="true"] {
   cursor: wait;
