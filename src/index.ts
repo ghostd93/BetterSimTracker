@@ -972,14 +972,11 @@ function isSummaryNoteMessage(message: unknown): message is Record<string, unkno
   const obj = asRecord(message);
   if (!obj) return false;
   const extra = asRecord(obj.extra);
-  const name = String(obj.name ?? "").trim().toLowerCase();
-  const forceAvatar = String(obj.force_avatar ?? "").trim().toLowerCase();
   if (extra) {
     if (extra.bstSummaryNote === true || extra.bst_summary_note === true) return true;
     if (String(extra.model ?? "").trim().toLowerCase() === "bettersimtracker.summary") return true;
   }
-  // Legacy fallback for earlier notes created without explicit BST markers.
-  return name === "note" && forceAvatar.includes("quill");
+  return false;
 }
 
 async function reloadCurrentChatViewAfterSummarySync(): Promise<void> {
