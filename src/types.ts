@@ -63,6 +63,8 @@ export interface BetterSimTrackerSettings {
   connectionProfile: string;
   injectTrackerIntoPrompt: boolean;
   injectPromptDepth: number;
+  summarizationNoteVisibleForAI: boolean;
+  injectSummarizationNote: boolean;
   sequentialExtraction: boolean;
   maxDeltaPerTurn: number;
   maxTokensOverride: number;

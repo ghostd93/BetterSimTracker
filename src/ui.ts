@@ -3732,6 +3732,8 @@ export function openSettingsModal(input: {
         <div class="bst-check-grid">
           <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
           <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
+          <label class="bst-check"><input data-k="summarizationNoteVisibleForAI" type="checkbox">Summarization Note Visible for AI</label>
+          <label class="bst-check" data-bst-row="injectSummarizationNote"><input data-k="injectSummarizationNote" type="checkbox">Inject Summarization Note</label>
           <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
           <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
@@ -3747,6 +3749,7 @@ export function openSettingsModal(input: {
             <li><code>{{reactRules}}</code> — how-to-react rules</li>
             <li><code>{{priorityRules}}</code> — priority rules block</li>
             <li><code>{{lines}}</code> — per-character state lines</li>
+            <li><code>{{summarizationNote}}</code> — optional latest tracker summary note (when enabled)</li>
           </ul>
           <div class="bst-prompt-group bst-prompt-inline">
             <div class="bst-prompt-head">
@@ -4308,6 +4311,8 @@ export function openSettingsModal(input: {
   set("confidenceDampening", String(input.settings.confidenceDampening));
   set("moodStickiness", String(input.settings.moodStickiness));
   set("injectTrackerIntoPrompt", String(input.settings.injectTrackerIntoPrompt));
+  set("summarizationNoteVisibleForAI", String(input.settings.summarizationNoteVisibleForAI));
+  set("injectSummarizationNote", String(input.settings.injectSummarizationNote));
   set("autoDetectActive", String(input.settings.autoDetectActive));
   set("activityLookback", String(input.settings.activityLookback));
   set("showInactive", String(input.settings.showInactive));
@@ -5349,6 +5354,8 @@ export function openSettingsModal(input: {
       confidenceDampening: readNumber("confidenceDampening", input.settings.confidenceDampening, 0, 1),
       moodStickiness: readNumber("moodStickiness", input.settings.moodStickiness, 0, 1),
       injectTrackerIntoPrompt: readBool("injectTrackerIntoPrompt", input.settings.injectTrackerIntoPrompt),
+      summarizationNoteVisibleForAI: readBool("summarizationNoteVisibleForAI", input.settings.summarizationNoteVisibleForAI),
+      injectSummarizationNote: readBool("injectSummarizationNote", input.settings.injectSummarizationNote),
       autoDetectActive: readBool("autoDetectActive", input.settings.autoDetectActive),
       activityLookback: readNumber("activityLookback", input.settings.activityLookback, 1, 25),
       showInactive: readBool("showInactive", input.settings.showInactive),
@@ -5405,6 +5412,7 @@ export function openSettingsModal(input: {
     const graphDiagRow = modal.querySelector('[data-bst-row="includeGraphInDiagnostics"]') as HTMLElement | null;
     const injectPromptBlock = modal.querySelector('[data-bst-row="injectPromptBlock"]') as HTMLElement | null;
     const injectPromptDivider = modal.querySelector('[data-bst-row="injectPromptDivider"]') as HTMLElement | null;
+    const injectSummarizationNoteRow = modal.querySelector('[data-bst-row="injectSummarizationNote"]') as HTMLElement | null;
     const moodAdvancedBlock = modal.querySelector('[data-bst-row="moodAdvancedBlock"]') as HTMLElement | null;
     const globalMoodExpressionMap = modal.querySelector('[data-bst-row="globalMoodExpressionMap"]') as HTMLElement | null;
     const stExpressionImageOptions = modal.querySelector('[data-bst-row="stExpressionImageOptions"]') as HTMLElement | null;
@@ -5451,6 +5459,9 @@ export function openSettingsModal(input: {
     }
     if (injectPromptDivider) {
       injectPromptDivider.style.display = current.injectTrackerIntoPrompt ? "block" : "none";
+    }
+    if (injectSummarizationNoteRow) {
+      injectSummarizationNoteRow.style.display = current.injectTrackerIntoPrompt ? "" : "none";
     }
     if (moodAdvancedBlock) {
       moodAdvancedBlock.style.display = current.trackMood ? "block" : "none";
@@ -5532,6 +5543,8 @@ export function openSettingsModal(input: {
     confidenceDampening: "How strongly model confidence scales stat deltas (0 = ignore confidence, 1 = full effect).",
     moodStickiness: "Higher values keep previous mood unless confidence is strong.",
     injectTrackerIntoPrompt: "Inject current relationship state into generation prompt for behavioral coherence.",
+    summarizationNoteVisibleForAI: "When enabled, summary notes are posted as AI-visible note messages instead of hidden system notes.",
+    injectSummarizationNote: "Include the latest generated summary note in prompt injection as additional hidden guidance.",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",
     activityLookback: "How many recent messages are scanned for active-speaker detection.",
     trackAffection: "Enable Affection stat extraction and updates.",

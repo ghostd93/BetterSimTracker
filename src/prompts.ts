@@ -57,7 +57,9 @@ export const DEFAULT_INJECTION_PROMPT_TEMPLATE = [
   "Priority rules:",
   "{{priorityRules}}",
   "",
-  "{{lines}}"
+  "{{lines}}",
+  "",
+  "{{summarizationNote}}"
 ].join("\n");
 
 export const UNIFIED_PROMPT_PROTOCOL = `Numeric stats to update ({{numericStats}}):

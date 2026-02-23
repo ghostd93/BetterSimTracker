@@ -293,31 +293,38 @@ async function generateTrackerSummaryProse(input: {
   return { text: normalized, profileId };
 }
 
-async function sendSummaryAsSystemMessage(context: STContext, summaryText: string): Promise<"comment-system"> {
+async function sendSummaryAsSystemMessage(
+  context: STContext,
+  summaryText: string,
+  visibleForAi: boolean,
+): Promise<"comment-system" | "comment-ai-visible"> {
   const anyContext = context as STContext & {
     sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
     addOneMessage?: (message: Record<string, unknown>, options?: Record<string, unknown>) => void;
   };
 
   const compactText = summaryText.replace(/\s+/g, " ").trim();
+  const now = Date.now();
   const commentMessage = {
     name: "Note",
     is_user: false,
-    is_system: true,
-    send_date: Date.now(),
+    is_system: !visibleForAi,
+    send_date: now,
     mes: compactText,
     force_avatar: "img/quill.png",
     extra: {
       type: "comment",
-      gen_id: Date.now(),
+      gen_id: now,
       isSmallSys: true,
       api: "manual",
       model: "bettersimtracker.summary",
+      bstSummaryNote: true,
+      bst_summary_note: true,
     },
   };
   context.chat.push(commentMessage);
   anyContext.addOneMessage?.(commentMessage);
-  return "comment-system";
+  return visibleForAi ? "comment-ai-visible" : "comment-system";
 }
 
 function getTraceStorageKey(context: STContext): string {
@@ -1051,7 +1058,7 @@ async function sendTrackerSummaryToChat(messageIndex: number): Promise<void> {
 
     const normalizedBody = normalizeSummaryProse(summaryBody) || "The current relationship state remains steady with no major shifts to report.";
     const summaryText = wrapAsSystemNarrativeText(normalizedBody);
-    const delivery = await sendSummaryAsSystemMessage(context, summaryText);
+    const delivery = await sendSummaryAsSystemMessage(context, summaryText, settings.summarizationNoteVisibleForAI);
     context.saveChatDebounced?.();
     await context.saveChat?.();
     pushTrace("summary.sent", {
@@ -1684,6 +1691,8 @@ function openSettings(): void {
           includeGraphInDiagnostics: currentSettings.includeGraphInDiagnostics,
           injectTrackerIntoPrompt: currentSettings.injectTrackerIntoPrompt,
           injectPromptDepth: currentSettings.injectPromptDepth,
+          summarizationNoteVisibleForAI: currentSettings.summarizationNoteVisibleForAI,
+          injectSummarizationNote: currentSettings.injectSummarizationNote,
           contextMessages: currentSettings.contextMessages,
           maxConcurrentCalls: currentSettings.maxConcurrentCalls,
           maxDeltaPerTurn: currentSettings.maxDeltaPerTurn,
