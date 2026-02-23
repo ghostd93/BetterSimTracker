@@ -1576,6 +1576,15 @@ function registerEvents(context: STContext): void {
     }
     if (!chatGenerationInFlight) {
       pushTrace("event.generation_ended_ignored", { reason: "non_chat_or_quiet_generation" });
+      if (trackerUiState.phase === "generating") {
+        pushTrace("ui.generating.clear", {
+          reason: "generation_ended_without_inflight",
+          trigger: "GENERATION_ENDED",
+          messageIndex: latestDataMessageIndex,
+        });
+        setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
+        queueRender();
+      }
       return;
     }
     if (!chatGenerationSawCharacterRender) {
@@ -1758,7 +1767,16 @@ function registerEvents(context: STContext): void {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.swipe", { event: key, messageIndex });
       clearPendingSwipeExtraction();
-      if (trackerUiState.phase === "generating" && !chatGenerationInFlight) {
+      chatGenerationInFlight = false;
+      chatGenerationSawCharacterRender = false;
+      chatGenerationStartLastAiIndex = null;
+      swipeGenerationActive = false;
+      if (trackerUiState.phase === "generating") {
+        pushTrace("ui.generating.clear", {
+          reason: "swipe_event_force_idle",
+          trigger: key,
+          messageIndex: latestDataMessageIndex,
+        });
         setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
         queueRender();
       }
