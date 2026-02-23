@@ -789,6 +789,30 @@ function ensureStyles(): void {
     0 10px 20px rgba(0,0,0,0.33),
     0 0 0 1px rgba(255,255,255,0.07) inset;
 }
+.bst-root-actions .bst-root-action-summary {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  border: 1px solid color-mix(in srgb, var(--bst-accent) 55%, #ffffff 45%);
+  background:
+    radial-gradient(86% 86% at 28% 24%, rgba(255,255,255,0.24), transparent 50%),
+    linear-gradient(145deg, rgba(14,20,31,0.96), rgba(10,14,24,0.94));
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.30),
+    0 0 0 1px rgba(255,255,255,0.06) inset;
+}
+.bst-root-actions .bst-root-action-summary:hover {
+  border-color: color-mix(in srgb, var(--bst-accent) 76%, #ffffff 24%);
+  filter: brightness(1.07);
+  transform: translateY(-1px);
+}
+.bst-root-actions .bst-root-action-summary:active {
+  transform: translateY(1px);
+}
 .bst-root-actions .bst-root-action-retrack:hover {
   border-color: color-mix(in srgb, var(--bst-accent) 88%, #ffffff 12%);
   filter: brightness(1.08);
@@ -805,6 +829,7 @@ function ensureStyles(): void {
   transform: rotate(-38deg);
 }
 .bst-root-actions .bst-root-action-retrack:focus-visible,
+.bst-root-actions .bst-root-action-summary:focus-visible,
 .bst-root-actions .bst-root-action-main:focus-visible {
   outline: 2px solid rgba(125, 211, 252, 0.88);
   outline-offset: 1px;
@@ -2433,6 +2458,11 @@ function ensureStyles(): void {
     min-width: 28px;
     height: 28px;
   }
+  .bst-root-action-summary {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+  }
   .bst-mood-preview-backdrop {
     padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
   }
@@ -2668,6 +2698,7 @@ export function renderTracker(
   resolveCharacterAvatar?: (characterName: string) => string | null,
   onOpenGraph?: (characterName: string) => void,
   onRetrackMessage?: (messageIndex: number) => void,
+  onSendSummaryMessage?: (messageIndex: number) => void,
   onCancelExtraction?: () => void,
   onRequestRerender?: () => void,
 ): void {
@@ -2762,6 +2793,14 @@ export function renderTracker(
           const idx = Number(root.dataset.messageIndex);
           if (!Number.isNaN(idx)) {
             onRetrackMessage?.(idx);
+          }
+          return;
+        }
+        const sendSummary = target?.closest('[data-bst-action="send-summary"]') as HTMLElement | null;
+        if (sendSummary) {
+          const idx = Number(root.dataset.messageIndex);
+          if (!Number.isNaN(idx)) {
+            onSendSummaryMessage?.(idx);
           }
           return;
         }
@@ -3003,6 +3042,7 @@ export function renderTracker(
         <span class="bst-root-action-icon" aria-hidden="true">${collapsed ? "&#9656;" : "&#9662;"}</span>
         <span class="bst-root-action-label">${collapsed ? "Expand cards" : "Collapse cards"}</span>
       </button>
+      ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-root-action-summary" data-bst-action="send-summary" title="Send current tracker summary to chat" aria-label="Send current tracker summary to chat"><span aria-hidden="true">&#128221;</span></button>` : ""}
       ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-mini-btn-accent bst-root-action-retrack" data-bst-action="retrack" title="Retrack latest AI message" aria-label="Retrack latest AI message"><span aria-hidden="true">&#x21BB;</span></button>` : ""}
     `;
     root.appendChild(actions);

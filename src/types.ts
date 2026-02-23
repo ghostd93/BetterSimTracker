@@ -203,6 +203,8 @@ export interface STContext {
   groups?: Group[];
   eventSource?: STEventSource;
   event_types?: Record<string, string>;
+  addOneMessage?: (message: ChatMessage, options?: Record<string, unknown>) => void;
+  sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
   saveChat?: () => Promise<void> | void;
   saveChatDebounced?: () => void;
   saveSettingsDebounced?: () => void;

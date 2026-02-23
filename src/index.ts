@@ -39,6 +39,95 @@ let swipeGenerationActive = false;
 let slashCommandsRegistered = false;
 let activeExtractionRunId: number | null = null;
 const cancelledExtractionRuns = new Set<number>();
+const BUILT_IN_SUMMARY_LABELS: Array<{ key: "affection" | "trust" | "desire" | "connection"; label: string }> = [
+  { key: "affection", label: "affection" },
+  { key: "trust", label: "trust" },
+  { key: "desire", label: "desire" },
+  { key: "connection", label: "connection" },
+];
+
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function formatHumanList(parts: string[]): string {
+  if (!parts.length) return "";
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
+}
+
+function collectSummaryCharacters(data: TrackerData): string[] {
+  const names = new Set<string>();
+  for (const name of data.activeCharacters ?? []) {
+    if (typeof name === "string" && name.trim()) names.add(name.trim());
+  }
+  const addKeys = (map: Record<string, unknown> | undefined): void => {
+    if (!map || typeof map !== "object") return;
+    for (const key of Object.keys(map)) {
+      if (key.trim()) names.add(key.trim());
+    }
+  };
+  addKeys(data.statistics.affection);
+  addKeys(data.statistics.trust);
+  addKeys(data.statistics.desire);
+  addKeys(data.statistics.connection);
+  addKeys(data.statistics.mood);
+  for (const statValues of Object.values(data.customStatistics ?? {})) {
+    addKeys(statValues as Record<string, unknown>);
+  }
+  return Array.from(names).sort((a, b) => a.localeCompare(b));
+}
+
+function buildTrackerStatusSummaryText(data: TrackerData, currentSettings: BetterSimTrackerSettings): string {
+  const customLabelMap = new Map<string, string>();
+  for (const stat of currentSettings.customStats ?? []) {
+    const id = String(stat.id ?? "").trim().toLowerCase();
+    if (!id) continue;
+    customLabelMap.set(id, String(stat.label ?? id).trim() || id);
+  }
+
+  const perCharacter = collectSummaryCharacters(data).map(name => {
+    const clauses: string[] = [];
+    const mood = String(data.statistics.mood?.[name] ?? "").trim();
+    if (mood) {
+      clauses.push(`mood is ${mood}`);
+    }
+
+    const builtInParts: string[] = [];
+    for (const { key, label } of BUILT_IN_SUMMARY_LABELS) {
+      const raw = data.statistics[key]?.[name];
+      const value = Number(raw);
+      if (raw === undefined || Number.isNaN(value)) continue;
+      builtInParts.push(`${label} ${clampPercent(value)}%`);
+    }
+    if (builtInParts.length) {
+      clauses.push(`relationship stats are ${formatHumanList(builtInParts)}`);
+    }
+
+    const customParts: string[] = [];
+    for (const [statId, byCharacter] of Object.entries(data.customStatistics ?? {})) {
+      const raw = byCharacter?.[name];
+      const value = Number(raw);
+      if (raw === undefined || Number.isNaN(value)) continue;
+      const label = customLabelMap.get(statId) ?? statId;
+      customParts.push(`${label} ${clampPercent(value)}%`);
+    }
+    if (customParts.length) {
+      clauses.push(`custom stats are ${formatHumanList(customParts)}`);
+    }
+
+    if (!clauses.length) {
+      return `${name} has no tracked values yet`;
+    }
+    return `${name} has ${clauses.join(", ")}`;
+  });
+
+  const body = perCharacter.length
+    ? perCharacter.join(". ")
+    : "no tracked values are available yet";
+  return `*System summary of current tracker state: ${body}.*`;
+}
 
 function getTraceStorageKey(context: STContext): string {
   return `${getDebugScopeKey(context)}:trace`;
@@ -275,6 +364,8 @@ function queueRender(): void {
       });
     }, messageIndex => {
       void runExtraction("manual_refresh", messageIndex);
+    }, messageIndex => {
+      void sendTrackerSummaryToChat(messageIndex);
     }, () => {
       if (!isExtracting) return;
       if (activeExtractionRunId != null) {
@@ -722,6 +813,59 @@ function summarizeGraphSeries(history: TrackerData[], characterName: string): {
     customLatest,
     customSeries,
   };
+}
+
+async function sendTrackerSummaryToChat(messageIndex: number): Promise<void> {
+  const context = getSafeContext();
+  if (!context || !settings) return;
+  if (!Number.isInteger(messageIndex) || messageIndex < 0 || messageIndex >= context.chat.length) return;
+
+  const message = context.chat[messageIndex];
+  const messageData = getTrackerDataFromMessage(message);
+  const data = messageData ?? (latestDataMessageIndex === messageIndex ? latestData : null);
+  if (!data) {
+    pushTrace("summary.skip", { reason: "no_tracker_data", messageIndex });
+    return;
+  }
+
+  const summaryText = buildTrackerStatusSummaryText(data, settings);
+  const anyContext = context as STContext & {
+    sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
+    addOneMessage?: (message: Record<string, unknown>, options?: Record<string, unknown>) => void;
+  };
+
+  if (typeof anyContext.sendSystemMessage === "function") {
+    anyContext.sendSystemMessage("generic", summaryText, {
+      type: "comment",
+      isSmallSys: true,
+      swipeable: false,
+    });
+  } else {
+    const systemMessage = {
+      name: "System",
+      mes: summaryText,
+      is_user: false,
+      is_system: true,
+      extra: {
+        type: "comment",
+        isSmallSys: true,
+        swipeable: false,
+      },
+    };
+    context.chat.push(systemMessage);
+    if (typeof anyContext.addOneMessage === "function") {
+      anyContext.addOneMessage(systemMessage);
+    }
+  }
+
+  context.saveChatDebounced?.();
+  await context.saveChat?.();
+  pushTrace("summary.sent", {
+    messageIndex,
+    activeCharacters: data.activeCharacters.length,
+    charCount: collectSummaryCharacters(data).length,
+    textChars: summaryText.length,
+  });
 }
 
 async function runExtraction(reason: string, targetMessageIndex?: number): Promise<void> {
