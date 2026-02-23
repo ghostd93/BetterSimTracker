@@ -1226,10 +1226,22 @@ async function sendTrackerSummaryToChat(messageIndex: number): Promise<void> {
 async function runExtraction(reason: string, targetMessageIndex?: number): Promise<void> {
   const context = getSafeContext();
   if (!context) return;
+  const clearGeneratingUiIfStale = (skipReason: string): void => {
+    if (trackerUiState.phase !== "generating") return;
+    if (chatGenerationInFlight) return;
+    pushTrace("ui.generating.clear", {
+      reason: skipReason,
+      trigger: reason,
+      messageIndex: latestDataMessageIndex,
+    });
+    setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
+    queueRender();
+  };
   if (!settings?.enabled) return;
   if (context.chat.length === 0) return;
   if (isExtracting) {
     pushTrace("extract.skip", { reason: "already_extracting", trigger: reason });
+    clearGeneratingUiIfStale("already_extracting");
     return;
   }
 
@@ -1245,6 +1257,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   }
   if (lastIndex == null) {
     pushTrace("extract.skip", { reason: "no_ai_message", trigger: reason });
+    clearGeneratingUiIfStale("no_ai_message");
     return;
   }
   const lastMessage = context.chat[lastIndex];
@@ -1253,6 +1266,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     (reason === "MESSAGE_EDITED" && typeof targetMessageIndex === "number");
   if (!forceRetrack && getTrackerDataFromMessage(lastMessage)) {
     pushTrace("extract.skip", { reason: "tracker_already_present", trigger: reason, messageIndex: lastIndex });
+    clearGeneratingUiIfStale("tracker_already_present");
     return;
   }
 
@@ -1484,6 +1498,8 @@ function refreshFromStoredData(): void {
   }
   if (trackerUiState.phase === "idle") {
     trackerUiState = { ...trackerUiState, messageIndex: latestDataMessageIndex };
+  } else if (trackerUiState.phase === "generating" && !chatGenerationInFlight && !isExtracting) {
+    setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
   }
   pushTrace("refresh.resolve", {
     source,
@@ -1526,12 +1542,17 @@ function registerEvents(context: STContext): void {
         pushTrace("event.generation_started_ignored", { reason: dryRun ? "dry_run" : "quiet_generation", type, dryRun });
         return;
       }
-      if (type === "swipe" && pendingSwipeExtraction) {
-        pendingSwipeExtraction.waitForGenerationEnd = true;
-        if (swipeExtractionTimer !== null) {
-          window.clearTimeout(swipeExtractionTimer);
-          swipeExtractionTimer = null;
+      if (type === "swipe") {
+        chatGenerationInFlight = false;
+        chatGenerationSawCharacterRender = false;
+        chatGenerationStartLastAiIndex = null;
+        swipeGenerationActive = false;
+        pushTrace("event.generation_started_ignored", { reason: "swipe_generation_tracking_disabled", type });
+        if (trackerUiState.phase === "generating") {
+          setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
+          queueRender();
         }
+        return;
       }
       swipeGenerationActive = type === "swipe";
       chatGenerationInFlight = true;
@@ -1737,6 +1758,10 @@ function registerEvents(context: STContext): void {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.swipe", { event: key, messageIndex });
       clearPendingSwipeExtraction();
+      if (trackerUiState.phase === "generating" && !chatGenerationInFlight) {
+        setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
+        queueRender();
+      }
       scheduleRefresh();
       pushTrace("extract.skip", {
         reason: "swipe_event_no_auto_retrack",
