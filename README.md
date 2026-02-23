@@ -293,7 +293,6 @@ Behavior notes:
   - custom stat wizard uses unified `Enabled` toggle (`Track + Card + Graph`) plus `includeInInjection`
   - `Improve description by AI` (Basics step) rewrites the current description draft into a clearer extraction-focused definition
   - `Generate with AI` (Tracking Behavior step) drafts a stat-specific `Sequential Prompt Override` from required `Label`, `ID`, and `Description`
-  - wizard includes macro hints for custom sequential prompt overrides (`{{statId}}`, `{{statLabel}}`, `{{characters}}`, `{{contextText}}`, etc.)
   - custom sequential prompt precedence: per-stat template override in wizard -> global `Seq: Custom Numeric` template -> built-in default template
 - `Mood Source` (`BST mood images` or `ST expressions`)
 - `Global Mood -> ST Expression Map` (editable in settings when `Mood Source = ST expressions`)
