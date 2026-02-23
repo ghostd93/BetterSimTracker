@@ -12,7 +12,7 @@ All notable changes to BetterSimTracker are documented here.
 - Summary output is now sanitized for hidden reasoning tags and normalized to concise prose wrapped as a system-style narrative line.
 - `Summarize` button now shows a loading state while generation is in progress.
 - Summary prose now gets an extra normalization pass (bullet/markdown cleanup, whitespace/punctuation correction) before sending.
-- Summary delivery now writes a compact comment-style system message (`Note`) so markdown-style formatting behaves correctly.
+- Summary delivery now uses comment-style note formatting with ST-native delivery paths per visibility mode.
 - Injection prompt templates now support `{{summarizationNote}}` for optional summary-note context.
 
 ### Fixed
