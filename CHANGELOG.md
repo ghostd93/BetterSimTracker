@@ -6,6 +6,7 @@ All notable changes to BetterSimTracker are documented here.
 ### Added
 - `Summarize` now generates tracker summary text with AI (using the currently selected/active connection profile) and posts it to chat as descriptive prose.
 - New settings toggles: `Summarization Note Visible for AI` and `Inject Summarization Note`.
+- Custom stat wizard now includes a dedicated optional `Behavior Instruction` step with `Generate with AI` support.
 
 ### Changed
 - Custom stat wizard wording now uses `Improve description with AI` for clearer phrasing.
@@ -15,6 +16,7 @@ All notable changes to BetterSimTracker are documented here.
 - Summary delivery now uses validated chat-message payloads for both hidden and AI-visible note modes.
 - Injection prompt templates now support `{{summarizationNote}}` for optional summary-note context.
 - `Summarization Note Visible for AI` now applies to newly generated BetterSimTracker summary notes only (no retroactive note conversion).
+- Prompt injection custom-stat behavior guidance now uses optional per-stat behavior lines (instead of generic low/high fallback wording).
 
 ### Fixed
 - Summary output now avoids numeric stat reporting (prose-only summary behavior).
