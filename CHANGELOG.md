@@ -20,6 +20,7 @@ All notable changes to BetterSimTracker are documented here.
 - Editing non-trackable messages (including summary system notes) no longer triggers tracker re-extraction on the nearest AI message.
 - Summary note messages are now always excluded from tracker extraction targets, including AI-visible mode.
 - Summary note delivery now avoids ST `sendSystemMessage("comment")` to prevent undefined-message insertion and downstream extension crashes.
+- Existing chats are now auto-sanitized from invalid/undefined message entries created by earlier broken summary delivery paths.
 
 ## [2.0.1] - 2026-02-23
 ### Added
