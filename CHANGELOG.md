@@ -20,6 +20,7 @@ All notable changes to BetterSimTracker are documented here.
 - Custom-stat behavior-guidance AI generation now produces richer guidance (low/medium/high behavior plus increase/decrease evidence cues).
 - Summarize generation now targets longer output (`4-6` sentences) and uses a lengthen pass when summaries are too short.
 - Summarize prompts are now dimension-aware and reference only currently tracked/enabled dimensions (no hardcoded stat assumptions).
+- Summarize wording/help text was clarified across UI and README to explicitly describe it as a prose summary of current tracked stats.
 
 ### Fixed
 - Summary output now avoids numeric stat reporting (prose-only summary behavior).
