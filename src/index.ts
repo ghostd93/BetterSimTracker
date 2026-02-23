@@ -297,7 +297,7 @@ async function sendSummaryAsSystemMessage(
   context: STContext,
   summaryText: string,
   visibleForAi: boolean,
-): Promise<"comment-system" | "comment-ai-visible" | "comment-system-api"> {
+): Promise<"comment-system" | "comment-ai-visible"> {
   const anyContext = context as STContext & {
     sendSystemMessage?: (type: string, text?: string, extra?: Record<string, unknown>) => void;
     addOneMessage?: (message: Record<string, unknown>, options?: Record<string, unknown>) => void;
@@ -313,15 +313,6 @@ async function sendSummaryAsSystemMessage(
     bst_summary_note: true,
   };
 
-  if (!visibleForAi && typeof anyContext.sendSystemMessage === "function") {
-    anyContext.sendSystemMessage("comment", compactText, {
-      ...commonExtra,
-      // Keep it deletable/editable through standard message controls.
-      isSmallSys: false,
-    });
-    return "comment-system-api";
-  }
-
   const commentMessage = {
     name: "Note",
     is_user: false,
@@ -331,7 +322,7 @@ async function sendSummaryAsSystemMessage(
     force_avatar: "img/quill.png",
     extra: visibleForAi
       ? commonExtra
-      : { ...commonExtra, type: "comment" },
+      : { ...commonExtra, type: "comment", isSmallSys: false },
     swipe_id: 0,
     swipes: [compactText],
     swipe_info: [
