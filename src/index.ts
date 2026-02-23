@@ -1451,16 +1451,6 @@ function refreshFromStoredData(): void {
   if (removedInvalidMessages > 0) {
     pushTrace("chat.sanitize", { removedInvalidMessages });
   }
-  const summaryVisibilitySynced = syncSummaryNoteVisibilityForCurrentChat(context, settings.summarizationNoteVisibleForAI);
-  if (summaryVisibilitySynced > 0) {
-    context.saveChatDebounced?.();
-    void context.saveChat?.();
-    pushTrace("summary.visibility.sync", {
-      mode: settings.summarizationNoteVisibleForAI ? "ai-visible" : "hidden-system",
-      updatedMessages: summaryVisibilitySynced,
-    });
-    void reloadCurrentChatViewAfterSummarySync();
-  }
 
   allCharacterNames = getAllTrackedCharacterNames(context);
   const latestEntry = getLatestTrackerDataWithIndex(context);
@@ -1532,8 +1522,22 @@ function refreshFromStoredData(): void {
     settings,
     onSave: patch => {
       if (!settings || !context) return;
+      const previousSummaryVisibility = settings.summarizationNoteVisibleForAI;
       settings = { ...settings, ...patch };
       saveSettings(context, settings);
+      if (previousSummaryVisibility !== settings.summarizationNoteVisibleForAI) {
+        const synced = syncSummaryNoteVisibilityForCurrentChat(context, settings.summarizationNoteVisibleForAI);
+        if (synced > 0) {
+          pushTrace("summary.visibility.sync", {
+            mode: settings.summarizationNoteVisibleForAI ? "ai-visible" : "hidden-system",
+            updatedMessages: synced,
+            trigger: "settings_panel",
+          });
+          context.saveChatDebounced?.();
+          void context.saveChat?.();
+          void reloadCurrentChatViewAfterSummarySync();
+        }
+      }
       queueRender();
       refreshFromStoredData();
     },
@@ -1798,8 +1802,22 @@ function openSettings(): void {
     onSave: next => {
       const activeContext = getSafeContext();
       if (!activeContext) return;
+      const previousSummaryVisibility = settings?.summarizationNoteVisibleForAI ?? false;
       settings = next;
       saveSettings(activeContext, settings);
+      if (previousSummaryVisibility !== settings.summarizationNoteVisibleForAI) {
+        const synced = syncSummaryNoteVisibilityForCurrentChat(activeContext, settings.summarizationNoteVisibleForAI);
+        if (synced > 0) {
+          pushTrace("summary.visibility.sync", {
+            mode: settings.summarizationNoteVisibleForAI ? "ai-visible" : "hidden-system",
+            updatedMessages: synced,
+            trigger: "settings_modal",
+          });
+          activeContext.saveChatDebounced?.();
+          void activeContext.saveChat?.();
+          void reloadCurrentChatViewAfterSummarySync();
+        }
+      }
       queueRender();
       refreshFromStoredData();
     },
