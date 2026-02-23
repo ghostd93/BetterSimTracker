@@ -1250,7 +1250,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   const lastMessage = context.chat[lastIndex];
   const forceRetrack =
     reason === "manual_refresh" ||
-    reason === "MESSAGE_EDITED";
+    (reason === "MESSAGE_EDITED" && typeof targetMessageIndex === "number");
   if (!forceRetrack && getTrackerDataFromMessage(lastMessage)) {
     pushTrace("extract.skip", { reason: "tracker_already_present", trigger: reason, messageIndex: lastIndex });
     return;
@@ -1700,18 +1700,32 @@ function registerEvents(context: STContext): void {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.message_edited", { messageIndex });
       scheduleRefresh();
-      if (messageIndex != null && messageIndex >= 0 && messageIndex < context.chat.length) {
-        const editedMessage = context.chat[messageIndex];
-        if (!isTrackableAiMessage(editedMessage)) {
-          pushTrace("extract.skip", {
-            reason: "edited_message_not_trackable",
-            trigger: "MESSAGE_EDITED",
-            messageIndex,
-          });
-          return;
-        }
+      if (messageIndex == null || messageIndex < 0 || messageIndex >= context.chat.length) {
+        pushTrace("extract.skip", {
+          reason: "edited_message_index_unknown",
+          trigger: "MESSAGE_EDITED",
+          messageIndex: messageIndex ?? null,
+        });
+        return;
       }
-      scheduleExtraction("MESSAGE_EDITED", messageIndex ?? undefined);
+      const editedMessage = context.chat[messageIndex];
+      if (!isTrackableAiMessage(editedMessage)) {
+        pushTrace("extract.skip", {
+          reason: "edited_message_not_trackable",
+          trigger: "MESSAGE_EDITED",
+          messageIndex,
+        });
+        return;
+      }
+      if (!getTrackerDataFromMessage(editedMessage)) {
+        pushTrace("extract.skip", {
+          reason: "edited_message_has_no_tracker_data",
+          trigger: "MESSAGE_EDITED",
+          messageIndex,
+        });
+        return;
+      }
+      scheduleExtraction("MESSAGE_EDITED", messageIndex);
     });
   }
 
