@@ -1,6 +1,6 @@
 {
   "name": "better-sim-tracker",
-  "version": "2.0.1-dev.1",
+  "version": "2.0.1-dev.17",
   "private": true,
   "description": "TypeScript SillyTavern extension for relationship tracking",
   "scripts": {
