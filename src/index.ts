@@ -44,6 +44,7 @@ let slashCommandsRegistered = false;
 let activeExtractionRunId: number | null = null;
 const cancelledExtractionRuns = new Set<number>();
 const activeSummaryRuns = new Set<number>();
+let summaryVisibilityReloadInFlight = false;
 
 function collectSummaryCharacters(data: TrackerData): string[] {
   const names = new Set<string>();
@@ -971,9 +972,30 @@ function isSummaryNoteMessage(message: unknown): message is Record<string, unkno
   const obj = asRecord(message);
   if (!obj) return false;
   const extra = asRecord(obj.extra);
-  if (!extra) return false;
-  if (extra.bstSummaryNote === true || extra.bst_summary_note === true) return true;
-  return String(extra.model ?? "").trim().toLowerCase() === "bettersimtracker.summary";
+  const name = String(obj.name ?? "").trim().toLowerCase();
+  const forceAvatar = String(obj.force_avatar ?? "").trim().toLowerCase();
+  if (extra) {
+    if (extra.bstSummaryNote === true || extra.bst_summary_note === true) return true;
+    if (String(extra.model ?? "").trim().toLowerCase() === "bettersimtracker.summary") return true;
+  }
+  // Legacy fallback for earlier notes created without explicit BST markers.
+  return name === "note" && forceAvatar.includes("quill");
+}
+
+async function reloadCurrentChatViewAfterSummarySync(): Promise<void> {
+  if (summaryVisibilityReloadInFlight) return;
+  summaryVisibilityReloadInFlight = true;
+  try {
+    const loadScriptModule = Function("return import('/script.js')") as () => Promise<unknown>;
+    const module = await loadScriptModule() as { reloadCurrentChat?: () => Promise<void> | void };
+    if (typeof module.reloadCurrentChat === "function") {
+      await module.reloadCurrentChat();
+    }
+  } catch {
+    // ignore: best-effort UI refresh only
+  } finally {
+    summaryVisibilityReloadInFlight = false;
+  }
 }
 
 function syncSummaryNoteVisibilityForCurrentChat(context: STContext, visibleForAi: boolean): number {
@@ -1435,6 +1457,7 @@ function refreshFromStoredData(): void {
       mode: settings.summarizationNoteVisibleForAI ? "ai-visible" : "hidden-system",
       updatedMessages: summaryVisibilitySynced,
     });
+    void reloadCurrentChatViewAfterSummarySync();
   }
 
   allCharacterNames = getAllTrackedCharacterNames(context);

@@ -1247,6 +1247,10 @@ function ensureStyles(): void {
 .bst-settings-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bst-settings-grid-compact { gap: 8px; }
 .bst-settings-grid-single { grid-template-columns: minmax(0, 1fr); }
+.bst-settings-grid .bst-toggle-help {
+  grid-column: 1 / -1;
+  margin-top: -4px;
+}
 .bst-check-grid {
   display: grid;
   column-gap: 22px;
@@ -3738,8 +3742,8 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
         </div>
-        <div class="bst-help-line"><code>Summarization Note Visible for AI</code> updates all BetterSimTracker summary notes in the current chat (existing + future).</div>
-        <div class="bst-help-line"><code>Inject Summarization Note</code> only affects hidden tracker prompt injection guidance.</div>
+        <div class="bst-help-line bst-toggle-help"><code>Summarization Note Visible for AI</code> updates all BetterSimTracker summary notes in the current chat (existing + future).</div>
+        <div class="bst-help-line bst-toggle-help"><code>Inject Summarization Note</code> only affects hidden tracker prompt injection guidance.</div>
         <div class="bst-section-divider" data-bst-row="injectPromptDivider">Injection Prompt</div>
         <div class="bst-injection-prompt" data-bst-row="injectPromptBlock">
           <div class="bst-help-line">Shown only when Inject Tracker Into Prompt is enabled.</div>
