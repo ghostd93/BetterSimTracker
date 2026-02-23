@@ -946,6 +946,22 @@ function getSafeContext(): STContext | null {
   return getContext();
 }
 
+function sanitizeInvalidChatEntries(context: STContext): number {
+  if (!Array.isArray(context.chat) || context.chat.length === 0) return 0;
+  let removed = 0;
+  for (let i = context.chat.length - 1; i >= 0; i -= 1) {
+    const message = context.chat[i] as unknown;
+    if (!message || typeof message !== "object") {
+      context.chat.splice(i, 1);
+      removed += 1;
+    }
+  }
+  if (removed > 0) {
+    context.saveChatDebounced?.();
+  }
+  return removed;
+}
+
 function getEventMessageIndex(payload: unknown): number | null {
   if (typeof payload === "number") return Number.isInteger(payload) ? payload : null;
   if (!payload || typeof payload !== "object") return null;
@@ -1295,6 +1311,10 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
 function refreshFromStoredData(): void {
   const context = getSafeContext();
   if (!context || !settings) return;
+  const removedInvalidMessages = sanitizeInvalidChatEntries(context);
+  if (removedInvalidMessages > 0) {
+    pushTrace("chat.sanitize", { removedInvalidMessages });
+  }
 
   allCharacterNames = getAllTrackedCharacterNames(context);
   const latestEntry = getLatestTrackerDataWithIndex(context);

@@ -30,7 +30,8 @@ function isTrackerSummaryNote(message: ChatMessage): boolean {
   return String(extra.model ?? "").trim().toLowerCase() === "bettersimtracker.summary";
 }
 
-export function isTrackableAiMessage(message: ChatMessage): boolean {
+export function isTrackableAiMessage(message: ChatMessage | null | undefined): boolean {
+  if (!message || typeof message !== "object") return false;
   if (message.is_user || message.is_system) return false;
   if (isTrackerSummaryNote(message)) return false;
   if (hasGeneratedMediaAttachment(message)) return false;
