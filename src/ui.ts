@@ -4708,7 +4708,7 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
         </div>
         <label>Sequential Prompt Override (optional)
-          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. This override is for this stat only (not a universal template). Literal example: [Update only respect_score deltas based on signs of respect in recent messages.] Leave empty to use the global Seq: Custom Numeric template fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
+          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. Per-stat override (not universal). Literal example: Update only respect_score deltas from recent messages, based on signs of respect. Leave empty to use global Seq: Custom Numeric fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
         </label>
         <div class="bst-custom-ai-row">
           <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-generate-template" data-loading="false">
@@ -4717,7 +4717,6 @@ export function openSettingsModal(input: {
           </button>
           <span class="bst-custom-ai-status" data-bst-custom-template-status>Uses current connection profile.</span>
         </div>
-        <div class="bst-help-line">Template macros: <code>{{statId}}</code> <code>{{statLabel}}</code> <code>{{statDescription}}</code> <code>{{statDefault}}</code> <code>{{maxDelta}}</code> <code>{{characters}}</code> <code>{{envelope}}</code> <code>{{contextText}}</code>.</div>
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="4">
