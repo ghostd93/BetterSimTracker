@@ -312,6 +312,7 @@ async function sendSummaryAsSystemMessage(
     model: "bettersimtracker.summary",
     bstSummaryNote: true,
     bst_summary_note: true,
+    swipeable: false,
   };
 
   const commentMessage = {
@@ -324,16 +325,6 @@ async function sendSummaryAsSystemMessage(
     extra: visibleForAi
       ? commonExtra
       : { ...commonExtra, type: "comment", isSmallSys: false },
-    swipe_id: 0,
-    swipes: [compactText],
-    swipe_info: [
-      {
-        send_date: now,
-        gen_started: null,
-        gen_finished: null,
-        extra: commonExtra,
-      },
-    ],
   };
   context.chat.push(commentMessage);
   anyContext.addOneMessage?.(commentMessage);
@@ -1046,6 +1037,10 @@ function syncSummaryNoteVisibilityForCurrentChat(context: STContext, visibleForA
       extra.api = "manual";
       changed = true;
     }
+    if (extra.swipeable !== false) {
+      extra.swipeable = false;
+      changed = true;
+    }
     if (extra.isSmallSys !== false) {
       extra.isSmallSys = false;
       changed = true;
@@ -1062,25 +1057,16 @@ function syncSummaryNoteVisibilityForCurrentChat(context: STContext, visibleForA
       changed = true;
     }
 
-    const mesText = String(message.mes ?? "").trim();
-    if (!Array.isArray(message.swipes) || message.swipes.length === 0) {
-      message.swipes = [mesText];
-      changed = true;
-    } else if (message.swipes[0] !== mesText) {
-      message.swipes[0] = mesText;
+    if ("swipes" in message) {
+      delete message.swipes;
       changed = true;
     }
-    if (typeof message.swipe_id !== "number") {
-      message.swipe_id = 0;
+    if ("swipe_id" in message) {
+      delete message.swipe_id;
       changed = true;
     }
-    if (!Array.isArray(message.swipe_info) || message.swipe_info.length === 0) {
-      message.swipe_info = [{
-        send_date: message.send_date ?? Date.now(),
-        gen_started: null,
-        gen_finished: null,
-        extra: { ...extra },
-      }];
+    if ("swipe_info" in message) {
+      delete message.swipe_info;
       changed = true;
     }
 
