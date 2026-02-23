@@ -5552,7 +5552,7 @@ export function openSettingsModal(input: {
     confidenceDampening: "How strongly model confidence scales stat deltas (0 = ignore confidence, 1 = full effect).",
     moodStickiness: "Higher values keep previous mood unless confidence is strong.",
     injectTrackerIntoPrompt: "Inject current relationship state into generation prompt for behavioral coherence.",
-    summarizationNoteVisibleForAI: "When enabled, BetterSimTracker summary notes are AI-visible in this chat (existing and newly generated notes are synced).",
+    summarizationNoteVisibleForAI: "When enabled, newly generated BetterSimTracker summary notes are AI-visible in this chat.",
     injectSummarizationNote: "Include the latest BetterSimTracker summary note in hidden tracker prompt injection guidance.",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",
     activityLookback: "How many recent messages are scanned for active-speaker detection.",
