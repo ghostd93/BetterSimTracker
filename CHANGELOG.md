@@ -27,6 +27,7 @@ All notable changes to BetterSimTracker are documented here.
 - Swipe-back / swipe-change events no longer auto-trigger tracker extraction; swipes now refresh state only unless retrack is requested manually.
 - Summary notes are now explicitly non-swipeable (`extra.swipeable=false`) and no longer carry swipe metadata, preventing swipe-based regeneration from Note messages.
 - `MESSAGE_EDITED` retrack is now strictly scoped to the edited AI message only (and only if that edited message already contains tracker data), preventing regeneration on other messages.
+- Tracker UI now auto-recovers from stale `Generating AI response` state when generation tracking ends without an extraction run.
 
 ## [2.0.1] - 2026-02-23
 ### Added
