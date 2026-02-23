@@ -14,6 +14,7 @@ All notable changes to BetterSimTracker are documented here.
 - Summary prose now gets an extra normalization pass (bullet/markdown cleanup, whitespace/punctuation correction) before sending.
 - Summary delivery now uses validated chat-message payloads for both hidden and AI-visible note modes.
 - Injection prompt templates now support `{{summarizationNote}}` for optional summary-note context.
+- `Summarization Note Visible for AI` now syncs existing BetterSimTracker summary notes in the current chat, not just newly generated notes.
 
 ### Fixed
 - Summary output now avoids numeric stat reporting (prose-only summary behavior).

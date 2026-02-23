@@ -172,7 +172,7 @@ Numeric scaling formula used by runtime:
 - `Auto Detect Active`: scene-based active character detection
 - `Inject Tracker Into Prompt`: uses current relationship state as hidden guidance
 - `Injection Depth`: controls prompt-injection depth in the in-chat prompt stack (`0..8`)
-- `Summarization Note Visible for AI`: posts summary notes as AI-visible note messages
+- `Summarization Note Visible for AI`: controls visibility mode for BetterSimTracker summary notes in the active chat (`ON` = AI-visible notes, `OFF` = hidden system notes) and syncs existing + future notes in that chat
 - `Inject Summarization Note`: appends the latest summary note into hidden prompt injection guidance
 - `Injection Prompt Template`: editable template for injected guidance (shown only when injection is enabled)
 - `Prompt Templates`: edit unified + per-stat sequential prompt instructions plus a global custom-numeric sequential default (protocol blocks are fixed; repair prompts are fixed)
@@ -208,7 +208,7 @@ Numeric scaling formula used by runtime:
 - `Mood Stickiness`: keeps mood stable unless model confidence/context strongly supports change.
 - `Inject Tracker Into Prompt`: inject hidden relationship state guidance into chat generation prompts.
 - `Injection Depth`: depth value passed to ST extension prompt injection (`0` = nearest/top in-chat insertion, max `8`).
-- `Summarization Note Visible for AI`: when enabled, summary notes are posted as AI-visible note messages instead of hidden system notes.
+- `Summarization Note Visible for AI`: when enabled, BetterSimTracker summary notes are AI-visible in the current chat; when disabled, they are hidden system notes. Existing and future BetterSimTracker summary notes in the current chat are synced to this mode.
 - `Inject Summarization Note`: when enabled, the latest summary note is added to prompt injection guidance.
 - `Injection Prompt Template`: editable template that defines the injected guidance block (shown only when injection is enabled). Supports `{{summarizationNote}}` for the latest summary note text.
 - `Auto Detect Active`: in group chat, tries to determine which characters are currently active in the scene.
