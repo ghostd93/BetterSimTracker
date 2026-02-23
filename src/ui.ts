@@ -1856,6 +1856,53 @@ function ensureStyles(): void {
   gap: 10px;
   flex-wrap: wrap;
 }
+.bst-custom-ai-btn {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--bst-accent) 62%, #ffffff 38%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--bst-accent) 26%, #182338 74%),
+    color-mix(in srgb, var(--bst-accent) 14%, #111b2b 86%)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 6px 16px rgba(0,0,0,0.28);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  padding-inline: 12px;
+  transition: transform .14s ease, box-shadow .16s ease, border-color .16s ease, filter .16s ease;
+}
+.bst-custom-ai-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--bst-accent) 74%, #ffffff 26%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    0 9px 20px rgba(0,0,0,0.34),
+    0 0 0 1px color-mix(in srgb, var(--bst-accent) 36%, transparent);
+  filter: brightness(1.03);
+}
+.bst-custom-ai-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+.bst-custom-ai-btn[data-loading="true"] {
+  cursor: wait;
+}
+.bst-custom-ai-btn:disabled {
+  opacity: 0.86;
+}
+.bst-custom-ai-btn .bst-custom-ai-btn-icon {
+  margin-right: 6px;
+  font-size: 12px;
+  opacity: 0.95;
+}
+.bst-custom-ai-btn[data-loading="true"] .bst-custom-ai-btn-icon {
+  animation: bst-spin 0.9s linear infinite;
+}
+@keyframes bst-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 .bst-custom-ai-status {
   font-size: 12px;
   opacity: 0.84;
@@ -4619,7 +4666,10 @@ export function openSettingsModal(input: {
           <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. Literal example: [Propose incremental changes to {{statLabel}} from recent messages. Only update {{statId}}.] Leave empty to use the global Seq: Custom Numeric template fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
         </label>
         <div class="bst-custom-ai-row">
-          <button type="button" class="bst-btn bst-btn-soft" data-action="custom-generate-template">Generate with AI</button>
+          <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-generate-template" data-loading="false">
+            <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
+            <span class="bst-custom-ai-btn-label">Generate with AI</span>
+          </button>
           <span class="bst-custom-ai-status" data-bst-custom-generate-status>Uses current connection profile.</span>
         </div>
         <div class="bst-help-line">Template macros: <code>{{statId}}</code> <code>{{statLabel}}</code> <code>{{statDescription}}</code> <code>{{statDefault}}</code> <code>{{maxDelta}}</code> <code>{{characters}}</code> <code>{{envelope}}</code> <code>{{contextText}}</code>.</div>
@@ -4656,6 +4706,7 @@ export function openSettingsModal(input: {
     const nextBtn = wizard.querySelector('[data-action="custom-next"]') as HTMLButtonElement | null;
     const saveBtn = wizard.querySelector('[data-action="custom-save"]') as HTMLButtonElement | null;
     const generateTemplateBtn = wizard.querySelector('[data-action="custom-generate-template"]') as HTMLButtonElement | null;
+    const generateTemplateLabelNode = wizard.querySelector(".bst-custom-ai-btn-label") as HTMLElement | null;
     const generateStatusNode = wizard.querySelector("[data-bst-custom-generate-status]") as HTMLElement | null;
     const getField = (name: string): HTMLInputElement | HTMLTextAreaElement | null =>
       wizard.querySelector(`[data-bst-custom-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
@@ -4759,7 +4810,10 @@ export function openSettingsModal(input: {
       generatingTemplate = loading;
       if (generateTemplateBtn) {
         generateTemplateBtn.disabled = loading;
-        generateTemplateBtn.textContent = loading ? "Generating..." : "Generate with AI";
+        generateTemplateBtn.setAttribute("data-loading", loading ? "true" : "false");
+      }
+      if (generateTemplateLabelNode) {
+        generateTemplateLabelNode.textContent = loading ? "Generating..." : "Generate with AI";
       }
     };
 
