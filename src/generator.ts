@@ -29,7 +29,17 @@ function resolveProfileId(settings: BetterSimTrackerSettings, context: STContext
   const explicit = normalizeProfileId(settings);
   if (explicit) return explicit;
   const active = getActiveConnectionProfileId(context);
-  return active?.trim() || undefined;
+  if (active?.trim()) return active.trim();
+
+  // Fallback: pick the first available profile when ST has profiles but no active selection.
+  const profiles = collectProfiles(context);
+  for (const profile of profiles) {
+    const id = profileIdOf(profile);
+    if (id) return id;
+  }
+
+  // Final fallback for ST setups where request service resolves the current selection from "default".
+  return "default";
 }
 
 function extractResponseMeta(data: unknown): Record<string, unknown> | undefined {
