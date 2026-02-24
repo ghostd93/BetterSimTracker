@@ -169,6 +169,26 @@ export function getSettingsProvenance(context: STContext): Record<string, "conte
   return provenance;
 }
 
+function asProfileIdCandidate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.toLowerCase() === "default") return null;
+  return trimmed;
+}
+
+function getLocalSelectedConnectionProfileId(): string | null {
+  try {
+    const raw = localStorage.getItem("extension-settings:connection-manager");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown> | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    return asProfileIdCandidate(parsed.selectedProfile);
+  } catch {
+    return null;
+  }
+}
+
 export function getActiveConnectionProfileId(context: STContext | null): string | null {
   const extSettings = context?.extensionSettings as Record<string, unknown> | undefined;
   const extConnectionManager = extSettings?.connectionManager as Record<string, unknown> | undefined;
@@ -178,15 +198,44 @@ export function getActiveConnectionProfileId(context: STContext | null): string 
   const globalObj = globalThis as Record<string, unknown>;
   const globalExt = globalObj.extension_settings as Record<string, unknown> | undefined;
   const globalConn = globalExt?.connectionManager as Record<string, unknown> | undefined;
+  const globalDirectConn = globalObj.connectionManager as Record<string, unknown> | undefined;
+  const candidates: unknown[] = [
+    extConnectionManager?.selectedProfile,
+    extConnectionManager?.activeProfile,
+    extConnectionManager?.profileId,
+    cc?.selectedProfile,
+    cc?.activeProfile,
+    cc?.profileId,
+    cc?.profile,
+    globalConn?.selectedProfile,
+    globalConn?.activeProfile,
+    globalConn?.profileId,
+    globalDirectConn?.selectedProfile,
+    globalDirectConn?.activeProfile,
+    globalDirectConn?.profileId,
+    getLocalSelectedConnectionProfileId(),
+  ];
+  for (const value of candidates) {
+    const candidate = asProfileIdCandidate(value);
+    if (candidate) return candidate;
+  }
+  return null;
+}
 
-  const candidate = String(
-    extConnectionManager?.selectedProfile ??
-      cc?.selectedProfile ??
-      cc?.profile ??
-      globalConn?.selectedProfile ??
-      "",
-  ).trim();
-  return candidate || null;
+export function resolveConnectionProfileId(settings: BetterSimTrackerSettings, context: STContext | null): string {
+  const explicit = asProfileIdCandidate(settings.connectionProfile);
+  if (explicit) return explicit;
+
+  const active = getActiveConnectionProfileId(context);
+  if (active) return active;
+
+  if (context) {
+    const discovered = discoverConnectionProfiles(context);
+    const firstDiscovered = discovered.find(option => asProfileIdCandidate(option.id));
+    if (firstDiscovered) return firstDiscovered.id;
+  }
+
+  return "default";
 }
 
 export function saveSettings(
@@ -339,11 +388,22 @@ export function discoverConnectionProfiles(context: STContext): ConnectionProfil
     }
   }
 
-  const selectedProfileId = String(
+  const selectedProfileId = asProfileIdCandidate(
     extConnectionManager?.selectedProfile ??
+      extConnectionManager?.activeProfile ??
+      extConnectionManager?.profileId ??
+      cc?.selectedProfile ??
+      cc?.activeProfile ??
+      cc?.profileId ??
+      cc?.profile ??
       globalConn?.selectedProfile ??
-      "",
-  ).trim();
+      globalConn?.activeProfile ??
+      globalConn?.profileId ??
+      (globalObj.connectionManager as Record<string, unknown> | undefined)?.selectedProfile ??
+      (globalObj.connectionManager as Record<string, unknown> | undefined)?.activeProfile ??
+      (globalObj.connectionManager as Record<string, unknown> | undefined)?.profileId ??
+      getLocalSelectedConnectionProfileId(),
+  ) ?? "";
   if (selectedProfileId && !merged.has(selectedProfileId)) {
     merged.set(selectedProfileId, { id: selectedProfileId, label: `${selectedProfileId} (selected)` });
   }

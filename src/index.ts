@@ -11,7 +11,7 @@ import {
   moodOptions,
 } from "./prompts";
 import { upsertSettingsPanel } from "./settingsPanel";
-import { discoverConnectionProfiles, getActiveConnectionProfileId, getContext, getSettingsProvenance, loadSettings, logDebug, saveSettings } from "./settings";
+import { discoverConnectionProfiles, getActiveConnectionProfileId, getContext, getSettingsProvenance, loadSettings, logDebug, resolveConnectionProfileId, saveSettings } from "./settings";
 import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLatestTrackerDataWithIndexBefore, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getRecentTrackerHistoryEntries, getTrackerDataFromMessage, mergeCustomStatisticsWithFallback, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
 import { getAllNumericStatDefinitions } from "./statRegistry";
 import type { BetterSimTrackerSettings, CustomStatistics, DeltaDebugRecord, STContext, Statistics, TrackerData } from "./types";
@@ -1984,10 +1984,7 @@ function openSettings(): void {
       const graphPreferences = getGraphPreferences();
       const settingsProvenance = getSettingsProvenance(activeContext);
       const activeProfileId = getActiveConnectionProfileId(activeContext);
-      const profileCandidate = currentSettings.connectionProfile?.trim() ?? "";
-      const resolvedProfileId = profileCandidate && profileCandidate.toLowerCase() !== "default"
-        ? profileCandidate
-        : (activeProfileId ?? null);
+      const resolvedProfileId = resolveConnectionProfileId(currentSettings, activeContext);
       const historySample = getRecentTrackerHistoryEntries(activeContext, 10).map(entry => ({
         messageIndex: entry.messageIndex,
         timestamp: entry.timestamp,
@@ -2027,7 +2024,7 @@ function openSettings(): void {
         graphPreferences,
         profileDebug: {
           selectedProfile: currentSettings.connectionProfile,
-          resolvedProfileId,
+          resolvedProfileId: resolvedProfileId || null,
           activeProfileId
         },
         historySample,

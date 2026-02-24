@@ -2,7 +2,7 @@ import type { BetterSimTrackerSettings, GenerateRequestMeta } from "./types";
 import type { STContext } from "./types";
 import { Generator } from "sillytavern-utils-lib";
 import type { Message } from "sillytavern-utils-lib";
-import { getActiveConnectionProfileId, getContext } from "./settings";
+import { getContext, resolveConnectionProfileId } from "./settings";
 
 interface GenerateResponse {
   content?: string;
@@ -17,30 +17,6 @@ function extractContent(payload: GenerateResponse): string {
 
 const generator = new Generator();
 const activeAbortControllers = new Set<AbortController>();
-
-function normalizeProfileId(settings: BetterSimTrackerSettings): string | undefined {
-  const raw = settings.connectionProfile?.trim();
-  if (!raw) return undefined;
-  if (raw.toLowerCase() === "default") return undefined;
-  return raw;
-}
-
-function resolveProfileId(settings: BetterSimTrackerSettings, context: STContext | null): string | undefined {
-  const explicit = normalizeProfileId(settings);
-  if (explicit) return explicit;
-  const active = getActiveConnectionProfileId(context);
-  if (active?.trim()) return active.trim();
-
-  // Fallback: pick the first available profile when ST has profiles but no active selection.
-  const profiles = collectProfiles(context);
-  for (const profile of profiles) {
-    const id = profileIdOf(profile);
-    if (id) return id;
-  }
-
-  // Final fallback for ST setups where request service resolves the current selection from "default".
-  return "default";
-}
 
 function extractResponseMeta(data: unknown): Record<string, unknown> | undefined {
   if (!data || typeof data !== "object") return undefined;
@@ -296,10 +272,7 @@ export async function generateJson(
   settings: BetterSimTrackerSettings,
 ): Promise<{ text: string; meta: GenerateRequestMeta }> {
   const context = getContext();
-  const profileId = resolveProfileId(settings, context);
-  if (!profileId) {
-    throw new Error("Please select a connection profile in BetterSimTracker settings.");
-  }
+  const profileId = resolveConnectionProfileId(settings, context);
   const limits = resolveProfileLimits(profileId, context, settings);
   return generateViaGenerator(prompt, profileId, limits);
 }
