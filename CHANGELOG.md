@@ -8,6 +8,8 @@ All notable changes to BetterSimTracker are documented here.
 
 ### Fixed
 - Extraction now falls back safely when no active connection profile is selected, instead of hard-failing tracker updates.
+- Active connection profile detection now covers more SillyTavern/runtime fields and local connection-manager state, improving fresh-install and single-profile reliability.
+- Diagnostics now report the same resolved connection profile id used by runtime extraction.
 
 ## [2.0.6] - 2026-02-24
 ### Added
