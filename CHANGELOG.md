@@ -4,7 +4,7 @@ All notable changes to BetterSimTracker are documented here.
 
 ## [Unreleased]
 ### Changed
-- Tracker card action buttons now derive dynamic colors from each card for consistent theming and readable labels/icons.
+- Tracker card action buttons now use dynamic colors tuned for contrast against each card.
 
 ## [2.0.6] - 2026-02-24
 ### Added
