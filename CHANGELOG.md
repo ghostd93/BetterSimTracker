@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Changed
+- Tracker card action buttons now follow the accent color styling.
+
 ## [2.0.6] - 2026-02-24
 ### Added
 - Per-character card color override in Advanced Character Defaults.
