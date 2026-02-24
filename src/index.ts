@@ -8,6 +8,7 @@ import {
   buildTrackerSummaryGenerationPrompt,
   buildTrackerSummaryLengthenPrompt,
   buildTrackerSummaryNoNumbersRewritePrompt,
+  moodOptions,
 } from "./prompts";
 import { upsertSettingsPanel } from "./settingsPanel";
 import { discoverConnectionProfiles, getActiveConnectionProfileId, getContext, getSettingsProvenance, loadSettings, logDebug, saveSettings } from "./settings";
@@ -46,6 +47,8 @@ let activeExtractionRunId: number | null = null;
 const cancelledExtractionRuns = new Set<number>();
 const activeSummaryRuns = new Set<number>();
 let summaryVisibilityReloadInFlight = false;
+const BUILT_IN_NUMERIC_KEYS = new Set(["affection", "trust", "desire", "connection"]);
+const EDIT_MOOD_LABELS = new Map(moodOptions.map(label => [label.toLowerCase(), label]));
 
 function collectSummaryCharacters(data: TrackerData): string[] {
   const names = new Set<string>();
@@ -625,6 +628,8 @@ function queueRender(): void {
       }
       const canceled = cancelActiveGenerations();
       pushTrace("extract.cancel", { canceled, source: "ui", runId: activeExtractionRunId });
+    }, payload => {
+      applyManualTrackerEdits(payload);
     }, () => {
       queueRender();
     });
@@ -1138,6 +1143,109 @@ function getEventMessageIndex(payload: unknown): number | null {
   const candidate = obj.message ?? obj.messageId ?? obj.id;
   if (typeof candidate !== "number") return null;
   return Number.isInteger(candidate) ? candidate : null;
+}
+
+type ManualEditPayload = {
+  messageIndex: number;
+  character: string;
+  numeric: Record<string, number | null>;
+  mood?: string | null;
+  lastThought?: string | null;
+};
+
+function normalizeEditMood(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const key = raw.trim().toLowerCase();
+  if (!key) return null;
+  return EDIT_MOOD_LABELS.get(key) ?? null;
+}
+
+function clampEditedNumber(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function applyManualTrackerEdits(payload: ManualEditPayload): void {
+  const context = getSafeContext();
+  if (!context || !settings) return;
+  const messageIndex = Number(payload.messageIndex);
+  if (!Number.isFinite(messageIndex) || messageIndex < 0 || messageIndex >= context.chat.length) return;
+  const character = String(payload.character ?? "").trim();
+  if (!character) return;
+
+  const message = context.chat[messageIndex];
+  if (!isTrackableAiMessage(message)) return;
+  const current = getTrackerDataFromMessage(message);
+  if (!current) return;
+
+  const stats: Statistics = {
+    affection: { ...current.statistics.affection },
+    trust: { ...current.statistics.trust },
+    desire: { ...current.statistics.desire },
+    connection: { ...current.statistics.connection },
+    mood: { ...current.statistics.mood },
+    lastThought: { ...current.statistics.lastThought },
+  };
+  const custom: CustomStatistics = {};
+  for (const [key, values] of Object.entries(current.customStatistics ?? {})) {
+    custom[key] = { ...(values ?? {}) };
+  }
+
+  for (const [rawKey, rawValue] of Object.entries(payload.numeric ?? {})) {
+    const statKey = rawKey.trim().toLowerCase();
+    if (!statKey) continue;
+    if (BUILT_IN_NUMERIC_KEYS.has(statKey)) {
+      const bucket = stats[statKey as "affection" | "trust" | "desire" | "connection"];
+      if (rawValue == null) {
+        delete bucket[character];
+      } else if (Number.isFinite(rawValue)) {
+        bucket[character] = clampEditedNumber(rawValue);
+      }
+      continue;
+    }
+    if (rawValue == null) {
+      if (custom[statKey]) {
+        delete custom[statKey][character];
+        if (Object.keys(custom[statKey]).length === 0) {
+          delete custom[statKey];
+        }
+      }
+      continue;
+    }
+    if (!Number.isFinite(rawValue)) continue;
+    if (!custom[statKey]) custom[statKey] = {};
+    custom[statKey][character] = clampEditedNumber(rawValue);
+  }
+
+  if (payload.mood !== undefined) {
+    const moodValue = normalizeEditMood(payload.mood);
+    if (!moodValue) {
+      delete stats.mood[character];
+    } else {
+      stats.mood[character] = moodValue;
+    }
+  }
+
+  if (payload.lastThought !== undefined) {
+    const thought = String(payload.lastThought ?? "").trim();
+    if (!thought) {
+      delete stats.lastThought[character];
+    } else {
+      stats.lastThought[character] = thought.slice(0, 600);
+    }
+  }
+
+  const next: TrackerData = {
+    timestamp: Date.now(),
+    activeCharacters: Array.isArray(current.activeCharacters) ? [...current.activeCharacters] : [],
+    statistics: stats,
+    customStatistics: Object.keys(custom).length ? custom : undefined,
+  };
+
+  writeTrackerDataToMessage(context, next, messageIndex);
+  context.saveChatDebounced?.();
+  void context.saveChat?.();
+  pushTrace("tracker.edit", { messageIndex, character });
+  refreshFromStoredData();
 }
 
 function summarizeGraphSeries(history: TrackerData[], characterName: string): {

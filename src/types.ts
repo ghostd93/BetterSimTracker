@@ -140,6 +140,7 @@ export interface CharacterDefaults {
   desire?: number;
   connection?: number;
   mood?: string;
+  cardColor?: string;
   customStatDefaults?: Record<CustomStatKey, number>;
   moodSource?: MoodSource;
   moodExpressionMap?: MoodExpressionMap;

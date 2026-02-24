@@ -169,6 +169,17 @@ function sanitizeExpressionValue(raw: string): string {
   return raw.trim().slice(0, 80);
 }
 
+function normalizeHexColor(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = trimmed.startsWith("#") ? trimmed.slice(1) : trimmed;
+  if (!/^[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(value)) return null;
+  const normalized = value.length === 3
+    ? value.split("").map(char => char + char).join("")
+    : value;
+  return `#${normalized.toLowerCase()}`;
+}
+
 function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -548,6 +559,10 @@ function renderPanel(input: InitInput, force = false): void {
   const customStatDefaultsRaw = defaults.customStatDefaults && typeof defaults.customStatDefaults === "object"
     ? defaults.customStatDefaults as Record<string, unknown>
     : {};
+  const normalizedCardColor = typeof defaults.cardColor === "string"
+    ? normalizeHexColor(defaults.cardColor) ?? ""
+    : "";
+  const cardColorPreview = normalizedCardColor || "#1f2028";
   const customStatFieldsHtml = customStatDefinitions.map(definition => {
     const id = String(definition.id ?? "").trim().toLowerCase();
     const label = String(definition.label ?? "").trim();
@@ -580,7 +595,14 @@ function renderPanel(input: InitInput, force = false): void {
       <label>Desire Default <input type="number" min="0" max="100" step="1" data-bst-default="desire" value="${defaults.desire ?? ""}"></label>
       <label>Connection Default <input type="number" min="0" max="100" step="1" data-bst-default="connection" value="${defaults.connection ?? ""}"></label>
       <label class="bst-character-wide">Mood Default <input type="text" data-bst-default="mood" value="${defaults.mood ?? ""}" placeholder="Neutral"></label>
+      <label class="bst-character-wide">Card Color (optional)
+        <div class="bst-color-inputs">
+          <input data-bst-color="cardColor" type="color" value="${escapeHtml(cardColorPreview)}">
+          <input type="text" data-bst-default="cardColor" value="${escapeHtml(normalizedCardColor)}" placeholder="Auto">
+        </div>
+      </label>
     </div>
+    <div class="bst-character-help">Leave card color empty to use the automatic palette for this character. Hex colors like #2b7cff.</div>
     <div class="bst-character-divider">Custom Stat Defaults</div>
     ${customStatFieldsHtml
       ? `<div class="bst-character-grid bst-character-grid-three">${customStatFieldsHtml}</div>`
@@ -687,6 +709,19 @@ function renderPanel(input: InitInput, force = false): void {
     node.addEventListener("blur", () => clampPercentInputElement(node));
   });
 
+  const cardColorInput = panel.querySelector<HTMLInputElement>('input[type="color"][data-bst-color="cardColor"]');
+  const cardColorText = panel.querySelector<HTMLInputElement>('input[type="text"][data-bst-default="cardColor"]');
+
+  if (cardColorInput && cardColorText) {
+    const applyFromPicker = () => {
+      const normalized = normalizeHexColor(cardColorInput.value);
+      cardColorText.value = normalized ?? "";
+      cardColorText.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    cardColorInput.addEventListener("input", applyFromPicker);
+    cardColorInput.addEventListener("change", applyFromPicker);
+  }
+
   panel.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-bst-default]").forEach(node => {
     node.addEventListener("change", async () => {
       const key = node.dataset.bstDefault ?? "";
@@ -714,6 +749,17 @@ function renderPanel(input: InitInput, force = false): void {
             delete copy.mood;
           } else {
             copy.mood = sanitized;
+          }
+        } else if (key === "cardColor") {
+          const normalized = normalizeHexColor(value);
+          if (cardColorInput) {
+            cardColorInput.value = normalized ?? "#1f2028";
+          }
+          node.value = normalized ?? "";
+          if (!normalized) {
+            delete copy.cardColor;
+          } else {
+            copy.cardColor = normalized;
           }
         } else if (key === "moodSource") {
           const source = normalizeMoodSource(value);

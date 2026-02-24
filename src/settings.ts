@@ -492,6 +492,18 @@ function sanitizeMoodExpressionMap(raw: unknown): MoodExpressionMap | null {
   return Object.keys(out).length ? out : null;
 }
 
+function sanitizeHexColor(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = trimmed.startsWith("#") ? trimmed.slice(1) : trimmed;
+  if (!/^[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(value)) return null;
+  const normalized = value.length === 3
+    ? value.split("").map(char => char + char).join("")
+    : value;
+  return `#${normalized.toLowerCase()}`;
+}
+
 function sanitizeStExpressionImageOptions(raw: unknown): StExpressionImageOptions | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
@@ -617,6 +629,10 @@ function sanitizeCharacterDefaults(
     if (obj.desire !== undefined) entry.desire = clampInt(obj.desire, defaultSettings.defaultDesire, 0, 100);
     if (obj.connection !== undefined) entry.connection = clampInt(obj.connection, defaultSettings.defaultConnection, 0, 100);
     if (obj.mood !== undefined) entry.mood = asText(obj.mood, defaultSettings.defaultMood).slice(0, 80);
+    if (obj.cardColor !== undefined) {
+      const cardColor = sanitizeHexColor(obj.cardColor);
+      if (cardColor) entry.cardColor = cardColor;
+    }
     const customStatDefaults = sanitizeCustomStatDefaults(obj.customStatDefaults, allowedCustomStatIds);
     if (customStatDefaults) entry.customStatDefaults = customStatDefaults;
     if (obj.moodSource !== undefined) entry.moodSource = sanitizeMoodSource(obj.moodSource, defaultSettings.moodSource);

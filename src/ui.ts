@@ -162,6 +162,9 @@ const MOOD_PREVIEW_BACKDROP_CLASS = "bst-mood-preview-backdrop";
 const MOOD_PREVIEW_MODAL_CLASS = "bst-mood-preview-modal";
 const MOOD_PREVIEW_DIALOG_CLASS = "bst-mood-preview-dialog";
 const MOOD_PREVIEW_BODY_CLASS = "bst-mood-preview-open";
+const EDIT_STATS_BACKDROP_CLASS = "bst-edit-backdrop";
+const EDIT_STATS_MODAL_CLASS = "bst-edit-modal";
+const MAX_EDIT_LAST_THOUGHT_CHARS = 600;
 let moodPreviewKeyListener: ((event: KeyboardEvent) => void) | null = null;
 let moodPreviewOpenedAt = 0;
 
@@ -202,6 +205,18 @@ function moodToEmojiEntity(moodRaw: string): string {
   return "&#x1F636;";
 }
 
+function normalizeHexColor(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = trimmed.startsWith("#") ? trimmed.slice(1) : trimmed;
+  if (!/^[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(value)) return null;
+  const normalized = value.length === 3
+    ? value.split("").map(char => char + char).join("")
+    : value;
+  return `#${normalized.toLowerCase()}`;
+}
+
 function moodBadgeColor(moodRaw: string): string {
   const mood = moodRaw.toLowerCase();
   if (mood.includes("happy") || mood.includes("excited") || mood.includes("in love")) return "rgba(87, 214, 138, 0.25)";
@@ -233,6 +248,12 @@ function getResolvedMoodSource(settings: BetterSimTrackerSettings, characterName
   const override = normalizeMoodSource(entry.moodSource);
   if (entry.moodSource === "bst_images" || entry.moodSource === "st_expressions") return override;
   return fallback;
+}
+
+function getResolvedCardColor(settings: BetterSimTrackerSettings, characterName: string, characterAvatar?: string): string | null {
+  const entry = resolveCharacterDefaultsEntry(settings, { name: characterName, avatar: characterAvatar });
+  if (!entry || typeof entry !== "object") return null;
+  return normalizeHexColor((entry as Record<string, unknown>).cardColor);
 }
 
 function thoughtKey(messageIndex: number, characterName: string): string {
@@ -2091,6 +2112,72 @@ function ensureStyles(): void {
   opacity: 1;
   color: #ffcaca;
 }
+.bst-edit-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 18, 0.72);
+  z-index: 2147483008;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+}
+.bst-edit-modal {
+  width: min(760px, calc(100vw - 20px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  background: linear-gradient(160deg, rgba(18, 23, 34, 0.98), rgba(10, 14, 24, 0.98));
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 16px;
+  padding: 16px;
+  color: #f3f5f9;
+  box-shadow: 0 18px 44px rgba(0,0,0,0.45);
+}
+.bst-edit-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.bst-edit-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.bst-edit-sub {
+  font-size: 12px;
+  opacity: 0.78;
+  margin-bottom: 12px;
+}
+.bst-edit-grid {
+  display: grid;
+  gap: 10px;
+}
+.bst-edit-grid.bst-edit-grid-two {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+.bst-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(241, 246, 255, 0.94);
+}
+.bst-edit-field input,
+.bst-edit-field select,
+.bst-edit-field textarea {
+  width: 100%;
+}
+.bst-edit-divider {
+  margin: 10px 0;
+  height: 1px;
+  background: rgba(255,255,255,0.12);
+}
+.bst-edit-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
 .bst-graph-backdrop {
   position: fixed;
   inset: 0;
@@ -2756,11 +2843,19 @@ export function renderTracker(
   onRetrackMessage?: (messageIndex: number) => void,
   onSendSummaryMessage?: (messageIndex: number) => void,
   onCancelExtraction?: () => void,
+  onEditStats?: (payload: EditStatsPayload) => void,
   onRequestRerender?: () => void,
 ): void {
   ensureStyles();
   const palette = allocateCharacterColors(allCharacters);
   const sortedEntries = [...entries].sort((a, b) => a.messageIndex - b.messageIndex);
+  const entryByIndex = new Map<number, TrackerData>();
+  for (const entry of entries) {
+    if (entry.data) {
+      entryByIndex.set(entry.messageIndex, entry.data);
+    }
+  }
+  const latestTrackedMessageIndex = [...sortedEntries].reverse().find(item => item.data)?.messageIndex ?? null;
   const findPreviousData = (messageIndex: number): TrackerData | null => {
     for (let i = sortedEntries.length - 1; i >= 0; i -= 1) {
       const candidate = sortedEntries[i];
@@ -2842,6 +2937,21 @@ export function renderTracker(
           const name = String(button.getAttribute("data-character") ?? "").trim();
           if (!name) return;
           onOpenGraph?.(name);
+          return;
+        }
+        const edit = target?.closest('[data-bst-action="edit-stats"]') as HTMLElement | null;
+        if (edit) {
+          const idx = Number(edit.getAttribute("data-bst-edit-message") ?? root.dataset.messageIndex);
+          const character = String(edit.getAttribute("data-bst-edit-character") ?? "").trim();
+          const data = Number.isNaN(idx) ? null : entryByIndex.get(idx) ?? null;
+          if (!data || !character) return;
+          openEditStatsModal({
+            messageIndex: idx,
+            character,
+            data,
+            settings,
+            onSave: onEditStats,
+          });
           return;
         }
         const retrack = target?.closest('[data-bst-action="retrack"]') as HTMLElement | null;
@@ -3013,6 +3123,7 @@ export function renderTracker(
       const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
+      const canEdit = latestTrackedMessageIndex != null && entry.messageIndex === latestTrackedMessageIndex;
       const moodSource = moodText ? getResolvedMoodSource(settings, name, characterAvatar) : "bst_images";
       const stExpressionImageOptions = moodSource === "st_expressions"
         ? getResolvedStExpressionImageOptions(settings, name, characterAvatar)
@@ -3041,6 +3152,7 @@ export function renderTracker(
           <div class="bst-name" title="${name}">${name}</div>
           <div class="bst-actions">
             <button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> <span class="bst-graph-label">Graph</span></button>
+            ${canEdit ? `<button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="edit-stats" data-bst-edit-message="${entry.messageIndex}" data-bst-edit-character="${escapeHtml(name)}" title="Edit last tracker stats for ${escapeHtml(name)}" aria-label="Edit last tracker stats for ${escapeHtml(name)}"><span aria-hidden="true">&#9998;</span></button>` : ""}
             <div class="bst-state" title="${isActive ? "Active" : settings.inactiveLabel}">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>
           </div>
         </div>
@@ -3111,7 +3223,8 @@ export function renderTracker(
     for (const item of cardHtmlByName) {
       const card = document.createElement("div");
       card.className = `bst-card${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
-      card.style.setProperty("--bst-card-local", palette[item.name] ?? colorFromName(item.name));
+      const override = getResolvedCardColor(settings, item.name, resolveCharacterAvatar?.(item.name) ?? undefined);
+      card.style.setProperty("--bst-card-local", override ?? palette[item.name] ?? colorFromName(item.name));
       card.innerHTML = item.html;
       root.appendChild(card);
     }
@@ -3307,6 +3420,150 @@ function closeMoodImageModal(immediate = false): void {
     document.documentElement.classList.remove(MOOD_PREVIEW_BODY_CLASS);
     moodPreviewOpenedAt = 0;
   }, 150);
+}
+
+type EditStatsPayload = {
+  messageIndex: number;
+  character: string;
+  numeric: Record<string, number | null>;
+  mood?: string | null;
+  lastThought?: string | null;
+};
+
+function closeEditStatsModal(): void {
+  document.querySelector(`.${EDIT_STATS_BACKDROP_CLASS}`)?.remove();
+}
+
+function openEditStatsModal(input: {
+  messageIndex: number;
+  character: string;
+  data: TrackerData;
+  settings: BetterSimTrackerSettings;
+  onSave?: (payload: EditStatsPayload) => void;
+}): void {
+  ensureStyles();
+  closeEditStatsModal();
+
+  const numericDefs = getAllNumericStatDefinitions(input.settings).filter(def => def.track);
+  const builtInDefs = numericDefs.filter(def => def.builtIn);
+  const customDefs = numericDefs.filter(def => !def.builtIn);
+  const currentMood = input.data.statistics.mood?.[input.character];
+  const normalizedMood = currentMood ? normalizeMoodLabel(String(currentMood)) : null;
+  const currentThought = input.data.statistics.lastThought?.[input.character];
+
+  const numericField = (def: { id: string; label: string; defaultValue: number }): string => {
+    const raw = getNumericRawValue(input.data, def.id, input.character);
+    const value = raw !== undefined && Number.isFinite(raw) ? String(Math.round(raw)) : "";
+    const placeholder = String(Math.round(def.defaultValue ?? 50));
+    return `
+      <label class="bst-edit-field">
+        <span>${escapeHtml(def.label)}</span>
+        <input type="number" min="0" max="100" step="1" data-bst-edit-stat="${escapeHtml(def.id)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}">
+      </label>
+    `;
+  };
+
+  const backdrop = document.createElement("div");
+  backdrop.className = EDIT_STATS_BACKDROP_CLASS;
+  backdrop.addEventListener("click", event => {
+    if (event.target === backdrop) {
+      closeEditStatsModal();
+    }
+  });
+
+  const modal = document.createElement("div");
+  modal.className = EDIT_STATS_MODAL_CLASS;
+  modal.innerHTML = `
+    <div class="bst-edit-head">
+      <div class="bst-edit-title">Edit Tracker Stats - ${escapeHtml(input.character)}</div>
+      <button class="bst-btn bst-close-btn" data-action="close" aria-label="Close edit dialog">&times;</button>
+    </div>
+    <div class="bst-edit-sub">Values are percentages (0-100). Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest tracker snapshot for this character.</div>
+    ${builtInDefs.length
+      ? `<div class="bst-edit-grid bst-edit-grid-two">${builtInDefs.map(numericField).join("")}</div>`
+      : `<div class="bst-edit-sub">No built-in numeric stats are currently tracked.</div>`}
+    ${customDefs.length
+      ? `<div class="bst-edit-divider"></div>
+         <div class="bst-edit-grid bst-edit-grid-two">${customDefs.map(numericField).join("")}</div>`
+      : ""}
+    ${input.settings.trackMood
+      ? `<div class="bst-edit-divider"></div>
+         <label class="bst-edit-field">
+           <span>Mood</span>
+           <select data-bst-edit-text="mood">
+             <option value="">Clear mood</option>
+             ${MOOD_LABELS.map(label => {
+               const safe = escapeHtml(label);
+               const selected = normalizedMood === label ? "selected" : "";
+               return `<option value="${safe}" ${selected}>${safe}</option>`;
+             }).join("")}
+           </select>
+         </label>`
+      : ""}
+    ${input.settings.trackLastThought
+      ? `<div class="bst-edit-divider"></div>
+         <label class="bst-edit-field">
+           <span>Last Thought</span>
+           <textarea rows="3" data-bst-edit-text="lastThought" placeholder="Optional. Keep it concise (max ${MAX_EDIT_LAST_THOUGHT_CHARS} chars).">${escapeHtml(String(currentThought ?? ""))}</textarea>
+         </label>`
+      : ""}
+    <div class="bst-edit-actions">
+      <button type="button" class="bst-btn bst-btn-soft" data-action="cancel">Cancel</button>
+      <button type="button" class="bst-btn" data-action="save">Save</button>
+    </div>
+  `;
+
+  backdrop.appendChild(modal);
+  document.body.appendChild(backdrop);
+
+  const close = () => closeEditStatsModal();
+  modal.querySelector('[data-action="close"]')?.addEventListener("click", close);
+  modal.querySelector('[data-action="cancel"]')?.addEventListener("click", close);
+
+  modal.querySelector('[data-action="save"]')?.addEventListener("click", () => {
+    const numeric: Record<string, number | null> = {};
+    modal.querySelectorAll<HTMLInputElement>("[data-bst-edit-stat]").forEach(node => {
+      const key = String(node.dataset.bstEditStat ?? "").trim().toLowerCase();
+      if (!key) return;
+      const raw = node.value.trim();
+      if (!raw) {
+        numeric[key] = null;
+        return;
+      }
+      const parsed = Number(raw);
+      if (Number.isNaN(parsed)) {
+        numeric[key] = null;
+        node.value = "";
+        return;
+      }
+      const clamped = Math.max(0, Math.min(100, Math.round(parsed)));
+      node.value = String(clamped);
+      numeric[key] = clamped;
+    });
+
+    let moodValue: string | null | undefined = undefined;
+    const moodSelect = modal.querySelector<HTMLSelectElement>('[data-bst-edit-text="mood"]');
+    if (moodSelect) {
+      const raw = String(moodSelect.value ?? "").trim();
+      moodValue = raw ? raw : null;
+    }
+
+    let lastThoughtValue: string | null | undefined = undefined;
+    const thoughtInput = modal.querySelector<HTMLTextAreaElement>('[data-bst-edit-text="lastThought"]');
+    if (thoughtInput) {
+      const text = thoughtInput.value.trim();
+      lastThoughtValue = text ? text.slice(0, MAX_EDIT_LAST_THOUGHT_CHARS) : null;
+    }
+
+    input.onSave?.({
+      messageIndex: input.messageIndex,
+      character: input.character,
+      numeric,
+      mood: moodValue,
+      lastThought: lastThoughtValue,
+    });
+    closeEditStatsModal();
+  });
 }
 
 function statValue(entry: TrackerData, statKey: string, character: string, fallback: number): number {
