@@ -217,6 +217,78 @@ function normalizeHexColor(raw: unknown): string | null {
   return `#${normalized.toLowerCase()}`;
 }
 
+function hexToRgb(raw: string | null): { r: number; g: number; b: number } | null {
+  if (!raw) return null;
+  const normalized = normalizeHexColor(raw);
+  if (!normalized) return null;
+  const hex = normalized.slice(1);
+  const r = Number.parseInt(hex.slice(0, 2), 16);
+  const g = Number.parseInt(hex.slice(2, 4), 16);
+  const b = Number.parseInt(hex.slice(4, 6), 16);
+  if ([r, g, b].some(value => Number.isNaN(value))) return null;
+  return { r, g, b };
+}
+
+function rgbToHex(rgb: { r: number; g: number; b: number }): string {
+  const toHex = (value: number): string => {
+    const clamped = Math.max(0, Math.min(255, Math.round(value)));
+    return clamped.toString(16).padStart(2, "0");
+  };
+  return `#${toHex(rgb.r)}${toHex(rgb.g)}${toHex(rgb.b)}`;
+}
+
+function mixRgb(base: { r: number; g: number; b: number }, target: { r: number; g: number; b: number }, amount: number): { r: number; g: number; b: number } {
+  const t = Math.max(0, Math.min(1, amount));
+  return {
+    r: base.r + (target.r - base.r) * t,
+    g: base.g + (target.g - base.g) * t,
+    b: base.b + (target.b - base.b) * t,
+  };
+}
+
+function relativeLuminance(rgb: { r: number; g: number; b: number }): number {
+  const toLinear = (value: number): number => {
+    const srgb = value / 255;
+    return srgb <= 0.03928 ? srgb / 12.92 : Math.pow((srgb + 0.055) / 1.055, 2.4);
+  };
+  const r = toLinear(rgb.r);
+  const g = toLinear(rgb.g);
+  const b = toLinear(rgb.b);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function buildActionPalette(cardHex: string): {
+  bg: string;
+  border: string;
+  text: string;
+  hoverBg: string;
+  hoverBorder: string;
+  focus: string;
+} {
+  const base = hexToRgb(cardHex) ?? { r: 31, g: 32, b: 40 };
+  const darkBase = { r: 12, g: 16, b: 26 };
+  const lightBase = { r: 245, g: 248, b: 255 };
+  const lum = relativeLuminance(base);
+  if (lum < 0.45) {
+    return {
+      bg: rgbToHex(mixRgb(base, darkBase, 0.72)),
+      border: rgbToHex(mixRgb(base, lightBase, 0.38)),
+      text: "#f7f9ff",
+      hoverBg: rgbToHex(mixRgb(base, darkBase, 0.58)),
+      hoverBorder: rgbToHex(mixRgb(base, lightBase, 0.52)),
+      focus: rgbToHex(mixRgb(base, lightBase, 0.62)),
+    };
+  }
+  return {
+    bg: rgbToHex(mixRgb(base, lightBase, 0.82)),
+    border: rgbToHex(mixRgb(base, darkBase, 0.28)),
+    text: "#0f1523",
+    hoverBg: rgbToHex(mixRgb(base, lightBase, 0.9)),
+    hoverBorder: rgbToHex(mixRgb(base, darkBase, 0.42)),
+    focus: rgbToHex(mixRgb(base, darkBase, 0.6)),
+  };
+}
+
 function moodBadgeColor(moodRaw: string): string {
   const mood = moodRaw.toLowerCase();
   if (mood.includes("happy") || mood.includes("excited") || mood.includes("in love")) return "rgba(87, 214, 138, 0.25)";
@@ -974,18 +1046,19 @@ function ensureStyles(): void {
   align-items: center;
 }
 .bst-actions .bst-mini-btn {
-  border-color: color-mix(in srgb, var(--bst-card-local, var(--bst-card)) 55%, #ffffff 45%);
-  background: color-mix(in srgb, var(--bst-card-local, var(--bst-card)) 18%, #141a27 82%);
-  color: #f6f8ff;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+  border-color: var(--bst-action-border, rgba(255,255,255,0.42));
+  background: var(--bst-action-bg, linear-gradient(180deg, rgba(14, 18, 30, 0.92), rgba(10, 14, 24, 0.92)));
+  color: var(--bst-action-text, #f6f8ff);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 1px 0 rgba(255,255,255,0.04);
 }
 .bst-actions .bst-mini-btn:hover {
-  border-color: color-mix(in srgb, var(--bst-card-local, var(--bst-card)) 78%, #ffffff 22%);
-  background: color-mix(in srgb, var(--bst-card-local, var(--bst-card)) 28%, #141a27 72%);
-  color: #ffffff;
+  border-color: var(--bst-action-border-hover, rgba(255,255,255,0.6));
+  background: var(--bst-action-bg-hover, linear-gradient(180deg, rgba(18, 24, 38, 0.95), rgba(12, 16, 28, 0.95)));
+  color: var(--bst-action-text-hover, var(--bst-action-text, #ffffff));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.16), 0 2px 8px rgba(0,0,0,0.18);
 }
 .bst-actions .bst-mini-btn:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--bst-card-local, var(--bst-card)) 60%, #ffffff 40%);
+  outline: 2px solid var(--bst-action-focus, rgba(255,255,255,0.7));
   outline-offset: 2px;
 }
 .bst-mini-btn {
@@ -3268,6 +3341,13 @@ export function renderTracker(
       const card = document.createElement("div");
       card.className = `bst-card${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
       card.style.setProperty("--bst-card-local", item.cardColor);
+      const palette = buildActionPalette(item.cardColor);
+      card.style.setProperty("--bst-action-bg", palette.bg);
+      card.style.setProperty("--bst-action-border", palette.border);
+      card.style.setProperty("--bst-action-text", palette.text);
+      card.style.setProperty("--bst-action-bg-hover", palette.hoverBg);
+      card.style.setProperty("--bst-action-border-hover", palette.hoverBorder);
+      card.style.setProperty("--bst-action-focus", palette.focus);
       card.innerHTML = item.html;
       root.appendChild(card);
     }
