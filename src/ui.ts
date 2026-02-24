@@ -735,15 +735,8 @@ function formatDelta(value: number): string {
 }
 
 function colorFromName(name: string): string {
-  let hash = 0;
-  const text = name.trim().toLowerCase();
-  for (let i = 0; i < text.length; i += 1) {
-    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
-  }
-  const hue = hash % 360;
-  const sat = 46 + (hash % 22); // 46..67
-  const light = 24 + ((hash >> 5) % 10); // 24..33
-  return `hsl(${hue} ${sat}% ${light}%)`;
+  const seed = hslFromName(name);
+  return hslToHex(seed.h, seed.s, seed.l);
 }
 
 function hslFromName(name: string): { h: number; s: number; l: number } {
@@ -757,6 +750,43 @@ function hslFromName(name: string): { h: number; s: number; l: number } {
     s: 46 + (hash % 22),
     l: 24 + ((hash >> 5) % 10),
   };
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hue = ((h % 360) + 360) % 360;
+  const sat = clamp(s / 100, 0, 1);
+  const light = clamp(l / 100, 0, 1);
+  const chroma = (1 - Math.abs(2 * light - 1)) * sat;
+  const hPrime = hue / 60;
+  const x = chroma * (1 - Math.abs((hPrime % 2) - 1));
+  let r1 = 0;
+  let g1 = 0;
+  let b1 = 0;
+  if (hPrime >= 0 && hPrime < 1) {
+    r1 = chroma;
+    g1 = x;
+  } else if (hPrime >= 1 && hPrime < 2) {
+    r1 = x;
+    g1 = chroma;
+  } else if (hPrime >= 2 && hPrime < 3) {
+    g1 = chroma;
+    b1 = x;
+  } else if (hPrime >= 3 && hPrime < 4) {
+    g1 = x;
+    b1 = chroma;
+  } else if (hPrime >= 4 && hPrime < 5) {
+    r1 = x;
+    b1 = chroma;
+  } else {
+    r1 = chroma;
+    b1 = x;
+  }
+  const match = light - chroma / 2;
+  return rgbToHex({
+    r: (r1 + match) * 255,
+    g: (g1 + match) * 255,
+    b: (b1 + match) * 255,
+  });
 }
 
 function hueDistance(a: number, b: number): number {
@@ -787,7 +817,7 @@ function allocateCharacterColors(names: string[]): Record<string, string> {
       }
     }
     takenHues.push(bestHue);
-    out[name] = `hsl(${bestHue} ${seed.s}% ${seed.l}%)`;
+    out[name] = hslToHex(bestHue, seed.s, seed.l);
   }
   return out;
 }

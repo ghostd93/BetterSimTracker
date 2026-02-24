@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.0.7.2] - 2026-02-24
+### Fixed
+- Auto card colors now resolve to stable hex values for broad browser compatibility, so different characters no longer collapse to the same fallback card color.
+
 ## [2.0.7.1] - 2026-02-24
 ### Fixed
 - Extraction now falls back to the active SillyTavern runtime API when no valid Connection Manager profile ID can be resolved, preventing `Profile not found (ID: default)` failures.
