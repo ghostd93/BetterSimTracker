@@ -3131,7 +3131,7 @@ export function renderTracker(
       });
 
     const previousData = findPreviousData(entry.messageIndex);
-    const cardHtmlByName: Array<{ name: string; html: string; isActive: boolean; isNew: boolean }> = [];
+    const cardHtmlByName: Array<{ name: string; html: string; isActive: boolean; isNew: boolean; cardColor: string }> = [];
     const signatureParts: string[] = [
       `msg:${entry.messageIndex}`,
       `collapsed:${collapsed ? "1" : "0"}`,
@@ -3172,6 +3172,7 @@ export function renderTracker(
         return `<span>${def.short} ${value}%</span>`;
       }).join("");
       const showCollapsedMood = moodText !== "";
+      const cardColor = getResolvedCardColor(settings, name, characterAvatar) ?? palette[name] ?? colorFromName(name);
       const cardKey = `${entry.messageIndex}:${normalizeName(name)}`;
       const isNew = !renderedCardKeys.has(cardKey);
       renderedCardKeys.add(cardKey);
@@ -3224,8 +3225,8 @@ export function renderTracker(
         ${enabledNumeric.length === 0 && moodText === "" && !(settings.showLastThought && data.statistics.lastThought?.[name] !== undefined) ? `<div class="bst-empty">No stats recorded.</div>` : ""}
         </div>
       `;
-      cardHtmlByName.push({ name, html: cardHtml, isActive, isNew });
-      signatureParts.push(`card:${name}:${isActive ? "1" : "0"}:${moodText}:${moodImage ?? ""}:${lastThoughtText}:${cardHtml}`);
+      cardHtmlByName.push({ name, html: cardHtml, isActive, isNew, cardColor });
+      signatureParts.push(`card:${name}:${isActive ? "1" : "0"}:${moodText}:${moodImage ?? ""}:${lastThoughtText}:${cardColor}:${cardHtml}`);
     }
 
     const renderSignature = signatureParts.join("|#|");
@@ -3251,8 +3252,7 @@ export function renderTracker(
     for (const item of cardHtmlByName) {
       const card = document.createElement("div");
       card.className = `bst-card${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
-      const override = getResolvedCardColor(settings, item.name, resolveCharacterAvatar?.(item.name) ?? undefined);
-      card.style.setProperty("--bst-card-local", override ?? palette[item.name] ?? colorFromName(item.name));
+      card.style.setProperty("--bst-card-local", item.cardColor);
       card.innerHTML = item.html;
       root.appendChild(card);
     }
