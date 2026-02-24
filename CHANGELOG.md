@@ -4,7 +4,7 @@ All notable changes to BetterSimTracker are documented here.
 
 ## [Unreleased]
 ### Changed
-- Tracker card action buttons now match each card's color styling with readable labels/icons.
+- Tracker card action buttons now derive dynamic colors from each card for consistent theming and readable labels/icons.
 
 ## [2.0.6] - 2026-02-24
 ### Added
