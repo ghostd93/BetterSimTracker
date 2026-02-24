@@ -973,6 +973,14 @@ function ensureStyles(): void {
   gap: 6px;
   align-items: center;
 }
+.bst-actions .bst-mini-btn {
+  border-color: color-mix(in srgb, var(--bst-accent) 40%, #ffffff 60%);
+  background: color-mix(in srgb, var(--bst-accent) 14%, #131a28 86%);
+}
+.bst-actions .bst-mini-btn:hover {
+  border-color: color-mix(in srgb, var(--bst-accent) 62%, #ffffff 38%);
+  background: color-mix(in srgb, var(--bst-accent) 22%, #131a28 78%);
+}
 .bst-mini-btn {
   border: 1px solid rgba(255,255,255,0.22);
   border-radius: 7px;
