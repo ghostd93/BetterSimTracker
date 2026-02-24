@@ -266,26 +266,36 @@ function buildActionPalette(cardHex: string): {
   focus: string;
 } {
   const base = hexToRgb(cardHex) ?? { r: 31, g: 32, b: 40 };
-  const darkBase = { r: 12, g: 16, b: 26 };
-  const lightBase = { r: 245, g: 248, b: 255 };
+  const neutralDark = { r: 18, g: 21, b: 28 };
+  const neutralLight = { r: 238, g: 242, b: 250 };
   const lum = relativeLuminance(base);
   if (lum < 0.45) {
+    const bg = mixRgb(base, neutralDark, 0.86);
+    const hoverBg = mixRgb(base, neutralDark, 0.74);
+    const border = mixRgb(base, neutralLight, 0.42);
+    const hoverBorder = mixRgb(base, neutralLight, 0.58);
+    const focus = mixRgb(base, neutralLight, 0.66);
     return {
-      bg: rgbToHex(mixRgb(base, darkBase, 0.72)),
-      border: rgbToHex(mixRgb(base, lightBase, 0.38)),
+      bg: rgbToHex(bg),
+      border: rgbToHex(border),
       text: "#f7f9ff",
-      hoverBg: rgbToHex(mixRgb(base, darkBase, 0.58)),
-      hoverBorder: rgbToHex(mixRgb(base, lightBase, 0.52)),
-      focus: rgbToHex(mixRgb(base, lightBase, 0.62)),
+      hoverBg: rgbToHex(hoverBg),
+      hoverBorder: rgbToHex(hoverBorder),
+      focus: rgbToHex(focus),
     };
   }
+  const bg = mixRgb(base, neutralLight, 0.84);
+  const hoverBg = mixRgb(base, neutralLight, 0.92);
+  const border = mixRgb(base, neutralDark, 0.36);
+  const hoverBorder = mixRgb(base, neutralDark, 0.52);
+  const focus = mixRgb(base, neutralDark, 0.68);
   return {
-    bg: rgbToHex(mixRgb(base, lightBase, 0.82)),
-    border: rgbToHex(mixRgb(base, darkBase, 0.28)),
+    bg: rgbToHex(bg),
+    border: rgbToHex(border),
     text: "#0f1523",
-    hoverBg: rgbToHex(mixRgb(base, lightBase, 0.9)),
-    hoverBorder: rgbToHex(mixRgb(base, darkBase, 0.42)),
-    focus: rgbToHex(mixRgb(base, darkBase, 0.6)),
+    hoverBg: rgbToHex(hoverBg),
+    hoverBorder: rgbToHex(hoverBorder),
+    focus: rgbToHex(focus),
   };
 }
 
