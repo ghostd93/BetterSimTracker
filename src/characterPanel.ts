@@ -720,6 +720,12 @@ function renderPanel(input: InitInput, force = false): void {
     };
     cardColorInput.addEventListener("input", applyFromPicker);
     cardColorInput.addEventListener("change", applyFromPicker);
+    cardColorText.addEventListener("input", () => {
+      const normalized = normalizeHexColor(cardColorText.value);
+      if (normalized) {
+        cardColorInput.value = normalized;
+      }
+    });
   }
 
   panel.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-bst-default]").forEach(node => {

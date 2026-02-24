@@ -2167,6 +2167,34 @@ function ensureStyles(): void {
 .bst-edit-field textarea {
   width: 100%;
 }
+.bst-edit-modal input,
+.bst-edit-modal select,
+.bst-edit-modal textarea {
+  background: #0d1220;
+  color: #f3f5f9;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+.bst-edit-modal input:hover,
+.bst-edit-modal select:hover,
+.bst-edit-modal textarea:hover {
+  border-color: rgba(168, 203, 245, 0.48);
+  background: #101728;
+}
+.bst-edit-modal input:focus-visible,
+.bst-edit-modal select:focus-visible,
+.bst-edit-modal textarea:focus-visible {
+  outline: none;
+  border-color: rgba(56,189,248,0.9);
+  box-shadow: 0 0 0 2px rgba(56,189,248,0.25);
+}
+.bst-edit-modal input::placeholder,
+.bst-edit-modal textarea::placeholder {
+  color: rgba(243,245,249,0.6);
+}
 .bst-edit-divider {
   margin: 10px 0;
   height: 1px;
