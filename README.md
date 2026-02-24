@@ -376,6 +376,7 @@ Per-character defaults can be set in character card Advanced definitions:
 
 All numeric character defaults are limited to `0..100` (UI + save sanitization).
 Card color accepts hex (`#RRGGBB`); leave empty to keep the automatic palette color.
+Automatic palette colors stay stable per character after assignment and new characters get their own distinct auto colors.
 
 Direct key path:
 

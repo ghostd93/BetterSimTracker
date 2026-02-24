@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Changed
+- Auto card color assignment no longer rebalances previously assigned characters when new characters appear in chat.
+- Auto color now assigns distinct colors incrementally for new characters while keeping already assigned auto colors stable.
+
 ## [2.0.7.2] - 2026-02-24
 ### Fixed
 - Auto card colors now resolve to stable hex values for broad browser compatibility, so different characters no longer collapse to the same fallback card color.
