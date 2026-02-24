@@ -222,7 +222,7 @@ export function getActiveConnectionProfileId(context: STContext | null): string 
   return null;
 }
 
-export function resolveConnectionProfileId(settings: BetterSimTrackerSettings, context: STContext | null): string {
+export function resolveConnectionProfileId(settings: BetterSimTrackerSettings, context: STContext | null): string | null {
   const explicit = asProfileIdCandidate(settings.connectionProfile);
   if (explicit) return explicit;
 
@@ -235,7 +235,7 @@ export function resolveConnectionProfileId(settings: BetterSimTrackerSettings, c
     if (firstDiscovered) return firstDiscovered.id;
   }
 
-  return "default";
+  return null;
 }
 
 export function saveSettings(

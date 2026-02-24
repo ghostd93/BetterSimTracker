@@ -204,6 +204,20 @@ function resolveProfileLimits(
   return { maxTokens, truncationLength };
 }
 
+function isProfileMissingError(error: unknown): boolean {
+  const message = String(
+    error instanceof Error
+      ? error.message
+      : (error && typeof error === "object" ? (error as Record<string, unknown>).message : error) ?? "",
+  ).toLowerCase();
+  return message.includes("profile not found") || message.includes("connection manager is not available");
+}
+
+function hasExplicitConnectionProfile(settings: BetterSimTrackerSettings): boolean {
+  const value = String(settings.connectionProfile ?? "").trim();
+  return Boolean(value && value.toLowerCase() !== "default");
+}
+
 async function generateViaGenerator(prompt: string, profileId: string, limits: TokenLimits): Promise<{ text: string; meta: GenerateRequestMeta }> {
   const messages: Message[] = [{ role: "user", content: prompt }];
   const promptChars = prompt.length;
@@ -267,14 +281,137 @@ async function generateViaGenerator(prompt: string, profileId: string, limits: T
   });
 }
 
+async function generateViaActiveRuntime(
+  prompt: string,
+  limits: TokenLimits,
+  context: STContext,
+): Promise<{ text: string; meta: GenerateRequestMeta }> {
+  const promptChars = prompt.length;
+  const maxTokens = limits.maxTokens;
+  const startedAt = Date.now();
+  const abortController = new AbortController();
+  activeAbortControllers.add(abortController);
+  try {
+    let data: unknown;
+    const mainApi = String(context.mainApi ?? "").trim();
+    if (mainApi === "openai") {
+      const chatSettings = context.chatCompletionSettings as Record<string, unknown> | undefined;
+      const source = String(chatSettings?.chat_completion_source ?? "").trim();
+      if (!source) {
+        throw new Error("Active chat completion source is not configured.");
+      }
+      const requestData: Record<string, unknown> = {
+        stream: false,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: maxTokens,
+        chat_completion_source: source,
+      };
+      if (limits.truncationLength) {
+        requestData.truncation_length = limits.truncationLength;
+      }
+      data = await context.ChatCompletionService?.processRequest?.(requestData, {}, true, abortController.signal);
+    } else if (mainApi === "textgenerationwebui") {
+      const textSettings = context.textCompletionSettings as Record<string, unknown> | undefined;
+      const apiType = String(textSettings?.type ?? "").trim();
+      if (!apiType) {
+        throw new Error("Active text completion API type is not configured.");
+      }
+      const requestData: Record<string, unknown> = {
+        stream: false,
+        prompt,
+        max_tokens: maxTokens,
+        api_type: apiType,
+      };
+      const server = context.getTextGenServer?.(apiType);
+      if (server) {
+        requestData.api_server = server;
+      }
+      if (limits.truncationLength) {
+        requestData.truncation_length = limits.truncationLength;
+      }
+      data = await context.TextCompletionService?.processRequest?.(requestData, {}, true, abortController.signal);
+    } else {
+      throw new Error(`Unsupported active API for profile-less extraction: ${mainApi || "unknown"}.`);
+    }
+
+    const output = extractContentFromData(data).trim();
+    if (!output) {
+      throw new Error("Active runtime request returned empty output");
+    }
+
+    return {
+      text: output,
+      meta: {
+        profileId: "__active_runtime__",
+        promptChars,
+        maxTokens,
+        truncationLength: limits.truncationLength,
+        durationMs: Date.now() - startedAt,
+        outputChars: output.length,
+        responseMeta: {
+          mode: "active_runtime_fallback",
+          mainApi,
+        },
+        timestamp: Date.now(),
+      },
+    };
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      throw Object.assign(new DOMException("Request aborted by user", "AbortError"), {
+        meta: {
+          profileId: "__active_runtime__",
+          promptChars,
+          maxTokens,
+          truncationLength: limits.truncationLength,
+          durationMs: Date.now() - startedAt,
+          outputChars: 0,
+          timestamp: Date.now(),
+          error: String(error),
+        } satisfies GenerateRequestMeta,
+      });
+    }
+    throw Object.assign(new Error(String(error)), {
+      meta: {
+        profileId: "__active_runtime__",
+        promptChars,
+        maxTokens,
+        truncationLength: limits.truncationLength,
+        durationMs: Date.now() - startedAt,
+        outputChars: 0,
+        timestamp: Date.now(),
+        error: String(error),
+      } satisfies GenerateRequestMeta,
+    });
+  } finally {
+    activeAbortControllers.delete(abortController);
+  }
+}
+
 export async function generateJson(
   prompt: string,
   settings: BetterSimTrackerSettings,
 ): Promise<{ text: string; meta: GenerateRequestMeta }> {
   const context = getContext();
   const profileId = resolveConnectionProfileId(settings, context);
-  const limits = resolveProfileLimits(profileId, context, settings);
-  return generateViaGenerator(prompt, profileId, limits);
+  const profileLookupId = profileId ?? "__active_runtime__";
+  const limits = resolveProfileLimits(profileLookupId, context, settings);
+
+  if (!context) {
+    throw new Error("SillyTavern context is unavailable.");
+  }
+
+  if (profileId) {
+    try {
+      return await generateViaGenerator(prompt, profileId, limits);
+    } catch (error) {
+      if (hasExplicitConnectionProfile(settings) || !isProfileMissingError(error)) {
+        throw error;
+      }
+      return generateViaActiveRuntime(prompt, limits, context);
+    }
+  }
+
+  return generateViaActiveRuntime(prompt, limits, context);
 }
 
 export function cancelActiveGenerations(): number {

@@ -219,6 +219,24 @@ export interface STContext {
   chatMetadata?: Record<string, unknown>;
   chatCompletionSettings?: Record<string, unknown>;
   textCompletionSettings?: Record<string, unknown>;
+  mainApi?: string;
+  getTextGenServer?: (type?: string) => string;
+  ChatCompletionService?: {
+    processRequest?: (
+      requestData: Record<string, unknown>,
+      options?: Record<string, unknown>,
+      extractData?: boolean,
+      signal?: AbortSignal | null,
+    ) => Promise<unknown>;
+  };
+  TextCompletionService?: {
+    processRequest?: (
+      requestData: Record<string, unknown>,
+      options?: Record<string, unknown>,
+      extractData?: boolean,
+      signal?: AbortSignal | null,
+    ) => Promise<unknown>;
+  };
   getPresetManager?: (apiId?: string) => {
     getCompletionPresetByName: (name?: string) => Record<string, unknown> | undefined;
   };
