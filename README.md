@@ -17,6 +17,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8, color picker + hex input, AI-assisted description improvement, AI generation for stat-specific Sequential Prompt Override, optional behavior-injection guidance with AI generation)
 - Retrack button (regenerate tracker for last AI message)
 - Summarize button (AI-generated detailed prose summary, 4-6 sentences, grounded in currently tracked dimensions, no numeric stat values; with settings to make the note AI-visible and/or inject it into prompt guidance)
+- Edit last tracker stats inline (pencil icon on the latest card; numeric clamp + mood picker + last thought editor)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
   - raw/smoothed view
@@ -27,6 +28,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Prompt templates (unified + per-stat + custom numeric default) with per-prompt reset
 - AI-assisted generation for built-in sequential prompt instructions (`Affection`, `Trust`, `Desire`, `Connection`, `Mood`, `LastThought`)
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
+- Per-character card color override (advanced character defaults)
 - Interactive ST expression framing editor with live preview (global + per-character override)
 - Click-to-preview mood image lightbox with close button / backdrop / Esc support (native top-layer dialog path on supported browsers)
 - Active-first tracker card ordering in group chats with stable per-message order
@@ -369,9 +371,11 @@ Per-character defaults can be set in character card Advanced definitions:
 - `desire`
 - `connection`
 - `mood`
+- `cardColor` (hex, optional per-character card color override)
 - `customStatDefaults` (for configured custom stats; key = stat id, value = 0..100)
 
 All numeric character defaults are limited to `0..100` (UI + save sanitization).
+Card color accepts hex (`#RRGGBB`); leave empty to keep the automatic palette color.
 
 Direct key path:
 

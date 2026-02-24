@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Added
+- Per-character card color override in Advanced Character Defaults.
+- Edit the latest tracker stats inline (pencil icon; numeric clamp, mood picker, last thought editor).
+
 ## [2.0.5] - 2026-02-23
 ### Added
 - New AI-powered `Summarize` action that generates prose summary notes from the current tracked state.
