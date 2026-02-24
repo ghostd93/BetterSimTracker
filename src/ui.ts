@@ -974,12 +974,19 @@ function ensureStyles(): void {
   align-items: center;
 }
 .bst-actions .bst-mini-btn {
-  border-color: color-mix(in srgb, var(--bst-accent) 40%, #ffffff 60%);
-  background: color-mix(in srgb, var(--bst-accent) 14%, #131a28 86%);
+  border-color: color-mix(in srgb, var(--bst-card-local, var(--bst-card)) 55%, #ffffff 45%);
+  background: color-mix(in srgb, var(--bst-card-local, var(--bst-card)) 18%, #141a27 82%);
+  color: #f6f8ff;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
 }
 .bst-actions .bst-mini-btn:hover {
-  border-color: color-mix(in srgb, var(--bst-accent) 62%, #ffffff 38%);
-  background: color-mix(in srgb, var(--bst-accent) 22%, #131a28 78%);
+  border-color: color-mix(in srgb, var(--bst-card-local, var(--bst-card)) 78%, #ffffff 22%);
+  background: color-mix(in srgb, var(--bst-card-local, var(--bst-card)) 28%, #141a27 72%);
+  color: #ffffff;
+}
+.bst-actions .bst-mini-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--bst-card-local, var(--bst-card)) 60%, #ffffff 40%);
+  outline-offset: 2px;
 }
 .bst-mini-btn {
   border: 1px solid rgba(255,255,255,0.22);
