@@ -167,6 +167,14 @@ const EDIT_STATS_MODAL_CLASS = "bst-edit-modal";
 const MAX_EDIT_LAST_THOUGHT_CHARS = 600;
 let moodPreviewKeyListener: ((event: KeyboardEvent) => void) | null = null;
 let moodPreviewOpenedAt = 0;
+type AutoCardColorAssignment = {
+  hue: number;
+  color: string;
+  seenAt: number;
+};
+const autoCardColorAssignments = new Map<string, AutoCardColorAssignment>();
+const AUTO_CARD_COLOR_CACHE_LIMIT = 300;
+const AUTO_CARD_MIN_HUE_DISTANCE = 24;
 
 function toPercent(value: StatValue): number {
   if (typeof value === "number") return Math.max(0, Math.min(100, value));
@@ -740,16 +748,21 @@ function colorFromName(name: string): string {
 }
 
 function hslFromName(name: string): { h: number; s: number; l: number } {
-  let hash = 0;
-  const text = name.trim().toLowerCase();
-  for (let i = 0; i < text.length; i += 1) {
-    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
-  }
+  const hash = hashName(name);
   return {
     h: hash % 360,
     s: 46 + (hash % 22),
     l: 24 + ((hash >> 5) % 10),
   };
+}
+
+function hashName(name: string): number {
+  let hash = 0;
+  const text = name.trim().toLowerCase();
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return hash;
 }
 
 function hslToHex(h: number, s: number, l: number): string {
@@ -794,30 +807,64 @@ function hueDistance(a: number, b: number): number {
   return raw > 180 ? 360 - raw : raw;
 }
 
+function trimAutoCardColorAssignments(): void {
+  const overflow = autoCardColorAssignments.size - AUTO_CARD_COLOR_CACHE_LIMIT;
+  if (overflow <= 0) return;
+  const toDrop = [...autoCardColorAssignments.entries()]
+    .sort((a, b) => a[1].seenAt - b[1].seenAt)
+    .slice(0, overflow);
+  for (const [key] of toDrop) {
+    autoCardColorAssignments.delete(key);
+  }
+}
+
+function pickDistinctAutoHue(baseHue: number, takenHues: number[]): number {
+  if (!takenHues.length) return baseHue;
+  let bestHue = baseHue;
+  let bestScore = -1;
+  for (let i = 0; i < 360; i += 1) {
+    const candidate = (baseHue + i * 137) % 360;
+    const minDist = Math.min(...takenHues.map(hue => hueDistance(hue, candidate)));
+    if (minDist > bestScore) {
+      bestScore = minDist;
+      bestHue = candidate;
+    }
+    if (minDist >= AUTO_CARD_MIN_HUE_DISTANCE) {
+      return candidate;
+    }
+  }
+  return bestHue;
+}
+
+function getStableAutoCardColor(name: string): string {
+  const key = normalizeName(name);
+  if (!key) return colorFromName(name);
+  const now = Date.now();
+  const existing = autoCardColorAssignments.get(key);
+  if (existing) {
+    existing.seenAt = now;
+    return existing.color;
+  }
+
+  const hash = hashName(key);
+  const baseHue = hash % 360;
+  const saturation = 52 + ((hash >> 9) % 14); // 52..65
+  const lightness = 24 + ((hash >> 13) % 10); // 24..33
+  const takenHues = [...autoCardColorAssignments.values()].map(assignment => assignment.hue);
+  const hue = pickDistinctAutoHue(baseHue, takenHues);
+  const color = hslToHex(hue, saturation, lightness);
+  autoCardColorAssignments.set(key, { hue, color, seenAt: now });
+  trimAutoCardColorAssignments();
+  return color;
+}
+
 function allocateCharacterColors(names: string[]): Record<string, string> {
-  const unique = Array.from(new Set(names.filter(Boolean)));
+  const unique = Array.from(new Set(names.filter(Boolean))).sort((a, b) => a.localeCompare(b));
   if (!unique.length) return {};
-  const sorted = [...unique].sort((a, b) => a.localeCompare(b));
-  const step = Math.max(22, Math.floor(360 / Math.max(1, sorted.length)));
-  const takenHues: number[] = [];
   const out: Record<string, string> = {};
 
-  for (const name of sorted) {
-    const seed = hslFromName(name);
-    let bestHue = seed.h;
-    let bestScore = -1;
-    for (let i = 0; i < 16; i += 1) {
-      const candidate = (seed.h + i * step) % 360;
-      const minDist = takenHues.length
-        ? Math.min(...takenHues.map(h => hueDistance(h, candidate)))
-        : 360;
-      if (minDist > bestScore) {
-        bestScore = minDist;
-        bestHue = candidate;
-      }
-    }
-    takenHues.push(bestHue);
-    out[name] = hslToHex(bestHue, seed.s, seed.l);
+  for (const name of unique) {
+    out[name] = getStableAutoCardColor(name);
   }
   return out;
 }
@@ -3306,7 +3353,7 @@ export function renderTracker(
         return `<span>${def.short} ${value}%</span>`;
       }).join("");
       const showCollapsedMood = moodText !== "";
-      const cardColor = getResolvedCardColor(settings, name, characterAvatar) ?? palette[name] ?? colorFromName(name);
+      const cardColor = getResolvedCardColor(settings, name, characterAvatar) ?? palette[name] ?? getStableAutoCardColor(name);
       const cardKey = `${entry.messageIndex}:${normalizeName(name)}`;
       const isNew = !renderedCardKeys.has(cardKey);
       renderedCardKeys.add(cardKey);
