@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Fixed
+- Extraction now falls back to the active SillyTavern runtime API when no valid Connection Manager profile ID can be resolved, preventing `Profile not found (ID: default)` failures.
+- Profile-less setups (fresh install, no Connection Manager profiles, or "Use active connection" mode) now continue extracting stats instead of stalling at "Requesting stats".
+
 ## [2.0.7] - 2026-02-24
 ### Changed
 - Tracker card action buttons now use dynamic colors tuned for contrast against each card, with more transparency.
