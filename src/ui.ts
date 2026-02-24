@@ -268,6 +268,12 @@ function buildActionPalette(cardHex: string): {
   const base = hexToRgb(cardHex) ?? { r: 31, g: 32, b: 40 };
   const neutralDark = { r: 18, g: 21, b: 28 };
   const neutralLight = { r: 238, g: 242, b: 250 };
+  const setAlpha = (hex: string, alpha: number): string => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return hex;
+    const a = Math.max(0, Math.min(1, alpha));
+    return `rgba(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)}, ${a})`;
+  };
   const lum = relativeLuminance(base);
   if (lum < 0.45) {
     const bg = mixRgb(base, neutralDark, 0.86);
@@ -276,10 +282,10 @@ function buildActionPalette(cardHex: string): {
     const hoverBorder = mixRgb(base, neutralLight, 0.58);
     const focus = mixRgb(base, neutralLight, 0.66);
     return {
-      bg: rgbToHex(bg),
+      bg: setAlpha(rgbToHex(bg), 0.7),
       border: rgbToHex(border),
       text: "#f7f9ff",
-      hoverBg: rgbToHex(hoverBg),
+      hoverBg: setAlpha(rgbToHex(hoverBg), 0.82),
       hoverBorder: rgbToHex(hoverBorder),
       focus: rgbToHex(focus),
     };
@@ -290,10 +296,10 @@ function buildActionPalette(cardHex: string): {
   const hoverBorder = mixRgb(base, neutralDark, 0.52);
   const focus = mixRgb(base, neutralDark, 0.68);
   return {
-    bg: rgbToHex(bg),
+    bg: setAlpha(rgbToHex(bg), 0.78),
     border: rgbToHex(border),
     text: "#0f1523",
-    hoverBg: rgbToHex(hoverBg),
+    hoverBg: setAlpha(rgbToHex(hoverBg), 0.9),
     hoverBorder: rgbToHex(hoverBorder),
     focus: rgbToHex(focus),
   };
