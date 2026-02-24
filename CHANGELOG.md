@@ -6,6 +6,9 @@ All notable changes to BetterSimTracker are documented here.
 ### Changed
 - Tracker card action buttons now use dynamic colors tuned for contrast against each card, with more transparency.
 
+### Fixed
+- Extraction now falls back safely when no active connection profile is selected, instead of hard-failing tracker updates.
+
 ## [2.0.6] - 2026-02-24
 ### Added
 - Per-character card color override in Advanced Character Defaults.
