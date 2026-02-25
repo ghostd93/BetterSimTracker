@@ -1357,6 +1357,13 @@ function ensureStyles(): void {
 .bst-row.bst-row-non-numeric {
   margin-top: 7px;
 }
+.bst-row.bst-row-non-numeric .bst-label {
+  align-items: flex-start;
+  gap: 8px;
+}
+.bst-row.bst-row-non-numeric .bst-label > span:first-child {
+  min-width: 0;
+}
 .bst-label {
   display: flex;
   justify-content: space-between;
@@ -1365,9 +1372,9 @@ function ensureStyles(): void {
   opacity: 0.93;
 }
 .bst-non-numeric-chip {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
   max-width: min(70%, 340px);
+  margin-left: auto;
   padding: 2px 8px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--bst-stat-color, var(--bst-accent)) 60%, #ffffff 40%);
@@ -1375,9 +1382,11 @@ function ensureStyles(): void {
   color: #f5f9ff;
   font-size: 11px;
   line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow: visible;
+  text-overflow: clip;
 }
 .bst-track {
   background: rgba(255,255,255,0.14);
@@ -2968,6 +2977,15 @@ function ensureStyles(): void {
   }
   .bst-label {
     font-size: 11px;
+  }
+  .bst-row.bst-row-non-numeric .bst-label {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .bst-non-numeric-chip {
+    max-width: 100%;
+    margin-left: 0;
   }
   .bst-track {
     height: 7px;
