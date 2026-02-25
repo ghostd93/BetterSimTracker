@@ -1,6 +1,6 @@
 # Prompt System
 
-Last verified commit: `000d643`
+Last verified commit: `fa0285a`
 
 Primary implementation: `src/prompts.ts`, `src/promptInjection.ts`.
 
@@ -22,8 +22,8 @@ Editable in settings:
 
 - Unified extraction instruction
 - Sequential instructions for each built-in stat
-- Global sequential default for custom numeric
-- Global sequential default for custom non-numeric
+- Global default for custom numeric per-stat extraction
+- Global default for custom non-numeric per-stat extraction
 - Injection template
 
 Non-editable safety templates:
@@ -41,13 +41,13 @@ Non-editable safety templates:
 ### Custom Numeric
 
 1. per-stat override
-2. global `Seq: Custom Numeric`
+2. global `Custom Numeric Default`
 3. built-in default constant
 
 ### Custom Non-Numeric
 
 1. per-stat override
-2. global `Seq: Custom Non-Numeric`
+2. global `Custom Non-Numeric Default`
 3. built-in default constant
 
 ## Macros and Render Context
@@ -92,13 +92,13 @@ This preserves core relationship guidance under token pressure.
 `prompts.ts` provides helper prompt builders for:
 
 - improving custom stat description
-- generating sequential prompt override text
+- generating per-stat prompt override text
 - generating behavior guidance text
 - generating built-in sequential instructions
 
 Important split:
 
-- `Sequential Prompt Override` generation is extraction-focused.
+- `Per-Stat Prompt Override` generation is extraction-focused.
 - `Behavior Instruction` generation is reaction/injection-focused.
 
 ## Summary Prompts

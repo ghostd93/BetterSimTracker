@@ -4649,7 +4649,7 @@ export function openSettingsModal(input: {
       <h4><span class="bst-header-icon fa-solid fa-pen-to-square"></span>Prompts</h4>
             <details class="bst-help-details">
         <summary>Prompt help</summary>
-        <div class="bst-help-line">Unified prompt is used for one-prompt extraction. Sequential mode uses per-stat prompts.</div>
+        <div class="bst-help-line">Unified prompt is used for one-prompt built-in extraction. Custom stats always use per-stat prompts in all modes.</div>
         <div class="bst-help-line">Only the instruction section is editable; protocol blocks are fixed for safety and consistency.</div>
         <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
         <div class="bst-help-line">Placeholders you can use:</div>
@@ -4664,8 +4664,8 @@ export function openSettingsModal(input: {
           <li><code>{{textStats}}</code> — requested text stats list</li>
           <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
           <li><code>{{moodOptions}}</code> — allowed mood labels</li>
-          <li><code>{{statId}}</code>/<code>{{statLabel}}</code> — custom stat identity (custom sequential template)</li>
-          <li><code>{{statDescription}}</code>/<code>{{statDefault}}</code> — custom stat metadata (custom sequential template)</li>
+          <li><code>{{statId}}</code>/<code>{{statLabel}}</code> — custom stat identity (custom per-stat template)</li>
+          <li><code>{{statDescription}}</code>/<code>{{statDefault}}</code> — custom stat metadata (custom per-stat template)</li>
           <li><code>{{statKind}}</code>/<code>{{valueSchema}}</code> — non-numeric stat kind + expected value format</li>
           <li><code>{{allowedValues}}</code>/<code>{{textMaxLen}}</code> — enum option list or text-short limit</li>
           <li><code>{{defaultValueLiteral}}</code>/<code>{{booleanTrueLabel}}</code>/<code>{{booleanFalseLabel}}</code> — non-numeric defaults/labels</li>
@@ -4755,12 +4755,12 @@ export function openSettingsModal(input: {
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-sliders"></span>Seq: Custom Numeric</span>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-sliders"></span>Custom Numeric Default</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialCustomNumeric" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
-            <div class="bst-prompt-caption">Instruction (editable default used when a custom stat has no per-stat override)</div>
+            <div class="bst-prompt-caption">Instruction (editable default used when a custom stat has no per-stat override, in all modes)</div>
             <textarea data-k="promptTemplateSequentialCustomNumeric" rows="6"></textarea>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("{{statId}}"))}</pre>
@@ -4768,12 +4768,12 @@ export function openSettingsModal(input: {
         </label>
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
-            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-list-check"></span>Seq: Custom Non-Numeric</span>
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-list-check"></span>Custom Non-Numeric Default</span>
             <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialCustomNonNumeric" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
-            <div class="bst-prompt-caption">Instruction (editable default used when enum/boolean/text custom stats have no per-stat override)</div>
+            <div class="bst-prompt-caption">Instruction (editable default used when enum/boolean/text custom stats have no per-stat override, in all modes)</div>
             <textarea data-k="promptTemplateSequentialCustomNonNumeric" rows="6"></textarea>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml("{\n  \"characters\": [\n    {\n      \"name\": \"Character Name\",\n      \"confidence\": 0.0,\n      \"value\": {\n        \"{{statId}}\": {{valueSchema}}\n      }\n    }\n  ]\n}")}</pre>
@@ -5813,10 +5813,10 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="enabled" ${draft.enabled ? "checked" : ""}><span data-bst-kind-help="enabledLabel">Enabled (Track + Card + Graph)</span></label>
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
         </div>
-        <label>Sequential Prompt Override (optional)
-          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional per-stat override. Leave empty to use the global custom-stat fallback for this kind.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
+        <label>Per-Stat Prompt Override (optional)
+          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional per-stat override used in all extraction modes. Leave empty to use the global custom-stat fallback for this kind.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
         </label>
-        <div class="bst-help-line" data-bst-kind-help="templateFallback">Empty override uses global Seq: Custom Numeric fallback.</div>
+        <div class="bst-help-line" data-bst-kind-help="templateFallback">Used in all extraction modes. Empty override uses global Custom Numeric Default.</div>
         <div class="bst-custom-ai-row">
           <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-generate-template" data-loading="false">
             <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
@@ -5982,8 +5982,8 @@ export function openSettingsModal(input: {
       const fallbackHelpNode = wizard.querySelector('[data-bst-kind-help="templateFallback"]') as HTMLElement | null;
       if (fallbackHelpNode) {
         fallbackHelpNode.textContent = kind === "numeric"
-          ? "Empty override uses global Seq: Custom Numeric fallback."
-          : "Empty override uses global Seq: Custom Non-Numeric fallback.";
+          ? "Used in all extraction modes. Empty override uses global Custom Numeric Default."
+          : "Used in all extraction modes. Empty override uses global Custom Non-Numeric Default.";
       }
 
       const valueHelpNode = wizard.querySelector('[data-bst-kind-help="value"]') as HTMLElement | null;
@@ -6009,8 +6009,8 @@ export function openSettingsModal(input: {
       const templateNode = getField("sequentialPromptTemplate") as HTMLTextAreaElement | null;
       if (templateNode) {
         templateNode.placeholder = kind === "numeric"
-          ? "Optional per-stat override. Literal example: Update only respect_score deltas from recent messages based on respect cues. Leave empty to use global Seq: Custom Numeric fallback."
-          : "Optional per-stat override. Literal example: Update only stance value for {{statId}} using allowed values and recent conversational cues. Leave empty to use global Seq: Custom Non-Numeric fallback.";
+          ? "Optional per-stat override used in all extraction modes. Literal example: Update only respect_score deltas from recent messages based on respect cues. Leave empty to use global Custom Numeric Default."
+          : "Optional per-stat override used in all extraction modes. Literal example: Update only stance value for {{statId}} using allowed values and recent conversational cues. Leave empty to use global Custom Non-Numeric Default.";
       }
 
       const behaviorNode = getField("behaviorGuidance") as HTMLTextAreaElement | null;
@@ -6763,8 +6763,8 @@ export function openSettingsModal(input: {
     promptTemplateSequentialTrust: "Sequential Trust instruction (protocol block is fixed).",
     promptTemplateSequentialDesire: "Sequential Desire instruction (protocol block is fixed).",
     promptTemplateSequentialConnection: "Sequential Connection instruction (protocol block is fixed).",
-    promptTemplateSequentialCustomNumeric: "Sequential default instruction for custom numeric stats (per-stat override in custom stat wizard still wins).",
-    promptTemplateSequentialCustomNonNumeric: "Sequential default instruction for enum/boolean/text custom stats (per-stat override in custom stat wizard still wins).",
+    promptTemplateSequentialCustomNumeric: "Default instruction for custom numeric per-stat extraction (used in all modes; per-stat override in custom stat wizard still wins).",
+    promptTemplateSequentialCustomNonNumeric: "Default instruction for custom non-numeric per-stat extraction (used in all modes; per-stat override in custom stat wizard still wins).",
     promptTemplateSequentialMood: "Sequential Mood instruction (protocol block is fixed).",
     promptTemplateSequentialLastThought: "Sequential LastThought instruction (protocol block is fixed)."
   };
@@ -6940,5 +6940,6 @@ export function closeSettingsModal(): void {
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
 }
+
 
 
