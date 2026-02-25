@@ -2,6 +2,25 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0] - 2026-02-25
+### Added
+- Non-numeric custom stat support with new kinds: `enum_single`, `boolean`, and `text_short`.
+- Kind-aware custom stat wizard fields and validation for enum options, boolean labels, and short-text limits.
+- Kind-aware character defaults support for non-numeric custom stats.
+- Kind-aware latest-tracker manual edit controls for non-numeric custom stat values.
+- New sequential prompt template fallback for non-numeric custom stats (`Seq: Custom Non-Numeric`).
+
+### Changed
+- Tracker cards now render non-numeric custom stats as compact value chips.
+- Custom stat settings UI now treats custom stats as mixed-type definitions instead of numeric-only.
+- Prompt generation and extraction contracts now include non-numeric schema guidance and macros.
+- AI guidance generation now separates intent by field: `Sequential Prompt Override` is extraction-focused, while `Behavior Instruction` is reaction-focused for prompt injection.
+
+### Fixed
+- Prompt injection now still renders when only non-numeric custom stats are enabled.
+- Non-numeric seeded defaults are now normalized by stat kind to prevent invalid enum/boolean/text carry-over values.
+- `Generate with AI` for behavior guidance no longer produces extraction-style update cues.
+
 ## [2.0.7.3] - 2026-02-25
 ### Changed
 - Auto card color assignment no longer rebalances previously assigned characters when new characters appear in chat.

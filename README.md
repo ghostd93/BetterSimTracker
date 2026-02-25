@@ -14,10 +14,10 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Polished extension settings modal with sticky header/footer actions and one-click `Expand all` / `Collapse all` section control
 - Settings checkboxes now use consistent round accent-matched styling across ST themes/mobile UI overrides
 - Built-in stats manager wizard with unified `Enabled` toggle (`Track + Card + Graph`) plus `Inject` control for numeric built-ins
-- Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric percentage stats, max 8, color picker + hex input, AI-assisted description improvement, AI generation for stat-specific Sequential Prompt Override, optional behavior-injection guidance with AI generation)
+- Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric + non-numeric custom stats, max 8 total, color picker + hex input, AI-assisted description improvement, AI generation for stat-specific Sequential Prompt Override, optional behavior-injection guidance with AI generation)
 - Retrack button (regenerate tracker for last AI message)
 - Summarize button (AI-generated detailed prose summary, 4-6 sentences, grounded in currently tracked dimensions, no numeric stat values; with settings to make the note AI-visible and/or inject it into prompt guidance)
-- Edit last tracker stats inline (pencil icon on the latest card; numeric clamp + mood picker + last thought editor)
+- Edit last tracker stats inline (pencil icon on the latest card; numeric clamp + mood picker + last thought editor + kind-aware custom non-numeric editors)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
   - raw/smoothed view
@@ -25,7 +25,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Prompt injection (optional) for behavior consistency
 - Prompt injection includes enabled custom stats marked `includeInInjection`
   - when injected guidance grows too large, custom stat lines are trimmed first to keep prompt size safe
-- Prompt templates (unified + per-stat + custom numeric default) with per-prompt reset
+- Prompt templates (unified + per-stat + custom numeric/non-numeric defaults) with per-prompt reset
 - AI-assisted generation for built-in sequential prompt instructions (`Affection`, `Trust`, `Desire`, `Connection`, `Mood`, `LastThought`)
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
 - Per-character card color override (advanced character defaults)
@@ -177,9 +177,9 @@ Numeric scaling formula used by runtime:
 - `Summarization Note Visible for AI`: controls visibility mode for newly generated Summarize notes (prose summaries of current tracked stats) in the active chat (`ON` = AI-visible notes, `OFF` = hidden system notes)
 - `Inject Summarization Note`: appends the latest Summarize note (prose summary of current tracked stats) into hidden prompt injection guidance
 - `Injection Prompt Template`: editable template for injected guidance (shown only when injection is enabled)
-- `Prompt Templates`: edit unified + per-stat sequential prompt instructions plus a global custom-numeric sequential default (protocol blocks are fixed; repair prompts are fixed)
+- `Prompt Templates`: edit unified + per-stat sequential prompt instructions plus global custom-numeric and custom-non-numeric sequential defaults (protocol blocks are fixed; repair prompts are fixed)
 - `Manage Built-in Stats`: open a wizard to control built-in stat participation in extraction/cards/graph/injection
-- `Custom Stats`: create and manage additional numeric percentage stats via step-by-step wizard in settings
+- `Custom Stats`: create and manage additional custom stats (`numeric`, `enum_single`, `boolean`, `text_short`) via step-by-step wizard in settings
 - `Profile Token Limits`: extraction now respects profile max tokens and truncation length (when available)
 - `Max Tokens Override`: force max tokens for extraction (0 = auto)
 - `Context Size Override`: force truncation length for extraction (0 = auto)
@@ -215,7 +215,7 @@ Numeric scaling formula used by runtime:
 - `Injection Prompt Template`: editable template that defines the injected guidance block (shown only when injection is enabled). Supports `{{summarizationNote}}` for the latest summary note text.
 - `Auto Detect Active`: in group chat, tries to determine which characters are currently active in the scene.
 - `Activity Lookback`: recent-message window used for active character detection.
-- `Prompt Templates`: unified prompt instruction for one-shot extraction, per-stat instructions for sequential mode, and a global default template for custom numeric sequential extraction.
+- `Prompt Templates`: unified prompt instruction for one-shot extraction, per-stat instructions for sequential mode, and global default templates for custom numeric + custom non-numeric sequential extraction.
   - Each prompt has a reset-to-default button.
   - Protocol blocks (JSON shape, constraints) are fixed for safety and consistency.
   - A hidden main prompt is always prefixed to extraction prompts (not shown in settings).
@@ -295,14 +295,17 @@ Behavior notes:
     - `Enabled` (numeric = `Track + Card + Graph`, text stats = `Track`)
     - `Inject` (numeric built-ins only)
 - `Custom Stats` section:
-  - `Add Custom Stat` wizard (Basics, Numeric Behavior, Tracking Behavior, Behavior Injection, Display, Review)
+  - `Add Custom Stat` wizard with kind-aware flow (`numeric`, `enum_single`, `boolean`, `text_short`)
   - `Edit` and `Clone` for faster setup reuse
   - `Remove` uses soft-remove flow (historical payload remains stored, active tracking stops)
-  - custom stat wizard uses unified `Enabled` toggle (`Track + Card + Graph`) plus `includeInInjection`
+  - numeric custom stats use unified `Enabled` toggle (`Track + Card + Graph`) plus `includeInInjection`
+  - non-numeric custom stats use `Track + Card` plus `includeInInjection` (not graphed in current version)
   - `Improve description with AI` (Basics step) rewrites the current description draft into a clearer extraction-focused definition
-  - `Generate with AI` (Tracking Behavior step) drafts a stat-specific `Sequential Prompt Override` from required `Label`, `ID`, and `Description`
+  - `Generate with AI` (Tracking Behavior step) drafts a stat-specific `Sequential Prompt Override` from required `Label`, `ID`, and `Description` with kind-aware schema constraints
   - `Generate with AI` (Behavior Injection step) drafts richer optional guidance lines used only in prompt injection for this custom stat (`low/medium/high` behavior + `increase/decrease` evidence cues)
-  - custom sequential prompt precedence: per-stat template override in wizard -> global `Seq: Custom Numeric` template -> built-in default template
+  - custom sequential prompt precedence:
+    - numeric stat: per-stat override -> global `Seq: Custom Numeric` -> built-in numeric default
+    - non-numeric stat: per-stat override -> global `Seq: Custom Non-Numeric` -> built-in non-numeric default
 - `Mood Source` (`BST mood images` or `ST expressions`)
 - `Global Mood -> ST Expression Map` (editable in settings when `Mood Source = ST expressions`)
 - `Preview Character` selector (inside framing modal, below preview): includes only characters with ST expressions and drives global framing preview
@@ -340,6 +343,7 @@ Two editable prompt types are supported:
 - Unified prompt: used when sequential extraction is off.
 - Per-stat prompts: used in sequential mode (`affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`).
 - `Seq: Custom Numeric` prompt: global default for custom stat sequential extraction when a custom stat does not define its own template override.
+- `Seq: Custom Non-Numeric` prompt: global default for `enum_single` / `boolean` / `text_short` custom stat sequential extraction when a custom stat does not define its own template override.
 - Default desire prompt guardrail: only increase desire when the recent messages are explicitly romantic/sexual; non-romantic context should be 0 or negative.
 
 Each prompt instruction can be reset to its default with the per-prompt reset button. Protocol blocks are read-only.
@@ -359,6 +363,12 @@ Available placeholders:
 - `{{moodOptions}}`: allowed mood labels.
 - `{{statId}}` / `{{statLabel}}`: custom stat id/label (custom sequential templates).
 - `{{statDescription}}` / `{{statDefault}}`: custom stat metadata (custom sequential templates).
+- `{{statKind}}`: custom stat kind for kind-aware templates.
+- `{{allowedValues}}`: enum options list (`enum_single` only).
+- `{{valueSchema}}`: expected output schema for non-numeric extraction.
+- `{{defaultValueLiteral}}`: schema-safe default literal for non-numeric kinds.
+- `{{textMaxLen}}`: max allowed length for `text_short`.
+- `{{booleanTrueLabel}}` / `{{booleanFalseLabel}}`: boolean semantic labels.
 
 Note: strict/repair prompts are not editable.
 
@@ -373,6 +383,7 @@ Per-character defaults can be set in character card Advanced definitions:
 - `mood`
 - `cardColor` (hex, optional per-character card color override)
 - `customStatDefaults` (for configured custom stats; key = stat id, value = 0..100)
+- `customNonNumericStatDefaults` (for configured non-numeric custom stats; key = stat id, value = enum token / boolean / short text)
 
 All numeric character defaults are limited to `0..100` (UI + save sanitization).
 Card color accepts hex (`#RRGGBB`); leave empty to keep the automatic palette color.

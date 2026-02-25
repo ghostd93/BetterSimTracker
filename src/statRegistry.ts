@@ -79,11 +79,13 @@ export function getBuiltInNumericStatDefinitions(settings: BetterSimTrackerSetti
 }
 
 export function getCustomNumericStatDefinitions(settings: BetterSimTrackerSettings): NumericStatDefinition[] {
-  return settings.customStats.map(def => ({
+  return settings.customStats
+    .filter(def => (def.kind ?? "numeric") === "numeric")
+    .map(def => ({
     id: def.id,
     label: def.label,
     description: def.description ?? "",
-    defaultValue: def.defaultValue,
+    defaultValue: Math.max(0, Math.min(100, Math.round(Number(def.defaultValue) || 50))),
     maxDeltaPerTurn: def.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
     track: def.track,
     showOnCard: def.showOnCard,

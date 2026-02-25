@@ -12,9 +12,31 @@ import {
 } from "./prompts";
 import { upsertSettingsPanel } from "./settingsPanel";
 import { discoverConnectionProfiles, getActiveConnectionProfileId, getContext, getSettingsProvenance, loadSettings, logDebug, resolveConnectionProfileId, saveSettings } from "./settings";
-import { clearTrackerDataForCurrentChat, getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLatestTrackerDataWithIndexBefore, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistory, getRecentTrackerHistoryEntries, getTrackerDataFromMessage, mergeCustomStatisticsWithFallback, mergeStatisticsWithFallback, writeTrackerDataToMessage } from "./storage";
+import {
+  clearTrackerDataForCurrentChat,
+  getChatStateLatestTrackerData,
+  getLatestTrackerDataWithIndex,
+  getLatestTrackerDataWithIndexBefore,
+  getLocalLatestTrackerData,
+  getMetadataLatestTrackerData,
+  getRecentTrackerHistory,
+  getRecentTrackerHistoryEntries,
+  getTrackerDataFromMessage,
+  mergeCustomNonNumericStatisticsWithFallback,
+  mergeCustomStatisticsWithFallback,
+  mergeStatisticsWithFallback,
+  writeTrackerDataToMessage
+} from "./storage";
 import { getAllNumericStatDefinitions } from "./statRegistry";
-import type { BetterSimTrackerSettings, CustomStatistics, DeltaDebugRecord, STContext, Statistics, TrackerData } from "./types";
+import type {
+  BetterSimTrackerSettings,
+  CustomNonNumericStatistics,
+  CustomStatistics,
+  DeltaDebugRecord,
+  STContext,
+  Statistics,
+  TrackerData
+} from "./types";
 import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
 import { cancelActiveGenerations, generateJson } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
@@ -67,6 +89,9 @@ function collectSummaryCharacters(data: TrackerData): string[] {
   addKeys(data.statistics.connection);
   addKeys(data.statistics.mood);
   for (const statValues of Object.values(data.customStatistics ?? {})) {
+    addKeys(statValues as Record<string, unknown>);
+  }
+  for (const statValues of Object.values(data.customNonNumericStatistics ?? {})) {
     addKeys(statValues as Record<string, unknown>);
   }
   return Array.from(names).sort((a, b) => a.localeCompare(b));
@@ -185,6 +210,18 @@ function buildSummaryTrackerStateLines(data: TrackerData, currentSettings: Bette
       const label = (customLabelMap.get(statId) ?? statId).replace(/\s+/g, "_").toLowerCase();
       parts.push(`${label}=${Math.max(0, Math.min(100, Math.round(value)))}`);
     }
+    for (const [statId, byCharacter] of Object.entries(data.customNonNumericStatistics ?? {})) {
+      const raw = byCharacter?.[name];
+      if (raw === undefined) continue;
+      const label = (customLabelMap.get(statId) ?? statId).replace(/\s+/g, "_").toLowerCase();
+      if (typeof raw === "boolean") {
+        parts.push(`${label}=${raw ? "true" : "false"}`);
+      } else {
+        const text = String(raw ?? "").trim().replace(/\s+/g, " ");
+        if (!text) continue;
+        parts.push(`${label}="${text.slice(0, 120)}"`);
+      }
+    }
 
     return `- ${name}: ${parts.length ? parts.join(", ") : "no tracked values"}`;
   });
@@ -245,6 +282,21 @@ function buildFallbackSummaryProse(data: TrackerData, currentSettings: BetterSim
       const tone = describeBand(raw, "low", "moderate", "high");
       customBits.push(`${label} feels ${tone}`);
       if (customBits.length >= 2) break;
+    }
+    if (customBits.length < 2) {
+      for (const [statId, byCharacter] of Object.entries(data.customNonNumericStatistics ?? {})) {
+        const raw = byCharacter?.[name];
+        if (raw === undefined) continue;
+        const label = customLabelMap.get(statId) ?? statId;
+        if (typeof raw === "boolean") {
+          customBits.push(`${label} is ${raw ? "active" : "inactive"}`);
+        } else {
+          const text = String(raw ?? "").trim().replace(/\s+/g, " ");
+          if (!text) continue;
+          customBits.push(`${label} is "${text.slice(0, 60)}"`);
+        }
+        if (customBits.length >= 2) break;
+      }
     }
 
     const customClause = customBits.length ? ` ${name}'s custom-state cues suggest ${customBits.join(" and ")}.` : "";
@@ -752,6 +804,7 @@ function getConfiguredCharacterDefaults(
   connection?: number;
   mood?: string;
   customStatDefaults?: Record<string, number>;
+  customNonNumericStatDefaults?: Record<string, string | boolean>;
 } {
   const character = findCharacterByName(context, name);
   const extFromCharacter = character?.extensions as Record<string, unknown> | undefined;
@@ -779,6 +832,23 @@ function getConfiguredCharacterDefaults(
       customStatDefaults[id] = parsed;
     }
   }
+  const customNonNumericStatDefaultsRaw = merged.customNonNumericStatDefaults;
+  const customNonNumericStatDefaults: Record<string, string | boolean> = {};
+  if (customNonNumericStatDefaultsRaw && typeof customNonNumericStatDefaultsRaw === "object") {
+    for (const [key, value] of Object.entries(customNonNumericStatDefaultsRaw as Record<string, unknown>)) {
+      const id = String(key ?? "").trim().toLowerCase();
+      if (!id) continue;
+      if (typeof value === "boolean") {
+        customNonNumericStatDefaults[id] = value;
+        continue;
+      }
+      if (typeof value === "string") {
+        const text = value.trim().replace(/\s+/g, " ");
+        if (!text) continue;
+        customNonNumericStatDefaults[id] = text.slice(0, 200);
+      }
+    }
+  }
   return {
     ...(affection != null ? { affection } : {}),
     ...(trust != null ? { trust } : {}),
@@ -786,6 +856,7 @@ function getConfiguredCharacterDefaults(
     ...(connection != null ? { connection } : {}),
     ...(mood != null ? { mood } : {}),
     ...(Object.keys(customStatDefaults).length ? { customStatDefaults } : {}),
+    ...(Object.keys(customNonNumericStatDefaults).length ? { customNonNumericStatDefaults } : {}),
   };
 }
 
@@ -842,6 +913,7 @@ function buildSeededCustomStatisticsForActiveCharacters(
 
   const customDefs = Array.isArray(settingsInput.customStats) ? settingsInput.customStats : [];
   for (const def of customDefs) {
+    if ((def.kind ?? "numeric") !== "numeric") continue;
     const statId = String(def.id ?? "").trim().toLowerCase();
     if (!statId) continue;
     if (!seeded[statId]) seeded[statId] = {};
@@ -849,7 +921,72 @@ function buildSeededCustomStatisticsForActiveCharacters(
       if (seeded[statId][name] !== undefined) continue;
       const configured = getConfiguredCharacterDefaults(context, settingsInput, name);
       const configuredValue = configured.customStatDefaults?.[statId];
-      seeded[statId][name] = configuredValue ?? def.defaultValue;
+      const fallback = Number(def.defaultValue);
+      seeded[statId][name] = configuredValue ?? (Number.isNaN(fallback) ? 50 : fallback);
+    }
+  }
+
+  return seeded;
+}
+
+function buildSeededCustomNonNumericStatisticsForActiveCharacters(
+  base: CustomNonNumericStatistics | null | undefined,
+  activeCharacters: string[],
+  settingsInput: BetterSimTrackerSettings,
+  context: STContext | null,
+): CustomNonNumericStatistics {
+  const seeded: CustomNonNumericStatistics = {};
+  for (const [statId, values] of Object.entries(base ?? {})) {
+    seeded[statId] = { ...(values ?? {}) };
+  }
+
+  const customDefs = Array.isArray(settingsInput.customStats) ? settingsInput.customStats : [];
+  for (const def of customDefs) {
+    const kind = def.kind ?? "numeric";
+    if (kind === "numeric") continue;
+    const statId = String(def.id ?? "").trim().toLowerCase();
+    if (!statId) continue;
+    if (!seeded[statId]) seeded[statId] = {};
+    const enumOptions = Array.isArray(def.enumOptions)
+      ? def.enumOptions.map(option => String(option ?? "").trim().toLowerCase()).filter(Boolean)
+      : [];
+    const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(def.textMaxLength) || 120)));
+    const normalizeValue = (raw: unknown): string | boolean => {
+      if (kind === "boolean") {
+        if (typeof raw === "boolean") return raw;
+        if (typeof raw === "string") {
+          const lowered = raw.trim().toLowerCase();
+          if (lowered === "true") return true;
+          if (lowered === "false") return false;
+        }
+        return typeof def.defaultValue === "boolean" ? def.defaultValue : false;
+      }
+      if (kind === "enum_single") {
+        const defaultToken = String(def.defaultValue ?? "").trim().toLowerCase();
+        const fallback = enumOptions.includes(defaultToken)
+          ? defaultToken
+          : (enumOptions[0] ?? defaultToken);
+        const token = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+        return token && enumOptions.includes(token) ? token : fallback;
+      }
+      const fallback = String(def.defaultValue ?? "").trim().replace(/\s+/g, " ");
+      const text = typeof raw === "string"
+        ? raw.trim().replace(/\s+/g, " ")
+        : "";
+      return (text || fallback).slice(0, textMaxLength);
+    };
+    for (const name of activeCharacters) {
+      if (seeded[statId][name] !== undefined) {
+        seeded[statId][name] = normalizeValue(seeded[statId][name]);
+        continue;
+      }
+      const configured = getConfiguredCharacterDefaults(context, settingsInput, name);
+      const configuredValue = configured.customNonNumericStatDefaults?.[statId];
+      if (configuredValue !== undefined) {
+        seeded[statId][name] = normalizeValue(configuredValue);
+        continue;
+      }
+      seeded[statId][name] = normalizeValue(undefined);
     }
   }
 
@@ -867,6 +1004,12 @@ function seedHistoryForActiveCharacters(
     statistics: buildSeededStatisticsForActiveCharacters(entry.statistics, activeCharacters, settingsInput, context),
     customStatistics: buildSeededCustomStatisticsForActiveCharacters(
       entry.customStatistics,
+      activeCharacters,
+      settingsInput,
+      context,
+    ),
+    customNonNumericStatistics: buildSeededCustomNonNumericStatisticsForActiveCharacters(
+      entry.customNonNumericStatistics,
       activeCharacters,
       settingsInput,
       context,
@@ -928,15 +1071,32 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
     connection: number;
     mood: string;
     custom: Record<string, number>;
+    customNonNumeric: Record<string, string | boolean>;
   } => {
     const contextual = inferFromContext(name);
     const defaults = getConfiguredCharacterDefaults(context, s, name);
     const customDefaults: Record<string, number> = {};
+    const customNonNumericDefaults: Record<string, string | boolean> = {};
     for (const def of s.customStats ?? []) {
+      const kind = def.kind ?? "numeric";
       const statId = String(def.id ?? "").trim().toLowerCase();
       if (!statId) continue;
-      const configuredCustom = defaults.customStatDefaults?.[statId];
-      customDefaults[statId] = pickNumber(configuredCustom, def.defaultValue);
+      if (kind === "numeric") {
+        const configuredCustom = defaults.customStatDefaults?.[statId];
+        const fallback = Number(def.defaultValue);
+        customDefaults[statId] = pickNumber(configuredCustom, Number.isNaN(fallback) ? 50 : fallback);
+      } else if (kind === "boolean") {
+        const configuredCustom = defaults.customNonNumericStatDefaults?.[statId];
+        customNonNumericDefaults[statId] = typeof configuredCustom === "boolean"
+          ? configuredCustom
+          : (typeof def.defaultValue === "boolean" ? def.defaultValue : false);
+      } else {
+        const configuredCustom = defaults.customNonNumericStatDefaults?.[statId];
+        const text = typeof configuredCustom === "string"
+          ? configuredCustom.trim()
+          : String(def.defaultValue ?? "").trim();
+        customNonNumericDefaults[statId] = text;
+      }
     }
     const hasAnyExplicitDefaults =
       defaults.affection !== undefined ||
@@ -944,7 +1104,8 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
       defaults.desire !== undefined ||
       defaults.connection !== undefined ||
       defaults.mood !== undefined ||
-      Object.keys(defaults.customStatDefaults ?? {}).length > 0;
+      Object.keys(defaults.customStatDefaults ?? {}).length > 0 ||
+      Object.keys(defaults.customNonNumericStatDefaults ?? {}).length > 0;
 
     if (hasAnyExplicitDefaults) {
       return {
@@ -954,10 +1115,11 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
         connection: pickNumber(defaults.connection, contextual.connection),
         mood: pickText(defaults.mood, contextual.mood),
         custom: customDefaults,
+        customNonNumeric: customNonNumericDefaults,
       };
     }
 
-    return { ...contextual, custom: customDefaults };
+    return { ...contextual, custom: customDefaults, customNonNumeric: customNonNumericDefaults };
   };
 
   const baselinePerCharacter = new Map<string, ReturnType<typeof getCardDefaults>>();
@@ -966,12 +1128,21 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
   }
 
   const customStatistics: CustomStatistics = {};
+  const customNonNumericStatistics: CustomNonNumericStatistics = {};
   for (const def of s.customStats ?? []) {
+    const kind = def.kind ?? "numeric";
     const statId = String(def.id ?? "").trim().toLowerCase();
     if (!statId) continue;
-    customStatistics[statId] = Object.fromEntries(
-      activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.custom?.[statId] ?? def.defaultValue]),
-    );
+    if (kind === "numeric") {
+      const fallback = Number(def.defaultValue);
+      customStatistics[statId] = Object.fromEntries(
+        activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.custom?.[statId] ?? (Number.isNaN(fallback) ? 50 : fallback)]),
+      );
+    } else {
+      customNonNumericStatistics[statId] = Object.fromEntries(
+        activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.customNonNumeric?.[statId] ?? (kind === "boolean" ? false : String(def.defaultValue ?? "").trim())]),
+      );
+    }
   }
 
   return {
@@ -986,6 +1157,7 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
       lastThought: Object.fromEntries(activeCharacters.map(name => [name, ""]))
     },
     customStatistics,
+    customNonNumericStatistics,
   };
 }
 
@@ -1149,6 +1321,7 @@ type ManualEditPayload = {
   messageIndex: number;
   character: string;
   numeric: Record<string, number | null>;
+  nonNumeric?: Record<string, string | boolean | null>;
   mood?: string | null;
   lastThought?: string | null;
 };
@@ -1186,8 +1359,12 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
     lastThought: { ...current.statistics.lastThought },
   };
   const custom: CustomStatistics = {};
+  const customNonNumeric: CustomNonNumericStatistics = {};
   for (const [key, values] of Object.entries(current.customStatistics ?? {})) {
     custom[key] = { ...(values ?? {}) };
+  }
+  for (const [key, values] of Object.entries(current.customNonNumericStatistics ?? {})) {
+    customNonNumeric[key] = { ...(values ?? {}) };
   }
 
   for (const [rawKey, rawValue] of Object.entries(payload.numeric ?? {})) {
@@ -1216,6 +1393,27 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
     custom[statKey][character] = clampEditedNumber(rawValue);
   }
 
+  for (const [rawKey, rawValue] of Object.entries(payload.nonNumeric ?? {})) {
+    const statKey = rawKey.trim().toLowerCase();
+    if (!statKey) continue;
+    if (rawValue == null) {
+      if (customNonNumeric[statKey]) {
+        delete customNonNumeric[statKey][character];
+        if (Object.keys(customNonNumeric[statKey]).length === 0) {
+          delete customNonNumeric[statKey];
+        }
+      }
+      continue;
+    }
+    if (!customNonNumeric[statKey]) customNonNumeric[statKey] = {};
+    if (typeof rawValue === "boolean") {
+      customNonNumeric[statKey][character] = rawValue;
+      continue;
+    }
+    const text = String(rawValue).trim().replace(/\s+/g, " ");
+    customNonNumeric[statKey][character] = text.slice(0, 200);
+  }
+
   if (payload.mood !== undefined) {
     const moodValue = normalizeEditMood(payload.mood);
     if (!moodValue) {
@@ -1239,6 +1437,7 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
     activeCharacters: Array.isArray(current.activeCharacters) ? [...current.activeCharacters] : [],
     statistics: stats,
     customStatistics: Object.keys(custom).length ? custom : undefined,
+    customNonNumericStatistics: Object.keys(customNonNumeric).length ? customNonNumeric : undefined,
   };
 
   writeTrackerDataToMessage(context, next, messageIndex);
@@ -1486,6 +1685,12 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       settings,
       context,
     );
+    const previousSeededCustomNonNumericStatistics = buildSeededCustomNonNumericStatisticsForActiveCharacters(
+      previous?.customNonNumericStatistics ?? null,
+      activeCharacters,
+      settings,
+      context,
+    );
     const seededHistory = seedHistoryForActiveCharacters(
       getRecentTrackerHistory(context, 6),
       activeCharacters,
@@ -1524,6 +1729,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       previousStatistics: previousSeededStatistics,
       previousCustomStatistics: previousSeededCustomStatistics,
       previousCustomStatisticsRaw: previousEntry?.data?.customStatistics ?? null,
+      previousCustomNonNumericStatistics: previousSeededCustomNonNumericStatistics,
       hasPriorTrackerData: Boolean(previousEntry?.data),
       history: seededHistory,
       isCancelled: () => cancelledExtractionRuns.has(runId),
@@ -1538,6 +1744,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     });
     const extracted = extractedResult.statistics;
     const extractedCustom = extractedResult.customStatistics;
+    const extractedCustomNonNumeric = extractedResult.customNonNumericStatistics;
     lastDebugRecord = extractedResult.debug;
     if (lastDebugRecord) {
       const persistedTail = readTraceLines(context).slice(-200);
@@ -1552,12 +1759,17 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
 
     const merged = mergeStatisticsWithFallback(extracted, previous?.statistics ?? null, settings);
     const mergedCustom = mergeCustomStatisticsWithFallback(extractedCustom, previous?.customStatistics ?? null);
+    const mergedCustomNonNumeric = mergeCustomNonNumericStatisticsWithFallback(
+      extractedCustomNonNumeric,
+      previous?.customNonNumericStatistics ?? null,
+    );
 
     latestData = {
       timestamp: Date.now(),
       activeCharacters,
       statistics: merged,
       customStatistics: mergedCustom,
+      customNonNumericStatistics: mergedCustomNonNumeric,
     };
     latestDataMessageIndex = lastIndex;
 
@@ -1996,7 +2208,8 @@ function openSettings(): void {
           connection: entry.data.statistics.connection,
           mood: entry.data.statistics.mood
         },
-        customStatistics: entry.data.customStatistics ?? {}
+        customStatistics: entry.data.customStatistics ?? {},
+        customNonNumericStatistics: entry.data.customNonNumericStatistics ?? {}
       }));
       const filterGraphTrace = (lines: string[]): string[] => {
         if (currentSettings.includeGraphInDiagnostics) return lines;

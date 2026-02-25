@@ -22,6 +22,13 @@ function numeric(value: unknown): number | null {
   return clamp(n);
 }
 
+function renderNonNumericValue(value: unknown): string | null {
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value !== "string") return null;
+  const text = value.trim().replace(/\s+/g, " ");
+  return text ? `"${text.slice(0, 120)}"` : null;
+}
+
 function renderTemplate(template: string, values: Record<string, string>): string {
   let output = template;
   for (const [key, value] of Object.entries(values)) {
@@ -73,8 +80,12 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
   const allEnabledCustom = (settings.customStats ?? [])
     .filter(stat => stat.track && stat.includeInInjection)
     .slice(0, 8);
+  const allEnabledCustomNumeric = allEnabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
+  const allEnabledCustomNonNumeric = allEnabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
   const buildWithCustom = (customStatCount: number): string => {
     const enabledCustom = allEnabledCustom.slice(0, customStatCount);
+    const enabledCustomNumeric = enabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
+    const enabledCustomNonNumeric = enabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
     const names = data.activeCharacters;
     const numericKeys: Array<{
       key: "affection" | "trust" | "desire" | "connection";
@@ -104,11 +115,12 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     ];
     const enabledBuiltIns = numericKeys.filter(entry => entry.enabled);
     const enabledBuiltInKeys = new Set(enabledBuiltIns.map(entry => entry.key));
-    const hasAnyNumeric = enabledBuiltIns.length > 0 || enabledCustom.length > 0;
+    const hasAnyNumeric = enabledBuiltIns.length > 0 || enabledCustomNumeric.length > 0;
+    const hasAnyNonNumeric = enabledCustomNonNumeric.length > 0;
     const includeMood = settings.trackMood;
     const includeSummarizationNote = Boolean(latestSummaryNote);
 
-    if (!hasAnyNumeric && !includeMood && !includeSummarizationNote) return "";
+    if (!hasAnyNumeric && !hasAnyNonNumeric && !includeMood && !includeSummarizationNote) return "";
 
     const lines = names.map(name => {
       const parts: string[] = [];
@@ -116,9 +128,15 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         const value = numeric(data.statistics[stat.key]?.[name] ?? 50) ?? 50;
         parts.push(`${stat.label} ${value}`);
       }
-      for (const stat of enabledCustom) {
+      for (const stat of enabledCustomNumeric) {
         const value = numeric(data.customStatistics?.[stat.id]?.[name] ?? stat.defaultValue) ?? stat.defaultValue;
         parts.push(`${stat.id} ${value}`);
+      }
+      for (const stat of enabledCustomNonNumeric) {
+        const value = renderNonNumericValue(data.customNonNumericStatistics?.[stat.id]?.[name] ?? stat.defaultValue);
+        if (value != null) {
+          parts.push(`${stat.id} ${value}`);
+        }
       }
       if (includeMood) {
         const mood = String(data.statistics.mood?.[name] ?? "Neutral").trim() || "Neutral";
@@ -180,15 +198,13 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         )
         .map(line => `- ${line}`);
     });
-    const reactRuleItems = hasAnyNumeric
-      ? [
-          ...(enabledBuiltInKeys.has("trust") ? ["- low trust -> avoid deep vulnerability; require proof/consistency", "- high trust -> share more, accept reassurance, collaborate"] : []),
-          ...(enabledBuiltInKeys.has("affection") ? ["- low affection -> limited warmth; less caring language", "- high affection -> caring language, concern, emotional support"] : []),
-          ...(enabledBuiltInKeys.has("desire") ? ["- low desire -> little/no flirtation; keep distance", "- high desire -> increased flirtation/attraction cues (respect context and consent)"] : []),
-          ...(enabledBuiltInKeys.has("connection") ? ["- low connection -> conversations stay surface-level", "- high connection -> personal references, emotional continuity, deeper empathy"] : []),
-          ...customBehaviorLines,
-        ]
-      : [];
+    const reactRuleItems = [
+      ...(enabledBuiltInKeys.has("trust") ? ["- low trust -> avoid deep vulnerability; require proof/consistency", "- high trust -> share more, accept reassurance, collaborate"] : []),
+      ...(enabledBuiltInKeys.has("affection") ? ["- low affection -> limited warmth; less caring language", "- high affection -> caring language, concern, emotional support"] : []),
+      ...(enabledBuiltInKeys.has("desire") ? ["- low desire -> little/no flirtation; keep distance", "- high desire -> increased flirtation/attraction cues (respect context and consent)"] : []),
+      ...(enabledBuiltInKeys.has("connection") ? ["- low connection -> conversations stay surface-level", "- high connection -> personal references, emotional continuity, deeper empathy"] : []),
+      ...customBehaviorLines,
+    ];
     const reactRules = reactRuleItems.length
       ? ["How to react:", ...reactRuleItems].join("\n")
       : "";
@@ -218,7 +234,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     return `${rendered}\n\n${summarizationNote}`.trim();
   };
 
-  let customCount = allEnabledCustom.length;
+  let customCount = allEnabledCustomNumeric.length + allEnabledCustomNonNumeric.length;
   while (customCount >= 0) {
     const prompt = buildWithCustom(customCount);
     if (prompt.length <= MAX_INJECTION_PROMPT_CHARS) {

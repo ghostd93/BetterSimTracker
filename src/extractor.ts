@@ -1,12 +1,14 @@
 import { STAT_KEYS } from "./constants";
 import { generateJson } from "./generator";
-import { parseCustomDeltaResponse, parseUnifiedDeltaResponse } from "./parse";
+import { parseCustomDeltaResponse, parseCustomValueResponse, parseUnifiedDeltaResponse } from "./parse";
 import {
   DEFAULT_REPAIR_LAST_THOUGHT_TEMPLATE,
   DEFAULT_REPAIR_MOOD_TEMPLATE,
+  DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_STRICT_RETRY_TEMPLATE,
+  buildSequentialCustomNonNumericPrompt,
   buildSequentialCustomNumericPrompt,
   buildSequentialPrompt,
   buildUnifiedPrompt,
@@ -14,6 +16,7 @@ import {
 } from "./prompts";
 import type {
   BetterSimTrackerSettings,
+  CustomNonNumericStatistics,
   CustomStatDefinition,
   CustomStatistics,
   DeltaDebugRecord,
@@ -133,11 +136,17 @@ export async function extractStatisticsParallel(input: {
   previousStatistics: Statistics | null;
   previousCustomStatistics?: CustomStatistics | null;
   previousCustomStatisticsRaw?: CustomStatistics | null;
+  previousCustomNonNumericStatistics?: CustomNonNumericStatistics | null;
   hasPriorTrackerData?: boolean;
   history: TrackerData[];
   isCancelled?: () => boolean;
   onProgress?: (done: number, total: number, label?: string) => void;
-}): Promise<{ statistics: Statistics; customStatistics: CustomStatistics; debug: DeltaDebugRecord | null }> {
+}): Promise<{
+  statistics: Statistics;
+  customStatistics: CustomStatistics;
+  customNonNumericStatistics: CustomNonNumericStatistics;
+  debug: DeltaDebugRecord | null;
+}> {
   const {
     settings,
     userName,
@@ -146,6 +155,7 @@ export async function extractStatisticsParallel(input: {
     previousStatistics,
     previousCustomStatistics,
     previousCustomStatisticsRaw,
+    previousCustomNonNumericStatistics,
     hasPriorTrackerData,
     history,
     onProgress,
@@ -154,6 +164,7 @@ export async function extractStatisticsParallel(input: {
   const customStats = enabledCustomStats(settings);
   const output = emptyStatistics();
   const outputCustom: CustomStatistics = {};
+  const outputCustomNonNumeric: CustomNonNumericStatistics = {};
   let debugRecord: DeltaDebugRecord | null = null;
   let cancelled = false;
 
@@ -179,7 +190,12 @@ export async function extractStatisticsParallel(input: {
   };
 
   if ((!builtInAndTextStats.length && !customStats.length) || !activeCharacters.length) {
-    return { statistics: output, customStatistics: outputCustom, debug: debugRecord };
+    return {
+      statistics: output,
+      customStatistics: outputCustom,
+      customNonNumericStatistics: outputCustomNonNumeric,
+      debug: debugRecord
+    };
   }
 
   const progressTotal = settings.sequentialExtraction
@@ -207,6 +223,7 @@ export async function extractStatisticsParallel(input: {
       mood: {} as Record<string, string>,
       lastThought: {} as Record<string, string>,
       customStatistics: {} as Record<string, Record<string, number>>,
+      customNonNumericStatistics: {} as Record<string, Record<string, string | boolean>>,
     };
     const moodFallbackApplied = new Set<string>();
     const parsed = {
@@ -217,6 +234,7 @@ export async function extractStatisticsParallel(input: {
         desire: {} as Record<string, number>,
         connection: {} as Record<string, number>,
         custom: {} as Record<string, Record<string, number>>,
+        customNonNumeric: {} as Record<string, Record<string, string | boolean>>,
       },
       mood: {} as Record<string, string>,
       lastThought: {} as Record<string, string>,
@@ -308,6 +326,28 @@ export async function extractStatisticsParallel(input: {
       }
     };
 
+    const applyParsedForCustomNonNumericStat = (
+      statDef: CustomStatDefinition,
+      parsedOne: ReturnType<typeof parseCustomValueResponse>,
+      requestCharacters: string[],
+    ): void => {
+      const statId = statDef.id;
+      if (!parsed.deltas.customNonNumeric) parsed.deltas.customNonNumeric = {};
+      if (!parsed.deltas.customNonNumeric[statId]) parsed.deltas.customNonNumeric[statId] = {};
+      if (!applied.customNonNumericStatistics[statId]) applied.customNonNumericStatistics[statId] = {};
+      if (!outputCustomNonNumeric[statId]) outputCustomNonNumeric[statId] = {};
+      for (const [name, value] of Object.entries(parsedOne.confidence)) {
+        parsed.confidence[name] = value;
+      }
+      for (const name of requestCharacters) {
+        const value = parsedOne.value[name];
+        if (value === undefined) continue;
+        parsed.deltas.customNonNumeric[statId][name] = value;
+        outputCustomNonNumeric[statId][name] = value;
+        applied.customNonNumericStatistics[statId][name] = value;
+      }
+    };
+
     const seedCustomStatDefaultsForNames = (
       statDef: CustomStatDefinition,
       names: string[],
@@ -323,11 +363,38 @@ export async function extractStatisticsParallel(input: {
       }
     };
 
+    const seedCustomNonNumericStatDefaultsForNames = (
+      statDef: CustomStatDefinition,
+      names: string[],
+    ): void => {
+      if (!names.length) return;
+      const statId = statDef.id;
+      if (!applied.customNonNumericStatistics[statId]) applied.customNonNumericStatistics[statId] = {};
+      if (!outputCustomNonNumeric[statId]) outputCustomNonNumeric[statId] = {};
+      const kind = statDef.kind ?? "numeric";
+      for (const name of names) {
+        let seedValue: string | boolean;
+        const previous = previousCustomNonNumericStatistics?.[statId]?.[name];
+        if (previous !== undefined) {
+          seedValue = previous;
+        } else if (kind === "boolean") {
+          seedValue = typeof statDef.defaultValue === "boolean" ? statDef.defaultValue : false;
+        } else {
+          seedValue = String(statDef.defaultValue ?? "").trim();
+        }
+        outputCustomNonNumeric[statId][name] = seedValue;
+        applied.customNonNumericStatistics[statId][name] = seedValue;
+      }
+    };
+
     const splitCustomCharactersByBaseline = (
       statId: string,
+      kind: "numeric" | "non_numeric",
     ): { existing: string[]; firstRunSeedOnly: string[] } => {
       const hasPrior = Boolean(hasPriorTrackerData);
-      const rawMap = previousCustomStatisticsRaw?.[statId] ?? {};
+      const rawMap = kind === "numeric"
+        ? (previousCustomStatisticsRaw?.[statId] ?? {})
+        : (previousCustomNonNumericStatistics?.[statId] ?? {});
       const existing: string[] = [];
       const firstRunSeedOnly: string[] = [];
       for (const name of activeCharacters) {
@@ -480,55 +547,110 @@ export async function extractStatisticsParallel(input: {
     const runOneCustomRequest = async (
       statDef: CustomStatDefinition,
       requestCharacters: string[],
-    ): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseCustomDeltaResponse> }> => {
+    ): Promise<{
+      prompt: string;
+      raw: string;
+      parsedNumeric?: ReturnType<typeof parseCustomDeltaResponse>;
+      parsedNonNumeric?: ReturnType<typeof parseCustomValueResponse>;
+    }> => {
       checkCancelled();
       const label = statDef.label || statDef.id;
       const statId = statDef.id;
-      const prompt = buildSequentialCustomNumericPrompt({
-        statId,
-        statLabel: label,
-        statDescription: statDef.description,
-        statDefault: statDef.defaultValue,
-        maxDeltaPerTurn: statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
-        userName,
-        characters: requestCharacters,
-        contextText,
-        current: previousStatistics,
-        currentCustom: previousCustomStatistics ?? {},
-        history,
-        template: statDef.sequentialPromptTemplate
-          || settings.promptTemplateSequentialCustomNumeric
-          || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
-      });
+      const kind = statDef.kind ?? "numeric";
+      const prompt = kind === "numeric"
+        ? buildSequentialCustomNumericPrompt({
+          statId,
+          statLabel: label,
+          statDescription: statDef.description,
+          statDefault: Number(statDef.defaultValue),
+          maxDeltaPerTurn: statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
+          userName,
+          characters: requestCharacters,
+          contextText,
+          current: previousStatistics,
+          currentCustom: previousCustomStatistics ?? {},
+          history,
+          template: statDef.sequentialPromptTemplate
+            || settings.promptTemplateSequentialCustomNumeric
+            || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
+        })
+        : buildSequentialCustomNonNumericPrompt({
+          statId,
+          statKind: kind,
+          statLabel: label,
+          statDescription: statDef.description,
+          statDefault: typeof statDef.defaultValue === "boolean" ? statDef.defaultValue : String(statDef.defaultValue ?? ""),
+          enumOptions: statDef.enumOptions,
+          textMaxLength: statDef.textMaxLength,
+          booleanTrueLabel: statDef.booleanTrueLabel,
+          booleanFalseLabel: statDef.booleanFalseLabel,
+          userName,
+          characters: requestCharacters,
+          contextText,
+          current: previousStatistics,
+          currentCustomNonNumeric: previousCustomNonNumericStatistics ?? {},
+          history,
+          template: statDef.sequentialPromptTemplate
+            || settings.promptTemplateSequentialCustomNonNumeric
+            || DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
+        });
       tickProgress(`Requesting ${label}`);
       let rawResponse = await callGenerate(prompt, [statId], "initial");
       checkCancelled();
       let raw = rawResponse.text;
       tickProgress(`Parsing ${label}`);
-      let parsedOne = parseCustomDeltaResponse(raw, requestCharacters, statId, statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn);
-      const firstHasValues = hasAnyValues(parsedOne.delta);
+      let parsedNumeric = kind === "numeric"
+        ? parseCustomDeltaResponse(raw, requestCharacters, statId, statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn)
+        : undefined;
+      let parsedNonNumeric = kind === "numeric"
+        ? undefined
+        : parseCustomValueResponse(raw, requestCharacters, statId, kind, {
+          enumOptions: statDef.enumOptions,
+          textMaxLength: statDef.textMaxLength,
+        });
+      const firstHasValues = kind === "numeric"
+        ? hasAnyValues(parsedNumeric?.delta ?? {})
+        : hasAnyValues(parsedNonNumeric?.value ?? {});
       firstParseHadValues = firstParseHadValues && firstHasValues;
       let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
-      while (!hasAnyValues(parsedOne.delta) && retriesLeft > 0 && settings.strictJsonRepair) {
+      while (
+        !(kind === "numeric"
+          ? hasAnyValues(parsedNumeric?.delta ?? {})
+          : hasAnyValues(parsedNonNumeric?.value ?? {})) &&
+        retriesLeft > 0 &&
+        settings.strictJsonRepair
+      ) {
         const strictPrompt = buildStrictJsonRetryPrompt(prompt);
         retryUsed = true;
         retriesLeft -= 1;
         const strictResponse = await callGenerate(strictPrompt, [statId], "strict_loop");
         checkCancelled();
-        const strictParsed = parseCustomDeltaResponse(
-          strictResponse.text,
-          requestCharacters,
-          statId,
-          statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
-        );
-        if (hasAnyValues(strictParsed.delta)) {
-          raw = strictResponse.text;
-          parsedOne = strictParsed;
-          break;
+        if (kind === "numeric") {
+          const strictParsed = parseCustomDeltaResponse(
+            strictResponse.text,
+            requestCharacters,
+            statId,
+            statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
+          );
+          if (hasAnyValues(strictParsed.delta)) {
+            raw = strictResponse.text;
+            parsedNumeric = strictParsed;
+            break;
+          }
+        } else {
+          const strictParsed = parseCustomValueResponse(strictResponse.text, requestCharacters, statId, kind, {
+            enumOptions: statDef.enumOptions,
+            textMaxLength: statDef.textMaxLength,
+          });
+          if (hasAnyValues(strictParsed.value)) {
+            raw = strictResponse.text;
+            parsedNonNumeric = strictParsed;
+            break;
+          }
         }
       }
       tickProgress(`Applying ${label}`);
-      return { prompt, raw, parsedOne };
+      return { prompt, raw, parsedNumeric, parsedNonNumeric };
     };
 
     if (!settings.sequentialExtraction) {
@@ -549,8 +671,13 @@ export async function extractStatisticsParallel(input: {
           checkCancelled();
           const statDef = customQueue.shift();
           if (!statDef) return;
-          const split = splitCustomCharactersByBaseline(statDef.id);
-          seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
+          const split = splitCustomCharactersByBaseline(statDef.id, kind);
+          if (kind === "numeric") {
+            seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          } else {
+            seedCustomNonNumericStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          }
           if (!split.existing.length) {
             const label = statDef.label || statDef.id;
             tickProgress(`Seeding ${label}`);
@@ -562,7 +689,11 @@ export async function extractStatisticsParallel(input: {
           checkCancelled();
           rawBlocks.push({ label: `custom:${statDef.id}`, raw: one.raw });
           promptBlocks.push({ label: `custom:${statDef.id}`, prompt: one.prompt });
-          applyParsedForCustomStat(statDef, one.parsedOne, split.existing);
+          if ((statDef.kind ?? "numeric") === "numeric") {
+            if (one.parsedNumeric) applyParsedForCustomStat(statDef, one.parsedNumeric, split.existing);
+          } else {
+            if (one.parsedNonNumeric) applyParsedForCustomNonNumericStat(statDef, one.parsedNonNumeric, split.existing);
+          }
         }
       };
       await Promise.all(Array.from({ length: customWorkers }, () => runCustomWorker()));
@@ -590,8 +721,13 @@ export async function extractStatisticsParallel(input: {
           checkCancelled();
           const statDef = customQueue.shift();
           if (!statDef) return;
-          const split = splitCustomCharactersByBaseline(statDef.id);
-          seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
+          const split = splitCustomCharactersByBaseline(statDef.id, kind);
+          if (kind === "numeric") {
+            seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          } else {
+            seedCustomNonNumericStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          }
           if (!split.existing.length) {
             const label = statDef.label || statDef.id;
             tickProgress(`Seeding ${label}`);
@@ -603,7 +739,11 @@ export async function extractStatisticsParallel(input: {
           checkCancelled();
           rawBlocks.push({ label: `custom:${statDef.id}`, raw: one.raw });
           promptBlocks.push({ label: `custom:${statDef.id}`, prompt: one.prompt });
-          applyParsedForCustomStat(statDef, one.parsedOne, split.existing);
+          if ((statDef.kind ?? "numeric") === "numeric") {
+            if (one.parsedNumeric) applyParsedForCustomStat(statDef, one.parsedNumeric, split.existing);
+          } else {
+            if (one.parsedNonNumeric) applyParsedForCustomNonNumericStat(statDef, one.parsedNonNumeric, split.existing);
+          }
         }
       };
       await Promise.all(Array.from({ length: customWorkers }, () => runCustomWorker()));
@@ -641,6 +781,7 @@ export async function extractStatisticsParallel(input: {
           mood: countMapValues(parsed.mood),
           lastThought: countMapValues(parsed.lastThought),
           customByStat: countMapValuesByStat(parsed.deltas.custom),
+          customNonNumericByStat: countMapValuesByStat(parsed.deltas.customNonNumeric ?? {}),
         },
         appliedCounts: {
           affection: countMapValues(applied.affection),
@@ -650,6 +791,7 @@ export async function extractStatisticsParallel(input: {
           mood: countMapValues(applied.mood),
           lastThought: countMapValues(applied.lastThought),
           customByStat: countMapValuesByStat(applied.customStatistics),
+          customNonNumericByStat: countMapValuesByStat(applied.customNonNumericStatistics ?? {}),
         },
         moodFallbackApplied: Array.from(moodFallbackApplied),
         requests: requestMetas
@@ -674,5 +816,10 @@ export async function extractStatisticsParallel(input: {
     if (!output[key]) output[key] = {};
   }
 
-  return { statistics: output, customStatistics: outputCustom, debug: debugRecord };
+  return {
+    statistics: output,
+    customStatistics: outputCustom,
+    customNonNumericStatistics: outputCustomNonNumeric,
+    debug: debugRecord
+  };
 }
