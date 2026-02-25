@@ -2,6 +2,17 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.1] - 2026-02-25
+### Changed
+- Renamed custom prompt UI labels for clarity:
+  - `Sequential Prompt Override` -> `Per-Stat Prompt Override`
+  - `Seq: Custom Numeric` -> `Custom Numeric Default`
+  - `Seq: Custom Non-Numeric` -> `Custom Non-Numeric Default`
+- Prompt captions, placeholders, and tooltips now explicitly state that custom per-stat prompt templates are used in all extraction modes.
+
+### Fixed
+- Removed confusion where users could assume custom prompt overrides only apply in sequential mode.
+
 ## [2.1.0] - 2026-02-25
 ### Added
 - Non-numeric custom stat support with new kinds: `enum_single`, `boolean`, and `text_short`.

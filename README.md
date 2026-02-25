@@ -14,7 +14,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Polished extension settings modal with sticky header/footer actions and one-click `Expand all` / `Collapse all` section control
 - Settings checkboxes now use consistent round accent-matched styling across ST themes/mobile UI overrides
 - Built-in stats manager wizard with unified `Enabled` toggle (`Track + Card + Graph`) plus `Inject` control for numeric built-ins
-- Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric + non-numeric custom stats, max 8 total, color picker + hex input, AI-assisted description improvement, AI generation for stat-specific Sequential Prompt Override, optional behavior-injection guidance with AI generation)
+- Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric + non-numeric custom stats, max 8 total, color picker + hex input, AI-assisted description improvement, AI generation for stat-specific Per-Stat Prompt Override, optional behavior-injection guidance with AI generation)
 - Retrack button (regenerate tracker for last AI message)
 - Summarize button (AI-generated detailed prose summary, 4-6 sentences, grounded in currently tracked dimensions, no numeric stat values; with settings to make the note AI-visible and/or inject it into prompt guidance)
 - Edit last tracker stats inline (pencil icon on the latest card; numeric clamp + mood picker + last thought editor + kind-aware custom non-numeric editors)
@@ -332,11 +332,11 @@ Behavior notes:
   - numeric custom stats use unified `Enabled` toggle (`Track + Card + Graph`) plus `includeInInjection`
   - non-numeric custom stats use `Track + Card` plus `includeInInjection` (not graphed in current version)
   - `Improve description with AI` (Basics step) rewrites the current description draft into a clearer extraction-focused definition
-  - `Generate with AI` (Tracking Behavior step) drafts a stat-specific `Sequential Prompt Override` from required `Label`, `ID`, and `Description` with kind-aware schema constraints
+  - `Generate with AI` (Tracking Behavior step) drafts a stat-specific `Per-Stat Prompt Override` from required `Label`, `ID`, and `Description` with kind-aware schema constraints
   - `Generate with AI` (Behavior Injection step) drafts richer optional guidance lines used only in prompt injection for this custom stat (`low/medium/high` behavior + `increase/decrease` evidence cues)
-  - custom sequential prompt precedence:
-    - numeric stat: per-stat override -> global `Seq: Custom Numeric` -> built-in numeric default
-    - non-numeric stat: per-stat override -> global `Seq: Custom Non-Numeric` -> built-in non-numeric default
+  - custom per-stat prompt precedence:
+    - numeric stat: per-stat override -> global `Custom Numeric Default` -> built-in numeric default
+    - non-numeric stat: per-stat override -> global `Custom Non-Numeric Default` -> built-in non-numeric default
 - `Mood Source` (`BST mood images` or `ST expressions`)
 - `Global Mood -> ST Expression Map` (editable in settings when `Mood Source = ST expressions`)
 - `Preview Character` selector (inside framing modal, below preview): includes only characters with ST expressions and drives global framing preview
@@ -373,8 +373,8 @@ Two editable prompt types are supported:
 
 - Unified prompt: used when sequential extraction is off.
 - Per-stat prompts: used in sequential mode (`affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`).
-- `Seq: Custom Numeric` prompt: global default for custom stat sequential extraction when a custom stat does not define its own template override.
-- `Seq: Custom Non-Numeric` prompt: global default for `enum_single` / `boolean` / `text_short` custom stat sequential extraction when a custom stat does not define its own template override.
+- `Custom Numeric Default` prompt: global default for custom numeric per-stat extraction in all modes when a custom stat does not define its own template override.
+- `Custom Non-Numeric Default` prompt: global default for `enum_single` / `boolean` / `text_short` per-stat extraction in all modes when a custom stat does not define its own template override.
 - Default desire prompt guardrail: only increase desire when the recent messages are explicitly romantic/sexual; non-romantic context should be 0 or negative.
 
 Each prompt instruction can be reset to its default with the per-prompt reset button. Protocol blocks are read-only.
@@ -392,8 +392,8 @@ Available placeholders:
 - `{{textStats}}`: requested text stats list.
 - `{{maxDelta}}`: configured max delta per turn.
 - `{{moodOptions}}`: allowed mood labels.
-- `{{statId}}` / `{{statLabel}}`: custom stat id/label (custom sequential templates).
-- `{{statDescription}}` / `{{statDefault}}`: custom stat metadata (custom sequential templates).
+- `{{statId}}` / `{{statLabel}}`: custom stat id/label (custom per-stat templates).
+- `{{statDescription}}` / `{{statDefault}}`: custom stat metadata (custom per-stat templates).
 - `{{statKind}}`: custom stat kind for kind-aware templates.
 - `{{allowedValues}}`: enum options list (`enum_single` only).
 - `{{valueSchema}}`: expected output schema for non-numeric extraction.
