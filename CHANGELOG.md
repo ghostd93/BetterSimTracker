@@ -14,10 +14,12 @@ All notable changes to BetterSimTracker are documented here.
 - Tracker cards now render non-numeric custom stats as compact value chips.
 - Custom stat settings UI now treats custom stats as mixed-type definitions instead of numeric-only.
 - Prompt generation and extraction contracts now include non-numeric schema guidance and macros.
+- AI guidance generation now separates intent by field: `Sequential Prompt Override` is extraction-focused, while `Behavior Instruction` is reaction-focused for prompt injection.
 
 ### Fixed
 - Prompt injection now still renders when only non-numeric custom stats are enabled.
 - Non-numeric seeded defaults are now normalized by stat kind to prevent invalid enum/boolean/text carry-over values.
+- `Generate with AI` for behavior guidance no longer produces extraction-style update cues.
 
 ## [2.0.7.3] - 2026-02-25
 ### Changed
