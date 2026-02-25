@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.2] - 2026-02-25
+### Fixed
+- Non-numeric custom stat chips (including `text_short`) no longer truncate long values on mobile; values now wrap cleanly instead of clipping with ellipsis.
+
 ## [2.1.0.1] - 2026-02-25
 ### Changed
 - Renamed custom prompt UI labels for clarity:
