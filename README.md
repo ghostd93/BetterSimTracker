@@ -127,20 +127,20 @@ flowchart TD
   B -- No --> Z[Skip tracker update]
   B -- Yes --> C[Resolve active characters]
   C --> D[Load previous tracker state]
-  D --> E[Resolve enabled built-in/text + custom stats]
-  E --> F{Built-in/text mode}
-  F -- Unified (sequentialExtraction=false) --> G[Single built-in/text request]
-  F -- Sequential (sequentialExtraction=true) --> H[Per built-in/text stat requests]
-  G --> I[Parse + apply built-in numeric deltas, mood, lastThought]
+  D --> E[Resolve enabled built in text and custom stats]
+  E --> F{Built in text mode}
+  F -- Unified mode --> G[Single built in text request]
+  F -- Sequential mode --> H[Per stat built in text requests]
+  G --> I[Parse and apply built in numeric deltas mood lastThought]
   H --> I
-  I --> J[Custom stats phase (always per-stat)]
+  I --> J[Custom stats phase always per stat]
   J --> K{Per custom stat and character baseline}
   K --> L{Prior baseline exists?}
   L -- No --> M[Seed stat default only (no model request)]
   L -- Yes --> N[Request and parse custom stat]
   N --> O{Custom stat kind}
   O -- Numeric --> P[Apply numeric delta scaling + clamp]
-  O -- Non-numeric --> Q[Validate enum/boolean/text_short and apply]
+  O -- Non numeric --> Q[Validate enum boolean text_short and apply]
   M --> R[Merge missing fields from previous/defaults]
   P --> R
   Q --> R
@@ -156,19 +156,19 @@ flowchart TD
   A[Numeric input: previous value, parsed delta, parsed confidence] --> B{Confidence present?}
   B -- No --> C[Fallback confidence: 0.8]
   B -- Yes --> D[Use parsed confidence]
-  C --> E[Clamp confidence to 0..1]
+  C --> E[Clamp confidence to range 0 to 1]
   D --> E
-  E --> F[Clamp delta by limit (built-in or custom override)]
-  F --> G[Scale: (1-dampening) + confidence*dampening]
-  G --> H[scaledDelta = round(clampedDelta*scale)]
-  H --> I[next = clamp(previous + scaledDelta, 0..100)]
+  E --> F[Clamp delta by limit built in or custom override]
+  F --> G[Compute scale from confidence and dampening]
+  G --> H[Compute scaled delta]
+  H --> I[Compute next value and clamp to range 0 to 100]
   I --> J[Save numeric stat]
   K[Mood input: previous mood, parsed mood, parsed confidence] --> L{confidence < Mood Stickiness?}
   L -- Yes --> M[Keep previous mood]
   L -- No --> N[Apply parsed mood]
   M --> O[Save mood]
   N --> O
-  P[Custom non-numeric input: parsed value + kind] --> Q{Kind}
+  P[Custom non numeric input parsed value and kind] --> Q{Kind}
   Q -- enum_single --> R[Accept only configured enum token]
   Q -- boolean --> S[Accept strict true/false]
   Q -- text_short --> T[Trim and enforce max length]
