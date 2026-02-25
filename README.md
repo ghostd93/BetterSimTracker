@@ -136,7 +136,7 @@ flowchart TD
   I --> J[Custom stats phase always per stat]
   J --> K{Per custom stat and character baseline}
   K --> L{Prior baseline exists?}
-  L -- No --> M[Seed stat default only (no model request)]
+  L -- No --> M[Seed stat default only no model request]
   L -- Yes --> N[Request and parse custom stat]
   N --> O{Custom stat kind}
   O -- Numeric --> P[Apply numeric delta scaling + clamp]
