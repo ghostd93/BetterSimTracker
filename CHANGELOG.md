@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [Unreleased]
+### Added
+- New technical documentation set under `docs/` covering architecture, data model, extraction pipeline, prompt system, UI system, and operations workflow.
+
+### Changed
+- README now includes a `Technical Documentation` section linking maintainers to the internal docs set.
+
 ## [2.1.0] - 2026-02-25
 ### Added
 - Non-numeric custom stat support with new kinds: `enum_single`, `boolean`, and `text_short`.

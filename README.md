@@ -94,6 +94,18 @@ npm install
 npm run build
 ```
 
+## Technical Documentation
+
+Maintainer-focused technical docs are available in `docs/`:
+
+- `docs/README.md` (index)
+- `docs/architecture.md`
+- `docs/data-model.md`
+- `docs/extraction-pipeline.md`
+- `docs/prompt-system.md`
+- `docs/ui-system.md`
+- `docs/operations.md`
+
 ## Quick Usage
 
 1. Send/generate an AI message.
