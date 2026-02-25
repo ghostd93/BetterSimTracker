@@ -14,6 +14,7 @@ import {
 import { fetchExpressionSpritePaths, fetchFirstExpressionSprite } from "./stExpressionSprites";
 import type {
   BetterSimTrackerSettings,
+  CustomStatKind,
   CustomStatDefinition,
   MoodExpressionMap,
   MoodLabel,
@@ -252,6 +253,32 @@ function clampStat(value: string): number | null {
   const num = Number(value);
   if (Number.isNaN(num)) return null;
   return Math.max(0, Math.min(100, Math.round(num)));
+}
+
+function normalizeCustomStatKind(value: unknown): CustomStatKind {
+  if (value === "enum_single" || value === "boolean" || value === "text_short") return value;
+  return "numeric";
+}
+
+function normalizeCustomEnumOptions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const token = String(item ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 32);
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    out.push(token);
+    if (out.length >= 12) break;
+  }
+  return out;
 }
 
 function clampPercentInputElement(input: HTMLInputElement): void {
@@ -556,8 +583,11 @@ function renderPanel(input: InitInput, force = false): void {
   const customStatDefinitions = Array.isArray(settings.customStats)
     ? settings.customStats as CustomStatDefinition[]
     : [];
-  const customStatDefaultsRaw = defaults.customStatDefaults && typeof defaults.customStatDefaults === "object"
+  const customNumericDefaultsRaw = defaults.customStatDefaults && typeof defaults.customStatDefaults === "object"
     ? defaults.customStatDefaults as Record<string, unknown>
+    : {};
+  const customNonNumericDefaultsRaw = defaults.customNonNumericStatDefaults && typeof defaults.customNonNumericStatDefaults === "object"
+    ? defaults.customNonNumericStatDefaults as Record<string, unknown>
     : {};
   const normalizedCardColor = typeof defaults.cardColor === "string"
     ? normalizeHexColor(defaults.cardColor) ?? ""
@@ -567,12 +597,52 @@ function renderPanel(input: InitInput, force = false): void {
     const id = String(definition.id ?? "").trim().toLowerCase();
     const label = String(definition.label ?? "").trim();
     if (!id || !label) return "";
-    const rawValue = customStatDefaultsRaw[id];
-    const value = typeof rawValue === "number" && Number.isFinite(rawValue)
-      ? String(Math.max(0, Math.min(100, Math.round(rawValue))))
-      : "";
+    const kind = normalizeCustomStatKind(definition.kind);
+    if (kind === "numeric") {
+      const rawValue = customNumericDefaultsRaw[id];
+      const value = typeof rawValue === "number" && Number.isFinite(rawValue)
+        ? String(Math.max(0, Math.min(100, Math.round(rawValue))))
+        : "";
+      return `
+        <label>${escapeHtml(label)} Default
+          <input type="number" min="0" max="100" step="1" data-bst-custom-default-num="${escapeHtml(id)}" value="${escapeHtml(value)}" placeholder="Use stat default">
+        </label>
+      `;
+    }
+    if (kind === "enum_single") {
+      const options = normalizeCustomEnumOptions(definition.enumOptions);
+      const rawValue = String(customNonNumericDefaultsRaw[id] ?? "").trim().toLowerCase();
+      const selected = options.includes(rawValue) ? rawValue : "";
+      return `
+        <label>${escapeHtml(label)} Default
+          <select data-bst-custom-default-enum="${escapeHtml(id)}">
+            <option value="">Use stat default</option>
+            ${options.map(option => `<option value="${escapeHtml(option)}" ${selected === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+          </select>
+        </label>
+      `;
+    }
+    if (kind === "boolean") {
+      const rawValue = customNonNumericDefaultsRaw[id];
+      const selected = typeof rawValue === "boolean" ? String(rawValue) : "";
+      const trueLabel = String(definition.booleanTrueLabel ?? "enabled").trim() || "enabled";
+      const falseLabel = String(definition.booleanFalseLabel ?? "disabled").trim() || "disabled";
+      return `
+        <label>${escapeHtml(label)} Default
+          <select data-bst-custom-default-bool="${escapeHtml(id)}">
+            <option value="">Use stat default</option>
+            <option value="true" ${selected === "true" ? "selected" : ""}>${escapeHtml(trueLabel)}</option>
+            <option value="false" ${selected === "false" ? "selected" : ""}>${escapeHtml(falseLabel)}</option>
+          </select>
+        </label>
+      `;
+    }
+    const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
+    const rawValue = String(customNonNumericDefaultsRaw[id] ?? "").trim().replace(/\s+/g, " ");
     return `
-      <label>${escapeHtml(label)} Default <input type="number" min="0" max="100" step="1" data-bst-custom-default="${escapeHtml(id)}" value="${escapeHtml(value)}"></label>
+      <label>${escapeHtml(label)} Default
+        <input type="text" maxlength="${maxLength}" data-bst-custom-default-text="${escapeHtml(id)}" value="${escapeHtml(rawValue)}" placeholder="Use stat default">
+      </label>
     `;
   }).filter(Boolean).join("");
   const getLiveSettings = (): BetterSimTrackerSettings => input.getSettings() ?? settings;
@@ -701,7 +771,7 @@ function renderPanel(input: InitInput, force = false): void {
     nameInput.addEventListener("input", () => renderPanel(input, false));
   }
 
-  panel.querySelectorAll<HTMLInputElement>('input[type="number"][data-bst-default], input[type="number"][data-bst-custom-default]').forEach(node => {
+  panel.querySelectorAll<HTMLInputElement>('input[type="number"][data-bst-default], input[type="number"][data-bst-custom-default-num]').forEach(node => {
     node.min = "0";
     node.max = "100";
     node.step = "1";
@@ -790,9 +860,9 @@ function renderPanel(input: InitInput, force = false): void {
     });
   });
 
-  panel.querySelectorAll<HTMLInputElement>("[data-bst-custom-default]").forEach(node => {
+  panel.querySelectorAll<HTMLInputElement>("[data-bst-custom-default-num]").forEach(node => {
     node.addEventListener("change", () => {
-      const id = String(node.dataset.bstCustomDefault ?? "").trim().toLowerCase();
+      const id = String(node.dataset.bstCustomDefaultNum ?? "").trim().toLowerCase();
       if (!id) return;
       const num = clampStat(node.value);
       node.value = num == null ? "" : String(num);
@@ -810,6 +880,87 @@ function renderPanel(input: InitInput, force = false): void {
           delete copy.customStatDefaults;
         } else {
           copy.customStatDefaults = existing;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLSelectElement>("[data-bst-custom-default-enum]").forEach(node => {
+    node.addEventListener("change", () => {
+      const id = String(node.dataset.bstCustomDefaultEnum ?? "").trim().toLowerCase();
+      if (!id) return;
+      const value = String(node.value ?? "").trim().toLowerCase();
+      const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
+        const copy = { ...current };
+        const existing = copy.customNonNumericStatDefaults && typeof copy.customNonNumericStatDefaults === "object"
+          ? { ...(copy.customNonNumericStatDefaults as Record<string, unknown>) }
+          : {};
+        if (!value) {
+          delete existing[id];
+        } else {
+          existing[id] = value;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.customNonNumericStatDefaults;
+        } else {
+          copy.customNonNumericStatDefaults = existing;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLSelectElement>("[data-bst-custom-default-bool]").forEach(node => {
+    node.addEventListener("change", () => {
+      const id = String(node.dataset.bstCustomDefaultBool ?? "").trim().toLowerCase();
+      if (!id) return;
+      const raw = String(node.value ?? "").trim().toLowerCase();
+      const value = raw === "true" ? true : raw === "false" ? false : null;
+      const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
+        const copy = { ...current };
+        const existing = copy.customNonNumericStatDefaults && typeof copy.customNonNumericStatDefaults === "object"
+          ? { ...(copy.customNonNumericStatDefaults as Record<string, unknown>) }
+          : {};
+        if (value == null) {
+          delete existing[id];
+        } else {
+          existing[id] = value;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.customNonNumericStatDefaults;
+        } else {
+          copy.customNonNumericStatDefaults = existing;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLInputElement>("[data-bst-custom-default-text]").forEach(node => {
+    node.addEventListener("change", () => {
+      const id = String(node.dataset.bstCustomDefaultText ?? "").trim().toLowerCase();
+      if (!id) return;
+      const maxLength = Math.max(20, Math.min(200, Math.round(Number(node.maxLength) || 120)));
+      const value = String(node.value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
+      node.value = value;
+      const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
+        const copy = { ...current };
+        const existing = copy.customNonNumericStatDefaults && typeof copy.customNonNumericStatDefaults === "object"
+          ? { ...(copy.customNonNumericStatDefaults as Record<string, unknown>) }
+          : {};
+        if (!value) {
+          delete existing[id];
+        } else {
+          existing[id] = value;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.customNonNumericStatDefaults;
+        } else {
+          copy.customNonNumericStatDefaults = existing;
         }
         return copy;
       });

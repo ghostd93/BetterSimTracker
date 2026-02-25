@@ -1,6 +1,7 @@
 import { CUSTOM_STAT_ID_REGEX, EXTENSION_KEY, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS } from "./constants";
 import {
   DEFAULT_INJECTION_PROMPT_TEMPLATE,
+  DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
@@ -101,6 +102,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.desire,
   promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
   promptTemplateSequentialCustomNumeric: DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
+  promptTemplateSequentialCustomNonNumeric: DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
   promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
   promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
   promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
@@ -503,6 +505,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     promptTemplateSequentialDesire: normalizeInstruction(input.promptTemplateSequentialDesire, defaultSettings.promptTemplateSequentialDesire).slice(0, 20000),
     promptTemplateSequentialConnection: normalizeInstruction(input.promptTemplateSequentialConnection, defaultSettings.promptTemplateSequentialConnection).slice(0, 20000),
     promptTemplateSequentialCustomNumeric: normalizeInstruction(input.promptTemplateSequentialCustomNumeric, defaultSettings.promptTemplateSequentialCustomNumeric).slice(0, 20000),
+    promptTemplateSequentialCustomNonNumeric: normalizeInstruction(input.promptTemplateSequentialCustomNonNumeric, defaultSettings.promptTemplateSequentialCustomNonNumeric).slice(0, 20000),
     promptTemplateSequentialMood: normalizeInstruction(input.promptTemplateSequentialMood, defaultSettings.promptTemplateSequentialMood).slice(0, 20000),
     promptTemplateSequentialLastThought: normalizeInstruction(input.promptTemplateSequentialLastThought, defaultSettings.promptTemplateSequentialLastThought).slice(0, 20000),
     promptTemplateInjection: normalizeInstruction(input.promptTemplateInjection, defaultSettings.promptTemplateInjection).slice(0, 20000),
@@ -609,6 +612,25 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
   if (!Array.isArray(raw)) return [];
   const out: BetterSimTrackerSettings["customStats"] = [];
   const seen = new Set<string>();
+  const normalizeKind = (value: unknown): "numeric" | "enum_single" | "boolean" | "text_short" => {
+    if (value === "enum_single" || value === "boolean" || value === "text_short") return value;
+    return "numeric";
+  };
+  const normalizeEnumOptions = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    const seenValues = new Set<string>();
+    const outValues: string[] = [];
+    for (const item of value) {
+      const token = String(item ?? "").trim().toLowerCase();
+      if (!token) continue;
+      if (!/^[a-z0-9_][a-z0-9_\- ]{0,38}[a-z0-9_]$/.test(token)) continue;
+      if (seenValues.has(token)) continue;
+      seenValues.add(token);
+      outValues.push(token);
+      if (outValues.length >= 12) break;
+    }
+    return outValues;
+  };
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const obj = item as Record<string, unknown>;
@@ -633,19 +655,58 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
     const template = typeof obj.sequentialPromptTemplate === "string"
       ? obj.sequentialPromptTemplate.trim().slice(0, 20000)
       : "";
+    const kind = normalizeKind(obj.kind);
+    const enumOptions = normalizeEnumOptions(obj.enumOptions);
+    const textMaxLength = clampInt(obj.textMaxLength, 120, 20, 200);
+    const booleanTrueLabel = typeof obj.booleanTrueLabel === "string"
+      ? obj.booleanTrueLabel.trim().slice(0, 40)
+      : "";
+    const booleanFalseLabel = typeof obj.booleanFalseLabel === "string"
+      ? obj.booleanFalseLabel.trim().slice(0, 40)
+      : "";
+
+    const resolveDefaultValue = (): number | string | boolean => {
+      if (kind === "numeric") {
+        return clampInt(obj.defaultValue, 50, 0, 100);
+      }
+      if (kind === "boolean") {
+        if (typeof obj.defaultValue === "boolean") return obj.defaultValue;
+        if (typeof obj.defaultValue === "string") {
+          const cleaned = obj.defaultValue.trim().toLowerCase();
+          if (cleaned === "true") return true;
+          if (cleaned === "false") return false;
+        }
+        return false;
+      }
+      if (kind === "enum_single") {
+        const fallback = enumOptions[0] ?? "state";
+        const rawDefault = typeof obj.defaultValue === "string" ? obj.defaultValue.trim().toLowerCase() : "";
+        if (rawDefault && enumOptions.includes(rawDefault)) return rawDefault;
+        return fallback;
+      }
+      const text = typeof obj.defaultValue === "string" ? obj.defaultValue.trim().replace(/\s+/g, " ") : "";
+      return text.slice(0, textMaxLength);
+    };
 
     const entry = {
       id,
+      kind,
       label,
       description: description || undefined,
       behaviorGuidance: behaviorGuidance || undefined,
-      defaultValue: clampInt(obj.defaultValue, 50, 0, 100),
-      maxDeltaPerTurn: obj.maxDeltaPerTurn === undefined
-        ? undefined
-        : clampInt(obj.maxDeltaPerTurn, 15, 1, 30),
+      defaultValue: resolveDefaultValue(),
+      maxDeltaPerTurn: kind === "numeric"
+        ? (obj.maxDeltaPerTurn === undefined
+          ? undefined
+          : clampInt(obj.maxDeltaPerTurn, 15, 1, 30))
+        : undefined,
+      enumOptions: kind === "enum_single" ? enumOptions : undefined,
+      booleanTrueLabel: kind === "boolean" ? (booleanTrueLabel || "enabled") : undefined,
+      booleanFalseLabel: kind === "boolean" ? (booleanFalseLabel || "disabled") : undefined,
+      textMaxLength: kind === "text_short" ? textMaxLength : undefined,
       track: asBool(obj.track, true),
       showOnCard: asBool(obj.showOnCard, true),
-      showInGraph: asBool(obj.showInGraph, true),
+      showInGraph: kind === "numeric" ? asBool(obj.showInGraph, true) : false,
       includeInInjection: asBool(obj.includeInInjection, true),
       color: color || undefined,
       sequentialPromptTemplate: template || undefined,
@@ -659,14 +720,57 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
 
 function sanitizeCustomStatDefaults(
   raw: unknown,
-  allowedIds: Set<string>,
+  customStats: BetterSimTrackerSettings["customStats"],
 ): Record<string, number> | null {
   if (!raw || typeof raw !== "object") return null;
+  const allowedIds = new Set(customStats.filter(stat => (stat.kind ?? "numeric") === "numeric").map(stat => stat.id));
   const out: Record<string, number> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const id = key.trim().toLowerCase();
     if (!id || !allowedIds.has(id)) continue;
     out[id] = clampInt(value, 50, 0, 100);
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function sanitizeCustomNonNumericStatDefaults(
+  raw: unknown,
+  customStats: BetterSimTrackerSettings["customStats"],
+): Record<string, string | boolean> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const byId = new Map(customStats.map(stat => [stat.id, stat]));
+  const out: Record<string, string | boolean> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const id = key.trim().toLowerCase();
+    if (!id) continue;
+    const stat = byId.get(id);
+    if (!stat) continue;
+    const kind = stat.kind ?? "numeric";
+    if (kind === "numeric") continue;
+    if (kind === "boolean") {
+      if (typeof value === "boolean") {
+        out[id] = value;
+      } else if (typeof value === "string") {
+        const cleaned = value.trim().toLowerCase();
+        if (cleaned === "true") out[id] = true;
+        if (cleaned === "false") out[id] = false;
+      }
+      continue;
+    }
+    const textMaxLength = kind === "text_short"
+      ? clampInt(stat.textMaxLength, 120, 20, 200)
+      : 120;
+    const options = kind === "enum_single"
+      ? (Array.isArray(stat.enumOptions) ? stat.enumOptions : [])
+      : [];
+    const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+    if (!text) continue;
+    if (kind === "enum_single") {
+      const normalized = text.toLowerCase();
+      if (options.includes(normalized)) out[id] = normalized;
+    } else {
+      out[id] = text.slice(0, textMaxLength);
+    }
   }
   return Object.keys(out).length ? out : null;
 }
@@ -677,7 +781,6 @@ function sanitizeCharacterDefaults(
 ): Record<string, CharacterDefaults> {
   if (!raw || typeof raw !== "object") return {};
   const out: Record<string, CharacterDefaults> = {};
-  const allowedCustomStatIds = new Set(customStats.map(stat => stat.id));
   for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
     const key = typeof name === "string" ? name.trim() : "";
     if (!key) continue;
@@ -693,8 +796,10 @@ function sanitizeCharacterDefaults(
       const cardColor = sanitizeHexColor(obj.cardColor);
       if (cardColor) entry.cardColor = cardColor;
     }
-    const customStatDefaults = sanitizeCustomStatDefaults(obj.customStatDefaults, allowedCustomStatIds);
+    const customStatDefaults = sanitizeCustomStatDefaults(obj.customStatDefaults, customStats);
     if (customStatDefaults) entry.customStatDefaults = customStatDefaults;
+    const customNonNumericStatDefaults = sanitizeCustomNonNumericStatDefaults(obj.customNonNumericStatDefaults, customStats);
+    if (customNonNumericStatDefaults) entry.customNonNumericStatDefaults = customNonNumericStatDefaults;
     if (obj.moodSource !== undefined) entry.moodSource = sanitizeMoodSource(obj.moodSource, defaultSettings.moodSource);
     const moodExpressionMap = sanitizeMoodExpressionMap(obj.moodExpressionMap);
     if (moodExpressionMap) entry.moodExpressionMap = moodExpressionMap;

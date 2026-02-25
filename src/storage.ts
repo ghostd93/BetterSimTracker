@@ -1,6 +1,15 @@
 import { EXTENSION_KEY, STAT_KEYS } from "./constants";
 import { isTrackableAiMessage } from "./messageFilter";
-import type { BetterSimTrackerSettings, ChatMessage, CustomStatistics, STContext, StatKey, Statistics, TrackerData } from "./types";
+import type {
+  BetterSimTrackerSettings,
+  ChatMessage,
+  CustomNonNumericStatistics,
+  CustomStatistics,
+  STContext,
+  StatKey,
+  Statistics,
+  TrackerData
+} from "./types";
 const CHAT_STATE_KEY = `${EXTENSION_KEY}:chat`;
 
 function createEmptyStatistics(): Statistics {
@@ -30,6 +39,7 @@ function normalizeTrackerData(data: Partial<TrackerData>): TrackerData {
       ...(data.statistics as Statistics)
     },
     customStatistics: normalizeCustomStatistics(data.customStatistics),
+    customNonNumericStatistics: normalizeCustomNonNumericStatistics(data.customNonNumericStatistics),
   };
 }
 
@@ -45,6 +55,32 @@ function normalizeCustomStatistics(raw: unknown): CustomStatistics {
       const n = Number(value);
       if (Number.isNaN(n)) continue;
       byCharacter[characterName] = Math.max(0, Math.min(100, Math.round(n)));
+    }
+    if (Object.keys(byCharacter).length > 0) {
+      out[statKey] = byCharacter;
+    }
+  }
+  return out;
+}
+
+function normalizeCustomNonNumericStatistics(raw: unknown): CustomNonNumericStatistics {
+  if (!raw || typeof raw !== "object") return {};
+  const out: CustomNonNumericStatistics = {};
+  for (const [statId, values] of Object.entries(raw as Record<string, unknown>)) {
+    if (!values || typeof values !== "object" || Array.isArray(values)) continue;
+    const statKey = String(statId ?? "").trim().toLowerCase();
+    if (!statKey) continue;
+    const byCharacter: Record<string, string | boolean> = {};
+    for (const [characterName, value] of Object.entries(values as Record<string, unknown>)) {
+      if (typeof value === "boolean") {
+        byCharacter[characterName] = value;
+        continue;
+      }
+      if (typeof value === "string") {
+        const cleaned = value.trim().replace(/\s+/g, " ");
+        if (!cleaned) continue;
+        byCharacter[characterName] = cleaned.slice(0, 200);
+      }
     }
     if (Object.keys(byCharacter).length > 0) {
       out[statKey] = byCharacter;
@@ -446,6 +482,28 @@ export function mergeCustomStatisticsWithFallback(
   const next = normalizeCustomStatistics(incoming);
   const prev = normalizeCustomStatistics(previous);
   const merged: CustomStatistics = {};
+  const allKeys = new Set<string>([
+    ...Object.keys(prev),
+    ...Object.keys(next),
+  ]);
+  for (const key of allKeys) {
+    const prevValues = prev[key] ?? {};
+    const nextValues = next[key] ?? {};
+    const combined = { ...prevValues, ...nextValues };
+    if (Object.keys(combined).length > 0) {
+      merged[key] = combined;
+    }
+  }
+  return merged;
+}
+
+export function mergeCustomNonNumericStatisticsWithFallback(
+  incoming: CustomNonNumericStatistics | undefined,
+  previous: CustomNonNumericStatistics | null | undefined,
+): CustomNonNumericStatistics {
+  const next = normalizeCustomNonNumericStatistics(incoming);
+  const prev = normalizeCustomNonNumericStatistics(previous);
+  const merged: CustomNonNumericStatistics = {};
   const allKeys = new Set<string>([
     ...Object.keys(prev),
     ...Object.keys(next),

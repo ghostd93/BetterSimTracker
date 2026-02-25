@@ -1,4 +1,4 @@
-import type { StatKey } from "./types";
+import type { CustomStatKind, CustomNonNumericStatistics, StatKey } from "./types";
 import type { Statistics } from "./types";
 import type { TrackerData } from "./types";
 
@@ -211,6 +211,14 @@ export const DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION = [
   "- It is valid to return 0 or negative deltas if the interaction is neutral or negative.",
   "- Do not reuse the same delta for all characters unless strongly justified by context.",
   "- Use recent messages first; use character cards only to disambiguate when context is unclear.",
+].join("\n");
+
+export const DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION = [
+  "- Determine the best current value for {{statLabel}} from recent messages.",
+  "- Update only {{statId}} and ignore other stats.",
+  "- Return one valid value per character using the exact schema for this stat kind.",
+  "- Keep updates conservative and context-grounded.",
+  "- Prefer recent messages first; use character cards only to disambiguate when needed.",
 ].join("\n");
 
 function commonEnvelope(userName: string, characters: string[], contextText: string): string {
@@ -503,14 +511,242 @@ export function buildSequentialCustomNumericPrompt(input: {
   });
 }
 
+function formatCustomNonNumericValue(
+  kind: CustomStatKind,
+  value: unknown,
+  fallback: string | boolean,
+): string | boolean {
+  if (kind === "boolean") {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+      const cleaned = value.trim().toLowerCase();
+      if (cleaned === "true") return true;
+      if (cleaned === "false") return false;
+    }
+    return Boolean(fallback);
+  }
+
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text) return text;
+  return typeof fallback === "string" ? fallback : "";
+}
+
+function customNonNumericProtocol(input: {
+  kind: CustomStatKind;
+  statId: string;
+  allowedValues: string[];
+  textMaxLen: number;
+  trueLabel: string;
+  falseLabel: string;
+}): string {
+  if (input.kind === "enum_single") {
+    return `Value schema:
+- Return one of allowed values exactly: ${input.allowedValues.join(", ")}.
+
+Return STRICT JSON only:
+{
+  "characters": [
+    {
+      "name": "Character Name",
+      "confidence": 0.0,
+      "value": {
+        "${input.statId}": "${input.allowedValues[0] ?? "state"}"
+      }
+    }
+  ]
+}
+
+Rules:
+- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.
+- include one entry for each character name exactly: {{characters}}.
+- output JSON only, no commentary.`;
+  }
+
+  if (input.kind === "boolean") {
+    return `Value schema:
+- Return strict boolean only for ${input.statId} (true/false).
+- true means: ${input.trueLabel}.
+- false means: ${input.falseLabel}.
+
+Return STRICT JSON only:
+{
+  "characters": [
+    {
+      "name": "Character Name",
+      "confidence": 0.0,
+      "value": {
+        "${input.statId}": false
+      }
+    }
+  ]
+}
+
+Rules:
+- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.
+- include one entry for each character name exactly: {{characters}}.
+- output JSON only, no commentary.`;
+  }
+
+  return `Value schema:
+- Return one concise single-line text value for ${input.statId}.
+- Maximum length: ${input.textMaxLen} characters.
+
+Return STRICT JSON only:
+{
+  "characters": [
+    {
+      "name": "Character Name",
+      "confidence": 0.0,
+      "value": {
+        "${input.statId}": ""
+      }
+    }
+  ]
+}
+
+Rules:
+- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.
+- include one entry for each character name exactly: {{characters}}.
+- output JSON only, no commentary.`;
+}
+
+export function buildSequentialCustomNonNumericPrompt(input: {
+  statId: string;
+  statKind: Exclude<CustomStatKind, "numeric">;
+  statLabel: string;
+  statDescription?: string;
+  statDefault: string | boolean;
+  enumOptions?: string[];
+  textMaxLength?: number;
+  booleanTrueLabel?: string;
+  booleanFalseLabel?: string;
+  userName: string;
+  characters: string[];
+  contextText: string;
+  current: Statistics | null;
+  currentCustomNonNumeric?: CustomNonNumericStatistics | null;
+  history: TrackerData[];
+  template?: string;
+}): string {
+  const statId = input.statId.trim();
+  const statLabel = input.statLabel.trim() || statId;
+  const statDescription = String(input.statDescription ?? "").trim();
+  const statKind = input.statKind;
+  const enumOptions = Array.isArray(input.enumOptions)
+    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, 12)
+    : [];
+  const textMaxLen = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
+  const trueLabel = String(input.booleanTrueLabel ?? "enabled").trim() || "enabled";
+  const falseLabel = String(input.booleanFalseLabel ?? "disabled").trim() || "disabled";
+  const envelope = commonEnvelope(input.userName, input.characters, input.contextText);
+
+  const defaultValue = formatCustomNonNumericValue(statKind, input.statDefault, statKind === "boolean" ? false : "");
+  const defaultLiteral = typeof defaultValue === "boolean" ? String(defaultValue) : defaultValue;
+  const allowedValuesLiteral = enumOptions.join(", ");
+  const valueSchema = statKind === "enum_single"
+    ? "enum"
+    : statKind === "boolean"
+      ? "boolean"
+      : `text<=${textMaxLen}`;
+
+  const currentLines = input.characters.map(name => {
+    const affection = Number(input.current?.affection?.[name] ?? 50);
+    const trust = Number(input.current?.trust?.[name] ?? 50);
+    const desire = Number(input.current?.desire?.[name] ?? 50);
+    const connection = Number(input.current?.connection?.[name] ?? 50);
+    const mood = String(input.current?.mood?.[name] ?? "Neutral");
+    const customRaw = input.currentCustomNonNumeric?.[statId]?.[name];
+    const customValue = formatCustomNonNumericValue(statKind, customRaw, defaultValue);
+    const customLiteral = typeof customValue === "boolean" ? String(customValue) : `"${customValue}"`;
+    return `- ${name}: affection=${Math.max(0, Math.min(100, Math.round(affection)))}, trust=${Math.max(0, Math.min(100, Math.round(trust)))}, desire=${Math.max(0, Math.min(100, Math.round(desire)))}, connection=${Math.max(0, Math.min(100, Math.round(connection)))}, mood=${mood}, ${statId}=${customLiteral}`;
+  }).join("\n");
+
+  const historyLines = input.history.slice(0, 3).map((entry, idx) => {
+    const header = `Snapshot ${idx + 1} (newest-${idx}):`;
+    const rows = input.characters.map(name => {
+      const affection = Number(entry.statistics.affection?.[name] ?? 50);
+      const trust = Number(entry.statistics.trust?.[name] ?? 50);
+      const desire = Number(entry.statistics.desire?.[name] ?? 50);
+      const connection = Number(entry.statistics.connection?.[name] ?? 50);
+      const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
+      const customRaw = entry.customNonNumericStatistics?.[statId]?.[name];
+      const customValue = formatCustomNonNumericValue(statKind, customRaw, defaultValue);
+      const customLiteral = typeof customValue === "boolean" ? String(customValue) : `"${customValue}"`;
+      return `  - ${name}: affection=${Math.round(affection)}, trust=${Math.round(trust)}, desire=${Math.round(desire)}, connection=${Math.round(connection)}, mood=${mood}, ${statId}=${customLiteral}`;
+    }).join("\n");
+    return `${header}\n${rows}`;
+  }).join("\n");
+
+  const instructionTemplate = input.template?.trim() || DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION;
+  const instruction = renderTemplate(instructionTemplate, {
+    statId,
+    statLabel,
+    statDescription,
+    statDefault: String(defaultLiteral),
+    maxDelta: "",
+    characters: input.characters.join(", "),
+    envelope,
+    contextText: input.contextText,
+    statKind,
+    allowedValues: allowedValuesLiteral,
+    textMaxLen: String(textMaxLen),
+    booleanTrueLabel: trueLabel,
+    booleanFalseLabel: falseLabel,
+    valueSchema,
+  });
+
+  const assembled = [
+    MAIN_PROMPT,
+    "",
+    "{{envelope}}",
+    "Current tracker state:",
+    "{{currentLines}}",
+    "",
+    "Recent tracker snapshots:",
+    "{{historyLines}}",
+    "",
+    "Task:",
+    "{{instruction}}",
+    "",
+    customNonNumericProtocol({
+      kind: statKind,
+      statId,
+      allowedValues: enumOptions,
+      textMaxLen,
+      trueLabel,
+      falseLabel,
+    }),
+  ].join("\n");
+
+  return renderTemplate(assembled, {
+    envelope,
+    currentLines,
+    historyLines: historyLines || "- none",
+    instruction,
+    characters: input.characters.join(", "),
+  });
+}
+
 export function buildSequentialCustomOverrideGenerationPrompt(input: {
   statId: string;
   statLabel: string;
   statDescription: string;
+  statKind?: CustomStatKind;
+  enumOptions?: string[];
+  textMaxLength?: number;
+  booleanTrueLabel?: string;
+  booleanFalseLabel?: string;
 }): string {
   const statId = input.statId.trim().toLowerCase();
   const statLabel = input.statLabel.trim();
   const statDescription = input.statDescription.trim();
+  const statKind = input.statKind ?? "numeric";
+  const enumOptions = Array.isArray(input.enumOptions)
+    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, 12)
+    : [];
+  const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
+  const trueLabel = String(input.booleanTrueLabel ?? "enabled").trim() || "enabled";
+  const falseLabel = String(input.booleanFalseLabel ?? "disabled").trim() || "disabled";
 
   return [
     "SYSTEM:",
@@ -523,8 +759,12 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
     "",
     "Custom stat:",
     `- ID: ${statId}`,
+    `- Kind: ${statKind}`,
     `- Label: ${statLabel}`,
     `- Description: ${statDescription}`,
+    ...(statKind === "enum_single" ? [`- Allowed values: ${enumOptions.join(", ") || "(none provided)"}`] : []),
+    ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
+    ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     "",
     "Task:",
     "Write exactly 6 short bullet lines. Every line must start with \"- \".",
@@ -532,9 +772,10 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
     "The instruction must:",
     `- Mention ${statLabel} and ${statId} directly (literal), not macro placeholders.`,
     `- Use the provided description (${statDescription}) to define what evidence should move ${statId}.`,
-    `- Explicitly say to update only ${statId} deltas and ignore other stats.`,
+    ...(statKind === "numeric"
+      ? [`- Explicitly say to update only ${statId} deltas and ignore other stats.`, "- Allow 0 or negative deltas when context is neutral/negative."]
+      : [`- Explicitly say to update only ${statId} value and ignore other stats.`, "- Enforce the exact value schema for this stat kind."]),
     "- Keep updates conservative and realistic from recent messages.",
-    "- Allow 0 or negative deltas when context is neutral/negative.",
     "- Prefer recent messages first; use character cards only for disambiguation.",
     "- Avoid generic filler and keep each bullet actionable.",
     "- Not mention JSON, response format, confidence math, or this generator prompt.",
@@ -547,10 +788,22 @@ export function buildCustomStatDescriptionGenerationPrompt(input: {
   statId: string;
   statLabel: string;
   currentDescription: string;
+  statKind?: CustomStatKind;
+  enumOptions?: string[];
+  textMaxLength?: number;
+  booleanTrueLabel?: string;
+  booleanFalseLabel?: string;
 }): string {
   const statId = input.statId.trim().toLowerCase();
   const statLabel = input.statLabel.trim();
   const currentDescription = input.currentDescription.trim();
+  const statKind = input.statKind ?? "numeric";
+  const enumOptions = Array.isArray(input.enumOptions)
+    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, 12)
+    : [];
+  const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
+  const trueLabel = String(input.booleanTrueLabel ?? "enabled").trim() || "enabled";
+  const falseLabel = String(input.booleanFalseLabel ?? "disabled").trim() || "disabled";
 
   return [
     "SYSTEM:",
@@ -562,8 +815,12 @@ export function buildCustomStatDescriptionGenerationPrompt(input: {
     "",
     "Custom stat:",
     `- ID: ${statId}`,
+    `- Kind: ${statKind}`,
     `- Label: ${statLabel}`,
     `- Current description: ${currentDescription}`,
+    ...(statKind === "enum_single" ? [`- Allowed values: ${enumOptions.join(", ") || "(none provided)"}`] : []),
+    ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
+    ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     "",
     "Task:",
     "Rewrite the description into one clear sentence for extraction logic.",
@@ -656,11 +913,23 @@ export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
   statLabel: string;
   statDescription: string;
   currentGuidance?: string;
+  statKind?: CustomStatKind;
+  enumOptions?: string[];
+  textMaxLength?: number;
+  booleanTrueLabel?: string;
+  booleanFalseLabel?: string;
 }): string {
   const statId = input.statId.trim().toLowerCase();
   const statLabel = input.statLabel.trim();
   const statDescription = input.statDescription.trim();
   const currentGuidance = String(input.currentGuidance ?? "").trim();
+  const statKind = input.statKind ?? "numeric";
+  const enumOptions = Array.isArray(input.enumOptions)
+    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, 12)
+    : [];
+  const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
+  const trueLabel = String(input.booleanTrueLabel ?? "enabled").trim() || "enabled";
+  const falseLabel = String(input.booleanFalseLabel ?? "disabled").trim() || "disabled";
 
   return [
     "SYSTEM:",
@@ -672,8 +941,12 @@ export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
     "",
     "Custom stat:",
     `- ID: ${statId}`,
+    `- Kind: ${statKind}`,
     `- Label: ${statLabel}`,
     `- Description: ${statDescription}`,
+    ...(statKind === "enum_single" ? [`- Allowed values: ${enumOptions.join(", ") || "(none provided)"}`] : []),
+    ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
+    ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     `- Current guidance: ${currentGuidance || "(empty)"}`,
     "",
     "Task:",

@@ -4,6 +4,8 @@ export type StatKey = (typeof STAT_KEYS)[number];
 export type NumericStatKey = "affection" | "trust" | "desire" | "connection";
 export type TextStatKey = "mood" | "lastThought";
 export type CustomStatKey = string;
+export type CustomStatKind = "numeric" | "enum_single" | "boolean" | "text_short";
+export type CustomNonNumericValue = string | boolean;
 export type MoodLabel =
   | "Happy"
   | "Sad"
@@ -26,14 +28,20 @@ export type StatValue = number | string;
 export type CharacterStatMap = Record<string, StatValue>;
 export type Statistics = Record<StatKey, CharacterStatMap>;
 export type CustomStatistics = Record<CustomStatKey, Record<string, number>>;
+export type CustomNonNumericStatistics = Record<CustomStatKey, Record<string, CustomNonNumericValue>>;
 
 export interface CustomStatDefinition {
   id: CustomStatKey;
+  kind?: CustomStatKind;
   label: string;
   description?: string;
   behaviorGuidance?: string;
-  defaultValue: number;
+  defaultValue: number | string | boolean;
   maxDeltaPerTurn?: number;
+  enumOptions?: string[];
+  booleanTrueLabel?: string;
+  booleanFalseLabel?: string;
+  textMaxLength?: number;
   track: boolean;
   showOnCard: boolean;
   showInGraph: boolean;
@@ -55,6 +63,7 @@ export interface TrackerData {
   activeCharacters: string[];
   statistics: Statistics;
   customStatistics?: CustomStatistics;
+  customNonNumericStatistics?: CustomNonNumericStatistics;
 }
 
 export interface BetterSimTrackerSettings {
@@ -111,6 +120,7 @@ export interface BetterSimTrackerSettings {
   promptTemplateSequentialDesire: string;
   promptTemplateSequentialConnection: string;
   promptTemplateSequentialCustomNumeric: string;
+  promptTemplateSequentialCustomNonNumeric: string;
   promptTemplateSequentialMood: string;
   promptTemplateSequentialLastThought: string;
   promptTemplateInjection: string;
@@ -142,6 +152,7 @@ export interface CharacterDefaults {
   mood?: string;
   cardColor?: string;
   customStatDefaults?: Record<CustomStatKey, number>;
+  customNonNumericStatDefaults?: Record<CustomStatKey, string | boolean>;
   moodSource?: MoodSource;
   moodExpressionMap?: MoodExpressionMap;
   stExpressionImageOptions?: StExpressionImageOptions;
@@ -255,6 +266,7 @@ export interface DeltaDebugRecord {
       desire: Record<string, number>;
       connection: Record<string, number>;
       custom?: Record<string, Record<string, number>>;
+      customNonNumeric?: Record<string, Record<string, string | boolean>>;
     };
     mood: Record<string, string>;
     lastThought: Record<string, string>;
@@ -267,6 +279,7 @@ export interface DeltaDebugRecord {
     mood: Record<string, string>;
     lastThought: Record<string, string>;
     customStatistics?: Record<string, Record<string, number>>;
+    customNonNumericStatistics?: Record<string, Record<string, string | boolean>>;
   };
   meta?: {
     promptChars: number;
@@ -288,6 +301,7 @@ export interface DeltaDebugRecord {
       mood: number;
       lastThought: number;
       customByStat?: Record<string, number>;
+      customNonNumericByStat?: Record<string, number>;
     };
     appliedCounts: {
       affection: number;
@@ -297,6 +311,7 @@ export interface DeltaDebugRecord {
       mood: number;
       lastThought: number;
       customByStat?: Record<string, number>;
+      customNonNumericByStat?: Record<string, number>;
     };
     moodFallbackApplied?: string[];
     requests?: Array<GenerateRequestMeta & { statList: string[]; attempt: number; retryType: string }>;

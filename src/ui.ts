@@ -6,6 +6,8 @@ import type {
   BetterSimTrackerSettings,
   BuiltInNumericStatUiSettings,
   ConnectionProfileOption,
+  CustomNonNumericValue,
+  CustomStatKind,
   CustomStatDefinition,
   DeltaDebugRecord,
   MoodLabel,
@@ -16,6 +18,7 @@ import type {
 } from "./types";
 import {
   DEFAULT_INJECTION_PROMPT_TEMPLATE,
+  DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
@@ -46,6 +49,20 @@ type UiNumericStatDefinition = {
   defaultValue: number;
   showOnCard: boolean;
   showInGraph: boolean;
+};
+
+type UiNonNumericStatDefinition = {
+  id: string;
+  label: string;
+  kind: Exclude<CustomStatKind, "numeric">;
+  defaultValue: string | boolean;
+  enumOptions: string[];
+  booleanTrueLabel: string;
+  booleanFalseLabel: string;
+  textMaxLength: number;
+  showOnCard: boolean;
+  includeInInjection: boolean;
+  color: string;
 };
 
 const BUILT_IN_NUMERIC_STAT_KEYS = new Set(["affection", "trust", "desire", "connection"]);
@@ -97,6 +114,75 @@ function shortLabelFrom(label: string): string {
   return cleaned.slice(0, 2);
 }
 
+function normalizeCustomStatKind(value: unknown): CustomStatKind {
+  if (value === "enum_single" || value === "boolean" || value === "text_short") return value;
+  return "numeric";
+}
+
+function normalizeNonNumericTextValue(value: unknown, maxLength: number): string {
+  return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, Math.max(20, Math.min(200, maxLength)));
+}
+
+function normalizeCustomEnumOptions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const options: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const token = String(item ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 32);
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    options.push(token);
+    if (options.length >= 12) break;
+  }
+  return options;
+}
+
+function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNonNumericStatDefinition[] {
+  const defs = Array.isArray(settings.customStats) ? settings.customStats : [];
+  return defs
+    .filter(def => normalizeCustomStatKind(def.kind) !== "numeric" && def.track)
+    .map(def => {
+      const kind = normalizeCustomStatKind(def.kind) as Exclude<CustomStatKind, "numeric">;
+      const enumOptions = normalizeCustomEnumOptions(def.enumOptions);
+      const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(def.textMaxLength) || 120)));
+      const booleanTrueLabel = String(def.booleanTrueLabel ?? "enabled").trim().slice(0, 40) || "enabled";
+      const booleanFalseLabel = String(def.booleanFalseLabel ?? "disabled").trim().slice(0, 40) || "disabled";
+      let defaultValue: string | boolean;
+      if (kind === "boolean") {
+        defaultValue = typeof def.defaultValue === "boolean" ? def.defaultValue : false;
+      } else {
+        const text = normalizeNonNumericTextValue(def.defaultValue, textMaxLength);
+        if (kind === "enum_single" && enumOptions.length > 0) {
+          const token = text.toLowerCase();
+          defaultValue = enumOptions.includes(token) ? token : enumOptions[0];
+        } else {
+          defaultValue = text;
+        }
+      }
+      return {
+        id: String(def.id ?? "").trim().toLowerCase(),
+        label: String(def.label ?? "").trim() || String(def.id ?? "").trim(),
+        kind,
+        defaultValue,
+        enumOptions,
+        booleanTrueLabel,
+        booleanFalseLabel,
+        textMaxLength,
+        showOnCard: Boolean(def.showOnCard),
+        includeInInjection: Boolean(def.includeInInjection),
+        color: String(def.color ?? "").trim(),
+      };
+    })
+    .filter(def => Boolean(def.id));
+}
+
 function getNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNumericStatDefinition[] {
   return getAllNumericStatDefinitions(settings).map(def => ({
     key: def.id,
@@ -120,6 +206,14 @@ function getNumericRawValue(entry: TrackerData, key: string, name: string): numb
   return Number(customRaw);
 }
 
+function getNonNumericRawValue(
+  entry: TrackerData,
+  statId: string,
+  name: string,
+): CustomNonNumericValue | undefined {
+  return entry.customNonNumericStatistics?.[statId]?.[name];
+}
+
 function hasNumericValue(entry: TrackerData, key: string, name: string): boolean {
   const raw = getNumericRawValue(entry, key, name);
   return raw !== undefined && !Number.isNaN(raw);
@@ -139,6 +233,50 @@ function getNumericStatsForHistory(
   settings: BetterSimTrackerSettings,
 ): UiNumericStatDefinition[] {
   return getNumericStatDefinitions(settings).filter(def => def.showInGraph);
+}
+
+function resolveNonNumericValue(
+  entry: TrackerData,
+  def: UiNonNumericStatDefinition,
+  characterName: string,
+): string | boolean | null {
+  const raw = getNonNumericRawValue(entry, def.id, characterName);
+  if (def.kind === "boolean") {
+    if (typeof raw === "boolean") return raw;
+    return typeof def.defaultValue === "boolean" ? def.defaultValue : false;
+  }
+
+  const maxLength = def.textMaxLength;
+  const text = normalizeNonNumericTextValue(raw ?? def.defaultValue, maxLength);
+  if (!text) return null;
+  if (def.kind === "enum_single") {
+    const token = text.toLowerCase();
+    if (def.enumOptions.includes(token)) return token;
+    return def.enumOptions[0] ?? null;
+  }
+  return text;
+}
+
+function hasNonNumericValue(
+  entry: TrackerData,
+  def: UiNonNumericStatDefinition,
+  characterName: string,
+): boolean {
+  const raw = getNonNumericRawValue(entry, def.id, characterName);
+  if (raw === undefined) return false;
+  if (def.kind === "boolean") return typeof raw === "boolean";
+  if (typeof raw !== "string") return false;
+  const text = normalizeNonNumericTextValue(raw, def.textMaxLength);
+  if (!text) return false;
+  if (def.kind === "enum_single") return def.enumOptions.includes(text.toLowerCase());
+  return true;
+}
+
+function formatNonNumericForDisplay(def: UiNonNumericStatDefinition, value: string | boolean): string {
+  if (def.kind === "boolean") {
+    return value ? def.booleanTrueLabel : def.booleanFalseLabel;
+  }
+  return String(value);
 }
 
 export type TrackerUiState = {
@@ -402,16 +540,43 @@ function sanitizeStExpressionImageOptions(raw: unknown, fallback: StExpressionIm
 }
 
 function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStatDefinition {
+  const kind = normalizeCustomStatKind(definition.kind);
+  const enumOptions = normalizeCustomEnumOptions(definition.enumOptions);
+  const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
+  const booleanTrueLabel = String(definition.booleanTrueLabel ?? "enabled").trim().slice(0, 40) || "enabled";
+  const booleanFalseLabel = String(definition.booleanFalseLabel ?? "disabled").trim().slice(0, 40) || "disabled";
+  const resolveDefaultValue = (): number | string | boolean => {
+    if (kind === "numeric") {
+      return Math.max(0, Math.min(100, Math.round(Number(definition.defaultValue) || 50)));
+    }
+    if (kind === "boolean") {
+      return typeof definition.defaultValue === "boolean" ? definition.defaultValue : false;
+    }
+    const text = normalizeNonNumericTextValue(definition.defaultValue, textMaxLength);
+    if (kind === "enum_single" && enumOptions.length > 0) {
+      const token = text.toLowerCase();
+      return enumOptions.includes(token) ? token : enumOptions[0];
+    }
+    return text;
+  };
+
   return {
     id: String(definition.id ?? "").trim().toLowerCase(),
+    kind,
     label: String(definition.label ?? "").trim(),
     description: typeof definition.description === "string" ? definition.description : undefined,
     behaviorGuidance: typeof definition.behaviorGuidance === "string" ? definition.behaviorGuidance : undefined,
-    defaultValue: Number(definition.defaultValue),
-    maxDeltaPerTurn: definition.maxDeltaPerTurn === undefined ? undefined : Number(definition.maxDeltaPerTurn),
+    defaultValue: resolveDefaultValue(),
+    maxDeltaPerTurn: kind === "numeric"
+      ? (definition.maxDeltaPerTurn === undefined ? undefined : Number(definition.maxDeltaPerTurn))
+      : undefined,
+    enumOptions: kind === "enum_single" ? enumOptions : undefined,
+    booleanTrueLabel: kind === "boolean" ? booleanTrueLabel : undefined,
+    booleanFalseLabel: kind === "boolean" ? booleanFalseLabel : undefined,
+    textMaxLength: kind === "text_short" ? textMaxLength : undefined,
     track: Boolean(definition.track),
     showOnCard: Boolean(definition.showOnCard),
-    showInGraph: Boolean(definition.showInGraph),
+    showInGraph: kind === "numeric" && Boolean(definition.showInGraph),
     includeInInjection: Boolean(definition.includeInInjection),
     color: typeof definition.color === "string" ? definition.color : undefined,
     sequentialPromptTemplate: typeof definition.sequentialPromptTemplate === "string" ? definition.sequentialPromptTemplate : undefined,
@@ -1189,12 +1354,30 @@ function ensureStyles(): void {
   background: color-mix(in srgb, var(--bst-accent) 33%, #131a28 67%);
 }
 .bst-row { margin: 5px 0; }
+.bst-row.bst-row-non-numeric {
+  margin-top: 7px;
+}
 .bst-label {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
   margin-bottom: 2px;
   opacity: 0.93;
+}
+.bst-non-numeric-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: min(70%, 340px);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--bst-stat-color, var(--bst-accent)) 60%, #ffffff 40%);
+  background: color-mix(in srgb, var(--bst-stat-color, var(--bst-accent)) 18%, rgba(13, 18, 30, 0.9) 82%);
+  color: #f5f9ff;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .bst-track {
   background: rgba(255,255,255,0.14);
@@ -3288,8 +3471,11 @@ export function renderTracker(
     const activeSet = new Set(data.activeCharacters.map(normalizeName));
     const allNumericDefs = getNumericStatDefinitions(settings);
     const cardNumericDefs = allNumericDefs.filter(def => def.showOnCard);
+    const allNonNumericDefs = getNonNumericStatDefinitions(settings);
+    const cardNonNumericDefs = allNonNumericDefs.filter(def => def.showOnCard);
     const hasAnyStatFor = (name: string): boolean =>
       cardNumericDefs.some(def => hasNumericValue(data, def.key, name)) ||
+      cardNonNumericDefs.some(def => hasNonNumericValue(data, def, name)) ||
       data.statistics.mood?.[name] !== undefined ||
       data.statistics.lastThought?.[name] !== undefined;
     const forceAllInGroup = isGroupChat;
@@ -3329,6 +3515,7 @@ export function renderTracker(
       if (!isActive && !settings.showInactive) continue;
       const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
       const enabledNumeric = getNumericStatsForCharacter(data, name, settings);
+      const enabledNonNumeric = cardNonNumericDefs;
       const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
@@ -3352,6 +3539,12 @@ export function renderTracker(
         const value = toPercent(getNumericRawValue(data, def.key, name) ?? def.defaultValue);
         return `<span>${def.short} ${value}%</span>`;
       }).join("");
+      const collapsedNonNumeric = enabledNonNumeric.map(def => {
+        const value = resolveNonNumericValue(data, def, name);
+        if (value == null) return "";
+        const text = formatNonNumericForDisplay(def, value);
+        return `<span>${escapeHtml(shortLabelFrom(def.label))} ${escapeHtml(text)}</span>`;
+      }).filter(Boolean).join("");
       const showCollapsedMood = moodText !== "";
       const cardColor = getResolvedCardColor(settings, name, characterAvatar) ?? palette[name] ?? getStableAutoCardColor(name);
       const cardKey = `${entry.messageIndex}:${normalizeName(name)}`;
@@ -3366,9 +3559,10 @@ export function renderTracker(
             <div class="bst-state" title="${isActive ? "Active" : settings.inactiveLabel}">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>
           </div>
         </div>
-        ${enabledNumeric.length || showCollapsedMood ? `
+        ${enabledNumeric.length || enabledNonNumeric.length || showCollapsedMood ? `
         <div class="bst-collapsed-summary" title="Tracked stats">
           ${collapsedSummary || ""}
+          ${collapsedNonNumeric || ""}
           ${showCollapsedMood ? `<span class="bst-collapsed-mood" title="${moodText}">${moodToEmojiEntity(moodText)}</span>` : ""}
         </div>` : ""}
         <div class="bst-body">
@@ -3389,6 +3583,19 @@ export function renderTracker(
             </div>
           `;
         }).join("")}
+        ${enabledNonNumeric.map(def => {
+          const resolved = resolveNonNumericValue(data, def, name);
+          const displayValue = resolved == null ? "not set" : formatNonNumericForDisplay(def, resolved);
+          const color = def.color || "#9bd5ff";
+          return `
+            <div class="bst-row bst-row-non-numeric">
+              <div class="bst-label">
+                <span>${escapeHtml(def.label)}</span>
+                <span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</span>
+              </div>
+            </div>
+          `;
+        }).join("")}
         ${moodText !== "" ? `
         <div class="bst-mood${moodImage ? " bst-mood-has-image" : ""}" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap ${moodImage ? "bst-mood-wrap--image" : "bst-mood-wrap--emoji"}">
@@ -3403,11 +3610,16 @@ export function renderTracker(
           </div>
         </div>` : ""}
         ${settings.showLastThought && data.statistics.lastThought?.[name] !== undefined && !moodImage ? renderThoughtMarkup(String(data.statistics.lastThought?.[name] ?? ""), thoughtUiKey, "panel") : ""}
-        ${enabledNumeric.length === 0 && moodText === "" && !(settings.showLastThought && data.statistics.lastThought?.[name] !== undefined) ? `<div class="bst-empty">No stats recorded.</div>` : ""}
+        ${enabledNumeric.length === 0 && enabledNonNumeric.length === 0 && moodText === "" && !(settings.showLastThought && data.statistics.lastThought?.[name] !== undefined) ? `<div class="bst-empty">No stats recorded.</div>` : ""}
         </div>
       `;
       cardHtmlByName.push({ name, html: cardHtml, isActive, isNew, cardColor });
-      signatureParts.push(`card:${name}:${isActive ? "1" : "0"}:${moodText}:${moodImage ?? ""}:${lastThoughtText}:${cardColor}:${cardHtml}`);
+      const nonNumericSignature = enabledNonNumeric.map(def => {
+        const value = resolveNonNumericValue(data, def, name);
+        if (value == null) return `${def.id}:not_set`;
+        return `${def.id}:${typeof value === "boolean" ? String(value) : value}`;
+      }).join("|");
+      signatureParts.push(`card:${name}:${isActive ? "1" : "0"}:${moodText}:${moodImage ?? ""}:${lastThoughtText}:${nonNumericSignature}:${cardColor}:${cardHtml}`);
     }
 
     const renderSignature = signatureParts.join("|#|");
@@ -3642,6 +3854,7 @@ type EditStatsPayload = {
   messageIndex: number;
   character: string;
   numeric: Record<string, number | null>;
+  nonNumeric?: Record<string, string | boolean | null>;
   mood?: string | null;
   lastThought?: string | null;
 };
@@ -3663,6 +3876,8 @@ function openEditStatsModal(input: {
   const numericDefs = getAllNumericStatDefinitions(input.settings).filter(def => def.track);
   const builtInDefs = numericDefs.filter(def => def.builtIn);
   const customDefs = numericDefs.filter(def => !def.builtIn);
+  const nonNumericDefs = getNonNumericStatDefinitions(input.settings);
+  const nonNumericDefById = new Map(nonNumericDefs.map(def => [def.id, def]));
   const currentMood = input.data.statistics.mood?.[input.character];
   const normalizedMood = currentMood ? normalizeMoodLabel(String(currentMood)) : null;
   const currentThought = input.data.statistics.lastThought?.[input.character];
@@ -3675,6 +3890,46 @@ function openEditStatsModal(input: {
       <label class="bst-edit-field">
         <span>${escapeHtml(def.label)}</span>
         <input type="number" min="0" max="100" step="1" data-bst-edit-stat="${escapeHtml(def.id)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}">
+      </label>
+    `;
+  };
+
+  const nonNumericField = (def: UiNonNumericStatDefinition): string => {
+    const currentValue = resolveNonNumericValue(input.data, def, input.character);
+    if (def.kind === "enum_single") {
+      const selected = typeof currentValue === "string" ? currentValue : "";
+      return `
+        <label class="bst-edit-field">
+          <span>${escapeHtml(def.label)}</span>
+          <select data-bst-edit-non-numeric="${escapeHtml(def.id)}" data-bst-edit-kind="enum_single">
+            <option value="">Clear value</option>
+            ${def.enumOptions.map(option => {
+              const safe = escapeHtml(option);
+              const isSelected = selected === option ? "selected" : "";
+              return `<option value="${safe}" ${isSelected}>${safe}</option>`;
+            }).join("")}
+          </select>
+        </label>
+      `;
+    }
+    if (def.kind === "boolean") {
+      const selected = typeof currentValue === "boolean" ? currentValue : null;
+      return `
+        <label class="bst-edit-field">
+          <span>${escapeHtml(def.label)}</span>
+          <select data-bst-edit-non-numeric="${escapeHtml(def.id)}" data-bst-edit-kind="boolean">
+            <option value="">Clear value</option>
+            <option value="true" ${selected === true ? "selected" : ""}>${escapeHtml(def.booleanTrueLabel)}</option>
+            <option value="false" ${selected === false ? "selected" : ""}>${escapeHtml(def.booleanFalseLabel)}</option>
+          </select>
+        </label>
+      `;
+    }
+    const value = typeof currentValue === "string" ? currentValue : "";
+    return `
+      <label class="bst-edit-field">
+        <span>${escapeHtml(def.label)}</span>
+        <input type="text" maxlength="${def.textMaxLength}" data-bst-edit-non-numeric="${escapeHtml(def.id)}" data-bst-edit-kind="text_short" value="${escapeHtml(value)}" placeholder="Optional. Max ${def.textMaxLength} chars.">
       </label>
     `;
   };
@@ -3694,13 +3949,17 @@ function openEditStatsModal(input: {
       <div class="bst-edit-title">Edit Tracker Stats - ${escapeHtml(input.character)}</div>
       <button class="bst-btn bst-close-btn" data-action="close" aria-label="Close edit dialog">&times;</button>
     </div>
-    <div class="bst-edit-sub">Values are percentages (0-100). Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest tracker snapshot for this character.</div>
+    <div class="bst-edit-sub">Numeric values are percentages (0-100). Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest tracker snapshot for this character.</div>
     ${builtInDefs.length
       ? `<div class="bst-edit-grid bst-edit-grid-two">${builtInDefs.map(numericField).join("")}</div>`
       : `<div class="bst-edit-sub">No built-in numeric stats are currently tracked.</div>`}
     ${customDefs.length
       ? `<div class="bst-edit-divider"></div>
          <div class="bst-edit-grid bst-edit-grid-two">${customDefs.map(numericField).join("")}</div>`
+      : ""}
+    ${nonNumericDefs.length
+      ? `<div class="bst-edit-divider"></div>
+         <div class="bst-edit-grid bst-edit-grid-two">${nonNumericDefs.map(nonNumericField).join("")}</div>`
       : ""}
     ${input.settings.trackMood
       ? `<div class="bst-edit-divider"></div>
@@ -3757,6 +4016,35 @@ function openEditStatsModal(input: {
       numeric[key] = clamped;
     });
 
+    const nonNumeric: Record<string, string | boolean | null> = {};
+    modal.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-bst-edit-non-numeric]").forEach(node => {
+      const key = String(node.dataset.bstEditNonNumeric ?? "").trim().toLowerCase();
+      if (!key) return;
+      const def = nonNumericDefById.get(key);
+      if (!def) return;
+      const kind = String(node.dataset.bstEditKind ?? def.kind);
+      const raw = String(node.value ?? "").trim();
+      if (!raw) {
+        nonNumeric[key] = null;
+        return;
+      }
+      if (kind === "boolean") {
+        nonNumeric[key] = raw.toLowerCase() === "true";
+        return;
+      }
+      if (kind === "enum_single") {
+        const option = raw.toLowerCase();
+        nonNumeric[key] = def.enumOptions.includes(option) ? option : null;
+        if (nonNumeric[key] == null) {
+          node.value = "";
+        }
+        return;
+      }
+      const text = normalizeNonNumericTextValue(raw, def.textMaxLength);
+      nonNumeric[key] = text || null;
+      node.value = text;
+    });
+
     let moodValue: string | null | undefined = undefined;
     const moodSelect = modal.querySelector<HTMLSelectElement>('[data-bst-edit-text="mood"]');
     if (moodSelect) {
@@ -3775,6 +4063,7 @@ function openEditStatsModal(input: {
       messageIndex: input.messageIndex,
       character: input.character,
       numeric,
+      nonNumeric,
       mood: moodValue,
       lastThought: lastThoughtValue,
     });
@@ -3794,6 +4083,11 @@ function hasCharacterSnapshot(entry: TrackerData, character: string): boolean {
   }
   if (entry.customStatistics) {
     for (const values of Object.values(entry.customStatistics)) {
+      if (values?.[character] !== undefined) return true;
+    }
+  }
+  if (entry.customNonNumericStatistics) {
+    for (const values of Object.values(entry.customNonNumericStatistics)) {
       if (values?.[character] !== undefined) return true;
     }
   }
@@ -4327,7 +4621,7 @@ export function openSettingsModal(input: {
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-sliders"></span>Custom Stats</h4>
       <div class="bst-custom-stats-top">
-        <div class="bst-help-line">Add custom numeric percentage stats (0..100). Maximum ${MAX_CUSTOM_STATS} custom stats.</div>
+        <div class="bst-help-line">Add custom stats (numeric, enum, boolean, short text). Maximum ${MAX_CUSTOM_STATS} custom stats.</div>
         <button type="button" class="bst-btn bst-btn-soft" data-action="custom-add">Add Custom Stat</button>
       </div>
       <div class="bst-custom-stats-list" data-bst-row="customStatsList"></div>
@@ -4372,6 +4666,9 @@ export function openSettingsModal(input: {
           <li><code>{{moodOptions}}</code> — allowed mood labels</li>
           <li><code>{{statId}}</code>/<code>{{statLabel}}</code> — custom stat identity (custom sequential template)</li>
           <li><code>{{statDescription}}</code>/<code>{{statDefault}}</code> — custom stat metadata (custom sequential template)</li>
+          <li><code>{{statKind}}</code>/<code>{{valueSchema}}</code> — non-numeric stat kind + expected value format</li>
+          <li><code>{{allowedValues}}</code>/<code>{{textMaxLen}}</code> — enum option list or text-short limit</li>
+          <li><code>{{defaultValueLiteral}}</code>/<code>{{booleanTrueLabel}}</code>/<code>{{booleanFalseLabel}}</code> — non-numeric defaults/labels</li>
         </ul>
       </details>
       <div class="bst-settings-grid bst-settings-grid-single bst-prompts-stack">
@@ -4467,6 +4764,19 @@ export function openSettingsModal(input: {
             <textarea data-k="promptTemplateSequentialCustomNumeric" rows="6"></textarea>
             <div class="bst-prompt-caption">Protocol (read-only)</div>
             <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("{{statId}}"))}</pre>
+          </div>
+        </label>
+        <label class="bst-prompt-group">
+          <div class="bst-prompt-head">
+            <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-list-check"></span>Seq: Custom Non-Numeric</span>
+            <span class="bst-prompt-toggle fa-solid fa-circle-chevron-down"></span>
+            <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialCustomNonNumeric" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+          </div>
+          <div class="bst-prompt-body">
+            <div class="bst-prompt-caption">Instruction (editable default used when enum/boolean/text custom stats have no per-stat override)</div>
+            <textarea data-k="promptTemplateSequentialCustomNonNumeric" rows="6"></textarea>
+            <div class="bst-prompt-caption">Protocol (read-only)</div>
+            <pre class="bst-prompt-protocol">${escapeHtml("{\n  \"characters\": [\n    {\n      \"name\": \"Character Name\",\n      \"confidence\": 0.0,\n      \"value\": {\n        \"{{statId}}\": {{valueSchema}}\n      }\n    }\n  ]\n}")}</pre>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -4859,6 +5169,7 @@ export function openSettingsModal(input: {
   set("promptTemplateSequentialDesire", input.settings.promptTemplateSequentialDesire);
   set("promptTemplateSequentialConnection", input.settings.promptTemplateSequentialConnection);
   set("promptTemplateSequentialCustomNumeric", input.settings.promptTemplateSequentialCustomNumeric);
+  set("promptTemplateSequentialCustomNonNumeric", input.settings.promptTemplateSequentialCustomNonNumeric);
   set("promptTemplateSequentialMood", input.settings.promptTemplateSequentialMood);
   set("promptTemplateSequentialLastThought", input.settings.promptTemplateSequentialLastThought);
   set("promptTemplateInjection", input.settings.promptTemplateInjection);
@@ -4917,12 +5228,18 @@ export function openSettingsModal(input: {
 
   type CustomStatWizardMode = "add" | "edit" | "duplicate";
   type CustomStatDraft = {
+    kind: CustomStatKind;
     label: string;
     id: string;
     description: string;
     behaviorGuidance: string;
     defaultValue: string;
+    defaultBoolean: boolean;
     maxDeltaPerTurn: string;
+    enumOptionsText: string;
+    booleanTrueLabel: string;
+    booleanFalseLabel: string;
+    textMaxLength: string;
     enabled: boolean;
     includeInInjection: boolean;
     color: string;
@@ -4933,12 +5250,18 @@ export function openSettingsModal(input: {
   const makeDraft = (mode: CustomStatWizardMode, source?: CustomStatDefinition): CustomStatDraft => {
     if (!source) {
       return {
+        kind: "numeric",
         label: "",
         id: "",
         description: "",
         behaviorGuidance: "",
         defaultValue: "50",
+        defaultBoolean: false,
         maxDeltaPerTurn: "",
+        enumOptionsText: "",
+        booleanTrueLabel: "enabled",
+        booleanFalseLabel: "disabled",
+        textMaxLength: "120",
         enabled: true,
         includeInInjection: true,
         color: "",
@@ -4950,14 +5273,26 @@ export function openSettingsModal(input: {
     const duplicateId = mode === "duplicate"
       ? suggestUniqueCustomStatId(`${clone.id}_copy`, new Set(customStatsState.map(item => item.id)))
       : clone.id;
+    const kind = normalizeCustomStatKind(clone.kind);
+    const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(clone.textMaxLength) || 120)));
     return {
+      kind,
       label: clone.label,
       id: duplicateId,
       description: clone.description ?? "",
       behaviorGuidance: clone.behaviorGuidance ?? "",
-      defaultValue: String(Number.isFinite(clone.defaultValue) ? Math.round(clone.defaultValue) : 50),
-      maxDeltaPerTurn: clone.maxDeltaPerTurn == null ? "" : String(Math.round(clone.maxDeltaPerTurn)),
-      enabled: clone.track || clone.showOnCard || clone.showInGraph,
+      defaultValue: kind === "numeric"
+        ? String(Number.isFinite(Number(clone.defaultValue)) ? Math.round(Number(clone.defaultValue)) : 50)
+        : (kind === "boolean" ? "" : String(clone.defaultValue ?? "")),
+      defaultBoolean: kind === "boolean" ? Boolean(clone.defaultValue) : false,
+      maxDeltaPerTurn: kind === "numeric" && clone.maxDeltaPerTurn != null ? String(Math.round(clone.maxDeltaPerTurn)) : "",
+      enumOptionsText: kind === "enum_single" ? normalizeCustomEnumOptions(clone.enumOptions).join("\n") : "",
+      booleanTrueLabel: String(clone.booleanTrueLabel ?? "enabled").trim() || "enabled",
+      booleanFalseLabel: String(clone.booleanFalseLabel ?? "disabled").trim() || "disabled",
+      textMaxLength: kind === "text_short" ? String(textMaxLength) : "120",
+      enabled: kind === "numeric"
+        ? (clone.track || clone.showOnCard || clone.showInGraph)
+        : (clone.track || clone.showOnCard),
       includeInInjection: clone.includeInInjection,
       color: clone.color ?? "",
       sequentialPromptTemplate: clone.sequentialPromptTemplate ?? "",
@@ -5000,14 +5335,38 @@ export function openSettingsModal(input: {
     }
 
     if (step >= 2) {
-      const defaultValue = Number(draft.defaultValue);
-      if (!Number.isFinite(defaultValue) || defaultValue < 0 || defaultValue > 100) {
-        errors.push("Default value must be between 0 and 100.");
-      }
-      if (draft.maxDeltaPerTurn.trim()) {
-        const maxDelta = Number(draft.maxDeltaPerTurn);
-        if (!Number.isFinite(maxDelta) || maxDelta < 1 || maxDelta > 30) {
-          errors.push("Max delta per turn must be between 1 and 30.");
+      if (draft.kind === "numeric") {
+        const defaultValue = Number(draft.defaultValue);
+        if (!Number.isFinite(defaultValue) || defaultValue < 0 || defaultValue > 100) {
+          errors.push("Default value must be between 0 and 100.");
+        }
+        if (draft.maxDeltaPerTurn.trim()) {
+          const maxDelta = Number(draft.maxDeltaPerTurn);
+          if (!Number.isFinite(maxDelta) || maxDelta < 1 || maxDelta > 30) {
+            errors.push("Max delta per turn must be between 1 and 30.");
+          }
+        }
+      } else if (draft.kind === "enum_single") {
+        const options = normalizeCustomEnumOptions(draft.enumOptionsText.split(/\r?\n/));
+        if (options.length < 2) errors.push("Enum options require at least 2 unique values.");
+        if (options.length > 12) errors.push("Enum options allow up to 12 values.");
+        const selected = draft.defaultValue.trim().toLowerCase();
+        if (!selected) {
+          errors.push("Default enum value is required.");
+        } else if (!options.includes(selected)) {
+          errors.push("Default enum value must match one allowed option.");
+        }
+      } else if (draft.kind === "boolean") {
+        if (!draft.booleanTrueLabel.trim()) errors.push("True label is required for boolean stats.");
+        if (!draft.booleanFalseLabel.trim()) errors.push("False label is required for boolean stats.");
+      } else if (draft.kind === "text_short") {
+        const maxLen = Number(draft.textMaxLength);
+        if (!Number.isFinite(maxLen) || maxLen < 20 || maxLen > 200) {
+          errors.push("Text max length must be between 20 and 200.");
+        }
+        const bounded = Math.max(20, Math.min(200, Math.round(maxLen || 120)));
+        if (String(draft.defaultValue ?? "").trim().length > bounded) {
+          errors.push("Default text exceeds max length.");
         }
       }
     }
@@ -5040,19 +5399,39 @@ export function openSettingsModal(input: {
     const behaviorGuidance = draft.behaviorGuidance.trim();
     const color = draft.color.trim();
     const template = draft.sequentialPromptTemplate.trim();
+    const kind = normalizeCustomStatKind(draft.kind);
+    const enumOptions = normalizeCustomEnumOptions(draft.enumOptionsText.split(/\r?\n/));
+    const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(draft.textMaxLength) || 120)));
+    const trueLabel = draft.booleanTrueLabel.trim().slice(0, 40) || "enabled";
+    const falseLabel = draft.booleanFalseLabel.trim().slice(0, 40) || "disabled";
+    const resolvedDefault = (() => {
+      if (kind === "numeric") return Math.max(0, Math.min(100, Math.round(Number(draft.defaultValue))));
+      if (kind === "boolean") return Boolean(draft.defaultBoolean);
+      if (kind === "enum_single") {
+        const token = draft.defaultValue.trim().toLowerCase();
+        if (enumOptions.includes(token)) return token;
+        return enumOptions[0] ?? "";
+      }
+      return normalizeNonNumericTextValue(draft.defaultValue, textMaxLength);
+    })();
     return {
       id: draft.id.trim().toLowerCase(),
+      kind,
       label: draft.label.trim(),
       description: draft.description.trim(),
       behaviorGuidance: behaviorGuidance || undefined,
-      defaultValue: Math.max(0, Math.min(100, Math.round(Number(draft.defaultValue)))),
-      maxDeltaPerTurn: maxDeltaValue == null || !Number.isFinite(maxDeltaValue)
-        ? undefined
-        : Math.max(1, Math.min(30, Math.round(maxDeltaValue))),
+      defaultValue: resolvedDefault,
+      maxDeltaPerTurn: kind === "numeric" && maxDeltaValue != null && Number.isFinite(maxDeltaValue)
+        ? Math.max(1, Math.min(30, Math.round(maxDeltaValue)))
+        : undefined,
+      enumOptions: kind === "enum_single" ? enumOptions : undefined,
+      booleanTrueLabel: kind === "boolean" ? trueLabel : undefined,
+      booleanFalseLabel: kind === "boolean" ? falseLabel : undefined,
+      textMaxLength: kind === "text_short" ? textMaxLength : undefined,
       track: draft.enabled,
       includeInInjection: draft.includeInInjection,
       showOnCard: draft.enabled,
-      showInGraph: draft.enabled,
+      showInGraph: kind === "numeric" ? draft.enabled : false,
       color: color || undefined,
       sequentialPromptTemplate: template || undefined,
     };
@@ -5075,11 +5454,29 @@ export function openSettingsModal(input: {
       return;
     }
     customStatsListNode.innerHTML = customStatsState.map(stat => {
+      const kind = normalizeCustomStatKind(stat.kind);
       const flags = [
         stat.track || stat.showOnCard || stat.showInGraph ? "enabled" : "disabled",
+        kind,
         stat.includeInInjection ? "injection" : "no injection",
       ];
       const description = (stat.description ?? "").trim();
+      const defaultMeta = (() => {
+        if (kind === "numeric") {
+          return `Default: ${Math.round(Number(stat.defaultValue) || 0)}% | Max delta: ${stat.maxDeltaPerTurn == null ? "global" : Math.round(Number(stat.maxDeltaPerTurn))}`;
+        }
+        if (kind === "boolean") {
+          const trueLabel = String(stat.booleanTrueLabel ?? "enabled").trim() || "enabled";
+          const falseLabel = String(stat.booleanFalseLabel ?? "disabled").trim() || "disabled";
+          return `Default: ${Boolean(stat.defaultValue) ? trueLabel : falseLabel} | Graph: disabled`;
+        }
+        if (kind === "enum_single") {
+          const options = normalizeCustomEnumOptions(stat.enumOptions);
+          return `Default: ${String(stat.defaultValue ?? "").trim() || "(empty)"} | Options: ${options.length} | Graph: disabled`;
+        }
+        const limit = Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120)));
+        return `Default: ${String(stat.defaultValue ?? "").trim() || "(empty)"} | Max length: ${limit} | Graph: disabled`;
+      })();
       return `
         <div class="bst-custom-stat-row" data-bst-custom-id="${escapeHtml(stat.id)}">
           <div class="bst-custom-stat-main">
@@ -5088,7 +5485,7 @@ export function openSettingsModal(input: {
               <span class="bst-custom-stat-id">${escapeHtml(stat.id)}</span>
             </div>
             <div class="bst-custom-stat-meta">
-              Default: ${Math.round(Number(stat.defaultValue) || 0)}% · Max delta: ${stat.maxDeltaPerTurn == null ? "global" : Math.round(Number(stat.maxDeltaPerTurn))}
+              ${escapeHtml(defaultMeta)}
             </div>
             ${description ? `<div class="bst-custom-stat-meta">${escapeHtml(description)}</div>` : ""}
             <div class="bst-custom-stat-flags">
@@ -5348,6 +5745,14 @@ export function openSettingsModal(input: {
           <label>ID
             <input type="text" data-bst-custom-field="id" maxlength="32" value="${escapeHtml(draft.id)}" ${draft.lockId ? "readonly" : ""} placeholder="respect">
           </label>
+          <label>Type
+            <select data-bst-custom-field="kind">
+              <option value="numeric" ${draft.kind === "numeric" ? "selected" : ""}>Numeric (0-100)</option>
+              <option value="enum_single" ${draft.kind === "enum_single" ? "selected" : ""}>Enum (single choice)</option>
+              <option value="boolean" ${draft.kind === "boolean" ? "selected" : ""}>Boolean (true/false)</option>
+              <option value="text_short" ${draft.kind === "text_short" ? "selected" : ""}>Short text</option>
+            </select>
+          </label>
         </div>
         <label>Description
           <textarea data-bst-custom-field="description" rows="4" maxlength="200" placeholder="Required. Explain what this stat represents and how extraction should interpret it.">${escapeHtml(draft.description)}</textarea>
@@ -5362,25 +5767,56 @@ export function openSettingsModal(input: {
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="2">
-        <div class="bst-custom-wizard-grid">
+        <div class="bst-custom-wizard-grid" data-bst-kind-panel="numeric">
           <label>Default Value (%)
-            <input type="number" min="0" max="100" data-bst-custom-field="defaultValue" value="${escapeHtml(draft.defaultValue)}">
+            <input type="number" min="0" max="100" data-bst-custom-field="numericDefaultValue" value="${escapeHtml(draft.kind === "numeric" ? draft.defaultValue : "50")}">
           </label>
           <label>Max Delta Per Turn
             <input type="number" min="1" max="30" data-bst-custom-field="maxDeltaPerTurn" value="${escapeHtml(draft.maxDeltaPerTurn)}" placeholder="Use global">
           </label>
         </div>
-        <div class="bst-help-line">Values are always percentage-based in v1 (0..100).</div>
+        <div class="bst-custom-wizard-grid bst-custom-wizard-grid-single" data-bst-kind-panel="enum_single" style="display:none;">
+          <label>Allowed Values (2-12, one per line)
+            <textarea data-bst-custom-field="enumOptionsText" rows="5" placeholder="guarded&#10;cautious&#10;open">${escapeHtml(draft.enumOptionsText)}</textarea>
+          </label>
+          <label>Default Enum Value
+            <input type="text" data-bst-custom-field="enumDefaultValue" maxlength="32" value="${escapeHtml(draft.kind === "enum_single" ? draft.defaultValue : "")}" placeholder="guarded">
+          </label>
+        </div>
+        <div class="bst-custom-wizard-grid" data-bst-kind-panel="boolean" style="display:none;">
+          <label>Default Value
+            <select data-bst-custom-field="defaultBoolean">
+              <option value="true" ${draft.defaultBoolean ? "selected" : ""}>True</option>
+              <option value="false" ${!draft.defaultBoolean ? "selected" : ""}>False</option>
+            </select>
+          </label>
+          <label>True Label
+            <input type="text" data-bst-custom-field="booleanTrueLabel" maxlength="40" value="${escapeHtml(draft.booleanTrueLabel)}" placeholder="enabled">
+          </label>
+          <label>False Label
+            <input type="text" data-bst-custom-field="booleanFalseLabel" maxlength="40" value="${escapeHtml(draft.booleanFalseLabel)}" placeholder="disabled">
+          </label>
+        </div>
+        <div class="bst-custom-wizard-grid" data-bst-kind-panel="text_short" style="display:none;">
+          <label>Default Text
+            <input type="text" data-bst-custom-field="textDefaultValue" value="${escapeHtml(draft.kind === "text_short" ? draft.defaultValue : "")}" placeholder="focused on de-escalation">
+          </label>
+          <label>Text Max Length (20-200)
+            <input type="number" min="20" max="200" data-bst-custom-field="textMaxLength" value="${escapeHtml(draft.textMaxLength)}">
+          </label>
+        </div>
+        <div class="bst-help-line" data-bst-kind-help="value">Numeric stats use 0-100 with optional max delta. Non-numeric stats store absolute values and do not use delta.</div>
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="3">
         <div class="bst-check-grid bst-toggle-block">
-          <label class="bst-check"><input type="checkbox" data-bst-custom-field="enabled" ${draft.enabled ? "checked" : ""}>Enabled (Track + Card + Graph)</label>
+          <label class="bst-check"><input type="checkbox" data-bst-custom-field="enabled" ${draft.enabled ? "checked" : ""}><span data-bst-kind-help="enabledLabel">Enabled (Track + Card + Graph)</span></label>
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
         </div>
         <label>Sequential Prompt Override (optional)
-          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional. Per-stat override (not universal). Literal example: Update only respect_score deltas from recent messages, based on signs of respect. Leave empty to use global Seq: Custom Numeric fallback.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
+          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional per-stat override. Leave empty to use the global custom-stat fallback for this kind.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
         </label>
+        <div class="bst-help-line" data-bst-kind-help="templateFallback">Empty override uses global Seq: Custom Numeric fallback.</div>
         <div class="bst-custom-ai-row">
           <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-generate-template" data-loading="false">
             <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
@@ -5391,7 +5827,7 @@ export function openSettingsModal(input: {
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="4">
-        <div class="bst-help-line">Optional behavior instruction for prompt injection. Define low/medium/high behavior and optional increase/decrease evidence cues for this specific custom stat.</div>
+        <div class="bst-help-line">Optional behavior instruction for prompt injection. Describe how this stat value should shape behavior, with clear increase/decrease evidence cues.</div>
         <label>Behavior Instruction (optional)
           <textarea data-bst-custom-field="behaviorGuidance" rows="6" placeholder="Optional. Example:\n- low focus -> easily distracted, short replies, weak follow-through.\n- medium focus -> generally attentive but can drift during long exchanges.\n- high focus -> sustained attention, user-first responses, clear follow-through.\n- increase cues -> direct user engagement, clarifying questions, consistent follow-up.\n- decrease cues -> evasive replies, frequent topic drift, delayed/partial engagement.">${escapeHtml(draft.behaviorGuidance)}</textarea>
         </label>
@@ -5405,7 +5841,7 @@ export function openSettingsModal(input: {
       </div>
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="5">
-        <div class="bst-help-line">Color helps visually distinguish this stat in cards and graph.</div>
+        <div class="bst-help-line" data-bst-kind-help="color">Color helps visually distinguish this stat in cards and graph.</div>
         <label>Color (optional)
           <div class="bst-color-inputs">
             <input type="color" data-bst-custom-color-picker value="#66ccff" aria-label="Custom stat color picker">
@@ -5443,8 +5879,8 @@ export function openSettingsModal(input: {
     const generateBehaviorBtn = wizard.querySelector('[data-action="custom-generate-behavior"]') as HTMLButtonElement | null;
     const generateBehaviorLabelNode = wizard.querySelector("[data-bst-custom-behavior-btn-label]") as HTMLElement | null;
     const generateBehaviorStatusNode = wizard.querySelector("[data-bst-custom-behavior-status]") as HTMLElement | null;
-    const getField = (name: string): HTMLInputElement | HTMLTextAreaElement | null =>
-      wizard.querySelector(`[data-bst-custom-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
+    const getField = (name: string): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null =>
+      wizard.querySelector(`[data-bst-custom-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
     const colorPickerNode = wizard.querySelector('[data-bst-custom-color-picker]') as HTMLInputElement | null;
     let generateDescriptionRequestId = 0;
     let generateTemplateRequestId = 0;
@@ -5468,20 +5904,42 @@ export function openSettingsModal(input: {
     const syncDraftFromFields = (): void => {
       const labelNode = getField("label");
       const idNode = getField("id");
+      const kindNode = getField("kind") as HTMLSelectElement | null;
       const descriptionNode = getField("description");
       const behaviorGuidanceNode = getField("behaviorGuidance");
-      const defaultNode = getField("defaultValue");
+      const numericDefaultNode = getField("numericDefaultValue");
+      const enumDefaultNode = getField("enumDefaultValue");
+      const textDefaultNode = getField("textDefaultValue");
+      const defaultBooleanNode = getField("defaultBoolean") as HTMLSelectElement | null;
       const maxDeltaNode = getField("maxDeltaPerTurn");
+      const enumOptionsNode = getField("enumOptionsText");
+      const trueLabelNode = getField("booleanTrueLabel");
+      const falseLabelNode = getField("booleanFalseLabel");
+      const textMaxLengthNode = getField("textMaxLength");
       const enabledNode = getField("enabled") as HTMLInputElement | null;
       const injectNode = getField("includeInInjection") as HTMLInputElement | null;
       const colorNode = getField("color");
       const templateNode = getField("sequentialPromptTemplate");
       draft.label = String(labelNode?.value ?? "");
       draft.id = String(idNode?.value ?? "").toLowerCase();
+      draft.kind = normalizeCustomStatKind(kindNode?.value);
       draft.description = String(descriptionNode?.value ?? "");
       draft.behaviorGuidance = String(behaviorGuidanceNode?.value ?? "");
-      draft.defaultValue = String(defaultNode?.value ?? "");
+      if (draft.kind === "numeric") {
+        draft.defaultValue = String(numericDefaultNode?.value ?? "");
+      } else if (draft.kind === "enum_single") {
+        draft.defaultValue = String(enumDefaultNode?.value ?? "").trim().toLowerCase();
+      } else if (draft.kind === "text_short") {
+        draft.defaultValue = String(textDefaultNode?.value ?? "");
+      } else {
+        draft.defaultValue = "";
+      }
+      draft.defaultBoolean = String(defaultBooleanNode?.value ?? "false").toLowerCase() === "true";
       draft.maxDeltaPerTurn = String(maxDeltaNode?.value ?? "");
+      draft.enumOptionsText = String(enumOptionsNode?.value ?? "");
+      draft.booleanTrueLabel = String(trueLabelNode?.value ?? "");
+      draft.booleanFalseLabel = String(falseLabelNode?.value ?? "");
+      draft.textMaxLength = String(textMaxLengthNode?.value ?? "");
       draft.enabled = Boolean(enabledNode?.checked);
       draft.includeInInjection = Boolean(injectNode?.checked);
       draft.color = String(colorNode?.value ?? "");
@@ -5507,6 +5965,68 @@ export function openSettingsModal(input: {
       reviewNode.textContent = JSON.stringify(normalized, null, 2);
     };
 
+    const syncKindUi = (): void => {
+      const kind = normalizeCustomStatKind(draft.kind);
+      wizard.querySelectorAll<HTMLElement>("[data-bst-kind-panel]").forEach(panel => {
+        const panelKind = String(panel.dataset.bstKindPanel ?? "");
+        panel.style.display = panelKind === kind ? (panel.classList.contains("bst-custom-wizard-grid") ? "grid" : "block") : "none";
+      });
+
+      const enabledHelpNode = wizard.querySelector('[data-bst-kind-help="enabledLabel"]') as HTMLElement | null;
+      if (enabledHelpNode) {
+        enabledHelpNode.textContent = kind === "numeric"
+          ? "Enabled (Track + Card + Graph)"
+          : "Enabled (Track + Card)";
+      }
+
+      const fallbackHelpNode = wizard.querySelector('[data-bst-kind-help="templateFallback"]') as HTMLElement | null;
+      if (fallbackHelpNode) {
+        fallbackHelpNode.textContent = kind === "numeric"
+          ? "Empty override uses global Seq: Custom Numeric fallback."
+          : "Empty override uses global Seq: Custom Non-Numeric fallback.";
+      }
+
+      const valueHelpNode = wizard.querySelector('[data-bst-kind-help="value"]') as HTMLElement | null;
+      if (valueHelpNode) {
+        if (kind === "numeric") {
+          valueHelpNode.textContent = "Numeric stats use 0-100 with optional max delta.";
+        } else if (kind === "enum_single") {
+          valueHelpNode.textContent = "Enum stats store one value from the allowed list (no delta, no graph).";
+        } else if (kind === "boolean") {
+          valueHelpNode.textContent = "Boolean stats store true/false (no delta, no graph).";
+        } else {
+          valueHelpNode.textContent = "Short text stats store concise single-line state text (no delta, no graph).";
+        }
+      }
+
+      const colorHelpNode = wizard.querySelector('[data-bst-kind-help="color"]') as HTMLElement | null;
+      if (colorHelpNode) {
+        colorHelpNode.textContent = kind === "numeric"
+          ? "Color helps visually distinguish this stat in cards and graph."
+          : "Color helps visually distinguish this stat on cards. Non-numeric stats are not graphed in this version.";
+      }
+
+      const templateNode = getField("sequentialPromptTemplate") as HTMLTextAreaElement | null;
+      if (templateNode) {
+        templateNode.placeholder = kind === "numeric"
+          ? "Optional per-stat override. Literal example: Update only respect_score deltas from recent messages based on respect cues. Leave empty to use global Seq: Custom Numeric fallback."
+          : "Optional per-stat override. Literal example: Update only stance value for {{statId}} using allowed values and recent conversational cues. Leave empty to use global Seq: Custom Non-Numeric fallback.";
+      }
+
+      const behaviorNode = getField("behaviorGuidance") as HTMLTextAreaElement | null;
+      if (behaviorNode) {
+        if (kind === "numeric") {
+          behaviorNode.placeholder = "Optional. Example:\n- low focus -> easily distracted, short replies, weak follow-through.\n- medium focus -> generally attentive but can drift during long exchanges.\n- high focus -> sustained attention, user-first responses, clear follow-through.\n- increase cues -> direct user engagement, clarifying questions, consistent follow-up.\n- decrease cues -> evasive replies, frequent topic drift, delayed/partial engagement.";
+        } else if (kind === "enum_single") {
+          behaviorNode.placeholder = "Optional. Example:\n- guarded -> cautious tone, minimal disclosure.\n- cautious -> polite engagement with measured openness.\n- open -> proactive engagement and clearer emotional availability.\n- increase cues -> explicit trust/rapport signs.\n- decrease cues -> conflict, withdrawal, contradiction.";
+        } else if (kind === "boolean") {
+          behaviorNode.placeholder = "Optional. Example:\n- {{statId}} true -> behavior follows the enabled state.\n- {{statId}} false -> behavior follows the disabled state.\n- increase cues -> evidence that should switch to true.\n- decrease cues -> evidence that should switch to false.";
+        } else {
+          behaviorNode.placeholder = "Optional. Example:\n- interpret {{statId}} as short scene-state text.\n- keep responses aligned with the current text state.\n- increase cues -> evidence to update the text state.\n- decrease cues -> evidence to simplify or reset the text state.";
+        }
+      }
+    };
+
     const syncStepUi = (): void => {
       if (stepLabel) stepLabel.textContent = `Step ${step} / 6`;
       Array.from(wizard.querySelectorAll("[data-bst-custom-panel]")).forEach(panel => {
@@ -5517,6 +6037,7 @@ export function openSettingsModal(input: {
       if (prevBtn) prevBtn.style.visibility = step === 1 ? "hidden" : "visible";
       if (nextBtn) nextBtn.style.display = step === 6 ? "none" : "";
       if (saveBtn) saveBtn.style.display = step === 6 ? "" : "none";
+      syncKindUi();
       writeReview();
     };
 
@@ -5620,6 +6141,7 @@ export function openSettingsModal(input: {
 
     const labelInput = getField("label") as HTMLInputElement | null;
     const idInput = getField("id") as HTMLInputElement | null;
+    const kindInput = getField("kind") as HTMLSelectElement | null;
     const colorTextInput = getField("color") as HTMLInputElement | null;
     labelInput?.addEventListener("input", () => {
       if (draft.lockId || idTouched) return;
@@ -5633,6 +6155,11 @@ export function openSettingsModal(input: {
     idInput?.addEventListener("input", () => {
       idTouched = true;
       idInput.value = idInput.value.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+    });
+    kindInput?.addEventListener("change", () => {
+      syncDraftFromFields();
+      syncKindUi();
+      writeReview();
     });
     const applyPickerColor = (): void => {
       // Firefox may emit only "change" for <input type="color"> dialog commits.
@@ -5678,10 +6205,18 @@ export function openSettingsModal(input: {
       setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "loading", "Improving description...");
       try {
         const settingsForRequest = collectSettings();
+        const statKind = normalizeCustomStatKind(draft.kind);
+        const enumOptions = normalizeCustomEnumOptions(draft.enumOptionsText.split(/\r?\n/));
+        const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(draft.textMaxLength) || 120)));
         const prompt = buildCustomStatDescriptionGenerationPrompt({
           statId,
           statLabel: label,
           currentDescription: description,
+          statKind,
+          enumOptions,
+          textMaxLength,
+          booleanTrueLabel: draft.booleanTrueLabel,
+          booleanFalseLabel: draft.booleanFalseLabel,
         });
         const response = await generateJson(prompt, settingsForRequest);
         if (requestId !== generateDescriptionRequestId) return;
@@ -5747,10 +6282,18 @@ export function openSettingsModal(input: {
       setGenerateStatus(generateStatusNode, "Uses current connection profile.", "loading", "Generating instruction...");
       try {
         const settingsForRequest = collectSettings();
+        const statKind = normalizeCustomStatKind(draft.kind);
+        const enumOptions = normalizeCustomEnumOptions(draft.enumOptionsText.split(/\r?\n/));
+        const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(draft.textMaxLength) || 120)));
         const prompt = buildSequentialCustomOverrideGenerationPrompt({
           statId,
           statLabel: label,
           statDescription: description,
+          statKind,
+          enumOptions,
+          textMaxLength,
+          booleanTrueLabel: draft.booleanTrueLabel,
+          booleanFalseLabel: draft.booleanFalseLabel,
         });
         const response = await generateJson(prompt, settingsForRequest);
         if (requestId !== generateTemplateRequestId) return;
@@ -5818,11 +6361,19 @@ export function openSettingsModal(input: {
       setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "loading", "Generating behavior instruction...");
       try {
         const settingsForRequest = collectSettings();
+        const statKind = normalizeCustomStatKind(draft.kind);
+        const enumOptions = normalizeCustomEnumOptions(draft.enumOptionsText.split(/\r?\n/));
+        const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(draft.textMaxLength) || 120)));
         const prompt = buildCustomStatBehaviorGuidanceGenerationPrompt({
           statId,
           statLabel: label,
           statDescription: description,
           currentGuidance: behaviorGuidance,
+          statKind,
+          enumOptions,
+          textMaxLength,
+          booleanTrueLabel: draft.booleanTrueLabel,
+          booleanFalseLabel: draft.booleanFalseLabel,
         });
         const response = await generateJson(prompt, settingsForRequest);
         if (requestId !== generateBehaviorRequestId) return;
@@ -5891,13 +6442,15 @@ export function openSettingsModal(input: {
       persistLive();
     });
 
-    wizard.querySelectorAll("input, textarea").forEach(node => {
+    wizard.querySelectorAll("input, textarea, select").forEach(node => {
       node.addEventListener("input", () => {
         syncDraftFromFields();
+        syncKindUi();
         writeReview();
       });
       node.addEventListener("change", () => {
         syncDraftFromFields();
+        syncKindUi();
         writeReview();
       });
     });
@@ -6029,6 +6582,7 @@ export function openSettingsModal(input: {
       promptTemplateSequentialDesire: read("promptTemplateSequentialDesire") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.desire,
       promptTemplateSequentialConnection: read("promptTemplateSequentialConnection") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
       promptTemplateSequentialCustomNumeric: read("promptTemplateSequentialCustomNumeric") || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
+      promptTemplateSequentialCustomNonNumeric: read("promptTemplateSequentialCustomNonNumeric") || DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
       promptTemplateSequentialMood: read("promptTemplateSequentialMood") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
       promptTemplateSequentialLastThought: read("promptTemplateSequentialLastThought") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
       promptTemplateInjection: read("promptTemplateInjection") || DEFAULT_INJECTION_PROMPT_TEMPLATE,
@@ -6210,6 +6764,7 @@ export function openSettingsModal(input: {
     promptTemplateSequentialDesire: "Sequential Desire instruction (protocol block is fixed).",
     promptTemplateSequentialConnection: "Sequential Connection instruction (protocol block is fixed).",
     promptTemplateSequentialCustomNumeric: "Sequential default instruction for custom numeric stats (per-stat override in custom stat wizard still wins).",
+    promptTemplateSequentialCustomNonNumeric: "Sequential default instruction for enum/boolean/text custom stats (per-stat override in custom stat wizard still wins).",
     promptTemplateSequentialMood: "Sequential Mood instruction (protocol block is fixed).",
     promptTemplateSequentialLastThought: "Sequential LastThought instruction (protocol block is fixed)."
   };
@@ -6256,6 +6811,7 @@ export function openSettingsModal(input: {
     promptTemplateSequentialDesire: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.desire,
     promptTemplateSequentialConnection: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.connection,
     promptTemplateSequentialCustomNumeric: DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
+    promptTemplateSequentialCustomNonNumeric: DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
     promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
     promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
     promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
@@ -6384,4 +6940,5 @@ export function closeSettingsModal(): void {
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
 }
+
 

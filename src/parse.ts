@@ -1,5 +1,5 @@
 import { moodOptions } from "./prompts";
-import type { NumericStatKey, StatKey, StatValue } from "./types";
+import type { CustomStatKind, NumericStatKey, StatKey, StatValue } from "./types";
 import type { Statistics } from "./types";
 
 function safeJsonParse(raw: string): unknown {
@@ -328,6 +328,87 @@ export function parseCustomDeltaResponse(
     if (v !== null) {
       result.delta[name] = v;
     }
+  }
+
+  return result;
+}
+
+export function parseCustomValueResponse(
+  rawText: string,
+  activeCharacters: string[],
+  statId: string,
+  kind: Exclude<CustomStatKind, "numeric">,
+  input: {
+    enumOptions?: string[];
+    textMaxLength?: number;
+  } = {},
+): {
+  confidence: Record<string, number>;
+  value: Record<string, string | boolean>;
+} {
+  const parsed = safeJsonParse(rawText);
+  const byName = new Map<string, Record<string, unknown>>();
+  const result = {
+    confidence: {} as Record<string, number>,
+    value: {} as Record<string, string | boolean>,
+  };
+  if (!parsed || typeof parsed !== "object") return result;
+
+  const source = parsed as Record<string, unknown>;
+  const list = Array.isArray(source.characters) ? source.characters : null;
+  if (list) {
+    for (const row of list) {
+      if (!row || typeof row !== "object") continue;
+      const obj = row as Record<string, unknown>;
+      const name = String(obj.name ?? "").trim();
+      if (!name) continue;
+      byName.set(name, obj);
+    }
+  } else {
+    for (const name of activeCharacters) {
+      const row = source[name];
+      if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+      byName.set(name, row as Record<string, unknown>);
+    }
+  }
+
+  const enumOptions = Array.isArray(input.enumOptions)
+    ? input.enumOptions.map(item => String(item ?? "").trim().toLowerCase()).filter(Boolean)
+    : [];
+  const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
+
+  for (const name of activeCharacters) {
+    const row = byName.get(name);
+    if (!row) continue;
+
+    const confRaw = Number(row.confidence);
+    if (!Number.isNaN(confRaw)) {
+      result.confidence[name] = Math.max(0, Math.min(1, confRaw));
+    }
+
+    const valueObj = (row.value && typeof row.value === "object" ? row.value : null) as Record<string, unknown> | null;
+    const candidate = valueObj?.[statId] ?? row[statId] ?? row.value;
+    if (kind === "boolean") {
+      if (typeof candidate === "boolean") {
+        result.value[name] = candidate;
+      } else if (typeof candidate === "string") {
+        const cleaned = candidate.trim().toLowerCase();
+        if (cleaned === "true") result.value[name] = true;
+        if (cleaned === "false") result.value[name] = false;
+      }
+      continue;
+    }
+    if (typeof candidate !== "string") continue;
+    const cleaned = candidate.trim().replace(/\s+/g, " ");
+    if (!cleaned) continue;
+    if (kind === "enum_single") {
+      const normalized = cleaned.toLowerCase();
+      if (enumOptions.includes(normalized)) {
+        result.value[name] = normalized;
+      }
+      continue;
+    }
+    result.value[name] = cleaned.slice(0, textMaxLength);
   }
 
   return result;
