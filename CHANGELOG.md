@@ -2,7 +2,7 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [Unreleased]
+## [2.1.0] - 2026-02-25
 ### Added
 - Non-numeric custom stat support with new kinds: `enum_single`, `boolean`, and `text_short`.
 - Kind-aware custom stat wizard fields and validation for enum options, boolean labels, and short-text limits.
