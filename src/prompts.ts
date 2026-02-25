@@ -747,6 +747,41 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
   const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
   const trueLabel = String(input.booleanTrueLabel ?? "enabled").trim() || "enabled";
   const falseLabel = String(input.booleanFalseLabel ?? "disabled").trim() || "disabled";
+  const middleEnumValue = enumOptions.length
+    ? enumOptions[Math.floor((enumOptions.length - 1) / 2)]
+    : "";
+
+  const kindRequirements = (() => {
+    if (statKind === "numeric") {
+      return [
+        `- Explicitly say to update only ${statId} deltas and ignore other stats.`,
+        "- Allow 0 or negative deltas when context is neutral/negative.",
+        `- Include concrete evidence cues for when ${statId} should increase vs decrease.`,
+      ];
+    }
+    if (statKind === "enum_single") {
+      const lowValue = enumOptions[0] ?? "low";
+      const midValue = middleEnumValue || enumOptions[0] || "medium";
+      const highValue = enumOptions[enumOptions.length - 1] ?? "high";
+      return [
+        `- Explicitly say to update only ${statId} value and ignore other stats.`,
+        `- Require output values to be one exact token from: ${enumOptions.join(", ") || "(none provided)"}.`,
+        `- Include concrete evidence cues for choosing anchor values \"${lowValue}\", \"${midValue}\", and \"${highValue}\".`,
+      ];
+    }
+    if (statKind === "boolean") {
+      return [
+        `- Explicitly say to update only ${statId} value and ignore other stats.`,
+        `- Require strict boolean output only (true/false), where true=${trueLabel} and false=${falseLabel}.`,
+        `- Include concrete evidence cues for switching ${statId} from false->true and true->false.`,
+      ];
+    }
+    return [
+      `- Explicitly say to update only ${statId} value and ignore other stats.`,
+      `- Require one concise single-line text value (max ${textMaxLength} chars).`,
+      `- Include concrete evidence cues for when ${statId} should be kept, changed, or rewritten.`,
+    ];
+  })();
 
   return [
     "SYSTEM:",
@@ -769,16 +804,16 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
     "Task:",
     "Write exactly 6 short bullet lines. Every line must start with \"- \".",
     "Write a stat-specific override for this exact stat, not a generic template.",
+    "This is extraction instruction text (state update logic), not behavior-reaction guidance.",
     "The instruction must:",
     `- Mention ${statLabel} and ${statId} directly (literal), not macro placeholders.`,
     `- Use the provided description (${statDescription}) to define what evidence should move ${statId}.`,
-    ...(statKind === "numeric"
-      ? [`- Explicitly say to update only ${statId} deltas and ignore other stats.`, "- Allow 0 or negative deltas when context is neutral/negative."]
-      : [`- Explicitly say to update only ${statId} value and ignore other stats.`, "- Enforce the exact value schema for this stat kind."]),
+    ...kindRequirements,
     "- Keep updates conservative and realistic from recent messages.",
     "- Prefer recent messages first; use character cards only for disambiguation.",
     "- Avoid generic filler and keep each bullet actionable.",
-    "- Not mention JSON, response format, confidence math, or this generator prompt.",
+    "- Do not write assistant reply-style behavior tips (tone/boundaries/persona).",
+    "- Do not mention JSON, response format, confidence math, or this generator prompt.",
     "",
     "Return the 6-line instruction block only.",
   ].join("\n");
@@ -930,6 +965,59 @@ export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
   const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
   const trueLabel = String(input.booleanTrueLabel ?? "enabled").trim() || "enabled";
   const falseLabel = String(input.booleanFalseLabel ?? "disabled").trim() || "disabled";
+  const middleEnumValue = enumOptions.length
+    ? enumOptions[Math.floor((enumOptions.length - 1) / 2)]
+    : "";
+
+  const taskByKind = (() => {
+    if (statKind === "numeric") {
+      return [
+        "Write exactly 5 short bullet lines for this exact stat.",
+        "Requirements:",
+        "- Each line must start with \"- \".",
+        `- Mention ${statId} and ${statLabel} literally at least once across the block.`,
+        `- Include one line for LOW ${statId} behavior, one for MEDIUM ${statId}, and one for HIGH ${statId}.`,
+        `- Include one line describing evidence that should move ${statId} upward over time.`,
+        `- Include one line describing evidence that should move ${statId} downward over time.`,
+      ];
+    }
+    if (statKind === "enum_single") {
+      const lowValue = enumOptions[0] ?? "low";
+      const midValue = middleEnumValue || enumOptions[0] || "medium";
+      const highValue = enumOptions[enumOptions.length - 1] ?? "high";
+      return [
+        "Write exactly 5 short bullet lines for this exact stat.",
+        "Requirements:",
+        "- Each line must start with \"- \".",
+        `- Mention ${statId} and ${statLabel} literally at least once across the block.`,
+        `- Include one behavior line for value \"${lowValue}\", one for \"${midValue}\", and one for \"${highValue}\".`,
+        `- Include one line describing cues that should move ${statId} toward higher-value states.`,
+        `- Include one line describing cues that should move ${statId} toward lower-value states.`,
+      ];
+    }
+    if (statKind === "boolean") {
+      return [
+        "Write exactly 5 short bullet lines for this exact stat.",
+        "Requirements:",
+        "- Each line must start with \"- \".",
+        `- Mention ${statId} and ${statLabel} literally at least once across the block.`,
+        `- Include one behavior line for ${statId}=true (${trueLabel}) and one for ${statId}=false (${falseLabel}).`,
+        `- Include one line describing cues that should switch ${statId} from false to true.`,
+        `- Include one line describing cues that should switch ${statId} from true to false.`,
+        `- Include one stability line about how to stay consistent with current ${statId} state across nearby turns.`,
+      ];
+    }
+    return [
+      "Write exactly 5 short bullet lines for this exact stat.",
+      "Requirements:",
+      "- Each line must start with \"- \".",
+      `- Mention ${statId} and ${statLabel} literally at least once across the block.`,
+      `- Treat ${statId} as a short current-state note (max ${textMaxLength} chars), then define how replies should adapt to that state.`,
+      `- Include one line for open/positive state wording, one for guarded/negative state wording, and one for neutral/unclear state wording.`,
+      `- Include one line describing what evidence should strengthen the current ${statId} state.`,
+      `- Include one line describing what evidence should weaken or redirect the current ${statId} state.`,
+    ];
+  })();
 
   return [
     "SYSTEM:",
@@ -950,15 +1038,11 @@ export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
     `- Current guidance: ${currentGuidance || "(empty)"}`,
     "",
     "Task:",
-    "Write exactly 5 short bullet lines for this exact stat.",
-    "Requirements:",
-    "- Each line must start with \"- \".",
-    `- Mention ${statId} and ${statLabel} literally at least once across the block.`,
-    `- Include one line for LOW ${statId} behavior, one for MEDIUM ${statId}, and one for HIGH ${statId}.`,
-    `- Include one line with strong increase cues for ${statId} (what evidence should raise it).`,
-    `- Include one line with strong decrease cues for ${statId} (what evidence should lower it).`,
+    ...taskByKind,
     "- Keep phrasing specific and practical, not generic (avoid \"more/less [label]\" wording).",
     "- Keep wording model-facing, actionable, and neutral (no roleplay narration).",
+    "- Focus on reply behavior (tone, initiative, boundaries, detail level), not extraction mechanics.",
+    "- Do not instruct parsing/updating/extracting values and do not mention deltas.",
     "- Do not mention JSON, confidence, output schema, or this generator prompt.",
     "",
     "Return only the 5 bullet lines.",
