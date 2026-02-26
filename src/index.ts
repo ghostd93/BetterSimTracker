@@ -1793,6 +1793,9 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     }
 
     const userName = context.name1 ?? "User";
+    const preferredCharacterName = !userExtraction
+      ? String(lastMessage?.name ?? "").trim() || undefined
+      : undefined;
     let contextText = buildRecentContext(context, settings.contextMessages);
     if (activeSettings.includeCharacterCardsInPrompt) {
       contextText = `${contextText}${buildCharacterCardsContext(context, activeCharacters)}`.trim();
@@ -1865,6 +1868,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       settings: extractionSettings,
       userName,
       activeCharacters,
+      preferredCharacterName,
       contextText,
       previousStatistics: previousSeededStatistics,
       previousCustomStatistics: previousSeededCustomStatistics,

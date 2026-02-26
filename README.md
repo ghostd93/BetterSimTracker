@@ -384,7 +384,7 @@ Available placeholders:
 
 - `{{envelope}}`: prebuilt header that already includes user/character names and recent messages.
 - `{{user}}`: current user name (`{{userName}}` is also supported as an alias).
-- `{{char}}`: primary character name (first character in scope).
+- `{{char}}`: tracked message speaker (fallback: first character in scope).
 - `{{characters}}`: comma-separated character names.
 - `{{contextText}}`: raw recent messages text.
 - `{{currentLines}}`: current tracker state lines.

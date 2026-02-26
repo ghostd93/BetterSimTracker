@@ -61,6 +61,7 @@ export function resolveActiveCharacterAnalysis(
   lookback: number;
 } {
   const allNames = getAllTrackedCharacterNames(context);
+  const allNamesSet = new Set(allNames);
   const lookback = Math.max(1, settings.activityLookback);
   const reasons: Record<string, string> = {};
   if (!settings.autoDetectActive) {
@@ -75,9 +76,34 @@ export function resolveActiveCharacterAnalysis(
 
   for (const message of recentMessages) {
     if (!message.name || !isTrackableAiMessage(message)) continue;
-    if (allNames.includes(message.name)) {
-      seen.add(message.name);
-      reasons[message.name] = `spoke in last ${lookback} messages`;
+    const speaker = String(message.name ?? "").trim();
+    if (allNamesSet.has(speaker)) {
+      seen.add(speaker);
+      reasons[speaker] = `spoke in last ${lookback} messages`;
+    }
+  }
+
+  // Keep recently-speaking characters active for longer even if they miss a few turns.
+  // This prevents "off-screen" flips in scenes where one character is temporarily silent.
+  const persistenceWindow = Math.max(12, lookback * 3);
+  if (persistenceWindow > lookback) {
+    const persistenceStart = Math.max(0, context.chat.length - persistenceWindow);
+    const lastSpokeAt = new Map<string, number>();
+    for (let i = persistenceStart; i < context.chat.length; i += 1) {
+      const message = context.chat[i];
+      if (!message.name || !isTrackableAiMessage(message)) continue;
+      const speaker = String(message.name ?? "").trim();
+      if (!allNamesSet.has(speaker)) continue;
+      lastSpokeAt.set(speaker, i);
+    }
+    for (const name of allNames) {
+      if (seen.has(name)) continue;
+      const index = lastSpokeAt.get(name);
+      if (index == null) continue;
+      const turnsAgo = Math.max(0, context.chat.length - 1 - index);
+      const turnsWord = turnsAgo === 1 ? "message" : "messages";
+      seen.add(name);
+      reasons[name] = `activity persistence: spoke ${turnsAgo} ${turnsWord} ago`;
     }
   }
 

@@ -4739,7 +4739,7 @@ export function openSettingsModal(input: {
         <ul class="bst-help-list">
           <li><code>{{envelope}}</code> — prebuilt header with user/characters + recent messages</li>
           <li><code>{{user}}</code> — current user name (<code>{{userName}}</code> alias also works)</li>
-          <li><code>{{char}}</code> — primary character name (first character in scope)</li>
+          <li><code>{{char}}</code> — tracked message speaker (fallback: first character in scope)</li>
           <li><code>{{characters}}</code> — comma-separated character names</li>
           <li><code>{{contextText}}</code> — raw recent messages text</li>
           <li><code>{{currentLines}}</code> — current tracker state lines</li>
@@ -6973,7 +6973,7 @@ export function openSettingsModal(input: {
     summarizationNoteVisibleForAI: "Controls visibility mode for newly generated Summarize notes (prose summaries of current tracked stats). Existing notes are unchanged for safety.",
     injectSummarizationNote: "Include the latest Summarize note (prose summary of current tracked stats) in hidden tracker prompt injection guidance only (no chat-message edits).",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",
-    activityLookback: "How many recent messages are scanned for active-speaker detection.",
+    activityLookback: "Primary recent-speaker window. Characters stay active longer via persistence unless departure cues remove them.",
     trackAffection: "Enable Affection stat extraction and updates.",
     trackTrust: "Enable Trust stat extraction and updates.",
     trackDesire: "Enable Desire stat extraction and updates.",

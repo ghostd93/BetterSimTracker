@@ -56,7 +56,7 @@ Key macros:
 
 - `{{envelope}}`
 - `{{user}}` (`{{userName}}` alias also supported)
-- `{{char}}` (primary character name; first character in scope)
+- `{{char}}` (tracked message speaker; fallback is first character in scope)
 - `{{characters}}` (comma-separated character names)
 - `{{contextText}}`
 - `{{currentLines}}`

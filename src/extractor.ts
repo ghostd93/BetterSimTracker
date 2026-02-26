@@ -132,6 +132,7 @@ export async function extractStatisticsParallel(input: {
   settings: BetterSimTrackerSettings;
   userName: string;
   activeCharacters: string[];
+  preferredCharacterName?: string;
   contextText: string;
   previousStatistics: Statistics | null;
   previousCustomStatistics?: CustomStatistics | null;
@@ -151,6 +152,7 @@ export async function extractStatisticsParallel(input: {
     settings,
     userName,
     activeCharacters,
+    preferredCharacterName,
     contextText,
     previousStatistics,
     previousCustomStatistics,
@@ -488,6 +490,7 @@ export async function extractStatisticsParallel(input: {
             settings.maxDeltaPerTurn,
             getSequentialTemplate(statList[0]),
             getSequentialProtocolTemplate(statList[0]),
+            preferredCharacterName,
           )
         : buildUnifiedPrompt(
             statList,
@@ -499,6 +502,7 @@ export async function extractStatisticsParallel(input: {
             settings.maxDeltaPerTurn,
             settings.promptTemplateUnified,
             settings.promptProtocolUnified,
+            preferredCharacterName,
           );
       tickProgress(`Requesting ${statLabel}`);
       let rawResponse = await callGenerate(prompt, statList, "initial");
@@ -585,6 +589,7 @@ export async function extractStatisticsParallel(input: {
             || settings.promptTemplateSequentialCustomNumeric
             || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
           protocolTemplate: settings.promptProtocolSequentialCustomNumeric,
+          preferredCharacterName,
         })
         : buildSequentialCustomNonNumericPrompt({
           statId,
@@ -606,6 +611,7 @@ export async function extractStatisticsParallel(input: {
             || settings.promptTemplateSequentialCustomNonNumeric
             || DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
           protocolTemplate: settings.promptProtocolSequentialCustomNonNumeric,
+          preferredCharacterName,
         });
       tickProgress(`Requesting ${label}`);
       let rawResponse = await callGenerate(prompt, [statId], "initial");

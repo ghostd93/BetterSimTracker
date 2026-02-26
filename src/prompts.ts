@@ -276,6 +276,20 @@ function primaryCharacter(characters: string[]): string {
   return first?.trim() || "Character";
 }
 
+function resolvePrimaryCharacter(characters: string[], preferredCharacterName?: string): string {
+  const preferred = String(preferredCharacterName ?? "").trim();
+  if (preferred) {
+    const preferredLower = preferred.toLowerCase();
+    const matched = characters.find(name => {
+      if (typeof name !== "string") return false;
+      const trimmed = name.trim();
+      return Boolean(trimmed) && trimmed.toLowerCase() === preferredLower;
+    });
+    if (matched && matched.trim()) return matched.trim();
+  }
+  return primaryCharacter(characters);
+}
+
 export function buildPrompt(
   stat: StatKey,
   userName: string,
@@ -325,9 +339,10 @@ export function buildUnifiedPrompt(
   maxDeltaPerTurn = 15,
   template?: string,
   protocolTemplate?: string,
+  preferredCharacterName?: string,
 ): string {
   const envelope = commonEnvelope(userName, characters, contextText);
-  const char = primaryCharacter(characters);
+  const char = resolvePrimaryCharacter(characters, preferredCharacterName);
   const numericStats = stats.filter(stat =>
     stat === "affection" || stat === "trust" || stat === "desire" || stat === "connection",
   );
@@ -400,9 +415,10 @@ export function buildSequentialPrompt(
   maxDeltaPerTurn = 15,
   template?: string,
   protocolTemplate?: string,
+  preferredCharacterName?: string,
 ): string {
   const envelope = commonEnvelope(userName, characters, contextText);
-  const char = primaryCharacter(characters);
+  const char = resolvePrimaryCharacter(characters, preferredCharacterName);
   const numericStats = stat === "affection" || stat === "trust" || stat === "desire" || stat === "connection"
     ? [stat]
     : [];
@@ -486,13 +502,14 @@ export function buildSequentialCustomNumericPrompt(input: {
   history: TrackerData[];
   template?: string;
   protocolTemplate?: string;
+  preferredCharacterName?: string;
 }): string {
   const statId = input.statId.trim();
   const statLabel = input.statLabel.trim() || statId;
   const statDescription = String(input.statDescription ?? "").trim();
   const defaultValue = Math.max(0, Math.min(100, Math.round(Number(input.statDefault) || 50)));
   const envelope = commonEnvelope(input.userName, input.characters, input.contextText);
-  const char = primaryCharacter(input.characters);
+  const char = resolvePrimaryCharacter(input.characters, input.preferredCharacterName);
   const safeMaxDelta = Math.max(1, Math.round(Number(input.maxDeltaPerTurn) || 15));
 
   const currentLines = input.characters.map(name => {
@@ -662,6 +679,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   history: TrackerData[];
   template?: string;
   protocolTemplate?: string;
+  preferredCharacterName?: string;
 }): string {
   const statId = input.statId.trim();
   const statLabel = input.statLabel.trim() || statId;
@@ -674,7 +692,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   const trueLabel = String(input.booleanTrueLabel ?? "enabled").trim() || "enabled";
   const falseLabel = String(input.booleanFalseLabel ?? "disabled").trim() || "disabled";
   const envelope = commonEnvelope(input.userName, input.characters, input.contextText);
-  const char = primaryCharacter(input.characters);
+  const char = resolvePrimaryCharacter(input.characters, input.preferredCharacterName);
 
   const defaultValue = formatCustomNonNumericValue(statKind, input.statDefault, statKind === "boolean" ? false : "");
   const defaultLiteral = typeof defaultValue === "boolean" ? String(defaultValue) : defaultValue;
