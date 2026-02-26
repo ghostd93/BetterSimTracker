@@ -1,5 +1,5 @@
 import { EXTENSION_KEY, STAT_KEYS } from "./constants";
-import { isTrackableAiMessage } from "./messageFilter";
+import { isTrackableMessage } from "./messageFilter";
 import type {
   BetterSimTrackerSettings,
   ChatMessage,
@@ -346,7 +346,7 @@ export function getRecentTrackerHistory(context: STContext, limit: number): Trac
     if (entry.messageIndex == null) continue;
     if (entry.messageIndex < 0 || entry.messageIndex >= context.chat.length) continue;
     const message = context.chat[entry.messageIndex];
-    if (!isTrackableAiMessage(message)) continue;
+    if (!isTrackableMessage(message)) continue;
     const existing = byMessageIndex.get(entry.messageIndex);
     if (!existing || entry.timestamp > existing.timestamp) {
       byMessageIndex.set(entry.messageIndex, entry);
@@ -390,7 +390,7 @@ export function getRecentTrackerHistoryEntries(
     if (entry.messageIndex == null) continue;
     if (entry.messageIndex < 0 || entry.messageIndex >= context.chat.length) continue;
     const message = context.chat[entry.messageIndex];
-    if (!isTrackableAiMessage(message)) continue;
+    if (!isTrackableMessage(message)) continue;
     const existing = byMessageIndex.get(entry.messageIndex);
     if (!existing || entry.timestamp > existing.timestamp) {
       byMessageIndex.set(entry.messageIndex, {

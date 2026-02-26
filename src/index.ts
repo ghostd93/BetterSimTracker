@@ -2,8 +2,9 @@ import { getAllTrackedCharacterNames, buildRecentContext, resolveActiveCharacter
 import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
-import { isTrackableAiMessage } from "./messageFilter";
+import { isTrackableAiMessage, isTrackableMessage, isTrackableUserMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from "./promptInjection";
+import { USER_TRACKER_KEY } from "./constants";
 import {
   buildTrackerSummaryGenerationPrompt,
   buildTrackerSummaryLengthenPrompt,
@@ -193,7 +194,11 @@ function cacheLorebookActivatedEntries(context: STContext, payload: unknown): nu
   return entries.length;
 }
 
-function buildSummaryTrackerStateLines(data: TrackerData, currentSettings: BetterSimTrackerSettings): string {
+function buildSummaryTrackerStateLines(
+  data: TrackerData,
+  currentSettings: BetterSimTrackerSettings,
+  userDisplayName = "User",
+): string {
   const customLabelMap = new Map<string, string>();
   for (const stat of currentSettings.customStats ?? []) {
     const id = String(stat.id ?? "").trim().toLowerCase();
@@ -209,6 +214,7 @@ function buildSummaryTrackerStateLines(data: TrackerData, currentSettings: Bette
   ];
 
   const lines = collectSummaryCharacters(data).map(name => {
+    const displayName = name === USER_TRACKER_KEY ? userDisplayName : name;
     const parts: string[] = [];
     const mood = String(data.statistics.mood?.[name] ?? "").trim().replace(/\s+/g, " ");
     if (mood) {
@@ -246,7 +252,7 @@ function buildSummaryTrackerStateLines(data: TrackerData, currentSettings: Bette
       }
     }
 
-    return `- ${name}: ${parts.length ? parts.join(", ") : "no tracked values"}`;
+    return `- ${displayName}: ${parts.length ? parts.join(", ") : "no tracked values"}`;
   });
 
   return lines.length ? lines.join("\n") : "- no tracked values are available";
@@ -286,6 +292,7 @@ function buildFallbackSummaryProse(data: TrackerData, currentSettings: BetterSim
   }
 
   const sentences = names.map(name => {
+    const displayName = name === USER_TRACKER_KEY ? (currentSettings.enableUserTracking ? "User" : name) : name;
     const affection = Number(data.statistics.affection?.[name] ?? currentSettings.defaultAffection);
     const trust = Number(data.statistics.trust?.[name] ?? currentSettings.defaultTrust);
     const desire = Number(data.statistics.desire?.[name] ?? currentSettings.defaultDesire);
@@ -322,9 +329,9 @@ function buildFallbackSummaryProse(data: TrackerData, currentSettings: BetterSim
       }
     }
 
-    const customClause = customBits.length ? ` ${name}'s custom-state cues suggest ${customBits.join(" and ")}.` : "";
-    const moodClause = mood ? `${name} currently feels ${mood.toLowerCase()}. ` : "";
-    return `${moodClause}${name} shows ${warmth} toward the user, ${safety}, and a ${bond} overall bond, ${tension}.${customClause}`;
+    const customClause = customBits.length ? ` ${displayName}'s custom-state cues suggest ${customBits.join(" and ")}.` : "";
+    const moodClause = mood ? `${displayName} currently feels ${mood.toLowerCase()}. ` : "";
+    return `${moodClause}${displayName} shows ${warmth} toward the user, ${safety}, and a ${bond} overall bond, ${tension}.${customClause}`;
   });
 
   return sentences.join(" ");
@@ -337,7 +344,9 @@ async function generateTrackerSummaryProse(input: {
   messageIndex: number;
 }): Promise<{ text: string; profileId: string | null }> {
   const { context, settings, data, messageIndex } = input;
-  const characters = collectSummaryCharacters(data);
+  const userDisplayName = context.name1 ?? "User";
+  const normalizeSummaryName = (name: string): string => (name === USER_TRACKER_KEY ? userDisplayName : name);
+  const characters = collectSummaryCharacters(data).map(normalizeSummaryName);
   const trackedDimensions: string[] = [];
   if (settings.trackAffection) trackedDimensions.push("warmth/care");
   if (settings.trackTrust) trackedDimensions.push("trust/safety");
@@ -353,10 +362,10 @@ async function generateTrackerSummaryProse(input: {
     trackedDimensions.push(`custom cues (${trackedCustomLabels.join(", ")})`);
   }
   const contextText = buildRecentContextUpToMessageIndex(context, messageIndex, settings.contextMessages);
-  const trackerStateLines = buildSummaryTrackerStateLines(data, settings);
+  const trackerStateLines = buildSummaryTrackerStateLines(data, settings, userDisplayName);
   const prompt = buildTrackerSummaryGenerationPrompt({
-    userName: context.name1 ?? "User",
-    activeCharacters: data.activeCharacters ?? [],
+    userName: userDisplayName,
+    activeCharacters: (data.activeCharacters ?? []).map(normalizeSummaryName),
     characters,
     contextText,
     trackerStateLines,
@@ -589,14 +598,34 @@ function getLastAiMessageIndex(context: STContext): number | null {
   return null;
 }
 
+function getLastUserMessageIndex(context: STContext): number | null {
+  for (let i = context.chat.length - 1; i >= 0; i -= 1) {
+    const message = context.chat[i];
+    if (isTrackableUserMessage(message)) return i;
+  }
+  return null;
+}
+
+function getLastTrackableMessageIndex(context: STContext): number | null {
+  for (let i = context.chat.length - 1; i >= 0; i -= 1) {
+    const message = context.chat[i];
+    if (isTrackableMessage(message)) return i;
+  }
+  return null;
+}
+
 function getLastMessageIndexIfAi(context: STContext): number | null {
   return getLastAiMessageIndex(context);
+}
+
+function getLastMessageIndexIfUser(context: STContext): number | null {
+  return getLastUserMessageIndex(context);
 }
 
 function isRenderableTrackerIndex(context: STContext, index: number): boolean {
   if (index < 0) return false;
   if (index >= context.chat.length) return true;
-  return isTrackableAiMessage(context.chat[index]);
+  return isTrackableMessage(context.chat[index]);
 }
 
 function getGenerationTargetMessageIndex(context: STContext): number | null {
@@ -608,6 +637,17 @@ function getGenerationTargetMessageIndex(context: STContext): number | null {
     return context.chat.length + 1;
   }
   return context.chat.length;
+}
+
+function hasUserTrackingEnabledForExtraction(input: BetterSimTrackerSettings): boolean {
+  if (!input.enableUserTracking) return false;
+  if (input.userTrackMood) return true;
+  if (input.userTrackLastThought) return true;
+  return (input.customStats ?? []).some(stat => Boolean(stat.track));
+}
+
+function isUserExtractionReason(reason: string): boolean {
+  return reason === "USER_MESSAGE_RENDERED" || reason === "USER_MESSAGE_EDITED";
 }
 
 function queueRender(): void {
@@ -623,7 +663,7 @@ function queueRender(): void {
     if (context) {
       for (let i = 0; i < context.chat.length; i += 1) {
         const message = context.chat[i];
-        if (!isTrackableAiMessage(message)) continue;
+        if (!isTrackableMessage(message)) continue;
         const data = getTrackerDataFromMessage(message);
         if (!data) continue;
         entries.push({ messageIndex: i, data });
@@ -716,6 +756,10 @@ function queuePromptSync(context: STContext): void {
   const signature = [
     settings.enabled ? "1" : "0",
     settings.injectTrackerIntoPrompt ? "1" : "0",
+    settings.enableUserTracking ? "1" : "0",
+    settings.includeUserTrackerInInjection ? "1" : "0",
+    settings.userTrackMood ? "1" : "0",
+    settings.userTrackLastThought ? "1" : "0",
     latestData?.timestamp ?? 0,
     context.groupId ?? "",
     context.characterId ?? "",
@@ -1189,12 +1233,24 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
     timestamp: Date.now(),
     activeCharacters,
     statistics: {
-      affection: Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.affection ?? s.defaultAffection])),
-      trust: Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.trust ?? s.defaultTrust])),
-      desire: Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.desire ?? s.defaultDesire])),
-      connection: Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.connection ?? s.defaultConnection])),
-      mood: Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.mood ?? s.defaultMood])),
-      lastThought: Object.fromEntries(activeCharacters.map(name => [name, ""]))
+      affection: s.trackAffection
+        ? Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.affection ?? s.defaultAffection]))
+        : {},
+      trust: s.trackTrust
+        ? Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.trust ?? s.defaultTrust]))
+        : {},
+      desire: s.trackDesire
+        ? Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.desire ?? s.defaultDesire]))
+        : {},
+      connection: s.trackConnection
+        ? Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.connection ?? s.defaultConnection]))
+        : {},
+      mood: s.trackMood
+        ? Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.mood ?? s.defaultMood]))
+        : {},
+      lastThought: s.trackLastThought
+        ? Object.fromEntries(activeCharacters.map(name => [name, ""]))
+        : {}
     },
     customStatistics,
     customNonNumericStatistics,
@@ -1386,7 +1442,7 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
   if (!character) return;
 
   const message = context.chat[messageIndex];
-  if (!isTrackableAiMessage(message)) return;
+  if (!isTrackableMessage(message)) return;
   const current = getTrackerDataFromMessage(message);
   if (!current) return;
 
@@ -1623,6 +1679,7 @@ async function sendTrackerSummaryToChat(messageIndex: number): Promise<void> {
 async function runExtraction(reason: string, targetMessageIndex?: number): Promise<void> {
   const context = getSafeContext();
   if (!context) return;
+  const userExtraction = isUserExtractionReason(reason);
   const clearGeneratingUiIfStale = (skipReason: string): void => {
     if (trackerUiState.phase !== "generating") return;
     if (chatGenerationInFlight) return;
@@ -1635,6 +1692,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     queueRender();
   };
   if (!settings?.enabled) return;
+  const activeSettings = settings;
   if (context.chat.length === 0) return;
   if (isExtracting) {
     pushTrace("extract.skip", { reason: "already_extracting", trigger: reason });
@@ -1642,25 +1700,33 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     return;
   }
 
+  if (userExtraction && !hasUserTrackingEnabledForExtraction(activeSettings)) {
+    pushTrace("extract.skip", { reason: "user_tracking_disabled", trigger: reason });
+    return;
+  }
+
   let lastIndex: number | null = null;
   if (typeof targetMessageIndex === "number" && targetMessageIndex >= 0 && targetMessageIndex < context.chat.length) {
     const target = context.chat[targetMessageIndex];
-    if (isTrackableAiMessage(target)) {
+    if ((userExtraction && isTrackableUserMessage(target)) || (!userExtraction && isTrackableAiMessage(target))) {
       lastIndex = targetMessageIndex;
     }
   }
   if (lastIndex == null) {
-    lastIndex = getLastMessageIndexIfAi(context);
+    lastIndex = userExtraction ? getLastMessageIndexIfUser(context) : getLastMessageIndexIfAi(context);
   }
   if (lastIndex == null) {
-    pushTrace("extract.skip", { reason: "no_ai_message", trigger: reason });
-    clearGeneratingUiIfStale("no_ai_message");
+    const skipReason = userExtraction ? "no_user_message" : "no_ai_message";
+    pushTrace("extract.skip", { reason: skipReason, trigger: reason });
+    clearGeneratingUiIfStale(skipReason);
     return;
   }
   const lastMessage = context.chat[lastIndex];
   const forceRetrack =
     reason === "manual_refresh" ||
     reason === "SWIPE_GENERATION_ENDED" ||
+    reason === "USER_MESSAGE_RENDERED" ||
+    reason === "USER_MESSAGE_EDITED" ||
     (reason === "MESSAGE_EDITED" && typeof targetMessageIndex === "number");
   if (!forceRetrack && getTrackerDataFromMessage(lastMessage)) {
     pushTrace("extract.skip", { reason: "tracker_already_present", trigger: reason, messageIndex: lastIndex });
@@ -1682,10 +1748,13 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   queueRender();
 
   try {
-    const activity = resolveActiveCharacterAnalysis(context, settings);
+    const activity = resolveActiveCharacterAnalysis(context, activeSettings);
     lastActivityAnalysis = activity;
     allCharacterNames = activity.allCharacterNames;
-    const activeCharacters = activity.activeCharacters;
+    if (activeSettings.enableUserTracking && !allCharacterNames.includes(USER_TRACKER_KEY)) {
+      allCharacterNames = [...allCharacterNames, USER_TRACKER_KEY];
+    }
+    const activeCharacters = userExtraction ? [USER_TRACKER_KEY] : activity.activeCharacters;
     pushTrace("activity.resolve", {
       allCharacterNames,
       activeCharacters,
@@ -1697,6 +1766,21 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       pushTrace("extract.skip", { reason: "no_active_characters", runId });
       return;
     }
+    const runScopedSettings: BetterSimTrackerSettings = userExtraction
+      ? {
+          ...activeSettings,
+          trackAffection: false,
+          trackTrust: false,
+          trackDesire: false,
+          trackConnection: false,
+          trackMood: activeSettings.userTrackMood,
+          trackLastThought: activeSettings.userTrackLastThought,
+          customStats: (activeSettings.customStats ?? []).map(stat => ({
+            ...stat,
+            track: Boolean(stat.track),
+          })),
+        }
+      : activeSettings;
 
     const previousEntry =
       typeof targetMessageIndex === "number" && targetMessageIndex >= 0
@@ -1704,63 +1788,76 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
         : getLatestTrackerDataWithIndex(context);
     let previous = previousEntry?.data ?? null;
     if (!previous) {
-      previous = buildBaselineData(activeCharacters, settings);
+      previous = buildBaselineData(activeCharacters, runScopedSettings);
       pushTrace("extract.baseline", { runId, forMessageIndex: lastIndex, activeCharacters: activeCharacters.length });
     }
 
     const userName = context.name1 ?? "User";
     let contextText = buildRecentContext(context, settings.contextMessages);
-    if (settings.includeCharacterCardsInPrompt) {
+    if (activeSettings.includeCharacterCardsInPrompt) {
       contextText = `${contextText}${buildCharacterCardsContext(context, activeCharacters)}`.trim();
     }
-    if (settings.includeLorebookInExtraction) {
-      contextText = `${contextText}${buildLorebookExtractionContext(context, settings.lorebookExtractionMaxChars)}`.trim();
+    if (activeSettings.includeLorebookInExtraction) {
+      contextText = `${contextText}${buildLorebookExtractionContext(context, activeSettings.lorebookExtractionMaxChars)}`.trim();
     }
     const previousSeededStatistics = buildSeededStatisticsForActiveCharacters(
       previous?.statistics ?? null,
       activeCharacters,
-      settings,
+      runScopedSettings,
       context,
     );
     const previousSeededCustomStatistics = buildSeededCustomStatisticsForActiveCharacters(
       previous?.customStatistics ?? null,
       activeCharacters,
-      settings,
+      runScopedSettings,
       context,
     );
     const previousSeededCustomNonNumericStatistics = buildSeededCustomNonNumericStatisticsForActiveCharacters(
       previous?.customNonNumericStatistics ?? null,
       activeCharacters,
-      settings,
+      runScopedSettings,
       context,
     );
     const seededHistory = seedHistoryForActiveCharacters(
       getRecentTrackerHistory(context, 6),
       activeCharacters,
-      settings,
+      runScopedSettings,
       context,
     );
 
-    logDebug(settings, "extraction", `Extraction started (${reason})`, {
+    logDebug(activeSettings, "extraction", `Extraction started (${reason})`, {
       activeCharacters,
       allCharacterNames,
       runId
     });
 
     const shouldForceSingleRequestAtStart =
+      !userExtraction &&
       reason === "GENERATION_ENDED" &&
       !previousEntry?.data &&
-      settings.sequentialExtraction &&
-      (settings.maxConcurrentCalls ?? 1) > 1;
-    const extractionSettings = shouldForceSingleRequestAtStart
-      ? { ...settings, maxConcurrentCalls: 1 }
-      : settings;
+      activeSettings.sequentialExtraction &&
+      (activeSettings.maxConcurrentCalls ?? 1) > 1;
+    const extractionSettings: BetterSimTrackerSettings = shouldForceSingleRequestAtStart
+      ? { ...runScopedSettings, maxConcurrentCalls: 1 }
+      : runScopedSettings;
+    const hasEnabledStatsForRun =
+      extractionSettings.trackAffection ||
+      extractionSettings.trackTrust ||
+      extractionSettings.trackDesire ||
+      extractionSettings.trackConnection ||
+      extractionSettings.trackMood ||
+      extractionSettings.trackLastThought ||
+      (extractionSettings.customStats ?? []).some(stat => Boolean(stat.track));
+    if (!hasEnabledStatsForRun) {
+      pushTrace("extract.skip", { reason: "no_enabled_stats", trigger: reason, runId });
+      return;
+    }
     if (shouldForceSingleRequestAtStart) {
       pushTrace("extract.force_single_request_start", {
         runId,
         reason,
         messageIndex: lastIndex,
-        maxConcurrentCalls: settings.maxConcurrentCalls
+        maxConcurrentCalls: activeSettings.maxConcurrentCalls
       });
     }
 
@@ -1800,7 +1897,12 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       return;
     }
 
-    const merged = mergeStatisticsWithFallback(extracted, previous?.statistics ?? null, settings);
+    const mergeSettings: BetterSimTrackerSettings = {
+      ...activeSettings,
+      trackMood: activeSettings.trackMood || (activeSettings.enableUserTracking && activeSettings.userTrackMood),
+      trackLastThought: activeSettings.trackLastThought || (activeSettings.enableUserTracking && activeSettings.userTrackLastThought),
+    };
+    const merged = mergeStatisticsWithFallback(extracted, previous?.statistics ?? null, mergeSettings);
     const mergedCustom = mergeCustomStatisticsWithFallback(extractedCustom, previous?.customStatistics ?? null);
     const mergedCustomNonNumeric = mergeCustomNonNumericStatisticsWithFallback(
       extractedCustomNonNumeric,
@@ -1828,7 +1930,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       savedMessageIndex: lastIndex,
       activeCharacters: activeCharacters.length
     });
-    logDebug(settings, "extraction", `Extraction finished (${reason})`);
+    logDebug(activeSettings, "extraction", `Extraction finished (${reason})`);
   } catch (error) {
     const isAbortError = error instanceof DOMException && error.name === "AbortError";
     if (isAbortError) {
@@ -1856,23 +1958,26 @@ function refreshFromStoredData(): void {
   if (!context || !settings) return;
 
   allCharacterNames = getAllTrackedCharacterNames(context);
+  if (settings.enableUserTracking && !allCharacterNames.includes(USER_TRACKER_KEY)) {
+    allCharacterNames = [...allCharacterNames, USER_TRACKER_KEY];
+  }
   const latestEntry = getLatestTrackerDataWithIndex(context);
   const chatStateEntry = getChatStateLatestTrackerData(context);
   const metadataEntry = getMetadataLatestTrackerData(context);
   const localEntry = getLocalLatestTrackerData(context);
-  const lastAiIndex = getLastAiMessageIndex(context);
+  const lastTrackableIndex = getLastTrackableMessageIndex(context);
   const isEntrySafeForCurrentLastAi = (entry: { data: TrackerData; messageIndex: number } | null): boolean => {
     if (!entry) return false;
-    if (lastAiIndex == null) return false;
-    if (entry.messageIndex !== lastAiIndex) return false;
+    if (lastTrackableIndex == null) return false;
+    if (entry.messageIndex !== lastTrackableIndex) return false;
     if (entry.messageIndex < 0 || entry.messageIndex >= context.chat.length) return false;
     const message = context.chat[entry.messageIndex];
-    return isTrackableAiMessage(message);
+    return isTrackableMessage(message);
   };
   const isEntrySafeForAnyChatMessage = (entry: { data: TrackerData; messageIndex: number } | null): boolean => {
     if (!entry) return false;
     if (entry.messageIndex < 0 || entry.messageIndex >= context.chat.length) return false;
-    return isTrackableAiMessage(context.chat[entry.messageIndex]);
+    return isTrackableMessage(context.chat[entry.messageIndex]);
   };
 
   if (!lastDebugRecord) {
@@ -1903,11 +2008,11 @@ function refreshFromStoredData(): void {
     latestDataMessageIndex = null;
   }
 
-  if (lastAiIndex != null && latestData && source === "message") {
-    latestDataMessageIndex = lastAiIndex;
+  if (lastTrackableIndex != null && latestData && source === "message") {
+    latestDataMessageIndex = lastTrackableIndex;
   } else if (!latestData) {
     latestDataMessageIndex = null;
-  } else if (latestData && lastAiIndex == null) {
+  } else if (latestData && lastTrackableIndex == null) {
     scheduleRefresh(300);
   }
   if (trackerUiState.phase === "idle") {
@@ -1917,7 +2022,7 @@ function refreshFromStoredData(): void {
   }
   pushTrace("refresh.resolve", {
     source,
-    lastAiIndex,
+    lastAiIndex: getLastAiMessageIndex(context),
     latestDataMessageIndex,
     hasLatestData: Boolean(latestData)
   });
@@ -2082,6 +2187,11 @@ function registerEvents(context: STContext): void {
     source.on(events.USER_MESSAGE_RENDERED, () => {
       pushTrace("event.user_message_rendered");
       scheduleRefresh(120);
+      if (!settings || !hasUserTrackingEnabledForExtraction(settings)) {
+        pushTrace("extract.skip", { reason: "user_tracking_disabled", trigger: "USER_MESSAGE_RENDERED" });
+        return;
+      }
+      scheduleExtraction("USER_MESSAGE_RENDERED", undefined, 220);
     });
   }
 
@@ -2158,9 +2268,19 @@ function registerEvents(context: STContext): void {
         return;
       }
       const editedMessage = context.chat[messageIndex];
-      if (!isTrackableAiMessage(editedMessage)) {
+      const editedIsAi = isTrackableAiMessage(editedMessage);
+      const editedIsUser = isTrackableUserMessage(editedMessage);
+      if (!editedIsAi && !editedIsUser) {
         pushTrace("extract.skip", {
           reason: "edited_message_not_trackable",
+          trigger: "MESSAGE_EDITED",
+          messageIndex,
+        });
+        return;
+      }
+      if (editedIsUser && settings && !hasUserTrackingEnabledForExtraction(settings)) {
+        pushTrace("extract.skip", {
+          reason: "user_tracking_disabled",
           trigger: "MESSAGE_EDITED",
           messageIndex,
         });
@@ -2174,7 +2294,7 @@ function registerEvents(context: STContext): void {
         });
         return;
       }
-      scheduleExtraction("MESSAGE_EDITED", messageIndex);
+      scheduleExtraction(editedIsUser ? "USER_MESSAGE_EDITED" : "MESSAGE_EDITED", messageIndex);
     });
   }
 

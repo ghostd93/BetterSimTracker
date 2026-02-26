@@ -38,3 +38,14 @@ export function isTrackableAiMessage(message: ChatMessage | null | undefined): b
   return true;
 }
 
+export function isTrackableUserMessage(message: ChatMessage | null | undefined): boolean {
+  if (!message || typeof message !== "object") return false;
+  if (!message.is_user || message.is_system) return false;
+  if (isTrackerSummaryNote(message)) return false;
+  return true;
+}
+
+export function isTrackableMessage(message: ChatMessage | null | undefined): boolean {
+  return isTrackableAiMessage(message) || isTrackableUserMessage(message);
+}
+

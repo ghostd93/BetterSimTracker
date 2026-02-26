@@ -1,4 +1,5 @@
 import { DEFAULT_INJECTION_PROMPT_TEMPLATE } from "./prompts";
+import { USER_TRACKER_KEY } from "./constants";
 import type { BetterSimTrackerSettings, STContext, TrackerData } from "./types";
 
 const INJECT_KEY = "bst_relationship_state";
@@ -86,7 +87,19 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     const enabledCustom = allEnabledCustom.slice(0, customStatCount);
     const enabledCustomNumeric = enabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
     const enabledCustomNonNumeric = enabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
-    const names = data.activeCharacters;
+    const names = [...data.activeCharacters];
+    if (settings.includeUserTrackerInInjection && settings.enableUserTracking) {
+      const hasUserMood = settings.userTrackMood && data.statistics.mood?.[USER_TRACKER_KEY] !== undefined;
+      const hasUserLastThought = settings.userTrackLastThought && String(data.statistics.lastThought?.[USER_TRACKER_KEY] ?? "").trim().length > 0;
+      const hasUserCustom = enabledCustom.some(stat =>
+        (stat.kind ?? "numeric") === "numeric"
+          ? data.customStatistics?.[stat.id]?.[USER_TRACKER_KEY] !== undefined
+          : data.customNonNumericStatistics?.[stat.id]?.[USER_TRACKER_KEY] !== undefined
+      );
+      if ((hasUserMood || hasUserLastThought || hasUserCustom) && !names.includes(USER_TRACKER_KEY)) {
+        names.push(USER_TRACKER_KEY);
+      }
+    }
     const numericKeys: Array<{
       key: "affection" | "trust" | "desire" | "connection";
       label: string;
@@ -116,14 +129,18 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     const enabledBuiltIns = numericKeys.filter(entry => entry.enabled);
     const enabledBuiltInKeys = new Set(enabledBuiltIns.map(entry => entry.key));
     const hasAnyNumeric = enabledBuiltIns.length > 0 || enabledCustomNumeric.length > 0;
-    const hasAnyNonNumeric = enabledCustomNonNumeric.length > 0;
+    const includeLastThought = settings.trackLastThought || (settings.includeUserTrackerInInjection && settings.enableUserTracking && settings.userTrackLastThought);
+    const hasAnyNonNumeric = enabledCustomNonNumeric.length > 0 || includeLastThought;
     const includeMood = settings.trackMood;
     const includeSummarizationNote = Boolean(latestSummaryNote);
     if (!hasAnyNumeric && !hasAnyNonNumeric && !includeMood && !includeSummarizationNote) return "";
 
     const lines = names.map(name => {
+      const isUser = name === USER_TRACKER_KEY;
+      const displayName = isUser ? (String(context.name1 ?? "").trim() || "User") : name;
       const parts: string[] = [];
       for (const stat of enabledBuiltIns) {
+        if (isUser) continue;
         const value = numeric(data.statistics[stat.key]?.[name] ?? 50) ?? 50;
         parts.push(`${stat.label} ${value}`);
       }
@@ -137,11 +154,17 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
           parts.push(`${stat.id} ${value}`);
         }
       }
-      if (includeMood) {
+      if ((isUser && settings.userTrackMood) || (!isUser && includeMood)) {
         const mood = String(data.statistics.mood?.[name] ?? "Neutral").trim() || "Neutral";
         parts.push(`mood ${mood}`);
       }
-      return `- ${name}: ${parts.join(", ")}`;
+      if ((isUser && settings.userTrackLastThought) || (!isUser && settings.trackLastThought)) {
+        const thought = renderNonNumericValue(data.statistics.lastThought?.[name]);
+        if (thought != null) {
+          parts.push(`lastThought ${thought}`);
+        }
+      }
+      return `- ${displayName}: ${parts.join(", ")}`;
     });
 
     const header = [
@@ -168,6 +191,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
           : `- ${stat.id}: custom stat "${label}"`;
       }),
       ...(includeMood ? ["- mood: immediate emotional tone for this turn"] : []),
+      ...(includeLastThought ? ["- lastThought: brief internal thought grounded in recent messages"] : []),
     ].join("\n");
     const behaviorBands = hasAnyNumeric
       ? [

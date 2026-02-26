@@ -98,6 +98,10 @@ export interface BetterSimTrackerSettings {
   trackConnection: boolean;
   trackMood: boolean;
   trackLastThought: boolean;
+  enableUserTracking: boolean;
+  userTrackMood: boolean;
+  userTrackLastThought: boolean;
+  includeUserTrackerInInjection: boolean;
   builtInNumericStatUi: BuiltInNumericStatUiSettings;
   moodSource: MoodSource;
   moodExpressionMap: MoodExpressionMap;

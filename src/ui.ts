@@ -1,4 +1,4 @@
-import { CUSTOM_STAT_ID_REGEX, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS, STYLE_ID } from "./constants";
+import { CUSTOM_STAT_ID_REGEX, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS, STYLE_ID, USER_TRACKER_KEY } from "./constants";
 import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import { generateJson } from "./generator";
 import { logDebug } from "./settings";
@@ -3574,6 +3574,7 @@ export function renderTracker(
     for (const name of targets) {
       const isActive = activeSet.has(normalizeName(name));
       if (!isActive && !settings.showInactive) continue;
+      const displayName = name === USER_TRACKER_KEY ? "User" : name;
       const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
       const enabledNumeric = getNumericStatsForCharacter(data, name, settings);
       const enabledNonNumeric = cardNonNumericDefs;
@@ -3613,10 +3614,10 @@ export function renderTracker(
       renderedCardKeys.add(cardKey);
       const cardHtml = `
         <div class="bst-head">
-          <div class="bst-name" title="${name}">${name}</div>
+          <div class="bst-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
           <div class="bst-actions">
             <button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> <span class="bst-graph-label">Graph</span></button>
-            ${canEdit ? `<button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="edit-stats" data-bst-edit-message="${entry.messageIndex}" data-bst-edit-character="${escapeHtml(name)}" title="Edit last tracker stats for ${escapeHtml(name)}" aria-label="Edit last tracker stats for ${escapeHtml(name)}"><span aria-hidden="true">&#9998;</span></button>` : ""}
+            ${canEdit ? `<button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="edit-stats" data-bst-edit-message="${entry.messageIndex}" data-bst-edit-character="${escapeHtml(name)}" title="Edit last tracker stats for ${escapeHtml(displayName)}" aria-label="Edit last tracker stats for ${escapeHtml(displayName)}"><span aria-hidden="true">&#9998;</span></button>` : ""}
             <div class="bst-state" title="${isActive ? "Active" : settings.inactiveLabel}">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>
           </div>
         </div>
@@ -4607,6 +4608,14 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
         </div>
 
+        <div class="bst-section-divider">User Tracking</div>
+        <div class="bst-check-grid">
+          <label class="bst-check"><input data-k="enableUserTracking" type="checkbox">Enable User-Side Extraction</label>
+          <label class="bst-check"><input data-k="userTrackMood" type="checkbox">Track User Mood</label>
+          <label class="bst-check"><input data-k="userTrackLastThought" type="checkbox">Track User Last Thought</label>
+          <label class="bst-check"><input data-k="includeUserTrackerInInjection" type="checkbox">Include User Tracker In Injection</label>
+        </div>
+
         <div class="bst-section-divider">Injection Settings</div>
         <label data-bst-row="injectPromptDepth">Injection Depth <select data-k="injectPromptDepth"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></label>
         <label data-bst-row="injectionPromptMaxChars">Injection Prompt Max Chars <input data-k="injectionPromptMaxChars" type="number" min="500" max="30000"></label>
@@ -5290,6 +5299,10 @@ export function openSettingsModal(input: {
   set("trackConnection", String(input.settings.trackConnection));
   set("trackMood", String(input.settings.trackMood));
   set("trackLastThought", String(input.settings.trackLastThought));
+  set("enableUserTracking", String(input.settings.enableUserTracking));
+  set("userTrackMood", String(input.settings.userTrackMood));
+  set("userTrackLastThought", String(input.settings.userTrackLastThought));
+  set("includeUserTrackerInInjection", String(input.settings.includeUserTrackerInInjection));
   set("moodSource", input.settings.moodSource);
   set("stExpressionImageZoom", String(input.settings.stExpressionImageZoom));
   set("stExpressionImagePositionX", String(input.settings.stExpressionImagePositionX));
@@ -6737,6 +6750,10 @@ export function openSettingsModal(input: {
       trackConnection: readBool("trackConnection", input.settings.trackConnection),
       trackMood: readBool("trackMood", input.settings.trackMood),
       trackLastThought: readBool("trackLastThought", input.settings.trackLastThought),
+      enableUserTracking: readBool("enableUserTracking", input.settings.enableUserTracking),
+      userTrackMood: readBool("userTrackMood", input.settings.userTrackMood),
+      userTrackLastThought: readBool("userTrackLastThought", input.settings.userTrackLastThought),
+      includeUserTrackerInInjection: readBool("includeUserTrackerInInjection", input.settings.includeUserTrackerInInjection),
       builtInNumericStatUi: cloneBuiltInNumericStatUi(builtInNumericStatUiState),
       moodSource: read("moodSource") === "st_expressions" ? "st_expressions" : "bst_images",
       moodExpressionMap: readGlobalMoodExpressionMap(),
@@ -6961,6 +6978,10 @@ export function openSettingsModal(input: {
     trackConnection: "Enable Connection stat extraction and updates.",
     trackMood: "Enable mood extraction and mood display updates.",
     trackLastThought: "Enable hidden short internal thought extraction.",
+    enableUserTracking: "Run user-side extraction after user messages.",
+    userTrackMood: "Allow user-side extraction to update User mood.",
+    userTrackLastThought: "Allow user-side extraction to update User lastThought.",
+    includeUserTrackerInInjection: "Include user-side tracked state in hidden prompt injection when available.",
     moodSource: "Choose where mood images come from: BetterSimTracker uploads or SillyTavern expression sprites.",
     stExpressionImageZoom: "Global zoom for ST expression mood images (higher values crop closer).",
     stExpressionImagePositionX: "Global horizontal crop position for ST expression mood images.",
