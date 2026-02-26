@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev10] - 2026-02-26
+### Fixed
+- Prevented user-tracking extraction/replay loops on empty user-rendered turns in group chats by skipping non-trackable (blank) user messages.
+
 ## [2.1.0.3-dev9] - 2026-02-26
 ### Changed
 - Color controls in Display now use paired picker + text input consistently (including `Accent Color` and `User Card Color`), with `Auto` reset for user card override.
