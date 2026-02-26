@@ -52,6 +52,8 @@ type UiNumericStatDefinition = {
   short: string;
   color: string;
   defaultValue: number;
+  trackCharacters: boolean;
+  trackUser: boolean;
   showOnCard: boolean;
   showInGraph: boolean;
 };
@@ -65,6 +67,8 @@ type UiNonNumericStatDefinition = {
   booleanTrueLabel: string;
   booleanFalseLabel: string;
   textMaxLength: number;
+  trackCharacters: boolean;
+  trackUser: boolean;
   showOnCard: boolean;
   includeInInjection: boolean;
   color: string;
@@ -167,9 +171,16 @@ function hasScriptLikeContent(value: string): boolean {
 function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNonNumericStatDefinition[] {
   const defs = Array.isArray(settings.customStats) ? settings.customStats : [];
   return defs
-    .filter(def => normalizeCustomStatKind(def.kind) !== "numeric" && def.track)
+    .filter(def => {
+      if (normalizeCustomStatKind(def.kind) === "numeric") return false;
+      const trackCharacters = Boolean(def.trackCharacters ?? def.track);
+      const trackUser = Boolean(def.trackUser ?? def.track);
+      return trackCharacters || trackUser;
+    })
     .map(def => {
       const kind = normalizeCustomStatKind(def.kind) as Exclude<CustomStatKind, "numeric">;
+      const trackCharacters = Boolean(def.trackCharacters ?? def.track);
+      const trackUser = Boolean(def.trackUser ?? def.track);
       const enumOptions = normalizeCustomEnumOptions(def.enumOptions);
       const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(def.textMaxLength) || 120)));
       const booleanTrueLabel = String(def.booleanTrueLabel ?? "enabled").trim().slice(0, 40) || "enabled";
@@ -195,6 +206,8 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
         booleanTrueLabel,
         booleanFalseLabel,
         textMaxLength,
+        trackCharacters,
+        trackUser,
         showOnCard: Boolean(def.showOnCard),
         includeInInjection: Boolean(def.includeInInjection),
         color: String(def.color ?? "").trim(),
@@ -204,12 +217,25 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
 }
 
 function getNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNumericStatDefinition[] {
+  const customScopeById = new Map(
+    (settings.customStats ?? []).map(def => {
+      const trackCharacters = Boolean(def.trackCharacters ?? def.track);
+      const trackUser = Boolean(def.trackUser ?? def.track);
+      return [String(def.id ?? "").trim().toLowerCase(), { trackCharacters, trackUser }] as const;
+    }),
+  );
   return getAllNumericStatDefinitions(settings).map(def => ({
     key: def.id,
     label: def.label,
     short: shortLabelFrom(def.label),
     color: def.color || "#9cff8f",
     defaultValue: Math.max(0, Math.min(100, Math.round(Number(def.defaultValue) || 50))),
+    trackCharacters: def.builtIn
+      ? Boolean(def.track)
+      : Boolean(customScopeById.get(def.id)?.trackCharacters ?? def.track),
+    trackUser: def.builtIn
+      ? false
+      : Boolean(customScopeById.get(def.id)?.trackUser ?? def.track),
     showOnCard: def.showOnCard,
     showInGraph: def.showInGraph,
   }));
@@ -244,7 +270,10 @@ function getNumericStatsForCharacter(
   name: string,
   settings: BetterSimTrackerSettings,
 ): UiNumericStatDefinition[] {
-  return getNumericStatDefinitions(settings).filter(def => def.showOnCard);
+  const isUserCard = name === USER_TRACKER_KEY;
+  return getNumericStatDefinitions(settings).filter(def =>
+    def.showOnCard && (isUserCard ? def.trackUser : def.trackCharacters),
+  );
 }
 
 function getNumericStatsForHistory(
@@ -252,7 +281,10 @@ function getNumericStatsForHistory(
   name: string,
   settings: BetterSimTrackerSettings,
 ): UiNumericStatDefinition[] {
-  return getNumericStatDefinitions(settings).filter(def => def.showInGraph);
+  const isUserCard = name === USER_TRACKER_KEY;
+  return getNumericStatDefinitions(settings).filter(def =>
+    def.showInGraph && (isUserCard ? def.trackUser : def.trackCharacters),
+  );
 }
 
 function resolveNonNumericValue(
@@ -594,6 +626,8 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     booleanFalseLabel: kind === "boolean" ? booleanFalseLabel : undefined,
     textMaxLength: kind === "text_short" ? textMaxLength : undefined,
     track: Boolean(definition.track),
+    trackCharacters: Boolean(definition.trackCharacters ?? definition.track),
+    trackUser: Boolean(definition.trackUser ?? definition.track),
     showOnCard: Boolean(definition.showOnCard),
     showInGraph: kind === "numeric" && Boolean(definition.showInGraph),
     includeInInjection: Boolean(definition.includeInInjection),
@@ -3576,8 +3610,9 @@ export function renderTracker(
       if (!isActive && !settings.showInactive) continue;
       const displayName = name === USER_TRACKER_KEY ? "User" : name;
       const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
+      const isUserCard = name === USER_TRACKER_KEY;
       const enabledNumeric = getNumericStatsForCharacter(data, name, settings);
-      const enabledNonNumeric = cardNonNumericDefs;
+      const enabledNonNumeric = cardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
       const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
@@ -3935,10 +3970,26 @@ function openEditStatsModal(input: {
   ensureStyles();
   closeEditStatsModal();
 
-  const numericDefs = getAllNumericStatDefinitions(input.settings).filter(def => def.track);
+  const isUserCharacter = input.character === USER_TRACKER_KEY;
+  const customScopeById = new Map(
+    (input.settings.customStats ?? []).map(def => {
+      const trackCharacters = Boolean(def.trackCharacters ?? def.track);
+      const trackUser = Boolean(def.trackUser ?? def.track);
+      return [String(def.id ?? "").trim().toLowerCase(), { trackCharacters, trackUser }] as const;
+    }),
+  );
+  const numericDefs = getAllNumericStatDefinitions(input.settings).filter(def => {
+    if (!def.track) return false;
+    if (def.builtIn) return !isUserCharacter;
+    const scope = customScopeById.get(String(def.id ?? "").trim().toLowerCase());
+    if (!scope) return !isUserCharacter;
+    return isUserCharacter ? scope.trackUser : scope.trackCharacters;
+  });
   const builtInDefs = numericDefs.filter(def => def.builtIn);
   const customDefs = numericDefs.filter(def => !def.builtIn);
-  const nonNumericDefs = getNonNumericStatDefinitions(input.settings);
+  const nonNumericDefs = getNonNumericStatDefinitions(input.settings).filter(def =>
+    isUserCharacter ? def.trackUser : def.trackCharacters,
+  );
   const nonNumericDefById = new Map(nonNumericDefs.map(def => [def.id, def]));
   const currentMood = input.data.statistics.mood?.[input.character];
   const normalizedMood = currentMood ? normalizeMoodLabel(String(currentMood)) : null;
@@ -5408,7 +5459,8 @@ export function openSettingsModal(input: {
     booleanTrueLabel: string;
     booleanFalseLabel: string;
     textMaxLength: string;
-    enabled: boolean;
+    trackCharacters: boolean;
+    trackUser: boolean;
     includeInInjection: boolean;
     color: string;
     sequentialPromptTemplate: string;
@@ -5430,7 +5482,8 @@ export function openSettingsModal(input: {
         booleanTrueLabel: "enabled",
         booleanFalseLabel: "disabled",
         textMaxLength: "120",
-        enabled: true,
+        trackCharacters: true,
+        trackUser: true,
         includeInInjection: true,
         color: "",
         sequentialPromptTemplate: "",
@@ -5442,6 +5495,8 @@ export function openSettingsModal(input: {
       ? suggestUniqueCustomStatId(`${clone.id}_copy`, new Set(customStatsState.map(item => item.id)))
       : clone.id;
     const kind = normalizeCustomStatKind(clone.kind);
+    const trackCharacters = Boolean(clone.trackCharacters ?? clone.track);
+    const trackUser = Boolean(clone.trackUser ?? clone.track);
     const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(clone.textMaxLength) || 120)));
     return {
       kind,
@@ -5458,9 +5513,8 @@ export function openSettingsModal(input: {
       booleanTrueLabel: String(clone.booleanTrueLabel ?? "enabled").trim() || "enabled",
       booleanFalseLabel: String(clone.booleanFalseLabel ?? "disabled").trim() || "disabled",
       textMaxLength: kind === "text_short" ? String(textMaxLength) : "120",
-      enabled: kind === "numeric"
-        ? (clone.track || clone.showOnCard || clone.showInGraph)
-        : (clone.track || clone.showOnCard),
+      trackCharacters,
+      trackUser,
       includeInInjection: clone.includeInInjection,
       color: clone.color ?? "",
       sequentialPromptTemplate: clone.sequentialPromptTemplate ?? "",
@@ -5546,6 +5600,9 @@ export function openSettingsModal(input: {
     }
 
     if (step >= 3) {
+      if (!draft.trackCharacters && !draft.trackUser) {
+        errors.push("Enable at least one scope: Track for Characters or Track for User.");
+      }
       if (draft.sequentialPromptTemplate.length > 20000) {
         errors.push("Custom sequential prompt template is too long.");
       }
@@ -5578,6 +5635,9 @@ export function openSettingsModal(input: {
     const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(draft.textMaxLength) || 120)));
     const trueLabel = draft.booleanTrueLabel.trim().slice(0, 40) || "enabled";
     const falseLabel = draft.booleanFalseLabel.trim().slice(0, 40) || "disabled";
+    const trackCharacters = Boolean(draft.trackCharacters);
+    const trackUser = Boolean(draft.trackUser);
+    const track = trackCharacters || trackUser;
     const resolvedDefault = (() => {
       if (kind === "numeric") return Math.max(0, Math.min(100, Math.round(Number(draft.defaultValue))));
       if (kind === "boolean") return Boolean(draft.defaultBoolean);
@@ -5602,10 +5662,12 @@ export function openSettingsModal(input: {
       booleanTrueLabel: kind === "boolean" ? trueLabel : undefined,
       booleanFalseLabel: kind === "boolean" ? falseLabel : undefined,
       textMaxLength: kind === "text_short" ? textMaxLength : undefined,
-      track: draft.enabled,
+      track,
+      trackCharacters,
+      trackUser,
       includeInInjection: draft.includeInInjection,
-      showOnCard: draft.enabled,
-      showInGraph: kind === "numeric" ? draft.enabled : false,
+      showOnCard: track,
+      showInGraph: kind === "numeric" ? track : false,
       color: color || undefined,
       sequentialPromptTemplate: template || undefined,
     };
@@ -5629,8 +5691,12 @@ export function openSettingsModal(input: {
     }
     customStatsListNode.innerHTML = customStatsState.map(stat => {
       const kind = normalizeCustomStatKind(stat.kind);
+      const trackCharacters = Boolean(stat.trackCharacters ?? stat.track);
+      const trackUser = Boolean(stat.trackUser ?? stat.track);
       const flags = [
-        stat.track || stat.showOnCard || stat.showInGraph ? "enabled" : "disabled",
+        trackCharacters || trackUser ? "enabled" : "disabled",
+        `char:${trackCharacters ? "on" : "off"}`,
+        `user:${trackUser ? "on" : "off"}`,
         kind,
         stat.includeInInjection ? "injection" : "no injection",
       ];
@@ -5985,7 +6051,8 @@ export function openSettingsModal(input: {
 
       <div class="bst-custom-wizard-panel" data-bst-custom-panel="3">
         <div class="bst-check-grid bst-toggle-block">
-          <label class="bst-check"><input type="checkbox" data-bst-custom-field="enabled" ${draft.enabled ? "checked" : ""}><span data-bst-kind-help="enabledLabel">Enabled (Track + Card + Graph)</span></label>
+          <label class="bst-check"><input type="checkbox" data-bst-custom-field="trackCharacters" ${draft.trackCharacters ? "checked" : ""}>Track for Characters</label>
+          <label class="bst-check"><input type="checkbox" data-bst-custom-field="trackUser" ${draft.trackUser ? "checked" : ""}>Track for User</label>
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
         </div>
         <label>Per-Stat Prompt Override (optional)
@@ -6093,7 +6160,8 @@ export function openSettingsModal(input: {
       const trueLabelNode = getField("booleanTrueLabel");
       const falseLabelNode = getField("booleanFalseLabel");
       const textMaxLengthNode = getField("textMaxLength");
-      const enabledNode = getField("enabled") as HTMLInputElement | null;
+      const trackCharactersNode = getField("trackCharacters") as HTMLInputElement | null;
+      const trackUserNode = getField("trackUser") as HTMLInputElement | null;
       const injectNode = getField("includeInInjection") as HTMLInputElement | null;
       const colorNode = getField("color");
       const templateNode = getField("sequentialPromptTemplate");
@@ -6117,7 +6185,8 @@ export function openSettingsModal(input: {
       draft.booleanTrueLabel = String(trueLabelNode?.value ?? "");
       draft.booleanFalseLabel = String(falseLabelNode?.value ?? "");
       draft.textMaxLength = String(textMaxLengthNode?.value ?? "");
-      draft.enabled = Boolean(enabledNode?.checked);
+      draft.trackCharacters = Boolean(trackCharactersNode?.checked);
+      draft.trackUser = Boolean(trackUserNode?.checked);
       draft.includeInInjection = Boolean(injectNode?.checked);
       draft.color = String(colorNode?.value ?? "");
       draft.sequentialPromptTemplate = String(templateNode?.value ?? "");
@@ -6160,13 +6229,6 @@ export function openSettingsModal(input: {
         const panelKind = String(panel.dataset.bstKindPanel ?? "");
         panel.style.display = panelKind === kind ? (panel.classList.contains("bst-custom-wizard-grid") ? "grid" : "block") : "none";
       });
-
-      const enabledHelpNode = wizard.querySelector('[data-bst-kind-help="enabledLabel"]') as HTMLElement | null;
-      if (enabledHelpNode) {
-        enabledHelpNode.textContent = kind === "numeric"
-          ? "Enabled (Track + Card + Graph)"
-          : "Enabled (Track + Card)";
-      }
 
       const fallbackHelpNode = wizard.querySelector('[data-bst-kind-help="templateFallback"]') as HTMLElement | null;
       if (fallbackHelpNode) {
@@ -6980,7 +7042,7 @@ export function openSettingsModal(input: {
     trackConnection: "Enable Connection stat extraction and updates.",
     trackMood: "Enable mood extraction and mood display updates.",
     trackLastThought: "Enable hidden short internal thought extraction.",
-    enableUserTracking: "Run user-side extraction after user messages.",
+    enableUserTracking: "Run user-side extraction after user messages (custom stats respect per-stat Track for User toggle).",
     userTrackMood: "Allow user-side extraction to update User mood.",
     userTrackLastThought: "Allow user-side extraction to update User lastThought.",
     includeUserTrackerInInjection: "Include user-side tracked state in hidden prompt injection when available.",

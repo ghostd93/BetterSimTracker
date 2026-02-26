@@ -43,6 +43,8 @@ export interface CustomStatDefinition {
   booleanFalseLabel?: string;
   textMaxLength?: number;
   track: boolean;
+  trackCharacters?: boolean;
+  trackUser?: boolean;
   showOnCard: boolean;
   showInGraph: boolean;
   includeInInjection: boolean;

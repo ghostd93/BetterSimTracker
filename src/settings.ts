@@ -760,6 +760,9 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       return text.slice(0, textMaxLength);
     };
 
+    const legacyTrack = asBool(obj.track, true);
+    const trackCharacters = asBool(obj.trackCharacters, legacyTrack);
+    const trackUser = asBool(obj.trackUser, legacyTrack);
     const entry = {
       id,
       kind,
@@ -776,7 +779,9 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       booleanTrueLabel: kind === "boolean" ? (booleanTrueLabel || "enabled") : undefined,
       booleanFalseLabel: kind === "boolean" ? (booleanFalseLabel || "disabled") : undefined,
       textMaxLength: kind === "text_short" ? textMaxLength : undefined,
-      track: asBool(obj.track, true),
+      track: trackCharacters || trackUser,
+      trackCharacters,
+      trackUser,
       showOnCard: asBool(obj.showOnCard, true),
       showInGraph: kind === "numeric" ? asBool(obj.showInGraph, true) : false,
       includeInInjection: asBool(obj.includeInInjection, true),

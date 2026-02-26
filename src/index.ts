@@ -640,10 +640,12 @@ function getGenerationTargetMessageIndex(context: STContext): number | null {
 }
 
 function hasUserTrackingEnabledForExtraction(input: BetterSimTrackerSettings): boolean {
+  const tracksUserCustomStat = (stat: { track?: boolean; trackUser?: boolean }): boolean =>
+    Boolean(stat.trackUser ?? stat.track);
   if (!input.enableUserTracking) return false;
   if (input.userTrackMood) return true;
   if (input.userTrackLastThought) return true;
-  return (input.customStats ?? []).some(stat => Boolean(stat.track));
+  return (input.customStats ?? []).some(tracksUserCustomStat);
 }
 
 function isUserExtractionReason(reason: string): boolean {
@@ -1766,6 +1768,17 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       pushTrace("extract.skip", { reason: "no_active_characters", runId });
       return;
     }
+    const scopedCustomStats = (activeSettings.customStats ?? []).map(stat => {
+      const trackCharacters = Boolean(stat.trackCharacters ?? stat.track);
+      const trackUser = Boolean(stat.trackUser ?? stat.track);
+      return {
+        ...stat,
+        trackCharacters,
+        trackUser,
+        track: userExtraction ? trackUser : trackCharacters,
+      };
+    });
+
     const runScopedSettings: BetterSimTrackerSettings = userExtraction
       ? {
           ...activeSettings,
@@ -1775,12 +1788,12 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
           trackConnection: false,
           trackMood: activeSettings.userTrackMood,
           trackLastThought: activeSettings.userTrackLastThought,
-          customStats: (activeSettings.customStats ?? []).map(stat => ({
-            ...stat,
-            track: Boolean(stat.track),
-          })),
+          customStats: scopedCustomStats,
         }
-      : activeSettings;
+      : {
+          ...activeSettings,
+          customStats: scopedCustomStats,
+        };
 
     const previousEntry =
       typeof targetMessageIndex === "number" && targetMessageIndex >= 0
