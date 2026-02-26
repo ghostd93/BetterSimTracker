@@ -718,6 +718,10 @@ function startUserTurnGate(context: STContext, messageIndex: number | null): voi
     resolvedIndex != null && resolvedIndex >= 0 && resolvedIndex < context.chat.length
       ? String(context.chat[resolvedIndex]?.mes ?? "").trim()
       : "";
+  if (resolvedIndex == null) {
+    resetUserTurnGate("no_trackable_user_message");
+    return;
+  }
   userTurnGateActive = true;
   userTurnGateMessageIndex = resolvedIndex;
   userTurnGateMessageText = messageText;
@@ -1992,6 +1996,11 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     const target = context.chat[targetMessageIndex];
     if ((userExtraction && isTrackableUserMessage(target)) || (!userExtraction && isTrackableAiMessage(target))) {
       lastIndex = targetMessageIndex;
+    } else if (userExtraction) {
+      const skipReason = "target_user_message_not_trackable";
+      pushTrace("extract.skip", { reason: skipReason, trigger: reason, messageIndex: targetMessageIndex });
+      clearGeneratingUiIfStale(skipReason);
+      return;
     }
   }
   if (lastIndex == null) {
@@ -2573,8 +2582,20 @@ function registerEvents(context: STContext): void {
         pushTrace("extract.skip", { reason: "user_tracking_disabled", trigger: "USER_MESSAGE_RENDERED" });
         return;
       }
+      if (
+        messageIndex != null &&
+        (messageIndex < 0 || messageIndex >= context.chat.length || !isTrackableUserMessage(context.chat[messageIndex]))
+      ) {
+        resetUserTurnGate("rendered_user_message_not_trackable");
+        pushTrace("extract.skip", {
+          reason: "rendered_user_message_not_trackable",
+          trigger: "USER_MESSAGE_RENDERED",
+          messageIndex,
+        });
+        return;
+      }
       startUserTurnGate(context, messageIndex);
-      scheduleExtraction("USER_MESSAGE_RENDERED", undefined, 0);
+      scheduleExtraction("USER_MESSAGE_RENDERED", messageIndex ?? undefined, 0);
     });
   }
 

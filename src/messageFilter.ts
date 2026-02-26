@@ -42,6 +42,7 @@ export function isTrackableUserMessage(message: ChatMessage | null | undefined):
   if (!message || typeof message !== "object") return false;
   if (!message.is_user || message.is_system) return false;
   if (isTrackerSummaryNote(message)) return false;
+  if (!String(message.mes ?? "").trim()) return false;
   return true;
 }
 
