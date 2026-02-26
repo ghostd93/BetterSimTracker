@@ -3974,6 +3974,7 @@ function openEditStatsModal(input: {
 }): void {
   ensureStyles();
   closeEditStatsModal();
+  const characterLabel = input.character === USER_TRACKER_KEY ? "User" : input.character;
 
   const isUserCharacter = input.character === USER_TRACKER_KEY;
   const customScopeById = new Map(
@@ -4064,7 +4065,7 @@ function openEditStatsModal(input: {
   modal.className = EDIT_STATS_MODAL_CLASS;
   modal.innerHTML = `
     <div class="bst-edit-head">
-      <div class="bst-edit-title">Edit Tracker Stats - ${escapeHtml(input.character)}</div>
+      <div class="bst-edit-title">Edit Tracker Stats - ${escapeHtml(characterLabel)}</div>
       <button class="bst-btn bst-close-btn" data-action="close" aria-label="Close edit dialog">&times;</button>
     </div>
     <div class="bst-edit-sub">Numeric values are percentages (0-100). Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest tracker snapshot for this character.</div>
