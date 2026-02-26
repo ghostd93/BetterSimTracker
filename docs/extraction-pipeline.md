@@ -127,4 +127,5 @@ Extractor returns:
 
 - Non-trackable AI/system/media messages are skipped upstream.
 - Empty custom stat baselines are seeded to avoid phantom delta spikes.
+- Prompt history snapshots are filtered to entries with tracked values for currently active characters, so user-only turns do not inject default-seeded character rows into extraction prompts.
 - Parsed maps are initialized defensively to avoid undefined access during merge/apply.

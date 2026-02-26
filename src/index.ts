@@ -2443,8 +2443,19 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       runScopedSettings,
       context,
     );
+    const rawHistory = getRecentTrackerHistory(context, 6);
+    const relevantHistory = rawHistory.filter(entry =>
+      activeCharacters.some(name => hasTrackedValueForCharacter(entry, name, runScopedSettings)),
+    );
+    if (relevantHistory.length !== rawHistory.length) {
+      pushTrace("extract.history_filter", {
+        runId,
+        before: rawHistory.length,
+        after: relevantHistory.length,
+      });
+    }
     const seededHistory = seedHistoryForActiveCharacters(
-      getRecentTrackerHistory(context, 6),
+      relevantHistory,
       activeCharacters,
       runScopedSettings,
       context,

@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev25] - 2026-02-26
+### Fixed
+- Extraction prompts now filter recent history snapshots to entries that actually contain tracked values for the currently active characters, preventing user-only turns from appearing as default-seeded `0` character rows in `Recent tracker snapshots`.
+
 ## [2.1.0.3-dev24] - 2026-02-26
 ### Fixed
 - Rebuilt `dist/index.js` with the latest extraction-baseline fixes so runtime now uses the same prior-snapshot lookup logic already present in `src` (prevents fallback-to-default `Current tracker state` values during retrack).
