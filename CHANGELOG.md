@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev11] - 2026-02-26
+### Fixed
+- Ignored `USER_MESSAGE_RENDERED` events when no concrete user message index is present, preventing single ghost empty-user turns after reply in group chats.
+
 ## [2.1.0.3-dev10] - 2026-02-26
 ### Fixed
 - Prevented user-tracking extraction/replay loops on empty user-rendered turns in group chats by skipping non-trackable (blank) user messages.
