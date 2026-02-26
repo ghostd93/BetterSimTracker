@@ -369,6 +369,7 @@ export function buildUnifiedPrompt(
   ].join("\n");
   return renderTemplate(assembled, {
     envelope,
+    user: userName,
     userName,
     characters: characters.join(", "),
     contextText,
@@ -448,6 +449,7 @@ export function buildSequentialPrompt(
   ].join("\n");
   return renderTemplate(assembled, {
     envelope,
+    user: userName,
     userName,
     characters: characters.join(", "),
     contextText,
@@ -516,6 +518,8 @@ export function buildSequentialCustomNumericPrompt(input: {
     statDescription,
     statDefault: String(defaultValue),
     maxDelta: String(safeMaxDelta),
+    user: input.userName,
+    userName: input.userName,
     characters: input.characters.join(", "),
     envelope,
     contextText: input.contextText,
@@ -540,6 +544,8 @@ export function buildSequentialCustomNumericPrompt(input: {
 
   return renderTemplate(assembled, {
     envelope,
+    user: input.userName,
+    userName: input.userName,
     currentLines,
     historyLines: historyLines || "- none",
     instruction,
@@ -701,6 +707,8 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     statDescription,
     statDefault: String(defaultLiteral),
     maxDelta: "",
+    user: input.userName,
+    userName: input.userName,
     characters: input.characters.join(", "),
     envelope,
     contextText: input.contextText,
@@ -738,6 +746,8 @@ export function buildSequentialCustomNonNumericPrompt(input: {
 
   return renderTemplate(assembled, {
     envelope,
+    user: input.userName,
+    userName: input.userName,
     currentLines,
     historyLines: historyLines || "- none",
     instruction,

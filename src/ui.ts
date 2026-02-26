@@ -4738,7 +4738,7 @@ export function openSettingsModal(input: {
         <div class="bst-help-line">Placeholders you can use:</div>
         <ul class="bst-help-list">
           <li><code>{{envelope}}</code> — prebuilt header with user/characters + recent messages</li>
-          <li><code>{{userName}}</code> — current user name</li>
+          <li><code>{{user}}</code> — current user name (<code>{{userName}}</code> alias also works)</li>
           <li><code>{{characters}}</code> — comma-separated character names</li>
           <li><code>{{contextText}}</code> — raw recent messages text</li>
           <li><code>{{currentLines}}</code> — current tracker state lines</li>

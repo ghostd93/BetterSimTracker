@@ -383,7 +383,7 @@ Built-in sequential prompt sections also include `Generate with AI` to draft a s
 Available placeholders:
 
 - `{{envelope}}`: prebuilt header that already includes user/character names and recent messages.
-- `{{userName}}`: current user name.
+- `{{user}}`: current user name (`{{userName}}` is also supported as an alias).
 - `{{characters}}`: comma-separated character names.
 - `{{contextText}}`: raw recent messages text.
 - `{{currentLines}}`: current tracker state lines.
