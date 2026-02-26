@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev19] - 2026-02-26
+### Fixed
+- Inactive character cards now carry forward the latest known tracker values from previous tracked messages when the current message has no fresh values for that character, instead of displaying baseline defaults.
+- Carry-forward now applies to numeric stats, mood, lastThought, and custom non-numeric stat display for inactive cards.
+- Delta badges on latest-message cards are now shown only for stats that were explicitly updated in the current message, avoiding misleading deltas on carried-forward values.
+
 ## [2.1.0.3-dev18] - 2026-02-26
 ### Fixed
 - Group/inactive card rendering now also considers character names present across rendered tracker history entries, so inactive cards (for example Lilly) remain visible even when the latest extraction run reports a narrower character set.

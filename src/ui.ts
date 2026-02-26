@@ -3678,11 +3678,42 @@ export function renderTracker(
     const cardNumericDefs = allNumericDefs.filter(def => def.showOnCard);
     const allNonNumericDefs = getNonNumericStatDefinitions(settings);
     const cardNonNumericDefs = allNonNumericDefs.filter(def => def.showOnCard);
+    const previousData = findPreviousData(entry.messageIndex);
+    const getEffectiveNumericRawValue = (key: string, name: string): number | undefined => {
+      const current = getNumericRawValue(data, key, name);
+      if (current !== undefined && !Number.isNaN(current)) return current;
+      if (!previousData) return undefined;
+      const previous = getNumericRawValue(previousData, key, name);
+      if (previous !== undefined && !Number.isNaN(previous)) return previous;
+      return undefined;
+    };
+    const hasEffectiveNumericValue = (key: string, name: string): boolean =>
+      getEffectiveNumericRawValue(key, name) !== undefined;
+    const hasEffectiveNonNumericValue = (def: UiNonNumericStatDefinition, name: string): boolean =>
+      hasNonNumericValue(data, def, name) || (previousData ? hasNonNumericValue(previousData, def, name) : false);
+    const resolveEffectiveNonNumericValue = (
+      def: UiNonNumericStatDefinition,
+      name: string,
+    ): string | boolean | null => {
+      if (hasNonNumericValue(data, def, name)) return resolveNonNumericValue(data, def, name);
+      if (previousData && hasNonNumericValue(previousData, def, name)) return resolveNonNumericValue(previousData, def, name);
+      return resolveNonNumericValue(data, def, name);
+    };
+    const getEffectiveMoodText = (name: string): string => {
+      if (data.statistics.mood?.[name] !== undefined) return String(data.statistics.mood?.[name] ?? "");
+      if (previousData?.statistics.mood?.[name] !== undefined) return String(previousData.statistics.mood?.[name] ?? "");
+      return "";
+    };
+    const getEffectiveLastThoughtText = (name: string): string => {
+      if (data.statistics.lastThought?.[name] !== undefined) return String(data.statistics.lastThought?.[name] ?? "");
+      if (previousData?.statistics.lastThought?.[name] !== undefined) return String(previousData.statistics.lastThought?.[name] ?? "");
+      return "";
+    };
     const hasAnyStatFor = (name: string): boolean =>
-      cardNumericDefs.some(def => hasNumericValue(data, def.key, name)) ||
-      cardNonNumericDefs.some(def => hasNonNumericValue(data, def, name)) ||
-      data.statistics.mood?.[name] !== undefined ||
-      data.statistics.lastThought?.[name] !== undefined;
+      cardNumericDefs.some(def => hasEffectiveNumericValue(def.key, name)) ||
+      cardNonNumericDefs.some(def => hasEffectiveNonNumericValue(def, name)) ||
+      getEffectiveMoodText(name) !== "" ||
+      getEffectiveLastThoughtText(name) !== "";
     const forceAllInGroup = isGroupChat;
     const dataCharacterNames = collectCharacterNamesFromTrackerData(data);
     const mergedCharacters: string[] = [];
@@ -3725,7 +3756,6 @@ export function renderTracker(
         return a.localeCompare(b);
       });
 
-    const previousData = findPreviousData(entry.messageIndex);
     const cardHtmlByName: Array<{ name: string; html: string; isActive: boolean; isNew: boolean; cardColor: string }> = [];
     const signatureParts: string[] = [
       `msg:${entry.messageIndex}`,
@@ -3746,7 +3776,7 @@ export function renderTracker(
       const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
       const enabledNumeric = getNumericStatsForCharacter(data, name, settings);
       const enabledNonNumeric = cardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
-      const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
+      const moodText = getEffectiveMoodText(name);
       const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
       const canEdit = latestTrackedMessageIndex != null && entry.messageIndex === latestTrackedMessageIndex;
@@ -3755,8 +3785,8 @@ export function renderTracker(
         ? getResolvedStExpressionImageOptions(settings, name, characterAvatar)
         : null;
       const moodImage = moodText ? getMoodImageUrl(settings, name, moodText, characterAvatar, onRequestRerender) : null;
-      const lastThoughtText = settings.showLastThought && data.statistics.lastThought?.[name] !== undefined
-        ? String(data.statistics.lastThought?.[name] ?? "")
+      const lastThoughtText = settings.showLastThought
+        ? getEffectiveLastThoughtText(name)
         : "";
       const thoughtUiKey = thoughtKey(entry.messageIndex, name);
       const stExpressionImageStyle = (() => {
@@ -3766,11 +3796,11 @@ export function renderTracker(
         return ` style="object-position:${stExpressionImageOptions.positionX.toFixed(2)}% ${stExpressionImageOptions.positionY.toFixed(2)}% !important;transform:translate(${panX.toFixed(2)}%, ${panY.toFixed(2)}%) scale(${stExpressionImageOptions.zoom.toFixed(2)}) !important;transform-origin:center center !important;"`;
       })();
       const collapsedSummary = enabledNumeric.map(def => {
-        const value = toPercent(getNumericRawValue(data, def.key, name) ?? def.defaultValue);
+        const value = toPercent(getEffectiveNumericRawValue(def.key, name) ?? def.defaultValue);
         return `<span>${def.short} ${value}%</span>`;
       }).join("");
       const collapsedNonNumeric = enabledNonNumeric.map(def => {
-        const value = resolveNonNumericValue(data, def, name);
+        const value = resolveEffectiveNonNumericValue(def, name);
         if (value == null) return "";
         const text = formatNonNumericForDisplay(def, value);
         return `<span>${escapeHtml(shortLabelFrom(def.label))} ${escapeHtml(text)}</span>`;
@@ -3802,13 +3832,16 @@ export function renderTracker(
         <div class="bst-body">
         ${enabledNumeric.map(({ key, label, color, defaultValue }) => {
           const defDefault = defaultValue ?? 50;
-          const value = toPercent(getNumericRawValue(data, key, name) ?? defDefault);
+          const currentValueRaw = getNumericRawValue(data, key, name);
+          const hasCurrentValue = currentValueRaw !== undefined && !Number.isNaN(currentValueRaw);
+          const effectiveValueRaw = getEffectiveNumericRawValue(key, name);
+          const value = toPercent(effectiveValueRaw ?? defDefault);
           const prevValueRaw = previousData ? getNumericRawValue(previousData, key, name) : undefined;
-          const hasPrevValue = prevValueRaw !== undefined;
+          const hasPrevValue = prevValueRaw !== undefined && !Number.isNaN(prevValueRaw);
           const prevValue = toPercent(hasPrevValue ? prevValueRaw : value);
           const delta = Math.round(value - prevValue);
           const deltaClass = delta > 0 ? "bst-delta bst-delta-up" : delta < 0 ? "bst-delta bst-delta-down" : "bst-delta bst-delta-flat";
-          const showDelta = latestAiIndex != null && entry.messageIndex === latestAiIndex && hasPrevValue;
+          const showDelta = latestAiIndex != null && entry.messageIndex === latestAiIndex && hasPrevValue && hasCurrentValue;
           const rowClass = showDelta && delta !== 0 ? "bst-row bst-row-changed" : "bst-row";
           return `
             <div class="${rowClass}">
@@ -3818,7 +3851,7 @@ export function renderTracker(
           `;
         }).join("")}
         ${enabledNonNumeric.map(def => {
-          const resolved = resolveNonNumericValue(data, def, name);
+          const resolved = resolveEffectiveNonNumericValue(def, name);
           const displayValue = resolved == null ? "not set" : formatNonNumericForDisplay(def, resolved);
           const color = def.color || "#9bd5ff";
           return `
@@ -3843,13 +3876,13 @@ export function renderTracker(
                 : `<span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>`}
           </div>
         </div>` : ""}
-        ${settings.showLastThought && data.statistics.lastThought?.[name] !== undefined && !moodImage ? renderThoughtMarkup(String(data.statistics.lastThought?.[name] ?? ""), thoughtUiKey, "panel") : ""}
-        ${enabledNumeric.length === 0 && enabledNonNumeric.length === 0 && moodText === "" && !(settings.showLastThought && data.statistics.lastThought?.[name] !== undefined) ? `<div class="bst-empty">No stats recorded.</div>` : ""}
+        ${settings.showLastThought && lastThoughtText !== "" && !moodImage ? renderThoughtMarkup(lastThoughtText, thoughtUiKey, "panel") : ""}
+        ${enabledNumeric.length === 0 && enabledNonNumeric.length === 0 && moodText === "" && !(settings.showLastThought && lastThoughtText !== "") ? `<div class="bst-empty">No stats recorded.</div>` : ""}
         </div>
       `;
       cardHtmlByName.push({ name, html: cardHtml, isActive, isNew, cardColor });
       const nonNumericSignature = enabledNonNumeric.map(def => {
-        const value = resolveNonNumericValue(data, def, name);
+        const value = resolveEffectiveNonNumericValue(def, name);
         if (value == null) return `${def.id}:not_set`;
         return `${def.id}:${typeof value === "boolean" ? String(value) : value}`;
       }).join("|");
