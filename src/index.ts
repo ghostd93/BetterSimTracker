@@ -691,6 +691,31 @@ function cloneCapturedGenerationIntent(intent: CapturedGenerationIntent): Captur
   };
 }
 
+function normalizeReplayGenerationIntent(
+  context: STContext,
+  intent: CapturedGenerationIntent,
+): { type: string; options: Record<string, unknown>; dryRun: boolean; forcedAutomaticTrigger: boolean } {
+  const type = String(intent.type ?? "").trim();
+  const options = sanitizeGenerationOptions(intent.options);
+  let forcedAutomaticTrigger = false;
+
+  // During USER_MESSAGE_RENDERED race-replay, forcing automatic-trigger mode avoids
+  // ST inserting a second empty user turn before generation.
+  if (type.toLowerCase() === "normal") {
+    const lastUserIndex = getLastUserMessageIndex(context);
+    const lastAiIndex = getLastAiMessageIndex(context);
+    const hasCommittedUserTurn =
+      lastUserIndex != null &&
+      (lastAiIndex == null || lastUserIndex > lastAiIndex);
+    if (hasCommittedUserTurn && options.automatic_trigger !== true) {
+      options.automatic_trigger = true;
+      forcedAutomaticTrigger = true;
+    }
+  }
+
+  return { type, options, dryRun: intent.dryRun, forcedAutomaticTrigger };
+}
+
 function resetUserTurnGate(reason: string): void {
   const hadIntent = Boolean(userTurnGatePendingIntent);
   if (userTurnGateStopTimer !== null) {
@@ -832,6 +857,7 @@ function finalizeUserTurnGateReplay(triggerReason: string): void {
   }
 
   const replay = intent;
+  const normalizedReplay = normalizeReplayGenerationIntent(context, replay);
   resetUserTurnGate("replay_start");
   chatGenerationInFlight = false;
   chatGenerationIntent = null;
@@ -841,17 +867,22 @@ function finalizeUserTurnGateReplay(triggerReason: string): void {
   pendingLateRenderExtraction = false;
   pushTrace("user_gate.replay_start", {
     triggerReason,
-    type: replay.type,
-    dryRun: replay.dryRun,
-    optionKeys: Object.keys(replay.options),
+    type: normalizedReplay.type,
+    dryRun: normalizedReplay.dryRun,
+    optionKeys: Object.keys(normalizedReplay.options),
+    forcedAutomaticTrigger: normalizedReplay.forcedAutomaticTrigger,
   });
   void (async () => {
     try {
-      await context.generate?.(replay.type, replay.options, replay.dryRun);
-      pushTrace("user_gate.replay_done", { type: replay.type });
+      await context.generate?.(normalizedReplay.type, normalizedReplay.options, normalizedReplay.dryRun);
+      pushTrace("user_gate.replay_done", {
+        type: normalizedReplay.type,
+        forcedAutomaticTrigger: normalizedReplay.forcedAutomaticTrigger,
+      });
     } catch (error) {
       pushTrace("user_gate.replay_error", {
-        type: replay.type,
+        type: normalizedReplay.type,
+        forcedAutomaticTrigger: normalizedReplay.forcedAutomaticTrigger,
         message: error instanceof Error ? error.message : String(error),
       });
       console.error("[BetterSimTracker] Failed to replay generation intent:", error);

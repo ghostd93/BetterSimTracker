@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev12] - 2026-02-26
+### Fixed
+- Normalized user-turn replay generation options to force `automatic_trigger` when a committed user message already exists, preventing a synthetic blank user turn during replay in group chat race conditions.
+
 ## [2.1.0.3-dev11] - 2026-02-26
 ### Fixed
 - Ignored `USER_MESSAGE_RENDERED` events when no concrete user message index is present, preventing single ghost empty-user turns after reply in group chats.
