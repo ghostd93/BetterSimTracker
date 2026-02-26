@@ -3443,6 +3443,14 @@ export function renderTracker(
   ensureStyles();
   const palette = allocateCharacterColors(allCharacters);
   const sortedEntries = [...entries].sort((a, b) => a.messageIndex - b.messageIndex);
+  const knownCharactersAcrossEntries: string[] = [];
+  const knownAcrossSeen = new Set<string>();
+  for (const entry of sortedEntries) {
+    if (!entry.data) continue;
+    for (const name of collectCharacterNamesFromTrackerData(entry.data)) {
+      pushUniqueCharacterName(knownCharactersAcrossEntries, knownAcrossSeen, name);
+    }
+  }
   const latestTrackedMessageIndex = [...sortedEntries].reverse().find(item => item.data)?.messageIndex ?? null;
   const findPreviousData = (messageIndex: number): TrackerData | null => {
     for (let i = sortedEntries.length - 1; i >= 0; i -= 1) {
@@ -3682,6 +3690,9 @@ export function renderTracker(
     for (const name of allCharacters) {
       pushUniqueCharacterName(mergedCharacters, mergedSeen, name);
     }
+    for (const name of knownCharactersAcrossEntries) {
+      pushUniqueCharacterName(mergedCharacters, mergedSeen, name);
+    }
     for (const name of dataCharacterNames) {
       pushUniqueCharacterName(mergedCharacters, mergedSeen, name);
     }
@@ -3696,7 +3707,7 @@ export function renderTracker(
           ? data.activeCharacters
           : dataCharacterNames);
     const scopedDisplayPool = userMessageEntry
-      ? displayPool
+      ? displayPool.filter(name => normalizeName(name) === normalizeName(USER_TRACKER_KEY))
       : displayPool.filter(name => normalizeName(name) !== normalizeName(USER_TRACKER_KEY));
     const displayOrder = new Map(scopedDisplayPool.map((name, index) => [normalizeName(name), index]));
     const includeAllTargets = forceAllInGroup || settings.showInactive;

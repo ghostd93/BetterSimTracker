@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev18] - 2026-02-26
+### Fixed
+- Group/inactive card rendering now also considers character names present across rendered tracker history entries, so inactive cards (for example Lilly) remain visible even when the latest extraction run reports a narrower character set.
+- User-message tracker rows are scoped back to the User card only, preventing inactive character cards from appearing under user messages.
+
 ## [2.1.0.3-dev17] - 2026-02-26
 ### Fixed
 - Inactive/group card rendering no longer drops characters that have no fresh per-message stat values; when `Show Inactive` is on (or in group rendering), all scoped character cards are shown and marked active/inactive accordingly.
