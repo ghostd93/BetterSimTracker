@@ -4833,9 +4833,16 @@ export function openSettingsModal(input: {
         <label>Accent Color
           <div class="bst-color-inputs">
             <input data-k-color="accentColor" type="color">
+            <input data-k="accentColor" type="text" placeholder="#RRGGBB">
           </div>
         </label>
-        <label>User Card Color (hex, optional) <input data-k="userCardColor" type="text" placeholder="#RRGGBB"></label>
+        <label>User Card Color
+          <div class="bst-color-inputs">
+            <input data-k-color="userCardColor" type="color">
+            <input data-k="userCardColor" type="text" placeholder="Auto">
+            <button type="button" class="bst-btn bst-btn-soft" data-action="reset-user-card-color">Auto</button>
+          </div>
+        </label>
         <label>Card Opacity <input data-k="cardOpacity" type="number" min="0.1" max="1" step="0.01"></label>
         <label>Border Radius <input data-k="borderRadius" type="number" min="0" max="32"></label>
         <label>Font Size <input data-k="fontSize" type="number" min="10" max="22"></label>
@@ -5359,15 +5366,44 @@ export function openSettingsModal(input: {
 
   const initAccentColorPicker = (): void => {
     const colorInput = modal.querySelector('[data-k-color="accentColor"]') as HTMLInputElement | null;
-    if (!colorInput) return;
-    const fallback = input.settings.accentColor || "#ff5a6f";
-    colorInput.value = fallback;
+    const textInput = modal.querySelector('[data-k="accentColor"]') as HTMLInputElement | null;
+    if (!colorInput || !textInput) return;
+    const fallback = normalizeHexColor(input.settings.accentColor) ?? "#ff5a6f";
+    const syncPickerFromText = (): void => {
+      colorInput.value = normalizeHexColor(textInput.value) ?? fallback;
+    };
+    textInput.value = normalizeHexColor(textInput.value) ?? fallback;
+    syncPickerFromText();
     colorInput.addEventListener("input", () => {
-      (input.settings as unknown as Record<string, unknown>).accentColor = colorInput.value;
+      textInput.value = colorInput.value;
+      persistLive();
+    });
+    textInput.addEventListener("input", syncPickerFromText);
+  };
+
+  const initUserCardColorPicker = (): void => {
+    const colorInput = modal.querySelector('[data-k-color="userCardColor"]') as HTMLInputElement | null;
+    const textInput = modal.querySelector('[data-k="userCardColor"]') as HTMLInputElement | null;
+    const resetButton = modal.querySelector('[data-action="reset-user-card-color"]') as HTMLButtonElement | null;
+    if (!colorInput || !textInput) return;
+    const fallback = normalizeHexColor(getStableAutoCardColor(USER_TRACKER_KEY)) ?? "#7a9cff";
+    const syncPickerFromText = (): void => {
+      colorInput.value = normalizeHexColor(textInput.value) ?? fallback;
+    };
+    textInput.value = normalizeHexColor(textInput.value) ?? "";
+    syncPickerFromText();
+    colorInput.addEventListener("input", () => {
+      textInput.value = colorInput.value;
+      persistLive();
+    });
+    textInput.addEventListener("input", syncPickerFromText);
+    resetButton?.addEventListener("click", event => {
+      event.preventDefault();
+      textInput.value = "";
+      syncPickerFromText();
       persistLive();
     });
   };
-  initAccentColorPicker();
 
   const set = (key: keyof BetterSimTrackerSettings, value: string): void => {
     const node = modal.querySelector(`[data-k="${key}"]`) as HTMLInputElement | HTMLSelectElement | null;
@@ -5426,9 +5462,10 @@ export function openSettingsModal(input: {
   set("stExpressionImageZoom", String(input.settings.stExpressionImageZoom));
   set("stExpressionImagePositionX", String(input.settings.stExpressionImagePositionX));
   set("stExpressionImagePositionY", String(input.settings.stExpressionImagePositionY));
-  const accentInput = modal.querySelector('[data-k-color="accentColor"]') as HTMLInputElement | null;
-  if (accentInput) accentInput.value = input.settings.accentColor || "#ff5a6f";
+  set("accentColor", input.settings.accentColor || "#ff5a6f");
   set("userCardColor", input.settings.userCardColor || "");
+  initAccentColorPicker();
+  initUserCardColorPicker();
   set("cardOpacity", String(input.settings.cardOpacity));
   set("borderRadius", String(input.settings.borderRadius));
   set("fontSize", String(input.settings.fontSize));

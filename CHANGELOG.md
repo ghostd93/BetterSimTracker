@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev9] - 2026-02-26
+### Changed
+- Color controls in Display now use paired picker + text input consistently (including `Accent Color` and `User Card Color`), with `Auto` reset for user card override.
+
 ## [2.1.0.3-dev8] - 2026-02-26
 ### Added
 - New `User Card Color` display setting for overriding the User tracker card color via optional hex value.
