@@ -41,7 +41,7 @@ import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModa
 import { cancelActiveGenerations, generateJson } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
 import { initCharacterPanel } from "./characterPanel";
-import { readLorebookContext } from "./lorebook";
+import { extractLorebookEntriesFromPayload, readLorebookContext } from "./lorebook";
 
 let settings: BetterSimTrackerSettings | null = null;
 let isExtracting = false;
@@ -73,6 +73,7 @@ let summaryVisibilityReloadInFlight = false;
 const BUILT_IN_NUMERIC_KEYS = new Set(["affection", "trust", "desire", "connection"]);
 const EDIT_MOOD_LABELS = new Map(moodOptions.map(label => [label.toLowerCase(), label]));
 const LOREBOOK_ACTIVATED_METADATA_KEY = "bstLorebookActivatedEntries";
+let lastActivatedLorebookEntries: string[] = [];
 
 function collectSummaryCharacters(data: TrackerData): string[] {
   const names = new Set<string>();
@@ -172,47 +173,24 @@ function countSummarySentences(text: string): number {
   return matches?.length ?? 0;
 }
 
-function sanitizeLorebookActivatedEntries(payload: unknown): string[] {
-  if (!Array.isArray(payload)) return [];
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const item of payload) {
-    let text = "";
-    if (typeof item === "string") {
-      text = item;
-    } else if (item && typeof item === "object") {
-      const record = item as Record<string, unknown>;
-      const candidates = [record.content, record.text, record.prompt, record.entry];
-      for (const candidate of candidates) {
-        if (typeof candidate !== "string") continue;
-        if (candidate.trim()) {
-          text = candidate;
-          break;
-        }
-      }
-    }
-    if (!text) continue;
-    const compact = text
-      .replace(/\r\n/g, "\n")
-      .replace(/[ \t]+/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-    if (!compact || seen.has(compact)) continue;
-    seen.add(compact);
-    out.push(compact);
-    if (out.length >= 120) break;
-  }
-  return out;
+function describeLorebookPayload(payload: unknown): string {
+  if (Array.isArray(payload)) return `array:${payload.length}`;
+  if (payload instanceof Set) return `set:${payload.size}`;
+  if (payload instanceof Map) return `map:${payload.size}`;
+  if (payload && typeof payload === "object") return "object";
+  return typeof payload;
 }
 
-function cacheLorebookActivatedEntries(context: STContext, payload: unknown): void {
-  const entries = sanitizeLorebookActivatedEntries(payload);
-  if (!entries.length) return;
+function cacheLorebookActivatedEntries(context: STContext, payload: unknown): number {
+  const entries = extractLorebookEntriesFromPayload(payload, 120);
+  if (!entries.length) return 0;
+  lastActivatedLorebookEntries = entries;
   if (!context.chatMetadata || typeof context.chatMetadata !== "object") {
     context.chatMetadata = {};
   }
   context.chatMetadata[LOREBOOK_ACTIVATED_METADATA_KEY] = entries;
   context.saveMetadataDebounced?.();
+  return entries.length;
 }
 
 function buildSummaryTrackerStateLines(data: TrackerData, currentSettings: BetterSimTrackerSettings): string {
@@ -2050,6 +2028,7 @@ function registerEvents(context: STContext): void {
     chatGenerationSawCharacterRender = false;
     chatGenerationStartLastAiIndex = null;
     swipeGenerationActive = false;
+    lastActivatedLorebookEntries = [];
     clearPendingSwipeExtraction();
     pushTrace("event.chat_changed");
     scheduleRefresh();
@@ -2112,6 +2091,7 @@ function registerEvents(context: STContext): void {
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
       swipeGenerationActive = false;
+      lastActivatedLorebookEntries = [];
       clearPendingSwipeExtraction();
       pushTrace("event.chat_loaded");
       scheduleRefresh();
@@ -2128,9 +2108,13 @@ function registerEvents(context: STContext): void {
 
   if (events.WORLD_INFO_ACTIVATED) {
     source.on(events.WORLD_INFO_ACTIVATED, (payload: unknown) => {
-      cacheLorebookActivatedEntries(context, payload);
-      const activatedCount = Array.isArray(payload) ? payload.length : 0;
-      pushTrace("event.world_info_activated", { activatedCount });
+      const acceptedCount = cacheLorebookActivatedEntries(context, payload);
+      const activatedCount = Array.isArray(payload) ? payload.length : undefined;
+      pushTrace("event.world_info_activated", {
+        activatedCount: activatedCount ?? null,
+        acceptedCount,
+        payload: describeLorebookPayload(payload),
+      });
       queuePromptSync(context);
     });
   }
@@ -2153,6 +2137,7 @@ function registerEvents(context: STContext): void {
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
       swipeGenerationActive = false;
+      lastActivatedLorebookEntries = [];
       clearPendingSwipeExtraction();
       pushTrace("event.chat_deleted");
       scheduleRefresh(60);
@@ -2395,8 +2380,22 @@ function buildCharacterCardsContext(context: STContext, activeCharacters: string
   return `\n\nCharacter cards (use only to disambiguate if recent messages are unclear):\n${chunks.join("\n\n")}`;
 }
 
+function applyLorebookCharLimit(text: string, maxChars: number, maxCap = 12000): string {
+  const requested = Number(maxChars);
+  const limit = Number.isNaN(requested)
+    ? 1200
+    : Math.max(0, Math.min(maxCap, Math.round(requested)));
+  const normalized = String(text ?? "").trim();
+  if (!normalized) return "";
+  if (limit === 0) return normalized;
+  return normalized.slice(0, limit).trim();
+}
+
 function buildLorebookExtractionContext(context: STContext, maxChars: number): string {
-  const lorebookText = readLorebookContext(context, maxChars, 12000);
+  let lorebookText = readLorebookContext(context, maxChars, 12000);
+  if (!lorebookText && lastActivatedLorebookEntries.length) {
+    lorebookText = applyLorebookCharLimit(lastActivatedLorebookEntries.join("\n\n"), maxChars, 12000);
+  }
   if (!lorebookText) return "";
   return `\n\nLorebook context (activated; use only to disambiguate if recent messages are unclear):\n${lorebookText}`;
 }
@@ -2436,6 +2435,7 @@ function clearCurrentChat(): void {
   clearTrackerDataForCurrentChat(activeContext);
   clearDebugRecord(activeContext);
   debugTrace = [];
+  lastActivatedLorebookEntries = [];
   latestData = null;
   latestDataMessageIndex = null;
   lastDebugRecord = null;

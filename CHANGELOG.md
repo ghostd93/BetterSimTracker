@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev3] - 2026-02-26
+### Fixed
+- Lorebook activation parsing is now robust to real-world payload shapes (arrays/sets/maps/nested objects), so activated lorebook text is reliably captured for extraction context.
+- Extraction lorebook context now falls back to the latest activated lorebook entries when metadata/context paths are momentarily empty in the same run.
+- Added diagnostics trace detail for lorebook activation (`activatedCount`, `acceptedCount`, payload type) to make inclusion failures easy to verify.
+
 ## [2.1.0.3-dev2] - 2026-02-26
 ### Added
 - Optional lorebook context include for extraction prompts with configurable extraction limit.
