@@ -702,7 +702,11 @@ function queueRender(): void {
     });
 
     const latestAiIndex = context ? getLastAiMessageIndex(context) : null;
-    renderTracker(entries, settings, allCharacterNames, Boolean(context?.groupId), trackerUiState, latestAiIndex, activeSummaryRuns, characterName => {
+    renderTracker(entries, settings, allCharacterNames, Boolean(context?.groupId), trackerUiState, latestAiIndex, activeSummaryRuns, messageIndex => {
+      const liveContext = getSafeContext();
+      if (!liveContext || messageIndex < 0 || messageIndex >= liveContext.chat.length) return false;
+      return Boolean(liveContext.chat[messageIndex]?.is_user);
+    }, characterName => {
       const liveContext = getSafeContext();
       if (!liveContext?.characters?.length) return null;
       const normalized = String(characterName ?? "").trim().toLowerCase();

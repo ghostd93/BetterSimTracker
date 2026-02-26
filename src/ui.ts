@@ -3325,6 +3325,7 @@ export function renderTracker(
   uiState: TrackerUiState,
   latestAiIndex: number | null,
   summaryBusyMessageIndices: Set<number> | undefined,
+  isUserMessageIndex?: (messageIndex: number) => boolean,
   resolveCharacterAvatar?: (characterName: string) => string | null,
   onOpenGraph?: (characterName: string) => void,
   onRetrackMessage?: (messageIndex: number) => void,
@@ -3562,6 +3563,7 @@ export function renderTracker(
 
     const showRetrack = latestAiIndex != null && entry.messageIndex === latestAiIndex;
     const summaryBusy = Boolean(showRetrack && summaryBusyMessageIndices?.has(entry.messageIndex));
+    const userMessageEntry = Boolean(isUserMessageIndex?.(entry.messageIndex));
     const collapsed = root.classList.contains("bst-root-collapsed");
     const activeSet = new Set(data.activeCharacters.map(normalizeName));
     const allNumericDefs = getNumericStatDefinitions(settings);
@@ -3578,9 +3580,12 @@ export function renderTracker(
       (forceAllInGroup || settings.showInactive) && allCharacters.length > 0
         ? allCharacters
         : data.activeCharacters;
-    const displayOrder = new Map(displayPool.map((name, index) => [normalizeName(name), index]));
+    const scopedDisplayPool = userMessageEntry
+      ? displayPool
+      : displayPool.filter(name => normalizeName(name) !== normalizeName(USER_TRACKER_KEY));
+    const displayOrder = new Map(scopedDisplayPool.map((name, index) => [normalizeName(name), index]));
     const targets = Array.from(new Set(
-      displayPool.filter(name => hasAnyStatFor(name) || activeSet.has(normalizeName(name)))
+      scopedDisplayPool.filter(name => hasAnyStatFor(name) || activeSet.has(normalizeName(name)))
     ))
       .sort((a, b) => {
         const aActive = activeSet.has(normalizeName(a));
