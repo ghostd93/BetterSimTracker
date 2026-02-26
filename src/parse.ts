@@ -346,6 +346,24 @@ export function parseCustomValueResponse(
   confidence: Record<string, number>;
   value: Record<string, string | boolean>;
 } {
+  const hasScriptLikeContent = (text: string): boolean =>
+    /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
+  const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
+    if (!Array.isArray(options) || options.length === 0) return null;
+    if (typeof candidate !== "string") return null;
+    if (options.includes(candidate)) return candidate;
+    const trimmed = candidate.trim();
+    if (trimmed && options.includes(trimmed)) return trimmed;
+    const lowered = candidate.toLowerCase();
+    const lowerMatch = options.find(option => option.toLowerCase() === lowered);
+    if (lowerMatch) return lowerMatch;
+    if (trimmed) {
+      const trimmedLower = trimmed.toLowerCase();
+      const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
+      if (trimmedMatch) return trimmedMatch;
+    }
+    return null;
+  };
   const parsed = safeJsonParse(rawText);
   const byName = new Map<string, Record<string, unknown>>();
   const result = {
@@ -373,7 +391,7 @@ export function parseCustomValueResponse(
   }
 
   const enumOptions = Array.isArray(input.enumOptions)
-    ? input.enumOptions.map(item => String(item ?? "").trim().toLowerCase()).filter(Boolean)
+    ? input.enumOptions.map(item => String(item ?? "")).filter(item => item.length > 0 && !hasScriptLikeContent(item))
     : [];
   const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
 
@@ -399,15 +417,13 @@ export function parseCustomValueResponse(
       continue;
     }
     if (typeof candidate !== "string") continue;
-    const cleaned = candidate.trim().replace(/\s+/g, " ");
-    if (!cleaned) continue;
     if (kind === "enum_single") {
-      const normalized = cleaned.toLowerCase();
-      if (enumOptions.includes(normalized)) {
-        result.value[name] = normalized;
-      }
+      const matched = resolveEnumOption(enumOptions, candidate);
+      if (matched != null && !hasScriptLikeContent(matched)) result.value[name] = matched;
       continue;
     }
+    const cleaned = candidate.trim().replace(/\s+/g, " ");
+    if (!cleaned) continue;
     result.value[name] = cleaned.slice(0, textMaxLength);
   }
 

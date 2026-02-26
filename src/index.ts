@@ -947,8 +947,26 @@ function buildSeededCustomNonNumericStatisticsForActiveCharacters(
     const statId = String(def.id ?? "").trim().toLowerCase();
     if (!statId) continue;
     if (!seeded[statId]) seeded[statId] = {};
+    const hasScriptLikeContent = (text: string): boolean =>
+      /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
+    const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
+      if (!Array.isArray(options) || options.length === 0) return null;
+      if (typeof candidate !== "string") return null;
+      if (options.includes(candidate)) return candidate;
+      const trimmed = candidate.trim();
+      if (trimmed && options.includes(trimmed)) return trimmed;
+      const lowered = candidate.toLowerCase();
+      const lowerMatch = options.find(option => option.toLowerCase() === lowered);
+      if (lowerMatch) return lowerMatch;
+      if (trimmed) {
+        const trimmedLower = trimmed.toLowerCase();
+        const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
+        if (trimmedMatch) return trimmedMatch;
+      }
+      return null;
+    };
     const enumOptions = Array.isArray(def.enumOptions)
-      ? def.enumOptions.map(option => String(option ?? "").trim().toLowerCase()).filter(Boolean)
+      ? def.enumOptions.map(option => String(option ?? "")).filter(option => option.length > 0 && !hasScriptLikeContent(option))
       : [];
     const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(def.textMaxLength) || 120)));
     const normalizeValue = (raw: unknown): string | boolean => {
@@ -962,12 +980,11 @@ function buildSeededCustomNonNumericStatisticsForActiveCharacters(
         return typeof def.defaultValue === "boolean" ? def.defaultValue : false;
       }
       if (kind === "enum_single") {
-        const defaultToken = String(def.defaultValue ?? "").trim().toLowerCase();
-        const fallback = enumOptions.includes(defaultToken)
-          ? defaultToken
-          : (enumOptions[0] ?? defaultToken);
-        const token = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-        return token && enumOptions.includes(token) ? token : fallback;
+        const defaultOption = resolveEnumOption(enumOptions, def.defaultValue);
+        const fallback = defaultOption ?? enumOptions[0] ?? String(def.defaultValue ?? "");
+        const matched = resolveEnumOption(enumOptions, raw);
+        const selected = matched ?? fallback;
+        return hasScriptLikeContent(selected) ? (enumOptions[0] ?? "") : selected;
       }
       const fallback = String(def.defaultValue ?? "").trim().replace(/\s+/g, " ");
       const text = typeof raw === "string"

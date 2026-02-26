@@ -616,17 +616,35 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
     if (value === "enum_single" || value === "boolean" || value === "text_short") return value;
     return "numeric";
   };
+  const hasScriptLikeContent = (text: string): boolean =>
+    /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
+  const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
+    if (!Array.isArray(options) || options.length === 0) return null;
+    if (typeof candidate !== "string") return null;
+    if (options.includes(candidate)) return candidate;
+    const trimmed = candidate.trim();
+    if (trimmed && options.includes(trimmed)) return trimmed;
+    const lowered = candidate.toLowerCase();
+    const lowerMatch = options.find(option => option.toLowerCase() === lowered);
+    if (lowerMatch) return lowerMatch;
+    if (trimmed) {
+      const trimmedLower = trimmed.toLowerCase();
+      const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
+      if (trimmedMatch) return trimmedMatch;
+    }
+    return null;
+  };
   const normalizeEnumOptions = (value: unknown): string[] => {
     if (!Array.isArray(value)) return [];
     const seenValues = new Set<string>();
     const outValues: string[] = [];
     for (const item of value) {
-      const token = String(item ?? "").trim().toLowerCase();
-      if (!token) continue;
-      if (!/^[a-z0-9_][a-z0-9_\- ]{0,38}[a-z0-9_]$/.test(token)) continue;
-      if (seenValues.has(token)) continue;
-      seenValues.add(token);
-      outValues.push(token);
+      const option = String(item ?? "");
+      if (!option.length) continue;
+      if (hasScriptLikeContent(option)) continue;
+      if (seenValues.has(option)) continue;
+      seenValues.add(option);
+      outValues.push(option);
       if (outValues.length >= 12) break;
     }
     return outValues;
@@ -644,7 +662,7 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
     if (label.length < 2) continue;
 
     const description = typeof obj.description === "string"
-      ? obj.description.trim().slice(0, 200)
+      ? obj.description.trim().slice(0, 300)
       : "";
     const behaviorGuidance = typeof obj.behaviorGuidance === "string"
       ? obj.behaviorGuidance.trim().slice(0, 2000)
@@ -680,8 +698,8 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       }
       if (kind === "enum_single") {
         const fallback = enumOptions[0] ?? "state";
-        const rawDefault = typeof obj.defaultValue === "string" ? obj.defaultValue.trim().toLowerCase() : "";
-        if (rawDefault && enumOptions.includes(rawDefault)) return rawDefault;
+        const matched = resolveEnumOption(enumOptions, obj.defaultValue);
+        if (matched != null && !hasScriptLikeContent(matched)) return matched;
         return fallback;
       }
       const text = typeof obj.defaultValue === "string" ? obj.defaultValue.trim().replace(/\s+/g, " ") : "";
@@ -737,6 +755,24 @@ function sanitizeCustomNonNumericStatDefaults(
   raw: unknown,
   customStats: BetterSimTrackerSettings["customStats"],
 ): Record<string, string | boolean> | null {
+  const hasScriptLikeContent = (text: string): boolean =>
+    /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
+  const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
+    if (!Array.isArray(options) || options.length === 0) return null;
+    if (typeof candidate !== "string") return null;
+    if (options.includes(candidate)) return candidate;
+    const trimmed = candidate.trim();
+    if (trimmed && options.includes(trimmed)) return trimmed;
+    const lowered = candidate.toLowerCase();
+    const lowerMatch = options.find(option => option.toLowerCase() === lowered);
+    if (lowerMatch) return lowerMatch;
+    if (trimmed) {
+      const trimmedLower = trimmed.toLowerCase();
+      const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
+      if (trimmedMatch) return trimmedMatch;
+    }
+    return null;
+  };
   if (!raw || typeof raw !== "object") return null;
   const byId = new Map(customStats.map(stat => [stat.id, stat]));
   const out: Record<string, string | boolean> = {};
@@ -763,13 +799,17 @@ function sanitizeCustomNonNumericStatDefaults(
     const options = kind === "enum_single"
       ? (Array.isArray(stat.enumOptions) ? stat.enumOptions : [])
       : [];
+    if (kind === "enum_single") {
+      const matched = resolveEnumOption(options, value);
+      if (matched != null && !hasScriptLikeContent(matched)) out[id] = matched;
+      continue;
+    }
     const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
     if (!text) continue;
-    if (kind === "enum_single") {
-      const normalized = text.toLowerCase();
-      if (options.includes(normalized)) out[id] = normalized;
-    } else {
+    if (kind === "text_short") {
       out[id] = text.slice(0, textMaxLength);
+    } else {
+      out[id] = text;
     }
   }
   return Object.keys(out).length ? out : null;
@@ -779,6 +819,24 @@ function sanitizeCharacterDefaults(
   raw: unknown,
   customStats: BetterSimTrackerSettings["customStats"],
 ): Record<string, CharacterDefaults> {
+  const hasScriptLikeContent = (text: string): boolean =>
+    /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
+  const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
+    if (!Array.isArray(options) || options.length === 0) return null;
+    if (typeof candidate !== "string") return null;
+    if (options.includes(candidate)) return candidate;
+    const trimmed = candidate.trim();
+    if (trimmed && options.includes(trimmed)) return trimmed;
+    const lowered = candidate.toLowerCase();
+    const lowerMatch = options.find(option => option.toLowerCase() === lowered);
+    if (lowerMatch) return lowerMatch;
+    if (trimmed) {
+      const trimmedLower = trimmed.toLowerCase();
+      const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
+      if (trimmedMatch) return trimmedMatch;
+    }
+    return null;
+  };
   if (!raw || typeof raw !== "object") return {};
   const out: Record<string, CharacterDefaults> = {};
   for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
