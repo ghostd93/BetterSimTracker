@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev20] - 2026-02-26
+### Fixed
+- Group character discovery now merges current group-member resolution with actual AI speaker names from chat history, preventing active-character analysis from dropping participants like Lilly when member resolution is temporarily narrowed.
+
 ## [2.1.0.3-dev19] - 2026-02-26
 ### Fixed
 - Inactive character cards now carry forward the latest known tracker values from previous tracked messages when the current message has no fresh values for that character, instead of displaying baseline defaults.

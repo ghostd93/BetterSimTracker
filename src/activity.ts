@@ -18,13 +18,23 @@ function getSingleCharacter(context: STContext): Character[] {
   return character ? [character] : [];
 }
 
+function pushUniqueName(target: string[], seen: Set<string>, raw: unknown): void {
+  const name = String(raw ?? "").trim();
+  if (!name) return;
+  const key = name.toLowerCase();
+  if (seen.has(key)) return;
+  seen.add(key);
+  target.push(name);
+}
+
 export function getAllTrackedCharacterNames(context: STContext): string[] {
   const groupCharacters = getGroupCharacters(context);
-  if (groupCharacters.length) {
-    return groupCharacters.map(c => c.name).filter(Boolean);
-  }
-
   if (context.groupId) {
+    const merged: string[] = [];
+    const seen = new Set<string>();
+    for (const character of groupCharacters) {
+      pushUniqueName(merged, seen, character.name);
+    }
     const fromChat = Array.from(
       new Set(
         context.chat
@@ -33,8 +43,11 @@ export function getAllTrackedCharacterNames(context: STContext): string[] {
           .filter(Boolean),
       ),
     );
-    if (fromChat.length) {
-      return fromChat;
+    for (const name of fromChat) {
+      pushUniqueName(merged, seen, name);
+    }
+    if (merged.length) {
+      return merged;
     }
   }
 
