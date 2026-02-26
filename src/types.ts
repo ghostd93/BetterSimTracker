@@ -243,6 +243,8 @@ export interface STContext {
   saveChatDebounced?: () => void;
   saveSettingsDebounced?: () => void;
   saveMetadataDebounced?: () => void;
+  generate?: (type: string, options?: Record<string, unknown>, dryRun?: boolean) => Promise<unknown>;
+  stopGeneration?: () => boolean;
   deactivateSendButtons?: () => void;
   activateSendButtons?: () => void;
   extensionSettings?: Record<string, unknown>;
