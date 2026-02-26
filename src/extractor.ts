@@ -128,6 +128,10 @@ function wait(ms: number): Promise<void> {
   });
 }
 
+function normalizeNameForCompare(value: string): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 export async function extractStatisticsParallel(input: {
   settings: BetterSimTrackerSettings;
   userName: string;
@@ -169,6 +173,43 @@ export async function extractStatisticsParallel(input: {
   const outputCustomNonNumeric: CustomNonNumericStatistics = {};
   let debugRecord: DeltaDebugRecord | null = null;
   let cancelled = false;
+  const normalizedUserName = String(userName ?? "").trim();
+  const nonUserActiveNames = activeCharacters
+    .filter(name => name !== USER_TRACKER_KEY)
+    .map(normalizeNameForCompare);
+  const resolveUserPromptCharacterName = (): string => {
+    const candidates = [
+      normalizedUserName,
+      "User",
+      normalizedUserName ? `${normalizedUserName} (User)` : "",
+      "User Persona",
+    ]
+      .map(item => item.trim())
+      .filter(Boolean);
+    for (const candidate of candidates) {
+      const normalized = normalizeNameForCompare(candidate);
+      if (!normalized) continue;
+      if (!nonUserActiveNames.includes(normalized)) {
+        return candidate;
+      }
+    }
+    return "User";
+  };
+  const userPromptCharacterName = activeCharacters.includes(USER_TRACKER_KEY)
+    ? resolveUserPromptCharacterName()
+    : "";
+  const promptCharacterAliases: Record<string, string> = {};
+  if (userPromptCharacterName) {
+    promptCharacterAliases[userPromptCharacterName] = USER_TRACKER_KEY;
+    promptCharacterAliases["User"] = USER_TRACKER_KEY;
+    if (normalizedUserName) {
+      promptCharacterAliases[normalizedUserName] = USER_TRACKER_KEY;
+    }
+  }
+  const applyPromptCharacterAliases = (prompt: string): string => {
+    if (!userPromptCharacterName || userPromptCharacterName === USER_TRACKER_KEY) return prompt;
+    return prompt.split(USER_TRACKER_KEY).join(userPromptCharacterName);
+  };
 
   const isAbortError = (error: unknown): boolean => {
     if (error instanceof DOMException && error.name === "AbortError") return true;
@@ -484,7 +525,7 @@ export async function extractStatisticsParallel(input: {
     ): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
       checkCancelled();
       const statLabel = statList.length === 1 ? statList[0] : "stats";
-      const prompt = settings.sequentialExtraction && statList.length === 1
+      const builtPrompt = settings.sequentialExtraction && statList.length === 1
         ? buildSequentialPrompt(
             statList[0],
             userName,
@@ -509,12 +550,13 @@ export async function extractStatisticsParallel(input: {
             settings.promptProtocolUnified,
             preferredCharacterName,
           );
+      const prompt = applyPromptCharacterAliases(builtPrompt);
       tickProgress(`Requesting ${statLabel}`);
       let rawResponse = await callGenerate(prompt, statList, "initial");
       checkCancelled();
       let raw = rawResponse.text;
       tickProgress(`Parsing ${statLabel}`);
-      let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList, settings.maxDeltaPerTurn);
+      let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList, settings.maxDeltaPerTurn, promptCharacterAliases);
       const firstHasValues = hasParsedValues(parsedOne);
       firstParseHadValues = firstParseHadValues && firstHasValues;
       let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
@@ -524,7 +566,13 @@ export async function extractStatisticsParallel(input: {
         retriesLeft -= 1;
         const retryResponse = await callGenerate(retryPrompt, statList, "strict");
         checkCancelled();
-        const retryParsed = parseUnifiedDeltaResponse(retryResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
+        const retryParsed = parseUnifiedDeltaResponse(
+          retryResponse.text,
+          activeCharacters,
+          statList,
+          settings.maxDeltaPerTurn,
+          promptCharacterAliases,
+        );
         if (hasValuesForRequestedBuiltInAndTextStats(retryParsed, statList)) {
           raw = retryResponse.text;
           parsedOne = retryParsed;
@@ -541,7 +589,13 @@ export async function extractStatisticsParallel(input: {
         retriesLeft -= 1;
         const repairResponse = await callGenerate(repairPrompt, statList, "repair");
         checkCancelled();
-        const repairParsed = parseUnifiedDeltaResponse(repairResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
+        const repairParsed = parseUnifiedDeltaResponse(
+          repairResponse.text,
+          activeCharacters,
+          statList,
+          settings.maxDeltaPerTurn,
+          promptCharacterAliases,
+        );
         if (hasValuesForRequestedBuiltInAndTextStats(repairParsed, statList)) {
           raw = repairResponse.text;
           parsedOne = repairParsed;
@@ -553,7 +607,13 @@ export async function extractStatisticsParallel(input: {
         retriesLeft -= 1;
         const strictResponse = await callGenerate(strictPrompt, statList, "strict_loop");
         checkCancelled();
-        const strictParsed = parseUnifiedDeltaResponse(strictResponse.text, activeCharacters, statList, settings.maxDeltaPerTurn);
+        const strictParsed = parseUnifiedDeltaResponse(
+          strictResponse.text,
+          activeCharacters,
+          statList,
+          settings.maxDeltaPerTurn,
+          promptCharacterAliases,
+        );
         if (hasValuesForRequestedBuiltInAndTextStats(strictParsed, statList)) {
           raw = strictResponse.text;
           parsedOne = strictParsed;
@@ -577,7 +637,7 @@ export async function extractStatisticsParallel(input: {
       const label = statDef.label || statDef.id;
       const statId = statDef.id;
       const kind = statDef.kind ?? "numeric";
-      const prompt = kind === "numeric"
+      const builtPrompt = kind === "numeric"
         ? buildSequentialCustomNumericPrompt({
           statId,
           statLabel: label,
@@ -618,20 +678,27 @@ export async function extractStatisticsParallel(input: {
           protocolTemplate: settings.promptProtocolSequentialCustomNonNumeric,
           preferredCharacterName,
         });
+      const prompt = applyPromptCharacterAliases(builtPrompt);
       tickProgress(`Requesting ${label}`);
       let rawResponse = await callGenerate(prompt, [statId], "initial");
       checkCancelled();
       let raw = rawResponse.text;
       tickProgress(`Parsing ${label}`);
       let parsedNumeric = kind === "numeric"
-        ? parseCustomDeltaResponse(raw, requestCharacters, statId, statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn)
+        ? parseCustomDeltaResponse(
+          raw,
+          requestCharacters,
+          statId,
+          statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
+          promptCharacterAliases,
+        )
         : undefined;
       let parsedNonNumeric = kind === "numeric"
         ? undefined
         : parseCustomValueResponse(raw, requestCharacters, statId, kind, {
           enumOptions: statDef.enumOptions,
           textMaxLength: statDef.textMaxLength,
-        });
+        }, promptCharacterAliases);
       const firstHasValues = kind === "numeric"
         ? hasAnyValues(parsedNumeric?.delta ?? {})
         : hasAnyValues(parsedNonNumeric?.value ?? {});
@@ -655,6 +722,7 @@ export async function extractStatisticsParallel(input: {
             requestCharacters,
             statId,
             statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
+            promptCharacterAliases,
           );
           if (hasAnyValues(strictParsed.delta)) {
             raw = strictResponse.text;
@@ -665,7 +733,7 @@ export async function extractStatisticsParallel(input: {
           const strictParsed = parseCustomValueResponse(strictResponse.text, requestCharacters, statId, kind, {
             enumOptions: statDef.enumOptions,
             textMaxLength: statDef.textMaxLength,
-          });
+          }, promptCharacterAliases);
           if (hasAnyValues(strictParsed.value)) {
             raw = strictResponse.text;
             parsedNonNumeric = strictParsed;

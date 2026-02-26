@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev30] - 2026-02-26
+### Fixed
+- Extraction prompts now show a user display label instead of the internal `__bst_user__` key, while parser alias mapping still resolves responses back to the internal user tracker key safely.
+
 ## [2.1.0.3-dev29] - 2026-02-26
 ### Fixed
 - User-side extraction now performs a best-effort lorebook dry-run scan before prompt building, so activated lorebook context can be available even when no fresh `WORLD_INFO_ACTIVATED` event was emitted.

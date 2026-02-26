@@ -2,6 +2,8 @@ import { moodOptions } from "./prompts";
 import type { CustomStatKind, NumericStatKey, StatKey, StatValue } from "./types";
 import type { Statistics } from "./types";
 
+type CharacterNameAliases = Record<string, string>;
+
 function safeJsonParse(raw: string): unknown {
   try {
     return JSON.parse(raw);
@@ -89,6 +91,43 @@ function normalizeMoodLabel(value: string): string {
   return "Neutral";
 }
 
+function normalizeCharacterName(value: string): string {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function resolveCharacterName(
+  rawName: string,
+  activeCharacters: string[],
+  aliases?: CharacterNameAliases,
+): string | null {
+  const trimmed = String(rawName ?? "").trim();
+  if (!trimmed) return null;
+
+  if (activeCharacters.includes(trimmed)) return trimmed;
+
+  const normalized = normalizeCharacterName(trimmed);
+  if (!normalized) return null;
+
+  for (const active of activeCharacters) {
+    if (normalizeCharacterName(active) === normalized) {
+      return active;
+    }
+  }
+
+  if (aliases && Object.keys(aliases).length) {
+    for (const [alias, canonical] of Object.entries(aliases)) {
+      if (normalizeCharacterName(alias) === normalized) {
+        if (activeCharacters.includes(canonical)) return canonical;
+        const canonicalNormalized = normalizeCharacterName(canonical);
+        const matched = activeCharacters.find(name => normalizeCharacterName(name) === canonicalNormalized);
+        if (matched) return matched;
+      }
+    }
+  }
+
+  return null;
+}
+
 export function parseStatResponse(
   stat: StatKey,
   rawText: string,
@@ -139,6 +178,7 @@ export function parseUnifiedStatResponse(
   rawText: string,
   activeCharacters: string[],
   enabled: StatKey[],
+  nameAliases?: CharacterNameAliases,
 ): Statistics {
   const parsed = safeJsonParse(rawText);
   const output = emptyStatistics();
@@ -153,9 +193,10 @@ export function parseUnifiedStatResponse(
     for (const row of list) {
       if (!row || typeof row !== "object") continue;
       const obj = row as Record<string, unknown>;
-      const name = String(obj.name ?? "").trim();
-      if (!name) continue;
-      byName.set(name, obj);
+      const rawName = String(obj.name ?? "").trim();
+      const resolved = resolveCharacterName(rawName, activeCharacters, nameAliases);
+      if (!resolved) continue;
+      byName.set(resolved, obj);
     }
   } else {
     for (const name of activeCharacters) {
@@ -203,6 +244,7 @@ export function parseUnifiedDeltaResponse(
   activeCharacters: string[],
   enabled: StatKey[],
   maxDelta = 15,
+  nameAliases?: CharacterNameAliases,
 ): {
   confidence: Record<string, number>;
   deltas: {
@@ -236,9 +278,10 @@ export function parseUnifiedDeltaResponse(
     for (const row of list) {
       if (!row || typeof row !== "object") continue;
       const obj = row as Record<string, unknown>;
-      const name = String(obj.name ?? "").trim();
-      if (!name) continue;
-      byName.set(name, obj);
+      const rawName = String(obj.name ?? "").trim();
+      const resolved = resolveCharacterName(rawName, activeCharacters, nameAliases);
+      if (!resolved) continue;
+      byName.set(resolved, obj);
     }
   }
 
@@ -297,6 +340,7 @@ export function parseCustomDeltaResponse(
   activeCharacters: string[],
   statId: string,
   maxDelta = 15,
+  nameAliases?: CharacterNameAliases,
 ): {
   confidence: Record<string, number>;
   delta: Record<string, number>;
@@ -315,9 +359,10 @@ export function parseCustomDeltaResponse(
     for (const row of list) {
       if (!row || typeof row !== "object") continue;
       const obj = row as Record<string, unknown>;
-      const name = String(obj.name ?? "").trim();
-      if (!name) continue;
-      byName.set(name, obj);
+      const rawName = String(obj.name ?? "").trim();
+      const resolved = resolveCharacterName(rawName, activeCharacters, nameAliases);
+      if (!resolved) continue;
+      byName.set(resolved, obj);
     }
   } else {
     for (const name of activeCharacters) {
@@ -368,6 +413,7 @@ export function parseCustomValueResponse(
     enumOptions?: string[];
     textMaxLength?: number;
   } = {},
+  nameAliases?: CharacterNameAliases,
 ): {
   confidence: Record<string, number>;
   value: Record<string, string | boolean>;
@@ -404,9 +450,10 @@ export function parseCustomValueResponse(
     for (const row of list) {
       if (!row || typeof row !== "object") continue;
       const obj = row as Record<string, unknown>;
-      const name = String(obj.name ?? "").trim();
-      if (!name) continue;
-      byName.set(name, obj);
+      const rawName = String(obj.name ?? "").trim();
+      const resolved = resolveCharacterName(rawName, activeCharacters, nameAliases);
+      if (!resolved) continue;
+      byName.set(resolved, obj);
     }
   } else {
     for (const name of activeCharacters) {
