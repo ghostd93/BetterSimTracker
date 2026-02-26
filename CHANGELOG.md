@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev8] - 2026-02-26
+### Added
+- New `User Card Color` display setting for overriding the User tracker card color via optional hex value.
+
 ## [2.1.0.3-dev7] - 2026-02-26
 ### Fixed
 - Enforced per-line custom-stat scope in prompt injection so user-only stats cannot render on character lines (and character-only stats cannot render on user lines), including default fallback paths.

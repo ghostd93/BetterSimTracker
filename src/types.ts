@@ -111,6 +111,7 @@ export interface BetterSimTrackerSettings {
   stExpressionImagePositionX: number;
   stExpressionImagePositionY: number;
   accentColor: string;
+  userCardColor: string;
   cardOpacity: number;
   borderRadius: number;
   fontSize: number;

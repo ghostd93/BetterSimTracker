@@ -57,6 +57,7 @@ Key groups:
 - Display controls:
   - graph settings
   - card style settings
+  - optional `userCardColor` override
   - mood source/mapping/frame settings
 
 Sanitization is centralized in `src/settings.ts`.

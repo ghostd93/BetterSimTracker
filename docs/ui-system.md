@@ -104,6 +104,7 @@ Provides per-character defaults and mood asset controls.
 - custom numeric defaults
 - custom non-numeric defaults
 - optional card color override
+- optional user card color override (global display setting)
 - mood source controls
 - mood image upload/delete
 - ST expression mapping and framing options

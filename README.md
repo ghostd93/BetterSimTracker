@@ -353,6 +353,7 @@ You can disable any metric you do not want extracted. Disabled stats stop updati
 - `Inactive Label`: label text used for inactive cards.
 - `Show Last Thought`: show/hide `lastThought` text on cards.
 - `Accent Color`: primary UI accent for bars/buttons/highlights.
+- `User Card Color`: optional hex override for the user tracker card (`#RRGGBB`); leave empty for automatic color.
 - `Card Opacity`: tracker card opacity.
 - `Border Radius`: tracker card corner radius.
 - `Font Size`: base tracker text size.

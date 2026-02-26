@@ -3701,7 +3701,10 @@ export function renderTracker(
         return `<span>${escapeHtml(shortLabelFrom(def.label))} ${escapeHtml(text)}</span>`;
       }).filter(Boolean).join("");
       const showCollapsedMood = moodText !== "";
-      const cardColor = getResolvedCardColor(settings, name, characterAvatar) ?? palette[name] ?? getStableAutoCardColor(name);
+      const cardColor = (isUserCard ? normalizeHexColor(settings.userCardColor) : null)
+        ?? getResolvedCardColor(settings, name, characterAvatar)
+        ?? palette[name]
+        ?? getStableAutoCardColor(name);
       const cardKey = `${entry.messageIndex}:${normalizeName(name)}`;
       const isNew = !renderedCardKeys.has(cardKey);
       renderedCardKeys.add(cardKey);
@@ -4832,6 +4835,7 @@ export function openSettingsModal(input: {
             <input data-k-color="accentColor" type="color">
           </div>
         </label>
+        <label>User Card Color (hex, optional) <input data-k="userCardColor" type="text" placeholder="#RRGGBB"></label>
         <label>Card Opacity <input data-k="cardOpacity" type="number" min="0.1" max="1" step="0.01"></label>
         <label>Border Radius <input data-k="borderRadius" type="number" min="0" max="32"></label>
         <label>Font Size <input data-k="fontSize" type="number" min="10" max="22"></label>
@@ -5424,6 +5428,7 @@ export function openSettingsModal(input: {
   set("stExpressionImagePositionY", String(input.settings.stExpressionImagePositionY));
   const accentInput = modal.querySelector('[data-k-color="accentColor"]') as HTMLInputElement | null;
   if (accentInput) accentInput.value = input.settings.accentColor || "#ff5a6f";
+  set("userCardColor", input.settings.userCardColor || "");
   set("cardOpacity", String(input.settings.cardOpacity));
   set("borderRadius", String(input.settings.borderRadius));
   set("fontSize", String(input.settings.fontSize));
@@ -6895,6 +6900,7 @@ export function openSettingsModal(input: {
       stExpressionImagePositionX: readNumber("stExpressionImagePositionX", input.settings.stExpressionImagePositionX, 0, 100),
       stExpressionImagePositionY: readNumber("stExpressionImagePositionY", input.settings.stExpressionImagePositionY, 0, 100),
       accentColor: read("accentColor") || input.settings.accentColor,
+      userCardColor: read("userCardColor") || "",
       cardOpacity: readNumber("cardOpacity", input.settings.cardOpacity, 0.1, 1),
       borderRadius: readNumber("borderRadius", input.settings.borderRadius, 0, 32),
       fontSize: readNumber("fontSize", input.settings.fontSize, 10, 22),
@@ -7125,6 +7131,7 @@ export function openSettingsModal(input: {
     inactiveLabel: "Text label shown on cards for inactive characters.",
     showLastThought: "Show extracted last thought text inside tracker cards.",
     accentColor: "Accent color for fills, highlights, and action emphasis.",
+    userCardColor: "Optional hex override for the User tracker card color (leave empty for auto color).",
     cardOpacity: "Overall tracker container opacity.",
     borderRadius: "Corner roundness for tracker cards and controls.",
     fontSize: "Base font size used inside tracker cards.",
