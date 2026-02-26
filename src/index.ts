@@ -702,6 +702,66 @@ function findCharacterIndexByName(context: STContext, name: string): number | nu
   return null;
 }
 
+function getEnabledGroupCharacterIndices(context: STContext): number[] {
+  if (!context.groupId) return [];
+  const groups = context.groups ?? [];
+  const characters = context.characters ?? [];
+  const group = groups.find(item => String(item?.id ?? "").trim() === String(context.groupId ?? "").trim());
+  if (!group || !Array.isArray(group.members) || !group.members.length) return [];
+
+  const disabledAvatarKeys = new Set<string>();
+  const disabledNames = new Set<string>();
+  const disabledIndices = new Set<number>();
+  for (const rawMember of group.disabled_members ?? []) {
+    if (typeof rawMember === "number" && Number.isInteger(rawMember) && rawMember >= 0) {
+      disabledIndices.add(rawMember);
+      continue;
+    }
+    if (rawMember && typeof rawMember === "object") {
+      const obj = rawMember as Record<string, unknown>;
+      const rawAvatar = String(obj.avatar ?? obj.member ?? "").trim();
+      if (rawAvatar) disabledAvatarKeys.add(rawAvatar);
+      const rawName = String(obj.name ?? "").trim().toLowerCase();
+      if (rawName) disabledNames.add(rawName);
+      const rawIndex = Number(obj.chid ?? obj.character_id ?? obj.index);
+      if (Number.isInteger(rawIndex) && rawIndex >= 0) disabledIndices.add(rawIndex);
+      continue;
+    }
+    const key = String(rawMember ?? "").trim();
+    if (!key) continue;
+    disabledAvatarKeys.add(key);
+    const asIndex = Number(key);
+    if (Number.isInteger(asIndex) && asIndex >= 0) disabledIndices.add(asIndex);
+    disabledNames.add(key.toLowerCase());
+  }
+
+  const result: number[] = [];
+  const seen = new Set<number>();
+  for (const avatar of group.members) {
+    const key = String(avatar ?? "").trim();
+    if (!key || disabledAvatarKeys.has(key)) continue;
+    let idx = characters.findIndex(character => String(character?.avatar ?? "").trim() === key);
+    if (idx < 0) {
+      const asIndex = Number(key);
+      if (Number.isInteger(asIndex) && asIndex >= 0 && asIndex < characters.length) {
+        idx = asIndex;
+      }
+    }
+    if (idx < 0) continue;
+    const character = characters[idx];
+    const charName = String(character?.name ?? "").trim().toLowerCase();
+    const charAvatar = String(character?.avatar ?? "").trim();
+    if (disabledIndices.has(idx)) continue;
+    if (charName && disabledNames.has(charName)) continue;
+    if (charAvatar && disabledAvatarKeys.has(charAvatar)) continue;
+    if (!seen.has(idx)) {
+      seen.add(idx);
+      result.push(idx);
+    }
+  }
+  return result;
+}
+
 function normalizeReplayGenerationIntent(
   context: STContext,
   intent: CapturedGenerationIntent,
@@ -728,20 +788,34 @@ function normalizeReplayGenerationIntent(
   // In group chats, replayed normal generation can fall back to ST's "send empty user message"
   // path when no member is activated. Force the last AI speaker as a safe target.
   if (context.groupId && type.toLowerCase() === "normal") {
+    const enabledIndices = getEnabledGroupCharacterIndices(context);
     const hasForcedChar =
       typeof options.force_chid === "number" &&
       Number.isInteger(options.force_chid) &&
       Number(options.force_chid) >= 0;
-    if (!hasForcedChar) {
+    const currentForcedChar = hasForcedChar ? Number(options.force_chid) : null;
+    const hasEnabledForcedChar = currentForcedChar != null && enabledIndices.includes(currentForcedChar);
+    if (!hasEnabledForcedChar && enabledIndices.length) {
       const lastAiIndex = getLastAiMessageIndex(context);
+      let selected: number | null = null;
       if (lastAiIndex != null && lastAiIndex >= 0 && lastAiIndex < context.chat.length) {
         const lastAiName = String(context.chat[lastAiIndex]?.name ?? "").trim();
         const charIndex = findCharacterIndexByName(context, lastAiName);
-        if (charIndex != null) {
-          options.force_chid = charIndex;
-          forcedGroupCharacterId = charIndex;
+        if (charIndex != null && enabledIndices.includes(charIndex)) {
+          selected = charIndex;
         }
       }
+      if (selected == null) {
+        selected = enabledIndices[0] ?? null;
+      }
+      if (selected != null) {
+        options.force_chid = selected;
+        forcedGroupCharacterId = selected;
+      }
+    } else if (!hasEnabledForcedChar && hasForcedChar) {
+      delete options.force_chid;
+    } else if (hasEnabledForcedChar) {
+      forcedGroupCharacterId = currentForcedChar;
     }
   }
 

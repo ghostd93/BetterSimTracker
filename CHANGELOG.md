@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev14] - 2026-02-26
+### Fixed
+- Group replay target normalization now excludes muted/disabled members robustly (by avatar, index, and name), preventing forced replies from selecting an auto-replies-off character.
+- Cleared stale replay `force_chid` when no enabled group target can be resolved, avoiding replay attempts against invalid muted targets.
+
 ## [2.1.0.3-dev13] - 2026-02-26
 ### Fixed
 - Group chat user-turn replay now injects a safe `force_chid` (last AI speaker) when needed, avoiding ST's empty-user fallback path during replay and preventing the ghost blank user message.
