@@ -2279,7 +2279,11 @@ async function sendTrackerSummaryToChat(messageIndex: number): Promise<void> {
 async function runExtraction(reason: string, targetMessageIndex?: number): Promise<void> {
   const context = getSafeContext();
   if (!context) return;
-  const userExtraction = isUserExtractionReason(reason);
+  const targetMessage =
+    typeof targetMessageIndex === "number" && targetMessageIndex >= 0 && targetMessageIndex < context.chat.length
+      ? context.chat[targetMessageIndex]
+      : null;
+  const userExtraction = isUserExtractionReason(reason) || Boolean(targetMessage?.is_user);
   const clearGeneratingUiIfStale = (skipReason: string): void => {
     if (trackerUiState.phase !== "generating") return;
     if (chatGenerationInFlight) return;

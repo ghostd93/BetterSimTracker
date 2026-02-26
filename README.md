@@ -15,7 +15,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Settings checkboxes now use consistent round accent-matched styling across ST themes/mobile UI overrides
 - Built-in stats manager wizard with unified `Enabled` toggle (`Track + Card + Graph`) plus `Inject` control for numeric built-ins
 - Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric + non-numeric custom stats, max 8 total, color picker + hex input, AI-assisted description improvement, AI generation for stat-specific Per-Stat Prompt Override, optional behavior-injection guidance with AI generation)
-- Retrack button (regenerate tracker for last AI message)
+- Retrack button (regenerate tracker for the latest tracked message entry, AI or user)
 - Summarize button (AI-generated detailed prose summary, 4-6 sentences, grounded in currently tracked dimensions, no numeric stat values; with settings to make the note AI-visible and/or inject it into prompt guidance)
 - Edit last tracker stats inline (pencil icon on the latest card; numeric clamp + mood picker + last thought editor + kind-aware custom non-numeric editors)
 - Relationship graph modal:
@@ -363,7 +363,7 @@ You can disable any metric you do not want extracted. Disabled stats stop updati
 - `Debug`: enables verbose diagnostics behavior.
 - `Include Context In Diagnostics`: include extraction prompt/context text in dumps (larger output, potentially sensitive).
 - `Include Graph Data In Diagnostics`: include graph series payloads in diagnostics.
-- `Retrack` (`refresh icon`): regenerate tracker for the last AI message.
+- `Retrack` (`refresh icon`): regenerate tracker for the latest tracked message entry (AI or user, based on the visible tracker row).
 - `Delete Tracker Data (Current Chat)`: remove tracker data only for current chat.
 - `Dump Diagnostics`: copy full diagnostics JSON to clipboard.
 - `Clear Diagnostics`: clear stored debug traces/last debug record.
@@ -466,7 +466,7 @@ Common checks:
 
 - Wrong/empty tracker: verify selected connection profile and extraction settings.
 - UI issues after update: hard refresh browser.
-- Group edge cases: retrack last AI message once after major chat edits/swipes.
+- Group edge cases: retrack latest tracked message once after major chat edits/swipes.
 
 ## License
 

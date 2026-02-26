@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev28] - 2026-02-26
+### Fixed
+- Manual retrack now infers user-side extraction when the explicit target message is a user message, so retracking a user tracker entry no longer falls back to AI-side extraction.
+
 ## [2.1.0.3-dev27] - 2026-02-26
 ### Fixed
 - Retrack action visibility now follows the latest tracked snapshot entry (user or AI) instead of only the latest AI message, so user-card retrack no longer targets the message above.
