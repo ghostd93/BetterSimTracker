@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev15] - 2026-02-26
+### Fixed
+- Group replay target resolution now accepts additional `group.members` shapes (object/name/index), so a valid target can still be found when member data is not avatar-only.
+- Added a guard to skip replay when no concrete group target can be resolved, preventing ST from injecting a synthetic blank user turn during replay.
+
 ## [2.1.0.3-dev14] - 2026-02-26
 ### Fixed
 - Group replay target normalization now excludes muted/disabled members robustly (by avatar, index, and name), preventing forced replies from selecting an auto-replies-off character.

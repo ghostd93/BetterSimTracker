@@ -702,58 +702,117 @@ function findCharacterIndexByName(context: STContext, name: string): number | nu
   return null;
 }
 
-function getEnabledGroupCharacterIndices(context: STContext): number[] {
-  if (!context.groupId) return [];
-  const groups = context.groups ?? [];
-  const characters = context.characters ?? [];
-  const group = groups.find(item => String(item?.id ?? "").trim() === String(context.groupId ?? "").trim());
-  if (!group || !Array.isArray(group.members) || !group.members.length) return [];
+type GroupDisabledSnapshot = {
+  avatarKeys: Set<string>;
+  names: Set<string>;
+  indices: Set<number>;
+};
 
-  const disabledAvatarKeys = new Set<string>();
-  const disabledNames = new Set<string>();
-  const disabledIndices = new Set<number>();
-  for (const rawMember of group.disabled_members ?? []) {
+function buildGroupDisabledSnapshot(disabledMembers: unknown): GroupDisabledSnapshot {
+  const avatarKeys = new Set<string>();
+  const names = new Set<string>();
+  const indices = new Set<number>();
+  if (!Array.isArray(disabledMembers)) {
+    return { avatarKeys, names, indices };
+  }
+
+  for (const rawMember of disabledMembers) {
     if (typeof rawMember === "number" && Number.isInteger(rawMember) && rawMember >= 0) {
-      disabledIndices.add(rawMember);
+      indices.add(rawMember);
       continue;
     }
     if (rawMember && typeof rawMember === "object") {
       const obj = rawMember as Record<string, unknown>;
       const rawAvatar = String(obj.avatar ?? obj.member ?? "").trim();
-      if (rawAvatar) disabledAvatarKeys.add(rawAvatar);
+      if (rawAvatar) avatarKeys.add(rawAvatar);
       const rawName = String(obj.name ?? "").trim().toLowerCase();
-      if (rawName) disabledNames.add(rawName);
+      if (rawName) names.add(rawName);
       const rawIndex = Number(obj.chid ?? obj.character_id ?? obj.index);
-      if (Number.isInteger(rawIndex) && rawIndex >= 0) disabledIndices.add(rawIndex);
+      if (Number.isInteger(rawIndex) && rawIndex >= 0) indices.add(rawIndex);
       continue;
     }
     const key = String(rawMember ?? "").trim();
     if (!key) continue;
-    disabledAvatarKeys.add(key);
+    avatarKeys.add(key);
+    names.add(key.toLowerCase());
     const asIndex = Number(key);
-    if (Number.isInteger(asIndex) && asIndex >= 0) disabledIndices.add(asIndex);
-    disabledNames.add(key.toLowerCase());
+    if (Number.isInteger(asIndex) && asIndex >= 0) indices.add(asIndex);
   }
+
+  return { avatarKeys, names, indices };
+}
+
+function resolveCharacterIndexFromGroupMember(context: STContext, member: unknown): number | null {
+  const characters = context.characters ?? [];
+  if (!characters.length) return null;
+
+  if (typeof member === "number" && Number.isInteger(member) && member >= 0 && member < characters.length) {
+    return member;
+  }
+
+  let rawAvatar = "";
+  let rawName = "";
+  let rawIndex: number | null = null;
+  if (member && typeof member === "object") {
+    const obj = member as Record<string, unknown>;
+    rawAvatar = String(obj.avatar ?? obj.member ?? "").trim();
+    rawName = String(obj.name ?? "").trim();
+    const parsed = Number(obj.chid ?? obj.character_id ?? obj.index);
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed < characters.length) {
+      rawIndex = parsed;
+    }
+  } else {
+    const token = String(member ?? "").trim();
+    rawAvatar = token;
+    rawName = token;
+    const parsed = Number(token);
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed < characters.length) {
+      rawIndex = parsed;
+    }
+  }
+
+  if (rawIndex != null) return rawIndex;
+  if (rawAvatar) {
+    const byAvatar = characters.findIndex(character => String(character?.avatar ?? "").trim() === rawAvatar);
+    if (byAvatar >= 0) return byAvatar;
+  }
+  if (rawName) {
+    const lowered = rawName.toLowerCase();
+    const byName = characters.findIndex(character => String(character?.name ?? "").trim().toLowerCase() === lowered);
+    if (byName >= 0) return byName;
+  }
+  return null;
+}
+
+function isCharacterDisabledBySnapshot(
+  context: STContext,
+  snapshot: GroupDisabledSnapshot,
+  characterIndex: number,
+): boolean {
+  const character = context.characters?.[characterIndex];
+  if (!character) return false;
+  if (snapshot.indices.has(characterIndex)) return true;
+  const avatar = String(character.avatar ?? "").trim();
+  if (avatar && snapshot.avatarKeys.has(avatar)) return true;
+  const name = String(character.name ?? "").trim().toLowerCase();
+  if (name && snapshot.names.has(name)) return true;
+  return false;
+}
+
+function getEnabledGroupCharacterIndices(context: STContext): number[] {
+  if (!context.groupId) return [];
+  const groups = context.groups ?? [];
+  const group = groups.find(item => String(item?.id ?? "").trim() === String(context.groupId ?? "").trim());
+  if (!group || !Array.isArray(group.members) || !group.members.length) return [];
+
+  const disabled = buildGroupDisabledSnapshot(group.disabled_members);
 
   const result: number[] = [];
   const seen = new Set<number>();
-  for (const avatar of group.members) {
-    const key = String(avatar ?? "").trim();
-    if (!key || disabledAvatarKeys.has(key)) continue;
-    let idx = characters.findIndex(character => String(character?.avatar ?? "").trim() === key);
-    if (idx < 0) {
-      const asIndex = Number(key);
-      if (Number.isInteger(asIndex) && asIndex >= 0 && asIndex < characters.length) {
-        idx = asIndex;
-      }
-    }
-    if (idx < 0) continue;
-    const character = characters[idx];
-    const charName = String(character?.name ?? "").trim().toLowerCase();
-    const charAvatar = String(character?.avatar ?? "").trim();
-    if (disabledIndices.has(idx)) continue;
-    if (charName && disabledNames.has(charName)) continue;
-    if (charAvatar && disabledAvatarKeys.has(charAvatar)) continue;
+  for (const member of group.members as unknown[]) {
+    const idx = resolveCharacterIndexFromGroupMember(context, member);
+    if (idx == null) continue;
+    if (isCharacterDisabledBySnapshot(context, disabled, idx)) continue;
     if (!seen.has(idx)) {
       seen.add(idx);
       result.push(idx);
@@ -765,11 +824,21 @@ function getEnabledGroupCharacterIndices(context: STContext): number[] {
 function normalizeReplayGenerationIntent(
   context: STContext,
   intent: CapturedGenerationIntent,
-): { type: string; options: Record<string, unknown>; dryRun: boolean; forcedAutomaticTrigger: boolean; forcedGroupCharacterId: number | null } {
+): {
+  type: string;
+  options: Record<string, unknown>;
+  dryRun: boolean;
+  forcedAutomaticTrigger: boolean;
+  forcedGroupCharacterId: number | null;
+  skipReplay: boolean;
+  skipReason: string | null;
+} {
   const type = String(intent.type ?? "").trim();
   const options = sanitizeGenerationOptions(intent.options);
   let forcedAutomaticTrigger = false;
   let forcedGroupCharacterId: number | null = null;
+  let skipReplay = false;
+  let skipReason: string | null = null;
 
   // During USER_MESSAGE_RENDERED race-replay, forcing automatic-trigger mode avoids
   // ST inserting a second empty user turn before generation.
@@ -788,6 +857,8 @@ function normalizeReplayGenerationIntent(
   // In group chats, replayed normal generation can fall back to ST's "send empty user message"
   // path when no member is activated. Force the last AI speaker as a safe target.
   if (context.groupId && type.toLowerCase() === "normal") {
+    const group = (context.groups ?? []).find(item => String(item?.id ?? "").trim() === String(context.groupId ?? "").trim());
+    const disabled = buildGroupDisabledSnapshot(group?.disabled_members);
     const enabledIndices = getEnabledGroupCharacterIndices(context);
     const hasForcedChar =
       typeof options.force_chid === "number" &&
@@ -812,14 +883,42 @@ function normalizeReplayGenerationIntent(
         options.force_chid = selected;
         forcedGroupCharacterId = selected;
       }
-    } else if (!hasEnabledForcedChar && hasForcedChar) {
-      delete options.force_chid;
+    } else if (!hasEnabledForcedChar) {
+      let fallback: number | null = null;
+      const lastAiIndex = getLastAiMessageIndex(context);
+      if (lastAiIndex != null && lastAiIndex >= 0 && lastAiIndex < context.chat.length) {
+        const lastAiName = String(context.chat[lastAiIndex]?.name ?? "").trim();
+        fallback = findCharacterIndexByName(context, lastAiName);
+      }
+      if (fallback == null && typeof context.characterId === "number" && Number.isInteger(context.characterId) && context.characterId >= 0) {
+        fallback = Number(context.characterId);
+      }
+      if (fallback != null && !isCharacterDisabledBySnapshot(context, disabled, fallback)) {
+        options.force_chid = fallback;
+        forcedGroupCharacterId = fallback;
+      } else {
+        delete options.force_chid;
+      }
     } else if (hasEnabledForcedChar) {
       forcedGroupCharacterId = currentForcedChar;
     }
+
+    // If we still cannot resolve a concrete target, replaying normal generation in group mode
+    // may create a synthetic empty user message. Skip replay instead of producing ghost turns.
+    const hasConcreteTarget =
+      typeof options.force_chid === "number" &&
+      Number.isInteger(options.force_chid) &&
+      Number(options.force_chid) >= 0;
+    if (!hasConcreteTarget) {
+      skipReplay = true;
+      skipReason = "group_replay_no_resolved_target";
+    } else if (hasEnabledForcedChar) {
+      skipReplay = false;
+      skipReason = null;
+    }
   }
 
-  return { type, options, dryRun: intent.dryRun, forcedAutomaticTrigger, forcedGroupCharacterId };
+  return { type, options, dryRun: intent.dryRun, forcedAutomaticTrigger, forcedGroupCharacterId, skipReplay, skipReason };
 }
 
 function resetUserTurnGate(reason: string): void {
@@ -964,6 +1063,18 @@ function finalizeUserTurnGateReplay(triggerReason: string): void {
 
   const replay = intent;
   const normalizedReplay = normalizeReplayGenerationIntent(context, replay);
+  if (normalizedReplay.skipReplay) {
+    pushTrace("user_gate.replay_skip", {
+      reason: normalizedReplay.skipReason ?? "replay_guard",
+      triggerReason,
+      type: normalizedReplay.type,
+      optionKeys: Object.keys(normalizedReplay.options),
+      forcedAutomaticTrigger: normalizedReplay.forcedAutomaticTrigger,
+      forcedGroupCharacterId: normalizedReplay.forcedGroupCharacterId,
+    });
+    resetUserTurnGate(normalizedReplay.skipReason ?? "replay_guard");
+    return;
+  }
   resetUserTurnGate("replay_start");
   chatGenerationInFlight = false;
   chatGenerationIntent = null;
