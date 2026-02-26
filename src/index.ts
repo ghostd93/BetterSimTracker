@@ -1193,6 +1193,7 @@ function buildSeededCustomStatisticsForActiveCharacters(
 
   const customDefs = Array.isArray(settingsInput.customStats) ? settingsInput.customStats : [];
   for (const def of customDefs) {
+    if (!def.track) continue;
     if ((def.kind ?? "numeric") !== "numeric") continue;
     const statId = String(def.id ?? "").trim().toLowerCase();
     if (!statId) continue;
@@ -1222,6 +1223,7 @@ function buildSeededCustomNonNumericStatisticsForActiveCharacters(
 
   const customDefs = Array.isArray(settingsInput.customStats) ? settingsInput.customStats : [];
   for (const def of customDefs) {
+    if (!def.track) continue;
     const kind = def.kind ?? "numeric";
     if (kind === "numeric") continue;
     const statId = String(def.id ?? "").trim().toLowerCase();
@@ -1375,6 +1377,7 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
     const customDefaults: Record<string, number> = {};
     const customNonNumericDefaults: Record<string, string | boolean> = {};
     for (const def of s.customStats ?? []) {
+      if (!def.track) continue;
       const kind = def.kind ?? "numeric";
       const statId = String(def.id ?? "").trim().toLowerCase();
       if (!statId) continue;
@@ -1427,6 +1430,7 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
   const customStatistics: CustomStatistics = {};
   const customNonNumericStatistics: CustomNonNumericStatistics = {};
   for (const def of s.customStats ?? []) {
+    if (!def.track) continue;
     const kind = def.kind ?? "numeric";
     const statId = String(def.id ?? "").trim().toLowerCase();
     if (!statId) continue;

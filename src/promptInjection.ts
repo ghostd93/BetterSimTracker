@@ -171,10 +171,12 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         parts.push(`${stat.label} ${value}`);
       }
       for (const stat of enabledCustomNumeric) {
+        if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
         const value = numeric(data.customStatistics?.[stat.id]?.[name] ?? stat.defaultValue) ?? stat.defaultValue;
         parts.push(`${stat.id} ${value}`);
       }
       for (const stat of enabledCustomNonNumeric) {
+        if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
         const value = renderNonNumericValue(data.customNonNumericStatistics?.[stat.id]?.[name] ?? stat.defaultValue);
         if (value != null) {
           parts.push(`${stat.id} ${value}`);

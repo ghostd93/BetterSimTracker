@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev7] - 2026-02-26
+### Fixed
+- Enforced per-line custom-stat scope in prompt injection so user-only stats cannot render on character lines (and character-only stats cannot render on user lines), including default fallback paths.
+- Hardened extraction baseline/seed builders to honor scoped `track` flags, preventing first-run cross-scope default seeding for custom stats.
+
 ## [2.1.0.3-dev6] - 2026-02-26
 ### Fixed
 - Prompt injection now respects custom-stat scope (`trackCharacters` / `trackUser`) so user-only custom stats are not emitted on character lines.
