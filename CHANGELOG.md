@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3] - 2026-02-26
+### Changed
+- Custom stat Description limit increased from `200` to `300` characters.
+- Custom stat wizard now shows a live Description counter (`x/300`), including near-limit and limit states.
+- Enum custom stats now preserve user-entered option strings/defaults (no forced token conversion).
+
+### Fixed
+- Enum default validation now resolves values consistently against allowed options (including symbols/emoji labels).
+- Enum option/default handling now blocks script-like payloads (e.g. `<script>`, `javascript:`) across wizard validation, settings sanitization, parsing, and runtime seeding.
+
 ## [2.1.0.2] - 2026-02-25
 ### Fixed
 - Non-numeric custom stat chips (including `text_short`) no longer truncate long values on mobile; values now wrap cleanly instead of clipping with ellipsis.
