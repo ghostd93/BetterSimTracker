@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev23] - 2026-02-26
+### Fixed
+- Extraction baseline lookup now falls back to indexed tracker history (chat-state/metadata/local store) when per-message payloads are missing after reload/swipe, preventing false resets to defaults in `Current tracker state` and resulting stat drops.
+
 ## [2.1.0.3-dev22] - 2026-02-26
 ### Fixed
 - Extraction baseline selection now skips user-only tracker snapshots that do not contain tracked values for the currently active characters, preventing false stat drops (for example Chloe trust falling from 2 to 1 after an intervening user message).

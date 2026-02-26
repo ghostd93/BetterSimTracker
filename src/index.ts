@@ -660,6 +660,23 @@ function getLatestRelevantTrackerDataWithIndexBefore(
       return { data: found, messageIndex: i };
     }
   }
+
+  // Fallback: after reload/swipe changes, per-message payload can be missing while
+  // chat-state/metadata/local history still has the prior indexed snapshot.
+  const historyEntries = getRecentTrackerHistoryEntries(context, Math.max(120, context.chat.length));
+  let best: { data: TrackerData; messageIndex: number } | null = null;
+  for (const entry of historyEntries) {
+    if (entry.messageIndex >= beforeIndex) continue;
+    const hasRelevantValue = activeCharacters.some(name => hasTrackedValueForCharacter(entry.data, name, settingsInput));
+    if (!hasRelevantValue) continue;
+    if (!best || entry.messageIndex > best.messageIndex) {
+      best = { data: entry.data, messageIndex: entry.messageIndex };
+    }
+  }
+  if (best) {
+    return best;
+  }
+
   return null;
 }
 
