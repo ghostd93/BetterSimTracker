@@ -2,6 +2,20 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0] - 2026-02-26
+### Added
+- User-side tracker extraction and display support, including user-focused custom stat tracking and injection scoping.
+- Extraction lorebook support improvements, including pre-scan fallback handling for user-side runs.
+
+### Changed
+- Extraction/injection configuration flow and prompt protocol controls were expanded and reorganized for clearer advanced setup.
+- Prompt user labeling now uses a display alias in extraction prompts while preserving internal key mapping in parser application.
+
+### Fixed
+- New-chat and retrack baseline seeding now consistently uses prior relevant snapshots, preventing false resets to defaults.
+- Group replay/user-turn handling was hardened to prevent ghost blank user turns and invalid forced-target paths.
+- Activity/inactive-card rendering and delta baselines now remain stable across user-only turns, swipes, reloads, and mixed-character histories.
+
 ## [2.1.0.3-dev30] - 2026-02-26
 ### Fixed
 - Extraction prompts now show a user display label instead of the internal `__bst_user__` key, while parser alias mapping still resolves responses back to the internal user tracker key safely.
