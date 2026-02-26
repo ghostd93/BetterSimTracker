@@ -41,6 +41,7 @@ import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModa
 import { cancelActiveGenerations, generateJson } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
 import { initCharacterPanel } from "./characterPanel";
+import { readLorebookContext } from "./lorebook";
 
 let settings: BetterSimTrackerSettings | null = null;
 let isExtracting = false;
@@ -1734,6 +1735,9 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     if (settings.includeCharacterCardsInPrompt) {
       contextText = `${contextText}${buildCharacterCardsContext(context, activeCharacters)}`.trim();
     }
+    if (settings.includeLorebookInExtraction) {
+      contextText = `${contextText}${buildLorebookExtractionContext(context, settings.lorebookExtractionMaxChars)}`.trim();
+    }
     const previousSeededStatistics = buildSeededStatisticsForActiveCharacters(
       previous?.statistics ?? null,
       activeCharacters,
@@ -2319,6 +2323,7 @@ function openSettings(): void {
           includeGraphInDiagnostics: currentSettings.includeGraphInDiagnostics,
           injectTrackerIntoPrompt: currentSettings.injectTrackerIntoPrompt,
           injectPromptDepth: currentSettings.injectPromptDepth,
+          injectionPromptMaxChars: currentSettings.injectionPromptMaxChars,
           summarizationNoteVisibleForAI: currentSettings.summarizationNoteVisibleForAI,
           injectSummarizationNote: currentSettings.injectSummarizationNote,
           contextMessages: currentSettings.contextMessages,
@@ -2327,6 +2332,8 @@ function openSettings(): void {
           maxTokensOverride: currentSettings.maxTokensOverride,
           truncationLengthOverride: currentSettings.truncationLengthOverride,
           includeCharacterCardsInPrompt: currentSettings.includeCharacterCardsInPrompt,
+          includeLorebookInExtraction: currentSettings.includeLorebookInExtraction,
+          lorebookExtractionMaxChars: currentSettings.lorebookExtractionMaxChars,
           autoDetectActive: currentSettings.autoDetectActive,
           activityLookback: currentSettings.activityLookback,
           moodSource: currentSettings.moodSource,
@@ -2386,6 +2393,12 @@ function buildCharacterCardsContext(context: STContext, activeCharacters: string
   }
   if (!chunks.length) return "";
   return `\n\nCharacter cards (use only to disambiguate if recent messages are unclear):\n${chunks.join("\n\n")}`;
+}
+
+function buildLorebookExtractionContext(context: STContext, maxChars: number): string {
+  const lorebookText = readLorebookContext(context, maxChars, 12000);
+  if (!lorebookText) return "";
+  return `\n\nLorebook context (activated; use only to disambiguate if recent messages are unclear):\n${lorebookText}`;
 }
 
 function toggle(): boolean {

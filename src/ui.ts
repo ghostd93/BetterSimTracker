@@ -4574,7 +4574,7 @@ export function openSettingsModal(input: {
       <div class="bst-help-line"><strong>Mood</strong> is short-term tone. <strong>Last Thought</strong> is one brief internal line for continuity.</div>
     </div>
     <div class="bst-settings-section">
-      <h4><span class="bst-header-icon fa-solid fa-plug"></span>Connection &amp; Generation</h4>
+      <h4><span class="bst-header-icon fa-solid fa-plug"></span>Connection</h4>
       <div class="bst-settings-grid">
         <label>Connection Profile <select data-k="connectionProfile">${profileOptionsHtml}</select></label>
         <label>Max Tokens Override <input data-k="maxTokensOverride" type="number" min="0" max="100000"></label>
@@ -4582,26 +4582,38 @@ export function openSettingsModal(input: {
       </div>
     </div>
     <div class="bst-settings-section">
-      <h4><span class="bst-header-icon fa-solid fa-filter"></span>Extraction</h4>
+      <h4><span class="bst-header-icon fa-solid fa-filter"></span>Extraction &amp; Injection</h4>
       <div class="bst-settings-grid">
+        <div class="bst-section-divider">Extraction Settings</div>
         <label>Context Messages <input data-k="contextMessages" type="number" min="1" max="40"></label>
-        <label data-bst-row="injectPromptDepth">Injection Depth <select data-k="injectPromptDepth"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></label>
         <label data-bst-row="maxConcurrentCalls">Max Concurrent Requests <input data-k="maxConcurrentCalls" type="number" min="1" max="8"></label>
         <label data-bst-row="maxRetriesPerStat">Max Retries Per Stat <input data-k="maxRetriesPerStat" type="number" min="0" max="4"></label>
         <label>Max Delta Per Turn <input data-k="maxDeltaPerTurn" type="number" min="1" max="30"></label>
         <label>Confidence Dampening <input data-k="confidenceDampening" type="number" min="0" max="1" step="0.05"></label>
         <label>Mood Stickiness <input data-k="moodStickiness" type="number" min="0" max="1" step="0.05"></label>
         <label data-bst-row="activityLookback">Activity Lookback <input data-k="activityLookback" type="number" min="1" max="25"></label>
-        <div class="bst-section-divider">Toggles</div>
+        <div class="bst-section-divider">Extraction Includes</div>
         <div class="bst-check-grid">
           <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
-          <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
-          <label class="bst-check" data-bst-row="injectLorebookInGeneration"><input data-k="injectLorebookInGeneration" type="checkbox">Inject Activated Lorebook Context</label>
-          <label class="bst-check"><input data-k="summarizationNoteVisibleForAI" type="checkbox">Summarization Note Visible for AI (future notes)</label>
-          <label class="bst-check" data-bst-row="injectSummarizationNote"><input data-k="injectSummarizationNote" type="checkbox">Inject Summarization Note</label>
+          <label class="bst-check"><input data-k="includeLorebookInExtraction" type="checkbox">Include Activated Lorebook in Extraction Prompt</label>
+        </div>
+        <label data-bst-row="lorebookExtractionMaxChars">Lorebook Extraction Limit <input data-k="lorebookExtractionMaxChars" type="number" min="0" max="12000"></label>
+        <div class="bst-help-line bst-toggle-help" data-bst-row="lorebookExtractionHelp">Maximum lorebook characters included in extraction context (0 = no trim).</div>
+
+        <div class="bst-section-divider">Extraction Toggles</div>
+        <div class="bst-check-grid">
           <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
           <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
+        </div>
+
+        <div class="bst-section-divider">Injection Settings</div>
+        <label data-bst-row="injectPromptDepth">Injection Depth <select data-k="injectPromptDepth"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></label>
+        <label data-bst-row="injectionPromptMaxChars">Injection Prompt Max Chars <input data-k="injectionPromptMaxChars" type="number" min="500" max="30000"></label>
+        <div class="bst-check-grid">
+          <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
+          <label class="bst-check"><input data-k="summarizationNoteVisibleForAI" type="checkbox">Summarization Note Visible for AI (future notes)</label>
+          <label class="bst-check" data-bst-row="injectSummarizationNote"><input data-k="injectSummarizationNote" type="checkbox">Inject Summarization Note</label>
         </div>
         <div class="bst-help-line bst-toggle-help"><strong>Summarize</strong> creates a prose note of current tracked stats (no numbers), typically 4-6 sentences, grounded in recent messages.</div>
         <div class="bst-help-line bst-toggle-help"><code>Summarization Note Visible for AI</code> affects only newly generated BetterSimTracker summary notes. Existing notes are not modified for safety.</div>
@@ -4618,17 +4630,7 @@ export function openSettingsModal(input: {
             <li><code>{{priorityRules}}</code> — priority rules block</li>
             <li><code>{{lines}}</code> — per-character state lines</li>
             <li><code>{{summarizationNote}}</code> — optional latest tracker summary note (when enabled)</li>
-            <li><code>{{lorebookContext}}</code> — optional activated lorebook context (when enabled)</li>
           </ul>
-          <label class="bst-prompt-group" data-bst-row="lorebookGenerationMaxChars">
-            <div class="bst-prompt-head">
-              <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-book-open"></span>Lorebook Injection Limit</span>
-            </div>
-            <div class="bst-prompt-body">
-              <div class="bst-prompt-caption">Maximum lorebook characters injected into generation guidance</div>
-              <input data-k="lorebookGenerationMaxChars" type="number" min="0" max="8000">
-            </div>
-          </label>
           <div class="bst-prompt-group bst-prompt-inline">
             <div class="bst-prompt-head">
               <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-wand-magic-sparkles"></span>Injection Prompt</span>
@@ -5004,7 +5006,7 @@ export function openSettingsModal(input: {
 
   const mergeConnectionAndGeneration = (): void => {
     const sections = Array.from(modal.querySelectorAll(".bst-settings-section")) as HTMLElement[];
-    const connectionSection = sections.find(section => section.querySelector("h4")?.textContent?.trim() === "Connection & Generation");
+    const connectionSection = sections.find(section => section.querySelector("h4")?.textContent?.trim() === "Connection");
     const generationSection = sections.find(section => section.querySelector("h4")?.textContent?.trim() === "Generation");
     if (!connectionSection || !generationSection) return;
     const generationGrid = generationSection.querySelector(".bst-settings-grid");
@@ -5095,8 +5097,8 @@ export function openSettingsModal(input: {
 
   const initSectionDrawers = (): void => {
     const sectionIds: Record<string, string> = {
-      "Connection & Generation": "connection",
-      "Extraction": "extraction",
+      "Connection": "connection",
+      "Extraction & Injection": "extraction",
       "Tracked Stats": "tracked-stats",
       "Custom Stats": "custom-stats",
       "Display": "display",
@@ -5269,11 +5271,12 @@ export function openSettingsModal(input: {
   set("maxTokensOverride", String(input.settings.maxTokensOverride));
   set("truncationLengthOverride", String(input.settings.truncationLengthOverride));
   set("includeCharacterCardsInPrompt", String(input.settings.includeCharacterCardsInPrompt));
+  set("includeLorebookInExtraction", String(input.settings.includeLorebookInExtraction));
+  set("lorebookExtractionMaxChars", String(input.settings.lorebookExtractionMaxChars));
   set("confidenceDampening", String(input.settings.confidenceDampening));
   set("moodStickiness", String(input.settings.moodStickiness));
   set("injectTrackerIntoPrompt", String(input.settings.injectTrackerIntoPrompt));
-  set("injectLorebookInGeneration", String(input.settings.injectLorebookInGeneration));
-  set("lorebookGenerationMaxChars", String(input.settings.lorebookGenerationMaxChars));
+  set("injectionPromptMaxChars", String(input.settings.injectionPromptMaxChars));
   set("summarizationNoteVisibleForAI", String(input.settings.summarizationNoteVisibleForAI));
   set("injectSummarizationNote", String(input.settings.injectSummarizationNote));
   set("autoDetectActive", String(input.settings.autoDetectActive));
@@ -6715,11 +6718,12 @@ export function openSettingsModal(input: {
       maxTokensOverride: readNumber("maxTokensOverride", input.settings.maxTokensOverride, 0, 100000),
       truncationLengthOverride: readNumber("truncationLengthOverride", input.settings.truncationLengthOverride, 0, 200000),
       includeCharacterCardsInPrompt: readBool("includeCharacterCardsInPrompt", input.settings.includeCharacterCardsInPrompt),
+      includeLorebookInExtraction: readBool("includeLorebookInExtraction", input.settings.includeLorebookInExtraction),
+      lorebookExtractionMaxChars: readNumber("lorebookExtractionMaxChars", input.settings.lorebookExtractionMaxChars, 0, 12000),
       confidenceDampening: readNumber("confidenceDampening", input.settings.confidenceDampening, 0, 1),
       moodStickiness: readNumber("moodStickiness", input.settings.moodStickiness, 0, 1),
       injectTrackerIntoPrompt: readBool("injectTrackerIntoPrompt", input.settings.injectTrackerIntoPrompt),
-      injectLorebookInGeneration: readBool("injectLorebookInGeneration", input.settings.injectLorebookInGeneration),
-      lorebookGenerationMaxChars: readNumber("lorebookGenerationMaxChars", input.settings.lorebookGenerationMaxChars, 0, 8000),
+      injectionPromptMaxChars: readNumber("injectionPromptMaxChars", input.settings.injectionPromptMaxChars, 500, 30000),
       summarizationNoteVisibleForAI: readBool("summarizationNoteVisibleForAI", input.settings.summarizationNoteVisibleForAI),
       injectSummarizationNote: readBool("injectSummarizationNote", input.settings.injectSummarizationNote),
       autoDetectActive: readBool("autoDetectActive", input.settings.autoDetectActive),
@@ -6790,8 +6794,9 @@ export function openSettingsModal(input: {
     const injectPromptBlock = modal.querySelector('[data-bst-row="injectPromptBlock"]') as HTMLElement | null;
     const injectPromptDivider = modal.querySelector('[data-bst-row="injectPromptDivider"]') as HTMLElement | null;
     const injectSummarizationNoteRow = modal.querySelector('[data-bst-row="injectSummarizationNote"]') as HTMLElement | null;
-    const injectLorebookInGenerationRow = modal.querySelector('[data-bst-row="injectLorebookInGeneration"]') as HTMLElement | null;
-    const lorebookGenerationMaxCharsRow = modal.querySelector('[data-bst-row="lorebookGenerationMaxChars"]') as HTMLElement | null;
+    const lorebookExtractionMaxCharsRow = modal.querySelector('[data-bst-row="lorebookExtractionMaxChars"]') as HTMLElement | null;
+    const lorebookExtractionHelpRow = modal.querySelector('[data-bst-row="lorebookExtractionHelp"]') as HTMLElement | null;
+    const injectionPromptMaxCharsRow = modal.querySelector('[data-bst-row="injectionPromptMaxChars"]') as HTMLElement | null;
     const moodAdvancedBlock = modal.querySelector('[data-bst-row="moodAdvancedBlock"]') as HTMLElement | null;
     const globalMoodExpressionMap = modal.querySelector('[data-bst-row="globalMoodExpressionMap"]') as HTMLElement | null;
     const stExpressionImageOptions = modal.querySelector('[data-bst-row="stExpressionImageOptions"]') as HTMLElement | null;
@@ -6844,13 +6849,18 @@ export function openSettingsModal(input: {
     if (injectSummarizationNoteRow) {
       injectSummarizationNoteRow.style.display = current.injectTrackerIntoPrompt ? "" : "none";
     }
-    if (injectLorebookInGenerationRow) {
-      injectLorebookInGenerationRow.style.display = current.injectTrackerIntoPrompt ? "" : "none";
+    if (lorebookExtractionMaxCharsRow) {
+      lorebookExtractionMaxCharsRow.style.display = current.includeLorebookInExtraction ? "flex" : "none";
+      lorebookExtractionMaxCharsRow.style.flexDirection = "column";
+      lorebookExtractionMaxCharsRow.style.gap = "4px";
     }
-    if (lorebookGenerationMaxCharsRow) {
-      lorebookGenerationMaxCharsRow.style.display = current.injectTrackerIntoPrompt && current.injectLorebookInGeneration ? "flex" : "none";
-      lorebookGenerationMaxCharsRow.style.flexDirection = "column";
-      lorebookGenerationMaxCharsRow.style.gap = "4px";
+    if (lorebookExtractionHelpRow) {
+      lorebookExtractionHelpRow.style.display = current.includeLorebookInExtraction ? "block" : "none";
+    }
+    if (injectionPromptMaxCharsRow) {
+      injectionPromptMaxCharsRow.style.display = current.injectTrackerIntoPrompt ? "flex" : "none";
+      injectionPromptMaxCharsRow.style.flexDirection = "column";
+      injectionPromptMaxCharsRow.style.gap = "4px";
     }
     if (moodAdvancedBlock) {
       moodAdvancedBlock.style.display = current.trackMood ? "block" : "none";
@@ -6938,8 +6948,9 @@ export function openSettingsModal(input: {
     confidenceDampening: "How strongly model confidence scales stat deltas (0 = ignore confidence, 1 = full effect).",
     moodStickiness: "Higher values keep previous mood unless confidence is strong.",
     injectTrackerIntoPrompt: "Inject current relationship state into generation prompt for behavioral coherence.",
-    injectLorebookInGeneration: "Optionally append activated lorebook context to hidden generation guidance injection.",
-    lorebookGenerationMaxChars: "Maximum number of lorebook characters injected into hidden guidance (0 disables lorebook injection).",
+    includeLorebookInExtraction: "Include activated lorebook context in extraction prompt building (for stat analysis only).",
+    lorebookExtractionMaxChars: "Maximum lorebook characters included in extraction context (0 means no trim).",
+    injectionPromptMaxChars: "Maximum size of hidden injection prompt block sent to generation.",
     summarizationNoteVisibleForAI: "Controls visibility mode for newly generated Summarize notes (prose summaries of current tracked stats). Existing notes are unchanged for safety.",
     injectSummarizationNote: "Include the latest Summarize note (prose summary of current tracked stats) in hidden tracker prompt injection guidance only (no chat-message edits).",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",

@@ -60,8 +60,6 @@ export const DEFAULT_INJECTION_PROMPT_TEMPLATE = [
   "{{lines}}",
   "",
   "{{summarizationNote}}",
-  "",
-  "{{lorebookContext}}"
 ].join("\n");
 
 export const UNIFIED_PROMPT_PROTOCOL = `Numeric stats to update ({{numericStats}}):

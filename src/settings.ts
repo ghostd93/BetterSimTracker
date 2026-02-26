@@ -52,9 +52,10 @@ export const defaultSettings: BetterSimTrackerSettings = {
   contextMessages: 10,
   connectionProfile: "",
   injectTrackerIntoPrompt: true,
-  injectLorebookInGeneration: false,
-  lorebookGenerationMaxChars: 1200,
+  includeLorebookInExtraction: false,
+  lorebookExtractionMaxChars: 1200,
   injectPromptDepth: 0,
+  injectionPromptMaxChars: 6000,
   summarizationNoteVisibleForAI: false,
   injectSummarizationNote: false,
   sequentialExtraction: false,
@@ -470,6 +471,17 @@ function sanitizeStExpressionPosition(raw: unknown, fallback: number): number {
 
 export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): BetterSimTrackerSettings {
   const customStats = sanitizeCustomStats(input.customStats);
+  const legacyInput = input as Record<string, unknown>;
+  const includeLorebookInExtraction = asBool(
+    legacyInput.includeLorebookInExtraction,
+    asBool(legacyInput.injectLorebookInGeneration, defaultSettings.includeLorebookInExtraction),
+  );
+  const lorebookExtractionMaxChars = clampInt(
+    legacyInput.lorebookExtractionMaxChars ?? legacyInput.lorebookGenerationMaxChars,
+    defaultSettings.lorebookExtractionMaxChars,
+    0,
+    12000,
+  );
   return {
     ...defaultSettings,
     ...input,
@@ -478,9 +490,10 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     contextMessages: clampInt(input.contextMessages, defaultSettings.contextMessages, 1, 40),
     connectionProfile: typeof input.connectionProfile === "string" ? input.connectionProfile.trim() : defaultSettings.connectionProfile,
     injectTrackerIntoPrompt: asBool(input.injectTrackerIntoPrompt, defaultSettings.injectTrackerIntoPrompt),
-    injectLorebookInGeneration: asBool(input.injectLorebookInGeneration, defaultSettings.injectLorebookInGeneration),
-    lorebookGenerationMaxChars: clampInt(input.lorebookGenerationMaxChars, defaultSettings.lorebookGenerationMaxChars, 0, 8000),
+    includeLorebookInExtraction,
+    lorebookExtractionMaxChars,
     injectPromptDepth: clampInt(input.injectPromptDepth, defaultSettings.injectPromptDepth, 0, 8),
+    injectionPromptMaxChars: clampInt(input.injectionPromptMaxChars, defaultSettings.injectionPromptMaxChars, 500, 30000),
     summarizationNoteVisibleForAI: asBool(input.summarizationNoteVisibleForAI, defaultSettings.summarizationNoteVisibleForAI),
     injectSummarizationNote: asBool(input.injectSummarizationNote, defaultSettings.injectSummarizationNote),
     sequentialExtraction: asBool(input.sequentialExtraction, defaultSettings.sequentialExtraction),

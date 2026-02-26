@@ -72,9 +72,10 @@ export interface BetterSimTrackerSettings {
   contextMessages: number;
   connectionProfile: string;
   injectTrackerIntoPrompt: boolean;
-  injectLorebookInGeneration: boolean;
-  lorebookGenerationMaxChars: number;
+  includeLorebookInExtraction: boolean;
+  lorebookExtractionMaxChars: number;
   injectPromptDepth: number;
+  injectionPromptMaxChars: number;
   summarizationNoteVisibleForAI: boolean;
   injectSummarizationNote: boolean;
   sequentialExtraction: boolean;
