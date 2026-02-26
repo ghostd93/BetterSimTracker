@@ -3614,8 +3614,8 @@ export function renderTracker(
       const isActive = activeSet.has(normalizeName(name));
       if (!isActive && !settings.showInactive) continue;
       const displayName = name === USER_TRACKER_KEY ? "User" : name;
-      const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
       const isUserCard = name === USER_TRACKER_KEY;
+      const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
       const enabledNumeric = getNumericStatsForCharacter(data, name, settings);
       const enabledNonNumeric = cardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
       const moodText = data.statistics.mood?.[name] !== undefined ? String(data.statistics.mood?.[name]) : "";
@@ -3656,9 +3656,9 @@ export function renderTracker(
         <div class="bst-head">
           <div class="bst-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
           <div class="bst-actions">
-            <button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> <span class="bst-graph-label">Graph</span></button>
+            ${!isUserCard ? `<button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> <span class="bst-graph-label">Graph</span></button>` : ""}
             ${canEdit ? `<button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="edit-stats" data-bst-edit-message="${entry.messageIndex}" data-bst-edit-character="${escapeHtml(name)}" title="Edit last tracker stats for ${escapeHtml(displayName)}" aria-label="Edit last tracker stats for ${escapeHtml(displayName)}"><span aria-hidden="true">&#9998;</span></button>` : ""}
-            <div class="bst-state" title="${isActive ? "Active" : settings.inactiveLabel}">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>
+            ${!isUserCard ? `<div class="bst-state" title="${isActive ? "Active" : settings.inactiveLabel}">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>` : ""}
           </div>
         </div>
         ${enabledNumeric.length || enabledNonNumeric.length || showCollapsedMood ? `
