@@ -2582,10 +2582,16 @@ function registerEvents(context: STContext): void {
         pushTrace("extract.skip", { reason: "user_tracking_disabled", trigger: "USER_MESSAGE_RENDERED" });
         return;
       }
-      if (
-        messageIndex != null &&
-        (messageIndex < 0 || messageIndex >= context.chat.length || !isTrackableUserMessage(context.chat[messageIndex]))
-      ) {
+      if (messageIndex == null) {
+        resetUserTurnGate("rendered_user_message_index_unknown");
+        pushTrace("extract.skip", {
+          reason: "rendered_user_message_index_unknown",
+          trigger: "USER_MESSAGE_RENDERED",
+          messageIndex: null,
+        });
+        return;
+      }
+      if (messageIndex < 0 || messageIndex >= context.chat.length || !isTrackableUserMessage(context.chat[messageIndex])) {
         resetUserTurnGate("rendered_user_message_not_trackable");
         pushTrace("extract.skip", {
           reason: "rendered_user_message_not_trackable",
