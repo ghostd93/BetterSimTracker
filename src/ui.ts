@@ -97,6 +97,7 @@ type CachedExpressionSprites = {
 const ST_EXPRESSION_CACHE_TTL_MS = 60_000;
 const stExpressionCache = new Map<string, CachedExpressionSprites>();
 const stExpressionFetchInFlight = new Set<string>();
+const CUSTOM_STAT_DESCRIPTION_MAX_LENGTH = 300;
 const DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS: StExpressionImageOptions = {
   zoom: 1.2,
   positionX: 50,
@@ -128,20 +129,34 @@ function normalizeCustomEnumOptions(value: unknown): string[] {
   const options: string[] = [];
   const seen = new Set<string>();
   for (const item of value) {
-    const token = String(item ?? "")
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, "_")
-      .replace(/[^a-z0-9_]/g, "_")
-      .replace(/_+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, 32);
-    if (!token || seen.has(token)) continue;
-    seen.add(token);
-    options.push(token);
+    const text = String(item ?? "");
+    if (!text.length || hasScriptLikeContent(text) || seen.has(text)) continue;
+    seen.add(text);
+    options.push(text);
     if (options.length >= 12) break;
   }
   return options;
+}
+
+function resolveEnumOption(options: string[], candidate: unknown): string | null {
+  if (!Array.isArray(options) || options.length === 0) return null;
+  if (typeof candidate !== "string") return null;
+  if (options.includes(candidate)) return candidate;
+  const trimmed = candidate.trim();
+  if (trimmed && options.includes(trimmed)) return trimmed;
+  const lowered = candidate.toLowerCase();
+  const lowerMatch = options.find(option => option.toLowerCase() === lowered);
+  if (lowerMatch) return lowerMatch;
+  if (trimmed) {
+    const trimmedLower = trimmed.toLowerCase();
+    const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
+    if (trimmedMatch) return trimmedMatch;
+  }
+  return null;
+}
+
+function hasScriptLikeContent(value: string): boolean {
+  return /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(value);
 }
 
 function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNonNumericStatDefinition[] {
@@ -158,11 +173,11 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
       if (kind === "boolean") {
         defaultValue = typeof def.defaultValue === "boolean" ? def.defaultValue : false;
       } else {
-        const text = normalizeNonNumericTextValue(def.defaultValue, textMaxLength);
         if (kind === "enum_single" && enumOptions.length > 0) {
-          const token = text.toLowerCase();
-          defaultValue = enumOptions.includes(token) ? token : enumOptions[0];
+          const matched = resolveEnumOption(enumOptions, def.defaultValue);
+          defaultValue = matched ?? enumOptions[0];
         } else {
+          const text = normalizeNonNumericTextValue(def.defaultValue, textMaxLength);
           defaultValue = text;
         }
       }
@@ -246,14 +261,14 @@ function resolveNonNumericValue(
     return typeof def.defaultValue === "boolean" ? def.defaultValue : false;
   }
 
+  if (def.kind === "enum_single") {
+    const matched = resolveEnumOption(def.enumOptions, raw ?? def.defaultValue);
+    if (matched != null) return matched;
+    return def.enumOptions[0] ?? null;
+  }
   const maxLength = def.textMaxLength;
   const text = normalizeNonNumericTextValue(raw ?? def.defaultValue, maxLength);
   if (!text) return null;
-  if (def.kind === "enum_single") {
-    const token = text.toLowerCase();
-    if (def.enumOptions.includes(token)) return token;
-    return def.enumOptions[0] ?? null;
-  }
   return text;
 }
 
@@ -265,10 +280,10 @@ function hasNonNumericValue(
   const raw = getNonNumericRawValue(entry, def.id, characterName);
   if (raw === undefined) return false;
   if (def.kind === "boolean") return typeof raw === "boolean";
+  if (def.kind === "enum_single") return resolveEnumOption(def.enumOptions, raw) != null;
   if (typeof raw !== "string") return false;
   const text = normalizeNonNumericTextValue(raw, def.textMaxLength);
   if (!text) return false;
-  if (def.kind === "enum_single") return def.enumOptions.includes(text.toLowerCase());
   return true;
 }
 
@@ -552,11 +567,10 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     if (kind === "boolean") {
       return typeof definition.defaultValue === "boolean" ? definition.defaultValue : false;
     }
-    const text = normalizeNonNumericTextValue(definition.defaultValue, textMaxLength);
     if (kind === "enum_single" && enumOptions.length > 0) {
-      const token = text.toLowerCase();
-      return enumOptions.includes(token) ? token : enumOptions[0];
+      return resolveEnumOption(enumOptions, definition.defaultValue) ?? enumOptions[0];
     }
+    const text = normalizeNonNumericTextValue(definition.defaultValue, textMaxLength);
     return text;
   };
 
@@ -719,7 +733,7 @@ function sanitizeGeneratedCustomDescription(raw: string): string {
 
   text = text.replace(/\s+/g, " ").trim();
   if (!text) return "";
-  return text.slice(0, 200).trim();
+  return text.slice(0, CUSTOM_STAT_DESCRIPTION_MAX_LENGTH).trim();
 }
 
 function sanitizeGeneratedBehaviorGuidance(raw: string): string {
@@ -2485,6 +2499,22 @@ function ensureStyles(): void {
   opacity: 1;
   color: #ffcaca;
 }
+.bst-custom-char-counter {
+  margin-top: 4px;
+  text-align: right;
+  font-size: 11px;
+  line-height: 1.3;
+  opacity: 0.72;
+  color: rgba(241, 246, 255, 0.88);
+}
+.bst-custom-char-counter[data-state="warn"] {
+  opacity: 1;
+  color: #ffe08a;
+}
+.bst-custom-char-counter[data-state="limit"] {
+  opacity: 1;
+  color: #ffb3b3;
+}
 .bst-edit-backdrop {
   position: fixed;
   inset: 0;
@@ -4051,8 +4081,8 @@ function openEditStatsModal(input: {
         return;
       }
       if (kind === "enum_single") {
-        const option = raw.toLowerCase();
-        nonNumeric[key] = def.enumOptions.includes(option) ? option : null;
+        const matched = resolveEnumOption(def.enumOptions, raw);
+        nonNumeric[key] = matched ?? null;
         if (nonNumeric[key] == null) {
           node.value = "";
         }
@@ -5368,10 +5398,16 @@ export function openSettingsModal(input: {
         const options = normalizeCustomEnumOptions(draft.enumOptionsText.split(/\r?\n/));
         if (options.length < 2) errors.push("Enum options require at least 2 unique values.");
         if (options.length > 12) errors.push("Enum options allow up to 12 values.");
-        const selected = draft.defaultValue.trim().toLowerCase();
-        if (!selected) {
+        if (options.some(option => hasScriptLikeContent(option))) {
+          errors.push("Enum values cannot contain script-like content.");
+        }
+        if (hasScriptLikeContent(String(draft.defaultValue ?? ""))) {
+          errors.push("Default enum value cannot contain script-like content.");
+        }
+        const selected = String(draft.defaultValue ?? "");
+        if (!selected.length) {
           errors.push("Default enum value is required.");
-        } else if (!options.includes(selected)) {
+        } else if (resolveEnumOption(options, selected) == null) {
           errors.push("Default enum value must match one allowed option.");
         }
       } else if (draft.kind === "boolean") {
@@ -5426,8 +5462,8 @@ export function openSettingsModal(input: {
       if (kind === "numeric") return Math.max(0, Math.min(100, Math.round(Number(draft.defaultValue))));
       if (kind === "boolean") return Boolean(draft.defaultBoolean);
       if (kind === "enum_single") {
-        const token = draft.defaultValue.trim().toLowerCase();
-        if (enumOptions.includes(token)) return token;
+        const matched = resolveEnumOption(enumOptions, draft.defaultValue);
+        if (matched != null) return matched;
         return enumOptions[0] ?? "";
       }
       return normalizeNonNumericTextValue(draft.defaultValue, textMaxLength);
@@ -5773,8 +5809,9 @@ export function openSettingsModal(input: {
           </label>
         </div>
         <label>Description
-          <textarea data-bst-custom-field="description" rows="4" maxlength="200" placeholder="Required. Explain what this stat represents and how extraction should interpret it.">${escapeHtml(draft.description)}</textarea>
+          <textarea data-bst-custom-field="description" rows="4" maxlength="${CUSTOM_STAT_DESCRIPTION_MAX_LENGTH}" placeholder="Required. Explain what this stat represents and how extraction should interpret it.">${escapeHtml(draft.description)}</textarea>
         </label>
+        <div class="bst-custom-char-counter" data-bst-custom-description-counter></div>
         <div class="bst-custom-ai-row">
           <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-improve-description" data-loading="false">
             <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
@@ -5798,7 +5835,7 @@ export function openSettingsModal(input: {
             <textarea data-bst-custom-field="enumOptionsText" rows="5" placeholder="guarded&#10;cautious&#10;open">${escapeHtml(draft.enumOptionsText)}</textarea>
           </label>
           <label>Default Enum Value
-            <input type="text" data-bst-custom-field="enumDefaultValue" maxlength="32" value="${escapeHtml(draft.kind === "enum_single" ? draft.defaultValue : "")}" placeholder="guarded">
+            <input type="text" data-bst-custom-field="enumDefaultValue" maxlength="200" value="${escapeHtml(draft.kind === "enum_single" ? draft.defaultValue : "")}" placeholder="guarded">
           </label>
         </div>
         <div class="bst-custom-wizard-grid" data-bst-kind-panel="boolean" style="display:none;">
@@ -5891,6 +5928,7 @@ export function openSettingsModal(input: {
     const improveDescriptionBtn = wizard.querySelector('[data-action="custom-improve-description"]') as HTMLButtonElement | null;
     const improveDescriptionLabelNode = wizard.querySelector("[data-bst-custom-description-btn-label]") as HTMLElement | null;
     const improveDescriptionStatusNode = wizard.querySelector("[data-bst-custom-description-status]") as HTMLElement | null;
+    const descriptionCounterNode = wizard.querySelector("[data-bst-custom-description-counter]") as HTMLElement | null;
     const generateTemplateBtn = wizard.querySelector('[data-action="custom-generate-template"]') as HTMLButtonElement | null;
     const generateTemplateLabelNode = wizard.querySelector("[data-bst-custom-template-btn-label]") as HTMLElement | null;
     const generateStatusNode = wizard.querySelector("[data-bst-custom-template-status]") as HTMLElement | null;
@@ -5946,7 +5984,7 @@ export function openSettingsModal(input: {
       if (draft.kind === "numeric") {
         draft.defaultValue = String(numericDefaultNode?.value ?? "");
       } else if (draft.kind === "enum_single") {
-        draft.defaultValue = String(enumDefaultNode?.value ?? "").trim().toLowerCase();
+        draft.defaultValue = String(enumDefaultNode?.value ?? "");
       } else if (draft.kind === "text_short") {
         draft.defaultValue = String(textDefaultNode?.value ?? "");
       } else {
@@ -5981,6 +6019,18 @@ export function openSettingsModal(input: {
       if (!reviewNode) return;
       const normalized = toCustomStatDefinition(draft);
       reviewNode.textContent = JSON.stringify(normalized, null, 2);
+    };
+
+    const updateDescriptionCounter = (): void => {
+      if (!descriptionCounterNode) return;
+      const descriptionNode = getField("description") as HTMLTextAreaElement | null;
+      if (!descriptionNode) return;
+      const maxLength = Number(descriptionNode.getAttribute("maxlength")) || CUSTOM_STAT_DESCRIPTION_MAX_LENGTH;
+      const currentLength = descriptionNode.value.length;
+      descriptionCounterNode.textContent = `${currentLength}/${maxLength} chars`;
+      const warnThreshold = Math.max(1, maxLength - 30);
+      const state = currentLength >= maxLength ? "limit" : currentLength >= warnThreshold ? "warn" : "ok";
+      descriptionCounterNode.setAttribute("data-state", state);
     };
 
     const syncKindUi = (): void => {
@@ -6057,6 +6107,7 @@ export function openSettingsModal(input: {
       if (saveBtn) saveBtn.style.display = step === 6 ? "" : "none";
       syncKindUi();
       writeReview();
+      updateDescriptionCounter();
     };
 
     const setErrors = (errors: string[]): boolean => {
@@ -6465,17 +6516,20 @@ export function openSettingsModal(input: {
         syncDraftFromFields();
         syncKindUi();
         writeReview();
+        updateDescriptionCounter();
       });
       node.addEventListener("change", () => {
         syncDraftFromFields();
         syncKindUi();
         writeReview();
+        updateDescriptionCounter();
       });
     });
 
     document.body.appendChild(backdropNode);
     document.body.appendChild(wizard);
     syncStepUi();
+    updateDescriptionCounter();
   };
 
   customAddButton?.addEventListener("click", () => {

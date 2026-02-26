@@ -264,18 +264,13 @@ function normalizeCustomEnumOptions(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const out: string[] = [];
   const seen = new Set<string>();
+  const hasScriptLikeContent = (text: string): boolean =>
+    /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
   for (const item of value) {
-    const token = String(item ?? "")
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, "_")
-      .replace(/[^a-z0-9_]/g, "_")
-      .replace(/_+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, 32);
-    if (!token || seen.has(token)) continue;
-    seen.add(token);
-    out.push(token);
+    const option = String(item ?? "");
+    if (!option.length || hasScriptLikeContent(option) || seen.has(option)) continue;
+    seen.add(option);
+    out.push(option);
     if (out.length >= 12) break;
   }
   return out;
@@ -611,8 +606,8 @@ function renderPanel(input: InitInput, force = false): void {
     }
     if (kind === "enum_single") {
       const options = normalizeCustomEnumOptions(definition.enumOptions);
-      const rawValue = String(customNonNumericDefaultsRaw[id] ?? "").trim().toLowerCase();
-      const selected = options.includes(rawValue) ? rawValue : "";
+      const rawValue = customNonNumericDefaultsRaw[id];
+      const selected = typeof rawValue === "string" && options.includes(rawValue) ? rawValue : "";
       return `
         <label>${escapeHtml(label)} Default
           <select data-bst-custom-default-enum="${escapeHtml(id)}">
@@ -891,7 +886,7 @@ function renderPanel(input: InitInput, force = false): void {
     node.addEventListener("change", () => {
       const id = String(node.dataset.bstCustomDefaultEnum ?? "").trim().toLowerCase();
       if (!id) return;
-      const value = String(node.value ?? "").trim().toLowerCase();
+      const value = String(node.value ?? "");
       const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
         const copy = { ...current };
         const existing = copy.customNonNumericStatDefaults && typeof copy.customNonNumericStatDefaults === "object"
