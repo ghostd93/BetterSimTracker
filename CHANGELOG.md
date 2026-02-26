@@ -2,6 +2,20 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev2] - 2026-02-26
+### Added
+- Optional lorebook context include for extraction prompts with configurable extraction limit.
+- New `Injection Prompt Max Chars` setting to control hidden generation-injection block size.
+
+### Changed
+- Extraction settings drawer reorganized into explicit `Extraction` vs `Injection` groups inside `Extraction & Injection`.
+- Extraction context includes now use clear `Include ...` naming to distinguish from generation `Inject ...` controls.
+- Connection section title simplified to `Connection`.
+
+### Fixed
+- Removed BST lorebook duplication path from generation injection; lorebook context is now extraction-focused.
+- Extraction lorebook include path now applies consistently in both unified and sequential extraction modes.
+
 ## [2.1.0.3-dev1] - 2026-02-26
 ### Added
 - Optional lorebook context injection in generation prompt injection with size cap controls.
