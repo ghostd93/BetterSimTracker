@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev22] - 2026-02-26
+### Fixed
+- Extraction baseline selection now skips user-only tracker snapshots that do not contain tracked values for the currently active characters, preventing false stat drops (for example Chloe trust falling from 2 to 1 after an intervening user message).
+- Baseline lookup before-index guard now returns no entry for index `<= 0`, avoiding accidental self-baselining at the start of chat.
+
 ## [2.1.0.3-dev21] - 2026-02-26
 ### Fixed
 - Delta badges now compare against the nearest prior message that actually contains the same character/stat value, instead of only the immediately previous tracker entry.

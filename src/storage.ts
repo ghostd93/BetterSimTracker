@@ -139,7 +139,10 @@ export function getLatestTrackerDataWithIndexBefore(
   context: STContext,
   beforeIndex: number,
 ): { data: TrackerData; messageIndex: number } | null {
-  const start = Math.min(Math.max(beforeIndex - 1, 0), context.chat.length - 1);
+  if (context.chat.length === 0 || beforeIndex <= 0) {
+    return null;
+  }
+  const start = Math.min(beforeIndex - 1, context.chat.length - 1);
   for (let i = start; i >= 0; i -= 1) {
     const found = getTrackerDataFromMessage(context.chat[i]);
     if (found) {

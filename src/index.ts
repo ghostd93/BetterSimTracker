@@ -17,7 +17,6 @@ import {
   clearTrackerDataForCurrentChat,
   getChatStateLatestTrackerData,
   getLatestTrackerDataWithIndex,
-  getLatestTrackerDataWithIndexBefore,
   getLocalLatestTrackerData,
   getMetadataLatestTrackerData,
   getRecentTrackerHistory,
@@ -615,6 +614,53 @@ function getLastMessageIndexIfAi(context: STContext): number | null {
 
 function getLastMessageIndexIfUser(context: STContext): number | null {
   return getLastUserMessageIndex(context);
+}
+
+function hasTrackedValueForCharacter(
+  data: TrackerData,
+  characterName: string,
+  settingsInput: BetterSimTrackerSettings,
+): boolean {
+  if (settingsInput.trackAffection && data.statistics.affection[characterName] !== undefined) return true;
+  if (settingsInput.trackTrust && data.statistics.trust[characterName] !== undefined) return true;
+  if (settingsInput.trackDesire && data.statistics.desire[characterName] !== undefined) return true;
+  if (settingsInput.trackConnection && data.statistics.connection[characterName] !== undefined) return true;
+  if (settingsInput.trackMood && data.statistics.mood[characterName] !== undefined) return true;
+  if (settingsInput.trackLastThought && data.statistics.lastThought[characterName] !== undefined) return true;
+
+  const customDefs = Array.isArray(settingsInput.customStats) ? settingsInput.customStats : [];
+  for (const def of customDefs) {
+    if (!def.track) continue;
+    const statId = String(def.id ?? "").trim().toLowerCase();
+    if (!statId) continue;
+    const kind = def.kind ?? "numeric";
+    if (kind === "numeric") {
+      if (data.customStatistics?.[statId]?.[characterName] !== undefined) return true;
+      continue;
+    }
+    if (data.customNonNumericStatistics?.[statId]?.[characterName] !== undefined) return true;
+  }
+
+  return false;
+}
+
+function getLatestRelevantTrackerDataWithIndexBefore(
+  context: STContext,
+  beforeIndex: number,
+  activeCharacters: string[],
+  settingsInput: BetterSimTrackerSettings,
+): { data: TrackerData; messageIndex: number } | null {
+  if (beforeIndex <= 0 || context.chat.length === 0) return null;
+  const start = Math.min(beforeIndex - 1, context.chat.length - 1);
+  for (let i = start; i >= 0; i -= 1) {
+    const found = getTrackerDataFromMessage(context.chat[i]);
+    if (!found) continue;
+    const hasRelevantValue = activeCharacters.some(name => hasTrackedValueForCharacter(found, name, settingsInput));
+    if (hasRelevantValue) {
+      return { data: found, messageIndex: i };
+    }
+  }
+  return null;
 }
 
 function isRenderableTrackerIndex(context: STContext, index: number): boolean {
@@ -2335,10 +2381,16 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
           customStats: scopedCustomStats,
         };
 
-    const previousEntry =
+    const baselineBeforeIndex =
       typeof targetMessageIndex === "number" && targetMessageIndex >= 0
-        ? getLatestTrackerDataWithIndexBefore(context, targetMessageIndex)
-        : getLatestTrackerDataWithIndex(context);
+        ? targetMessageIndex
+        : lastIndex;
+    const previousEntry = getLatestRelevantTrackerDataWithIndexBefore(
+      context,
+      baselineBeforeIndex,
+      activeCharacters,
+      runScopedSettings,
+    );
     let previous = previousEntry?.data ?? null;
     if (!previous) {
       previous = buildBaselineData(activeCharacters, runScopedSettings);
