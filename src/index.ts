@@ -81,6 +81,7 @@ let userTurnGateStopTimer: number | null = null;
 let userTurnGateReplayAttempts = 0;
 let chatGenerationIntent: CapturedGenerationIntent | null = null;
 let slashCommandsRegistered = false;
+const registeredEventSources = new WeakSet<object>();
 let activeExtractionRunId: number | null = null;
 const cancelledExtractionRuns = new Set<number>();
 const activeSummaryRuns = new Set<number>();
@@ -545,10 +546,6 @@ function getDebugScopeKey(context: STContext): string {
   return `bst-debug:${chatId}|${target}`;
 }
 
-function getDebugTargetSuffix(context: STContext): string {
-  return `|${context.groupId ? `group:${context.groupId}` : `char:${String(context.characterId ?? "unknown")}`}`;
-}
-
 function saveDebugRecord(context: STContext, record: DeltaDebugRecord | null): void {
   try {
     if (!record) return;
@@ -571,23 +568,7 @@ function loadDebugRecord(context: STContext): DeltaDebugRecord | null {
       }
       return parsed as DeltaDebugRecord;
     }
-
-    const suffix = getDebugTargetSuffix(context);
-    let best: { record: DeltaDebugRecord; savedAt: number } | null = null;
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
-      if (!key || !key.startsWith("bst-debug:")) continue;
-      if (!key.endsWith(suffix)) continue;
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw) as { savedAt?: number; record?: DeltaDebugRecord } | DeltaDebugRecord;
-      const record = (parsed as { record?: DeltaDebugRecord }).record ?? (parsed as DeltaDebugRecord);
-      const savedAt = Number((parsed as { savedAt?: number }).savedAt ?? 0);
-      if (!best || savedAt > best.savedAt) {
-        best = { record, savedAt };
-      }
-    }
-    return best?.record ?? null;
+    return null;
   } catch {
     return null;
   }
@@ -973,6 +954,10 @@ function queueRender(): void {
       pushTrace("extract.cancel", { canceled, source: "ui", runId: activeExtractionRunId });
     }, payload => {
       applyManualTrackerEdits(payload);
+    }, messageIndex => {
+      const liveContext = getSafeContext();
+      if (!liveContext || messageIndex < 0 || messageIndex >= liveContext.chat.length) return null;
+      return getTrackerDataFromMessage(liveContext.chat[messageIndex]);
     }, () => {
       queueRender();
     });
@@ -2364,6 +2349,12 @@ function registerEvents(context: STContext): void {
     pushTrace("event.register.skip", { reason: "missing_event_source" });
     return;
   }
+  const sourceRef = source as unknown as object;
+  if (registeredEventSources.has(sourceRef)) {
+    pushTrace("event.register.skip", { reason: "already_registered" });
+    return;
+  }
+  registeredEventSources.add(sourceRef);
 
   if (events.GENERATION_STARTED) {
     source.on(events.GENERATION_STARTED, (generationType: unknown, options: unknown, isDryRun: unknown) => {

@@ -29,6 +29,24 @@ function renderNonNumericValue(value: unknown): string | null {
   return text ? `"${text.slice(0, 120)}"` : null;
 }
 
+function customStatTracksScope(
+  stat: { track?: boolean; trackCharacters?: boolean; trackUser?: boolean },
+  scope: "character" | "user",
+): boolean {
+  if (scope === "user") {
+    if (stat.trackUser !== undefined) return Boolean(stat.trackUser);
+    return Boolean(stat.track);
+  }
+  if (stat.trackCharacters !== undefined) return Boolean(stat.trackCharacters);
+  return Boolean(stat.track);
+}
+
+function customStatTracksAnyScope(
+  stat: { track?: boolean; trackCharacters?: boolean; trackUser?: boolean },
+): boolean {
+  return customStatTracksScope(stat, "character") || customStatTracksScope(stat, "user");
+}
+
 function renderTemplate(template: string, values: Record<string, string>): string {
   let output = template;
   for (const [key, value] of Object.entries(values)) {
@@ -79,27 +97,35 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     connection: { showOnCard: true, showInGraph: true, includeInInjection: true },
   };
   const allEnabledCustom = (settings.customStats ?? [])
-    .filter(stat => stat.track && stat.includeInInjection)
+    .filter(stat => stat.includeInInjection && customStatTracksAnyScope(stat))
     .slice(0, 8);
   const allEnabledCustomNumeric = allEnabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
   const allEnabledCustomNonNumeric = allEnabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
   const buildWithCustom = (customStatCount: number): string => {
     const enabledCustom = allEnabledCustom.slice(0, customStatCount);
-    const enabledCustomNumeric = enabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
-    const enabledCustomNonNumeric = enabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
     const names = [...data.activeCharacters];
     if (settings.includeUserTrackerInInjection && settings.enableUserTracking) {
       const hasUserMood = settings.userTrackMood && data.statistics.mood?.[USER_TRACKER_KEY] !== undefined;
       const hasUserLastThought = settings.userTrackLastThought && String(data.statistics.lastThought?.[USER_TRACKER_KEY] ?? "").trim().length > 0;
       const hasUserCustom = enabledCustom.some(stat =>
-        (stat.kind ?? "numeric") === "numeric"
+        customStatTracksScope(stat, "user") &&
+        ((stat.kind ?? "numeric") === "numeric"
           ? data.customStatistics?.[stat.id]?.[USER_TRACKER_KEY] !== undefined
-          : data.customNonNumericStatistics?.[stat.id]?.[USER_TRACKER_KEY] !== undefined
+          : data.customNonNumericStatistics?.[stat.id]?.[USER_TRACKER_KEY] !== undefined)
       );
       if ((hasUserMood || hasUserLastThought || hasUserCustom) && !names.includes(USER_TRACKER_KEY)) {
         names.push(USER_TRACKER_KEY);
       }
     }
+    const hasUserLine = names.includes(USER_TRACKER_KEY);
+    const hasCharacterLine = names.some(name => name !== USER_TRACKER_KEY);
+    const scopedEnabledCustom = enabledCustom.filter(
+      stat =>
+        (hasCharacterLine && customStatTracksScope(stat, "character")) ||
+        (hasUserLine && customStatTracksScope(stat, "user")),
+    );
+    const enabledCustomNumeric = scopedEnabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
+    const enabledCustomNonNumeric = scopedEnabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
     const numericKeys: Array<{
       key: "affection" | "trust" | "desire" | "connection";
       label: string;
@@ -183,7 +209,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         if (stat.key === "desire") return "- desire: physical/romantic attraction and flirt/sexual tension";
         return "- connection: felt closeness/bond depth and emotional attunement";
       }),
-      ...enabledCustom.map(stat => {
+      ...scopedEnabledCustom.map(stat => {
         const label = stat.label?.trim() || stat.id;
         const description = stat.description?.trim();
         return description
@@ -201,7 +227,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
           "- 61-100 high: warm, open, engaged, proactive, intimate (where appropriate)",
         ].join("\n")
       : "";
-    const customBehaviorLines = enabledCustom.flatMap(stat => {
+    const customBehaviorLines = scopedEnabledCustom.flatMap(stat => {
       const guidance = String(stat.behaviorGuidance ?? "").trim();
       if (!guidance) return [];
       const label = String(stat.label ?? "").trim() || stat.id;

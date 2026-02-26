@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev6] - 2026-02-26
+### Fixed
+- Prompt injection now respects custom-stat scope (`trackCharacters` / `trackUser`) so user-only custom stats are not emitted on character lines.
+- Removed debug-record cross-scope fallback by target suffix; debug load now stays strictly within the exact chat+scope key.
+- Prevented duplicate event listener registration on the same event source to avoid stacked handlers after reinits.
+- Removed per-card stale render-map capture path in tracker card click handlers to reduce long-session memory retention.
+
 ## [2.1.0.3-dev5] - 2026-02-26
 ### Fixed
 - User-turn gate now adopts an already in-flight replayable generation when `GENERATION_STARTED` arrives before `USER_MESSAGE_RENDERED`, then requests stop and replays after user extraction.

@@ -3390,17 +3390,12 @@ export function renderTracker(
   onSendSummaryMessage?: (messageIndex: number) => void,
   onCancelExtraction?: () => void,
   onEditStats?: (payload: EditStatsPayload) => void,
+  resolveEntryData?: (messageIndex: number) => TrackerData | null,
   onRequestRerender?: () => void,
 ): void {
   ensureStyles();
   const palette = allocateCharacterColors(allCharacters);
   const sortedEntries = [...entries].sort((a, b) => a.messageIndex - b.messageIndex);
-  const entryByIndex = new Map<number, TrackerData>();
-  for (const entry of entries) {
-    if (entry.data) {
-      entryByIndex.set(entry.messageIndex, entry.data);
-    }
-  }
   const latestTrackedMessageIndex = [...sortedEntries].reverse().find(item => item.data)?.messageIndex ?? null;
   const findPreviousData = (messageIndex: number): TrackerData | null => {
     for (let i = sortedEntries.length - 1; i >= 0; i -= 1) {
@@ -3489,7 +3484,7 @@ export function renderTracker(
         if (edit) {
           const idx = Number(edit.getAttribute("data-bst-edit-message") ?? root.dataset.messageIndex);
           const character = String(edit.getAttribute("data-bst-edit-character") ?? "").trim();
-          const data = Number.isNaN(idx) ? null : entryByIndex.get(idx) ?? null;
+          const data = Number.isNaN(idx) ? null : resolveEntryData?.(idx) ?? null;
           if (!data || !character) return;
           openEditStatsModal({
             messageIndex: idx,
