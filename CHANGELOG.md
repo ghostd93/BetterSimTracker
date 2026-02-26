@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev24] - 2026-02-26
+### Fixed
+- Rebuilt `dist/index.js` with the latest extraction-baseline fixes so runtime now uses the same prior-snapshot lookup logic already present in `src` (prevents fallback-to-default `Current tracker state` values during retrack).
+
 ## [2.1.0.3-dev23] - 2026-02-26
 ### Fixed
 - Extraction baseline lookup now falls back to indexed tracker history (chat-state/metadata/local store) when per-message payloads are missing after reload/swipe, preventing false resets to defaults in `Current tracker state` and resulting stat drops.
