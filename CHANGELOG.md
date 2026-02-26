@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev16] - 2026-02-26
+### Fixed
+- Tracker card rendering now merges message-local character names with the current global character list, so historical AI messages still show all relevant character cards when `Show Inactive` is enabled.
+- Group-message card rendering now preserves characters present in stored tracker data even if current activity detection temporarily excludes them.
+
 ## [2.1.0.3-dev15] - 2026-02-26
 ### Fixed
 - Group replay target resolution now accepts additional `group.members` shapes (object/name/index), so a valid target can still be found when member data is not avatar-only.

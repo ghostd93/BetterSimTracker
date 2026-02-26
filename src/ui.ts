@@ -378,6 +378,53 @@ function normalizeName(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function pushUniqueCharacterName(target: string[], seen: Set<string>, raw: unknown): void {
+  const name = typeof raw === "string" ? raw.trim() : "";
+  if (!name) return;
+  const key = normalizeName(name);
+  if (!key || seen.has(key)) return;
+  seen.add(key);
+  target.push(name);
+}
+
+function collectCharacterNamesFromTrackerData(data: TrackerData): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const name of data.activeCharacters ?? []) {
+    pushUniqueCharacterName(names, seen, name);
+  }
+
+  const builtInStatMaps: unknown[] = [
+    data.statistics?.affection,
+    data.statistics?.trust,
+    data.statistics?.desire,
+    data.statistics?.connection,
+    data.statistics?.mood,
+    data.statistics?.lastThought,
+  ];
+  for (const statMap of builtInStatMaps) {
+    if (!statMap || typeof statMap !== "object") continue;
+    for (const name of Object.keys(statMap as Record<string, unknown>)) {
+      pushUniqueCharacterName(names, seen, name);
+    }
+  }
+
+  for (const statMap of Object.values(data.customStatistics ?? {})) {
+    if (!statMap || typeof statMap !== "object") continue;
+    for (const name of Object.keys(statMap as Record<string, unknown>)) {
+      pushUniqueCharacterName(names, seen, name);
+    }
+  }
+  for (const statMap of Object.values(data.customNonNumericStatistics ?? {})) {
+    if (!statMap || typeof statMap !== "object") continue;
+    for (const name of Object.keys(statMap as Record<string, unknown>)) {
+      pushUniqueCharacterName(names, seen, name);
+    }
+  }
+
+  return names;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -3629,10 +3676,25 @@ export function renderTracker(
       data.statistics.mood?.[name] !== undefined ||
       data.statistics.lastThought?.[name] !== undefined;
     const forceAllInGroup = isGroupChat;
+    const dataCharacterNames = collectCharacterNamesFromTrackerData(data);
+    const mergedCharacters: string[] = [];
+    const mergedSeen = new Set<string>();
+    for (const name of allCharacters) {
+      pushUniqueCharacterName(mergedCharacters, mergedSeen, name);
+    }
+    for (const name of dataCharacterNames) {
+      pushUniqueCharacterName(mergedCharacters, mergedSeen, name);
+    }
     const displayPool =
-      (forceAllInGroup || settings.showInactive) && allCharacters.length > 0
-        ? allCharacters
-        : data.activeCharacters;
+      forceAllInGroup || settings.showInactive
+        ? (mergedCharacters.length > 0
+          ? mergedCharacters
+          : dataCharacterNames.length > 0
+            ? dataCharacterNames
+            : data.activeCharacters)
+        : (data.activeCharacters.length > 0
+          ? data.activeCharacters
+          : dataCharacterNames);
     const scopedDisplayPool = userMessageEntry
       ? displayPool
       : displayPool.filter(name => normalizeName(name) !== normalizeName(USER_TRACKER_KEY));
