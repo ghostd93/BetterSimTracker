@@ -271,6 +271,11 @@ function renderTemplate(template: string, values: Record<string, string>): strin
   return output;
 }
 
+function primaryCharacter(characters: string[]): string {
+  const first = characters.find(name => typeof name === "string" && name.trim());
+  return first?.trim() || "Character";
+}
+
 export function buildPrompt(
   stat: StatKey,
   userName: string,
@@ -322,6 +327,7 @@ export function buildUnifiedPrompt(
   protocolTemplate?: string,
 ): string {
   const envelope = commonEnvelope(userName, characters, contextText);
+  const char = primaryCharacter(characters);
   const numericStats = stats.filter(stat =>
     stat === "affection" || stat === "trust" || stat === "desire" || stat === "connection",
   );
@@ -371,6 +377,7 @@ export function buildUnifiedPrompt(
     envelope,
     user: userName,
     userName,
+    char,
     characters: characters.join(", "),
     contextText,
     currentLines,
@@ -395,6 +402,7 @@ export function buildSequentialPrompt(
   protocolTemplate?: string,
 ): string {
   const envelope = commonEnvelope(userName, characters, contextText);
+  const char = primaryCharacter(characters);
   const numericStats = stat === "affection" || stat === "trust" || stat === "desire" || stat === "connection"
     ? [stat]
     : [];
@@ -451,6 +459,7 @@ export function buildSequentialPrompt(
     envelope,
     user: userName,
     userName,
+    char,
     characters: characters.join(", "),
     contextText,
     currentLines,
@@ -483,6 +492,7 @@ export function buildSequentialCustomNumericPrompt(input: {
   const statDescription = String(input.statDescription ?? "").trim();
   const defaultValue = Math.max(0, Math.min(100, Math.round(Number(input.statDefault) || 50)));
   const envelope = commonEnvelope(input.userName, input.characters, input.contextText);
+  const char = primaryCharacter(input.characters);
   const safeMaxDelta = Math.max(1, Math.round(Number(input.maxDeltaPerTurn) || 15));
 
   const currentLines = input.characters.map(name => {
@@ -520,6 +530,7 @@ export function buildSequentialCustomNumericPrompt(input: {
     maxDelta: String(safeMaxDelta),
     user: input.userName,
     userName: input.userName,
+    char,
     characters: input.characters.join(", "),
     envelope,
     contextText: input.contextText,
@@ -546,6 +557,7 @@ export function buildSequentialCustomNumericPrompt(input: {
     envelope,
     user: input.userName,
     userName: input.userName,
+    char,
     currentLines,
     historyLines: historyLines || "- none",
     instruction,
@@ -662,6 +674,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   const trueLabel = String(input.booleanTrueLabel ?? "enabled").trim() || "enabled";
   const falseLabel = String(input.booleanFalseLabel ?? "disabled").trim() || "disabled";
   const envelope = commonEnvelope(input.userName, input.characters, input.contextText);
+  const char = primaryCharacter(input.characters);
 
   const defaultValue = formatCustomNonNumericValue(statKind, input.statDefault, statKind === "boolean" ? false : "");
   const defaultLiteral = typeof defaultValue === "boolean" ? String(defaultValue) : defaultValue;
@@ -709,6 +722,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     maxDelta: "",
     user: input.userName,
     userName: input.userName,
+    char,
     characters: input.characters.join(", "),
     envelope,
     contextText: input.contextText,
@@ -748,6 +762,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     envelope,
     user: input.userName,
     userName: input.userName,
+    char,
     currentLines,
     historyLines: historyLines || "- none",
     instruction,

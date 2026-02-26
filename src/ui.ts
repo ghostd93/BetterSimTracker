@@ -4739,6 +4739,7 @@ export function openSettingsModal(input: {
         <ul class="bst-help-list">
           <li><code>{{envelope}}</code> — prebuilt header with user/characters + recent messages</li>
           <li><code>{{user}}</code> — current user name (<code>{{userName}}</code> alias also works)</li>
+          <li><code>{{char}}</code> — primary character name (first character in scope)</li>
           <li><code>{{characters}}</code> — comma-separated character names</li>
           <li><code>{{contextText}}</code> — raw recent messages text</li>
           <li><code>{{currentLines}}</code> — current tracker state lines</li>
@@ -5991,6 +5992,7 @@ export function openSettingsModal(input: {
           <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional per-stat override used in all extraction modes. Leave empty to use the global custom-stat fallback for this kind.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
         </label>
         <div class="bst-help-line" data-bst-kind-help="templateFallback">Used in all extraction modes. Empty override uses global Custom Numeric Default.</div>
+        <div class="bst-help-line">Template placeholders: <code>{{user}}</code>, <code>{{char}}</code>, <code>{{characters}}</code>, <code>{{contextText}}</code>, <code>{{envelope}}</code>, <code>{{statId}}</code>.</div>
         <div class="bst-custom-ai-row">
           <button type="button" class="bst-btn bst-btn-soft bst-custom-ai-btn" data-action="custom-generate-template" data-loading="false">
             <span class="bst-custom-ai-btn-icon fa-solid fa-wand-magic-sparkles" aria-hidden="true"></span>
