@@ -79,6 +79,7 @@ let userTurnGateMessageText = "";
 let userTurnGatePendingIntent: CapturedGenerationIntent | null = null;
 let userTurnGateStopTimer: number | null = null;
 let userTurnGateReplayAttempts = 0;
+let chatGenerationIntent: CapturedGenerationIntent | null = null;
 let slashCommandsRegistered = false;
 let activeExtractionRunId: number | null = null;
 const cancelledExtractionRuns = new Set<number>();
@@ -690,6 +691,25 @@ function sanitizeGenerationOptions(raw: unknown): Record<string, unknown> {
   return out;
 }
 
+function buildCapturedGenerationIntent(type: string, options: unknown, dryRun: boolean): CapturedGenerationIntent | null {
+  if (!isReplayableGenerationIntent(type, dryRun)) return null;
+  return {
+    type,
+    options: sanitizeGenerationOptions(options),
+    dryRun,
+    capturedAt: Date.now(),
+  };
+}
+
+function cloneCapturedGenerationIntent(intent: CapturedGenerationIntent): CapturedGenerationIntent {
+  return {
+    type: intent.type,
+    options: sanitizeGenerationOptions(intent.options),
+    dryRun: intent.dryRun,
+    capturedAt: intent.capturedAt,
+  };
+}
+
 function resetUserTurnGate(reason: string): void {
   const hadIntent = Boolean(userTurnGatePendingIntent);
   if (userTurnGateStopTimer !== null) {
@@ -726,6 +746,22 @@ function startUserTurnGate(context: STContext, messageIndex: number | null): voi
     messageIndex: resolvedIndex ?? null,
     messageChars: messageText.length,
   });
+  if (
+    chatGenerationInFlight &&
+    !chatGenerationSawCharacterRender &&
+    !userTurnGatePendingIntent &&
+    chatGenerationIntent
+  ) {
+    userTurnGatePendingIntent = cloneCapturedGenerationIntent(chatGenerationIntent);
+    userTurnGateReplayAttempts = 0;
+    pushTrace("user_gate.adopt_inflight_generation", {
+      type: userTurnGatePendingIntent.type,
+      startLastAiIndex: chatGenerationStartLastAiIndex,
+      messageIndex: userTurnGateMessageIndex,
+      optionKeys: Object.keys(userTurnGatePendingIntent.options),
+    });
+    requestUserTurnGateStop(context, userTurnGatePendingIntent.type);
+  }
 }
 
 function requestUserTurnGateStop(context: STContext, type: string): void {
@@ -813,6 +849,7 @@ function finalizeUserTurnGateReplay(triggerReason: string): void {
   const replay = intent;
   resetUserTurnGate("replay_start");
   chatGenerationInFlight = false;
+  chatGenerationIntent = null;
   chatGenerationSawCharacterRender = false;
   chatGenerationStartLastAiIndex = null;
   swipeGenerationActive = false;
@@ -2332,16 +2369,20 @@ function registerEvents(context: STContext): void {
     source.on(events.GENERATION_STARTED, (generationType: unknown, options: unknown, isDryRun: unknown) => {
       const type = String(generationType ?? "");
       const dryRun = Boolean(isDryRun);
+      const intent = buildCapturedGenerationIntent(type, options, dryRun);
       if (dryRun || type === "quiet") {
+        chatGenerationIntent = null;
         pushTrace("event.generation_started_ignored", { reason: dryRun ? "dry_run" : "quiet_generation", type, dryRun });
         return;
       }
       if (isExtracting && !userTurnGateActive) {
+        chatGenerationIntent = null;
         pushTrace("event.generation_started_ignored", { reason: "tracker_extraction_in_progress", type });
         return;
       }
       swipeGenerationActive = type === "swipe";
       chatGenerationInFlight = true;
+      chatGenerationIntent = intent;
       chatGenerationSawCharacterRender = false;
       pendingLateRenderExtraction = false;
       chatGenerationStartLastAiIndex = getLastAiMessageIndex(context);
@@ -2349,13 +2390,8 @@ function registerEvents(context: STContext): void {
       const targetIndex = type === "swipe"
         ? (getLastAiMessageIndex(context) ?? baseTargetIndex)
         : baseTargetIndex;
-      if (userTurnGateActive && isReplayableGenerationIntent(type, dryRun)) {
-        userTurnGatePendingIntent = {
-          type,
-          options: sanitizeGenerationOptions(options),
-          dryRun,
-          capturedAt: Date.now(),
-        };
+      if (userTurnGateActive && intent) {
+        userTurnGatePendingIntent = cloneCapturedGenerationIntent(intent);
         userTurnGateReplayAttempts = 0;
         pushTrace("user_gate.capture_generation", {
           type,
@@ -2388,6 +2424,7 @@ function registerEvents(context: STContext): void {
     if (isExtracting) {
       if (userTurnGateActive && chatGenerationInFlight) {
         chatGenerationInFlight = false;
+        chatGenerationIntent = null;
         chatGenerationSawCharacterRender = false;
         chatGenerationStartLastAiIndex = null;
         swipeGenerationActive = false;
@@ -2399,6 +2436,7 @@ function registerEvents(context: STContext): void {
       return;
     }
     if (!chatGenerationInFlight) {
+      chatGenerationIntent = null;
       pushTrace("event.generation_ended_ignored", { reason: "non_chat_or_quiet_generation" });
       if (trackerUiState.phase === "generating") {
         pushTrace("ui.generating.clear", {
@@ -2413,6 +2451,7 @@ function registerEvents(context: STContext): void {
     }
     if (!chatGenerationSawCharacterRender) {
       chatGenerationInFlight = false;
+      chatGenerationIntent = null;
       chatGenerationStartLastAiIndex = null;
       if (userTurnGateActive) {
         pendingLateRenderExtraction = false;
@@ -2426,6 +2465,7 @@ function registerEvents(context: STContext): void {
       return;
     }
     chatGenerationInFlight = false;
+    chatGenerationIntent = null;
     chatGenerationStartLastAiIndex = null;
     pendingLateRenderExtraction = false;
     pushTrace("event.generation_ended");
@@ -2454,6 +2494,7 @@ function registerEvents(context: STContext): void {
 
   source.on(events.CHAT_CHANGED, () => {
     chatGenerationInFlight = false;
+    chatGenerationIntent = null;
     chatGenerationSawCharacterRender = false;
     chatGenerationStartLastAiIndex = null;
     swipeGenerationActive = false;
@@ -2545,6 +2586,7 @@ function registerEvents(context: STContext): void {
   if (events.CHAT_LOADED) {
     source.on(events.CHAT_LOADED, () => {
       chatGenerationInFlight = false;
+      chatGenerationIntent = null;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
       swipeGenerationActive = false;
@@ -2581,6 +2623,7 @@ function registerEvents(context: STContext): void {
   if (events.MESSAGE_DELETED) {
     source.on(events.MESSAGE_DELETED, () => {
       chatGenerationInFlight = false;
+      chatGenerationIntent = null;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
       swipeGenerationActive = false;
@@ -2595,6 +2638,7 @@ function registerEvents(context: STContext): void {
   if (events.CHAT_DELETED) {
     source.on(events.CHAT_DELETED, () => {
       chatGenerationInFlight = false;
+      chatGenerationIntent = null;
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
       swipeGenerationActive = false;
@@ -2660,6 +2704,7 @@ function registerEvents(context: STContext): void {
       pushTrace("event.swipe", { event: key, messageIndex });
       clearPendingSwipeExtraction();
       if (!chatGenerationInFlight) {
+        chatGenerationIntent = null;
         chatGenerationSawCharacterRender = false;
         chatGenerationStartLastAiIndex = null;
         swipeGenerationActive = false;

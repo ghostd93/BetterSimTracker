@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev5] - 2026-02-26
+### Fixed
+- User-turn gate now adopts an already in-flight replayable generation when `GENERATION_STARTED` arrives before `USER_MESSAGE_RENDERED`, then requests stop and replays after user extraction.
+- Added explicit in-flight generation-intent cleanup across generation/chat reset paths to prevent stale intent reuse.
+
 ## [2.1.0.3-dev3] - 2026-02-26
 ### Fixed
 - Lorebook activation parsing is now robust to real-world payload shapes (arrays/sets/maps/nested objects), so activated lorebook text is reliably captured for extraction context.
