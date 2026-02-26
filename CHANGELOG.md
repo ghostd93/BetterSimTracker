@@ -5,7 +5,7 @@ All notable changes to BetterSimTracker are documented here.
 ## [2.2.0] - 2026-02-26
 ### Added
 - User-side tracker extraction and display support, including user-focused custom stat tracking and injection scoping.
-- Extraction lorebook support improvements, including pre-scan fallback handling for user-side runs.
+- Lorebook support for extraction, including pre-scan fallback handling for user-side runs.
 
 ### Changed
 - Extraction/injection configuration flow and prompt protocol controls were expanded and reorganized for clearer advanced setup.
