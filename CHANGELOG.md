@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev29] - 2026-02-26
+### Fixed
+- User-side extraction now performs a best-effort lorebook dry-run scan before prompt building, so activated lorebook context can be available even when no fresh `WORLD_INFO_ACTIVATED` event was emitted.
+
 ## [2.1.0.3-dev28] - 2026-02-26
 ### Fixed
 - Manual retrack now infers user-side extraction when the explicit target message is a user message, so retracking a user tracker entry no longer falls back to AI-side extraction.

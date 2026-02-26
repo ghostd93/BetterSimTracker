@@ -196,6 +196,91 @@ function describeLorebookPayload(payload: unknown): string {
   return typeof payload;
 }
 
+type WorldInfoModule = {
+  checkWorldInfo?: (
+    chat: string[],
+    maxContext: number,
+    isDryRun: boolean,
+    globalScanData?: unknown,
+  ) => Promise<unknown>;
+  world_info_include_names?: boolean;
+};
+
+type ScriptSettingsModule = {
+  max_context?: unknown;
+};
+
+async function loadWorldInfoModule(): Promise<WorldInfoModule | null> {
+  try {
+    const loader = Function("return import('/scripts/world-info.js')") as () => Promise<unknown>;
+    return await loader() as WorldInfoModule;
+  } catch {
+    return null;
+  }
+}
+
+async function readWorldInfoMaxContext(): Promise<number> {
+  try {
+    const loader = Function("return import('/script.js')") as () => Promise<unknown>;
+    const module = await loader() as ScriptSettingsModule;
+    const parsed = Number(module?.max_context);
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      return Math.round(parsed);
+    }
+  } catch {
+    // ignore dynamic import failures and use fallback
+  }
+  return 2048;
+}
+
+function buildWorldInfoScanChat(context: STContext, includeNames: boolean): string[] {
+  return (context.chat ?? [])
+    .filter(message => isTrackableMessage(message))
+    .map(message => {
+      const mes = String(message?.mes ?? "").trim();
+      if (!mes) return "";
+      const name = String(message?.name ?? "").trim();
+      if (includeNames && name) {
+        return `${name}: ${mes}`;
+      }
+      return mes;
+    })
+    .filter(Boolean)
+    .reverse();
+}
+
+async function refreshLorebookEntriesFromWorldInfoScan(context: STContext, runId: number, reason: string): Promise<void> {
+  const worldInfoModule = await loadWorldInfoModule();
+  const checkWorldInfo = worldInfoModule?.checkWorldInfo;
+  if (typeof checkWorldInfo !== "function") {
+    pushTrace("lorebook.scan.skip", { runId, reason, detail: "module_unavailable" });
+    return;
+  }
+
+  const chatForScan = buildWorldInfoScanChat(context, Boolean(worldInfoModule?.world_info_include_names ?? true));
+  if (!chatForScan.length) {
+    pushTrace("lorebook.scan.skip", { runId, reason, detail: "empty_chat" });
+    return;
+  }
+
+  const maxContext = await readWorldInfoMaxContext();
+  try {
+    const activated = await checkWorldInfo(chatForScan, maxContext, true);
+    const acceptedCount = cacheLorebookActivatedEntries(context, activated);
+    pushTrace("lorebook.scan", {
+      runId,
+      reason,
+      mode: "dry_run",
+      maxContext,
+      scannedMessages: chatForScan.length,
+      acceptedCount,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    pushTrace("lorebook.scan.error", { runId, reason, error: message });
+  }
+}
+
 function cacheLorebookActivatedEntries(context: STContext, payload: unknown): number {
   const entries = extractLorebookEntriesFromPayload(payload, 120);
   if (!entries.length) return 0;
@@ -2422,6 +2507,9 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     const preferredCharacterName = !userExtraction
       ? String(lastMessage?.name ?? "").trim() || undefined
       : undefined;
+    if (activeSettings.includeLorebookInExtraction && userExtraction) {
+      await refreshLorebookEntriesFromWorldInfoScan(context, runId, reason);
+    }
     let contextText = buildRecentContext(context, settings.contextMessages);
     if (activeSettings.includeCharacterCardsInPrompt) {
       contextText = `${contextText}${buildCharacterCardsContext(context, activeCharacters)}`.trim();
