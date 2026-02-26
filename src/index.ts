@@ -691,13 +691,25 @@ function cloneCapturedGenerationIntent(intent: CapturedGenerationIntent): Captur
   };
 }
 
+function findCharacterIndexByName(context: STContext, name: string): number | null {
+  const target = String(name ?? "").trim().toLowerCase();
+  if (!target) return null;
+  const list = context.characters ?? [];
+  for (let i = 0; i < list.length; i += 1) {
+    const candidate = String(list[i]?.name ?? "").trim().toLowerCase();
+    if (candidate && candidate === target) return i;
+  }
+  return null;
+}
+
 function normalizeReplayGenerationIntent(
   context: STContext,
   intent: CapturedGenerationIntent,
-): { type: string; options: Record<string, unknown>; dryRun: boolean; forcedAutomaticTrigger: boolean } {
+): { type: string; options: Record<string, unknown>; dryRun: boolean; forcedAutomaticTrigger: boolean; forcedGroupCharacterId: number | null } {
   const type = String(intent.type ?? "").trim();
   const options = sanitizeGenerationOptions(intent.options);
   let forcedAutomaticTrigger = false;
+  let forcedGroupCharacterId: number | null = null;
 
   // During USER_MESSAGE_RENDERED race-replay, forcing automatic-trigger mode avoids
   // ST inserting a second empty user turn before generation.
@@ -713,7 +725,27 @@ function normalizeReplayGenerationIntent(
     }
   }
 
-  return { type, options, dryRun: intent.dryRun, forcedAutomaticTrigger };
+  // In group chats, replayed normal generation can fall back to ST's "send empty user message"
+  // path when no member is activated. Force the last AI speaker as a safe target.
+  if (context.groupId && type.toLowerCase() === "normal") {
+    const hasForcedChar =
+      typeof options.force_chid === "number" &&
+      Number.isInteger(options.force_chid) &&
+      Number(options.force_chid) >= 0;
+    if (!hasForcedChar) {
+      const lastAiIndex = getLastAiMessageIndex(context);
+      if (lastAiIndex != null && lastAiIndex >= 0 && lastAiIndex < context.chat.length) {
+        const lastAiName = String(context.chat[lastAiIndex]?.name ?? "").trim();
+        const charIndex = findCharacterIndexByName(context, lastAiName);
+        if (charIndex != null) {
+          options.force_chid = charIndex;
+          forcedGroupCharacterId = charIndex;
+        }
+      }
+    }
+  }
+
+  return { type, options, dryRun: intent.dryRun, forcedAutomaticTrigger, forcedGroupCharacterId };
 }
 
 function resetUserTurnGate(reason: string): void {
@@ -871,6 +903,7 @@ function finalizeUserTurnGateReplay(triggerReason: string): void {
     dryRun: normalizedReplay.dryRun,
     optionKeys: Object.keys(normalizedReplay.options),
     forcedAutomaticTrigger: normalizedReplay.forcedAutomaticTrigger,
+    forcedGroupCharacterId: normalizedReplay.forcedGroupCharacterId,
   });
   void (async () => {
     try {
@@ -878,11 +911,13 @@ function finalizeUserTurnGateReplay(triggerReason: string): void {
       pushTrace("user_gate.replay_done", {
         type: normalizedReplay.type,
         forcedAutomaticTrigger: normalizedReplay.forcedAutomaticTrigger,
+        forcedGroupCharacterId: normalizedReplay.forcedGroupCharacterId,
       });
     } catch (error) {
       pushTrace("user_gate.replay_error", {
         type: normalizedReplay.type,
         forcedAutomaticTrigger: normalizedReplay.forcedAutomaticTrigger,
+        forcedGroupCharacterId: normalizedReplay.forcedGroupCharacterId,
         message: error instanceof Error ? error.message : String(error),
       });
       console.error("[BetterSimTracker] Failed to replay generation intent:", error);

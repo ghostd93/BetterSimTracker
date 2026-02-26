@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev13] - 2026-02-26
+### Fixed
+- Group chat user-turn replay now injects a safe `force_chid` (last AI speaker) when needed, avoiding ST's empty-user fallback path during replay and preventing the ghost blank user message.
+
 ## [2.1.0.3-dev12] - 2026-02-26
 ### Fixed
 - Normalized user-turn replay generation options to force `automatic_trigger` when a committed user message already exists, preventing a synthetic blank user turn during replay in group chat race conditions.
