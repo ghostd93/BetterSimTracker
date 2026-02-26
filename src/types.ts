@@ -72,6 +72,8 @@ export interface BetterSimTrackerSettings {
   contextMessages: number;
   connectionProfile: string;
   injectTrackerIntoPrompt: boolean;
+  injectLorebookInGeneration: boolean;
+  lorebookGenerationMaxChars: number;
   injectPromptDepth: number;
   summarizationNoteVisibleForAI: boolean;
   injectSummarizationNote: boolean;
@@ -124,6 +126,16 @@ export interface BetterSimTrackerSettings {
   promptTemplateSequentialMood: string;
   promptTemplateSequentialLastThought: string;
   promptTemplateInjection: string;
+  unlockProtocolPrompts: boolean;
+  promptProtocolUnified: string;
+  promptProtocolSequentialAffection: string;
+  promptProtocolSequentialTrust: string;
+  promptProtocolSequentialDesire: string;
+  promptProtocolSequentialConnection: string;
+  promptProtocolSequentialCustomNumeric: string;
+  promptProtocolSequentialCustomNonNumeric: string;
+  promptProtocolSequentialMood: string;
+  promptProtocolSequentialLastThought: string;
   customStats: CustomStatDefinition[];
   characterDefaults: Record<string, CharacterDefaults>;
 }
@@ -227,7 +239,17 @@ export interface STContext {
   deactivateSendButtons?: () => void;
   activateSendButtons?: () => void;
   extensionSettings?: Record<string, unknown>;
+  extensionPrompts?: Record<string, {
+    value?: string;
+    position?: number;
+    depth?: number;
+    scan?: boolean;
+    role?: number;
+  }>;
   chatMetadata?: Record<string, unknown>;
+  worldInfo?: unknown;
+  world_info?: unknown;
+  lorebook?: unknown;
   chatCompletionSettings?: Record<string, unknown>;
   textCompletionSettings?: Record<string, unknown>;
   mainApi?: string;

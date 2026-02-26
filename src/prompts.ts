@@ -59,7 +59,9 @@ export const DEFAULT_INJECTION_PROMPT_TEMPLATE = [
   "",
   "{{lines}}",
   "",
-  "{{summarizationNote}}"
+  "{{summarizationNote}}",
+  "",
+  "{{lorebookContext}}"
 ].join("\n");
 
 export const UNIFIED_PROMPT_PROTOCOL = `Numeric stats to update ({{numericStats}}):
@@ -168,6 +170,37 @@ Rules:
 - include one entry for each character name exactly: {{characters}}.
 - omit fields for stats that are not requested.
 - output JSON only, no commentary.`;
+
+export const DEFAULT_CUSTOM_NON_NUMERIC_PROTOCOL_TEMPLATE = `Value schema:
+{{valueSchemaRules}}
+
+Return STRICT JSON only:
+{
+  "characters": [
+    {
+      "name": "Character Name",
+      "confidence": 0.0,
+      "value": {
+        "{{statId}}": {{valueSchemaSample}}
+      }
+    }
+  ]
+}
+
+Rules:
+- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.
+- include one entry for each character name exactly: {{characters}}.
+- output JSON only, no commentary.`;
+
+export const DEFAULT_PROTOCOL_UNIFIED = UNIFIED_PROMPT_PROTOCOL;
+export const DEFAULT_PROTOCOL_SEQUENTIAL_AFFECTION = NUMERIC_PROMPT_PROTOCOL("affection");
+export const DEFAULT_PROTOCOL_SEQUENTIAL_TRUST = NUMERIC_PROMPT_PROTOCOL("trust");
+export const DEFAULT_PROTOCOL_SEQUENTIAL_DESIRE = NUMERIC_PROMPT_PROTOCOL("desire");
+export const DEFAULT_PROTOCOL_SEQUENTIAL_CONNECTION = NUMERIC_PROMPT_PROTOCOL("connection");
+export const DEFAULT_PROTOCOL_SEQUENTIAL_CUSTOM_NUMERIC = NUMERIC_PROMPT_PROTOCOL("{{statId}}");
+export const DEFAULT_PROTOCOL_SEQUENTIAL_MOOD = MOOD_PROMPT_PROTOCOL;
+export const DEFAULT_PROTOCOL_SEQUENTIAL_LAST_THOUGHT = LAST_THOUGHT_PROMPT_PROTOCOL;
+export const DEFAULT_PROTOCOL_SEQUENTIAL_CUSTOM_NON_NUMERIC = DEFAULT_CUSTOM_NON_NUMERIC_PROTOCOL_TEMPLATE;
 
 const buildNumericInstruction = (label: string, key: string): string => [
   `- Propose incremental changes to ${label} from the recent messages.`,
@@ -288,6 +321,7 @@ export function buildUnifiedPrompt(
   history: TrackerData[] = [],
   maxDeltaPerTurn = 15,
   template?: string,
+  protocolTemplate?: string,
 ): string {
   const envelope = commonEnvelope(userName, characters, contextText);
   const numericStats = stats.filter(stat =>
@@ -319,6 +353,7 @@ export function buildUnifiedPrompt(
 
   const safeMaxDelta = Math.max(1, Math.round(Number(maxDeltaPerTurn) || 15));
   const instruction = template?.trim() ? template : DEFAULT_UNIFIED_PROMPT_INSTRUCTION;
+  const protocol = protocolTemplate?.trim() ? protocolTemplate : UNIFIED_PROMPT_PROTOCOL;
   const assembled = [
     MAIN_PROMPT,
     "",
@@ -332,7 +367,7 @@ export function buildUnifiedPrompt(
     "Task:",
     "{{instruction}}",
     "",
-    UNIFIED_PROMPT_PROTOCOL,
+    protocol,
   ].join("\n");
   return renderTemplate(assembled, {
     envelope,
@@ -358,6 +393,7 @@ export function buildSequentialPrompt(
   history: TrackerData[] = [],
   maxDeltaPerTurn = 15,
   template?: string,
+  protocolTemplate?: string,
 ): string {
   const envelope = commonEnvelope(userName, characters, contextText);
   const numericStats = stat === "affection" || stat === "trust" || stat === "desire" || stat === "connection"
@@ -391,11 +427,12 @@ export function buildSequentialPrompt(
   const instruction = template?.trim()
     ? template
     : DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS[stat] || DEFAULT_UNIFIED_PROMPT_INSTRUCTION;
-  const protocol = stat === "mood"
+  const defaultProtocol = stat === "mood"
     ? MOOD_PROMPT_PROTOCOL
     : stat === "lastThought"
       ? LAST_THOUGHT_PROMPT_PROTOCOL
       : NUMERIC_PROMPT_PROTOCOL(stat);
+  const protocol = protocolTemplate?.trim() ? protocolTemplate : defaultProtocol;
   const assembled = [
     MAIN_PROMPT,
     "",
@@ -439,6 +476,7 @@ export function buildSequentialCustomNumericPrompt(input: {
   currentCustom?: Record<string, Record<string, number>> | null;
   history: TrackerData[];
   template?: string;
+  protocolTemplate?: string;
 }): string {
   const statId = input.statId.trim();
   const statLabel = input.statLabel.trim() || statId;
@@ -485,6 +523,7 @@ export function buildSequentialCustomNumericPrompt(input: {
     contextText: input.contextText,
   });
 
+  const protocol = input.protocolTemplate?.trim() || NUMERIC_PROMPT_PROTOCOL(statId);
   const assembled = [
     MAIN_PROMPT,
     "",
@@ -498,7 +537,7 @@ export function buildSequentialCustomNumericPrompt(input: {
     "Task:",
     "{{instruction}}",
     "",
-    NUMERIC_PROMPT_PROTOCOL(statId),
+    protocol,
   ].join("\n");
 
   return renderTemplate(assembled, {
@@ -531,6 +570,42 @@ function formatCustomNonNumericValue(
   return typeof fallback === "string" ? fallback : "";
 }
 
+function getCustomNonNumericProtocolValues(input: {
+  kind: CustomStatKind;
+  statId: string;
+  allowedValues: string[];
+  textMaxLen: number;
+  trueLabel: string;
+  falseLabel: string;
+}): { valueSchemaRules: string; valueSchemaSample: string } {
+  if (input.kind === "enum_single") {
+    const fallback = JSON.stringify(input.allowedValues[0] ?? "state");
+    return {
+      valueSchemaRules: `- Return one of allowed values exactly: ${input.allowedValues.join(", ")}.`,
+      valueSchemaSample: fallback,
+    };
+  }
+
+  if (input.kind === "boolean") {
+    return {
+      valueSchemaRules: [
+        `- Return strict boolean only for ${input.statId} (true/false).`,
+        `- true means: ${input.trueLabel}.`,
+        `- false means: ${input.falseLabel}.`,
+      ].join("\n"),
+      valueSchemaSample: "false",
+    };
+  }
+
+  return {
+    valueSchemaRules: [
+      `- Return one concise single-line text value for ${input.statId}.`,
+      `- Maximum length: ${input.textMaxLen} characters.`,
+    ].join("\n"),
+    valueSchemaSample: "\"\"",
+  };
+}
+
 function customNonNumericProtocol(input: {
   kind: CustomStatKind;
   statId: string;
@@ -538,76 +613,19 @@ function customNonNumericProtocol(input: {
   textMaxLen: number;
   trueLabel: string;
   falseLabel: string;
+  template?: string;
 }): string {
-  if (input.kind === "enum_single") {
-    return `Value schema:
-- Return one of allowed values exactly: ${input.allowedValues.join(", ")}.
-
-Return STRICT JSON only:
-{
-  "characters": [
-    {
-      "name": "Character Name",
-      "confidence": 0.0,
-      "value": {
-        "${input.statId}": "${input.allowedValues[0] ?? "state"}"
-      }
-    }
-  ]
-}
-
-Rules:
-- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.
-- include one entry for each character name exactly: {{characters}}.
-- output JSON only, no commentary.`;
-  }
-
-  if (input.kind === "boolean") {
-    return `Value schema:
-- Return strict boolean only for ${input.statId} (true/false).
-- true means: ${input.trueLabel}.
-- false means: ${input.falseLabel}.
-
-Return STRICT JSON only:
-{
-  "characters": [
-    {
-      "name": "Character Name",
-      "confidence": 0.0,
-      "value": {
-        "${input.statId}": false
-      }
-    }
-  ]
-}
-
-Rules:
-- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.
-- include one entry for each character name exactly: {{characters}}.
-- output JSON only, no commentary.`;
-  }
-
-  return `Value schema:
-- Return one concise single-line text value for ${input.statId}.
-- Maximum length: ${input.textMaxLen} characters.
-
-Return STRICT JSON only:
-{
-  "characters": [
-    {
-      "name": "Character Name",
-      "confidence": 0.0,
-      "value": {
-        "${input.statId}": ""
-      }
-    }
-  ]
-}
-
-Rules:
-- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.
-- include one entry for each character name exactly: {{characters}}.
-- output JSON only, no commentary.`;
+  const values = getCustomNonNumericProtocolValues(input);
+  const protocolTemplate = input.template?.trim() || DEFAULT_CUSTOM_NON_NUMERIC_PROTOCOL_TEMPLATE;
+  return renderTemplate(protocolTemplate, {
+    statId: input.statId,
+    valueSchemaRules: values.valueSchemaRules,
+    valueSchemaSample: values.valueSchemaSample,
+    allowedValues: input.allowedValues.join(", "),
+    textMaxLen: String(input.textMaxLen),
+    booleanTrueLabel: input.trueLabel,
+    booleanFalseLabel: input.falseLabel,
+  });
 }
 
 export function buildSequentialCustomNonNumericPrompt(input: {
@@ -627,6 +645,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   currentCustomNonNumeric?: CustomNonNumericStatistics | null;
   history: TrackerData[];
   template?: string;
+  protocolTemplate?: string;
 }): string {
   const statId = input.statId.trim();
   const statLabel = input.statLabel.trim() || statId;
@@ -715,6 +734,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
       textMaxLen,
       trueLabel,
       falseLabel,
+      template: input.protocolTemplate,
     }),
   ].join("\n");
 

@@ -463,6 +463,15 @@ export async function extractStatisticsParallel(input: {
       return settings.promptTemplateSequentialLastThought || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought;
     };
 
+    const getSequentialProtocolTemplate = (stat: StatKey): string => {
+      if (stat === "affection") return settings.promptProtocolSequentialAffection;
+      if (stat === "trust") return settings.promptProtocolSequentialTrust;
+      if (stat === "desire") return settings.promptProtocolSequentialDesire;
+      if (stat === "connection") return settings.promptProtocolSequentialConnection;
+      if (stat === "mood") return settings.promptProtocolSequentialMood;
+      return settings.promptProtocolSequentialLastThought;
+    };
+
     const runOneBuiltInOrTextRequest = async (
       statList: StatKey[],
     ): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
@@ -478,6 +487,7 @@ export async function extractStatisticsParallel(input: {
             history,
             settings.maxDeltaPerTurn,
             getSequentialTemplate(statList[0]),
+            getSequentialProtocolTemplate(statList[0]),
           )
         : buildUnifiedPrompt(
             statList,
@@ -488,6 +498,7 @@ export async function extractStatisticsParallel(input: {
             history,
             settings.maxDeltaPerTurn,
             settings.promptTemplateUnified,
+            settings.promptProtocolUnified,
           );
       tickProgress(`Requesting ${statLabel}`);
       let rawResponse = await callGenerate(prompt, statList, "initial");
@@ -573,6 +584,7 @@ export async function extractStatisticsParallel(input: {
           template: statDef.sequentialPromptTemplate
             || settings.promptTemplateSequentialCustomNumeric
             || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
+          protocolTemplate: settings.promptProtocolSequentialCustomNumeric,
         })
         : buildSequentialCustomNonNumericPrompt({
           statId,
@@ -593,6 +605,7 @@ export async function extractStatisticsParallel(input: {
           template: statDef.sequentialPromptTemplate
             || settings.promptTemplateSequentialCustomNonNumeric
             || DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
+          protocolTemplate: settings.promptProtocolSequentialCustomNonNumeric,
         });
       tickProgress(`Requesting ${label}`);
       let rawResponse = await callGenerate(prompt, [statId], "initial");

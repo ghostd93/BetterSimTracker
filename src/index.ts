@@ -71,6 +71,7 @@ const activeSummaryRuns = new Set<number>();
 let summaryVisibilityReloadInFlight = false;
 const BUILT_IN_NUMERIC_KEYS = new Set(["affection", "trust", "desire", "connection"]);
 const EDIT_MOOD_LABELS = new Map(moodOptions.map(label => [label.toLowerCase(), label]));
+const LOREBOOK_ACTIVATED_METADATA_KEY = "bstLorebookActivatedEntries";
 
 function collectSummaryCharacters(data: TrackerData): string[] {
   const names = new Set<string>();
@@ -168,6 +169,49 @@ function hasNumericCharacters(text: string): boolean {
 function countSummarySentences(text: string): number {
   const matches = String(text ?? "").match(/[.!?]+(?:\s|$)/g);
   return matches?.length ?? 0;
+}
+
+function sanitizeLorebookActivatedEntries(payload: unknown): string[] {
+  if (!Array.isArray(payload)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of payload) {
+    let text = "";
+    if (typeof item === "string") {
+      text = item;
+    } else if (item && typeof item === "object") {
+      const record = item as Record<string, unknown>;
+      const candidates = [record.content, record.text, record.prompt, record.entry];
+      for (const candidate of candidates) {
+        if (typeof candidate !== "string") continue;
+        if (candidate.trim()) {
+          text = candidate;
+          break;
+        }
+      }
+    }
+    if (!text) continue;
+    const compact = text
+      .replace(/\r\n/g, "\n")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (!compact || seen.has(compact)) continue;
+    seen.add(compact);
+    out.push(compact);
+    if (out.length >= 120) break;
+  }
+  return out;
+}
+
+function cacheLorebookActivatedEntries(context: STContext, payload: unknown): void {
+  const entries = sanitizeLorebookActivatedEntries(payload);
+  if (!entries.length) return;
+  if (!context.chatMetadata || typeof context.chatMetadata !== "object") {
+    context.chatMetadata = {};
+  }
+  context.chatMetadata[LOREBOOK_ACTIVATED_METADATA_KEY] = entries;
+  context.saveMetadataDebounced?.();
 }
 
 function buildSummaryTrackerStateLines(data: TrackerData, currentSettings: BetterSimTrackerSettings): string {
@@ -2075,6 +2119,15 @@ function registerEvents(context: STContext): void {
       pushTrace("event.app_ready");
       scheduleRefresh();
       ensureSlashCommandsRegistered();
+    });
+  }
+
+  if (events.WORLD_INFO_ACTIVATED) {
+    source.on(events.WORLD_INFO_ACTIVATED, (payload: unknown) => {
+      cacheLorebookActivatedEntries(context, payload);
+      const activatedCount = Array.isArray(payload) ? payload.length : 0;
+      pushTrace("event.world_info_activated", { activatedCount });
+      queuePromptSync(context);
     });
   }
 

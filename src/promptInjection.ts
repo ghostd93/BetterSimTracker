@@ -3,8 +3,11 @@ import type { BetterSimTrackerSettings, STContext, TrackerData } from "./types";
 
 const INJECT_KEY = "bst_relationship_state";
 const SUMMARY_NOTE_MODEL = "bettersimtracker.summary";
+const WI_DEPTH_PREFIX = "customDepthWI_";
+const WI_OUTLET_PREFIX = "customWIOutlet_";
 let lastInjectedPrompt = "";
 const MAX_INJECTION_PROMPT_CHARS = 6000;
+const DEFAULT_LOREBOOK_MAX_CHARS = 1200;
 
 function clamp(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -69,8 +72,116 @@ function readLatestSummaryNote(context: STContext): string {
   return "";
 }
 
+function compactLorebookText(raw: string): string {
+  return raw
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function getPath(record: unknown, path: string[]): unknown {
+  let current: unknown = record;
+  for (const key of path) {
+    if (!current || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+function maybePushLorebookString(target: string[], value: unknown): void {
+  if (typeof value !== "string") return;
+  const compact = compactLorebookText(value);
+  if (compact) target.push(compact);
+}
+
+function collectActivatedLorebookStrings(source: unknown): string[] {
+  const out: string[] = [];
+  if (!source || typeof source !== "object") return out;
+  const record = source as Record<string, unknown>;
+
+  const directStringPaths: string[][] = [
+    ["world_info_prompt"],
+    ["worldInfoPrompt"],
+    ["lorebookPrompt"],
+    ["prompt"],
+    ["extensions", "world_info", "world_info_prompt"],
+    ["extensions", "world_info", "prompt"],
+    ["extensions", "worldInfo", "worldInfoPrompt"],
+    ["extensions", "lorebook", "prompt"],
+  ];
+  for (const path of directStringPaths) {
+    maybePushLorebookString(out, getPath(record, path));
+  }
+
+  const arrayPaths: string[][] = [
+    ["bstLorebookActivatedEntries"],
+    ["bst_lorebook_activated_entries"],
+    ["world_info", "activated_entries"],
+    ["world_info", "activatedEntries"],
+    ["worldInfo", "activated_entries"],
+    ["worldInfo", "activatedEntries"],
+    ["lorebook", "activated_entries"],
+    ["lorebook", "activatedEntries"],
+  ];
+  for (const path of arrayPaths) {
+    const value = getPath(record, path);
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      if (typeof item === "string") {
+        maybePushLorebookString(out, item);
+        continue;
+      }
+      if (!item || typeof item !== "object") continue;
+      const entry = item as Record<string, unknown>;
+      maybePushLorebookString(out, entry.content);
+      maybePushLorebookString(out, entry.text);
+      maybePushLorebookString(out, entry.prompt);
+      maybePushLorebookString(out, entry.entry);
+    }
+  }
+
+  return out;
+}
+
+function collectLorebookFromExtensionPrompts(context: STContext): string[] {
+  const out: string[] = [];
+  const prompts = context.extensionPrompts;
+  if (!prompts || typeof prompts !== "object") return out;
+  for (const [key, rawPrompt] of Object.entries(prompts)) {
+    if (!key.startsWith(WI_DEPTH_PREFIX) && !key.startsWith(WI_OUTLET_PREFIX)) continue;
+    if (!rawPrompt || typeof rawPrompt !== "object") continue;
+    const value = (rawPrompt as Record<string, unknown>).value;
+    maybePushLorebookString(out, value);
+  }
+  return out;
+}
+
+function readLorebookContext(context: STContext, maxChars: number): string {
+  const limit = Math.max(0, Math.min(8000, Math.round(Number(maxChars) || DEFAULT_LOREBOOK_MAX_CHARS)));
+  if (!limit) return "";
+  const chunks = [
+    ...collectActivatedLorebookStrings(context.chatMetadata),
+    ...collectActivatedLorebookStrings(context.world_info),
+    ...collectActivatedLorebookStrings(context.worldInfo),
+    ...collectActivatedLorebookStrings(context.lorebook),
+    ...collectLorebookFromExtensionPrompts(context),
+  ];
+  if (!chunks.length) return "";
+  const deduped = Array.from(new Set(chunks.map(item => item.trim()).filter(Boolean)));
+  if (!deduped.length) return "";
+  const joined = deduped.join("\n\n");
+  return joined.slice(0, limit).trim();
+}
+
 function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, context: STContext): string {
   const latestSummaryNote = settings.injectSummarizationNote ? readLatestSummaryNote(context) : "";
+  const lorebookContextRaw = settings.injectLorebookInGeneration
+    ? readLorebookContext(context, settings.lorebookGenerationMaxChars)
+    : "";
+  const lorebookContext = lorebookContextRaw
+    ? ["Lorebook context (activated):", lorebookContextRaw].join("\n")
+    : "";
   const builtInUi = settings.builtInNumericStatUi ?? {
     affection: { showOnCard: true, showInGraph: true, includeInInjection: true },
     trust: { showOnCard: true, showInGraph: true, includeInInjection: true },
@@ -120,7 +231,8 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     const includeMood = settings.trackMood;
     const includeSummarizationNote = Boolean(latestSummaryNote);
 
-    if (!hasAnyNumeric && !hasAnyNonNumeric && !includeMood && !includeSummarizationNote) return "";
+    const includeLorebookContext = Boolean(lorebookContext);
+    if (!hasAnyNumeric && !hasAnyNonNumeric && !includeMood && !includeSummarizationNote && !includeLorebookContext) return "";
 
     const lines = names.map(name => {
       const parts: string[] = [];
@@ -218,6 +330,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       : "";
     const template = settings.promptTemplateInjection || DEFAULT_INJECTION_PROMPT_TEMPLATE;
     const hasSummaryPlaceholder = template.includes("{{summarizationNote}}");
+    const hasLorebookPlaceholder = template.includes("{{lorebookContext}}");
     const rendered = renderTemplate(template, {
       header,
       statSemantics,
@@ -226,12 +339,13 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       priorityRules,
       lines: lines.join("\n"),
       summarizationNote,
+      lorebookContext,
     }).trim();
 
-    if (!summarizationNote || hasSummaryPlaceholder) {
+    if ((!summarizationNote || hasSummaryPlaceholder) && (!lorebookContext || hasLorebookPlaceholder)) {
       return rendered;
     }
-    return `${rendered}\n\n${summarizationNote}`.trim();
+    return [rendered, summarizationNote, lorebookContext].filter(Boolean).join("\n\n").trim();
   };
 
   let customCount = allEnabledCustomNumeric.length + allEnabledCustomNonNumeric.length;

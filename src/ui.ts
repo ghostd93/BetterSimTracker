@@ -18,14 +18,19 @@ import type {
 } from "./types";
 import {
   DEFAULT_INJECTION_PROMPT_TEMPLATE,
+  DEFAULT_PROTOCOL_SEQUENTIAL_AFFECTION,
+  DEFAULT_PROTOCOL_SEQUENTIAL_CONNECTION,
+  DEFAULT_PROTOCOL_SEQUENTIAL_CUSTOM_NON_NUMERIC,
+  DEFAULT_PROTOCOL_SEQUENTIAL_CUSTOM_NUMERIC,
+  DEFAULT_PROTOCOL_SEQUENTIAL_DESIRE,
+  DEFAULT_PROTOCOL_SEQUENTIAL_LAST_THOUGHT,
+  DEFAULT_PROTOCOL_SEQUENTIAL_MOOD,
+  DEFAULT_PROTOCOL_SEQUENTIAL_TRUST,
+  DEFAULT_PROTOCOL_UNIFIED,
   DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
   DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS,
   DEFAULT_UNIFIED_PROMPT_INSTRUCTION,
-  LAST_THOUGHT_PROMPT_PROTOCOL,
-  MOOD_PROMPT_PROTOCOL,
-  NUMERIC_PROMPT_PROTOCOL,
-  UNIFIED_PROMPT_PROTOCOL,
   buildBuiltInSequentialPromptGenerationPrompt,
   buildCustomStatBehaviorGuidanceGenerationPrompt,
   buildCustomStatDescriptionGenerationPrompt,
@@ -2051,6 +2056,14 @@ function ensureStyles(): void {
   font-size: 11px;
   line-height: 1.35;
   color: rgba(243,245,249,0.75);
+}
+.bst-protocol-editable-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bst-protocol-editable-wrap .bst-prompt-reset {
+  align-self: flex-start;
 }
 .bst-prompt-head {
   display: flex;
@@ -4583,6 +4596,7 @@ export function openSettingsModal(input: {
         <div class="bst-check-grid">
           <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
           <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
+          <label class="bst-check" data-bst-row="injectLorebookInGeneration"><input data-k="injectLorebookInGeneration" type="checkbox">Inject Activated Lorebook Context</label>
           <label class="bst-check"><input data-k="summarizationNoteVisibleForAI" type="checkbox">Summarization Note Visible for AI (future notes)</label>
           <label class="bst-check" data-bst-row="injectSummarizationNote"><input data-k="injectSummarizationNote" type="checkbox">Inject Summarization Note</label>
           <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
@@ -4604,7 +4618,17 @@ export function openSettingsModal(input: {
             <li><code>{{priorityRules}}</code> — priority rules block</li>
             <li><code>{{lines}}</code> — per-character state lines</li>
             <li><code>{{summarizationNote}}</code> — optional latest tracker summary note (when enabled)</li>
+            <li><code>{{lorebookContext}}</code> — optional activated lorebook context (when enabled)</li>
           </ul>
+          <label class="bst-prompt-group" data-bst-row="lorebookGenerationMaxChars">
+            <div class="bst-prompt-head">
+              <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-book-open"></span>Lorebook Injection Limit</span>
+            </div>
+            <div class="bst-prompt-body">
+              <div class="bst-prompt-caption">Maximum lorebook characters injected into generation guidance</div>
+              <input data-k="lorebookGenerationMaxChars" type="number" min="0" max="8000">
+            </div>
+          </label>
           <div class="bst-prompt-group bst-prompt-inline">
             <div class="bst-prompt-head">
               <span class="bst-prompt-title"><span class="bst-prompt-icon fa-solid fa-wand-magic-sparkles"></span>Injection Prompt</span>
@@ -4698,7 +4722,7 @@ export function openSettingsModal(input: {
             <details class="bst-help-details">
         <summary>Prompt help</summary>
         <div class="bst-help-line">Unified prompt is used for one-prompt built-in extraction. Custom stats always use per-stat prompts in all modes.</div>
-        <div class="bst-help-line">Only the instruction section is editable; protocol blocks are fixed for safety and consistency.</div>
+        <div class="bst-help-line">Instruction is always editable. Protocol can be edited only when advanced unlock is enabled.</div>
         <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
         <div class="bst-help-line">Placeholders you can use:</div>
         <ul class="bst-help-list">
@@ -4719,6 +4743,10 @@ export function openSettingsModal(input: {
           <li><code>{{defaultValueLiteral}}</code>/<code>{{booleanTrueLabel}}</code>/<code>{{booleanFalseLabel}}</code> — non-numeric defaults/labels</li>
         </ul>
       </details>
+      <div class="bst-check-grid">
+        <label class="bst-check"><input data-k="unlockProtocolPrompts" type="checkbox">Unlock Protocol Prompt Editing (Advanced)</label>
+      </div>
+      <div class="bst-help-line">By default protocol blocks are locked. Enable the toggle above to edit and reset them.</div>
       <div class="bst-settings-grid bst-settings-grid-single bst-prompts-stack">
         <label class="bst-prompt-group">
           <div class="bst-prompt-head">
@@ -4729,8 +4757,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateUnified" rows="8"></textarea>
-            <div class="bst-prompt-caption">Protocol (read-only)</div>
-            <pre class="bst-prompt-protocol">${escapeHtml(UNIFIED_PROMPT_PROTOCOL)}</pre>
+            <div class="bst-protocol-readonly-wrap">
+              <div class="bst-prompt-caption">Protocol (read-only)</div>
+              <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolUnified)}</pre>
+            </div>
+            <div class="bst-protocol-editable-wrap">
+              <div class="bst-prompt-caption">Protocol (advanced editable)</div>
+              <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptProtocolUnified" title="Reset protocol to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+              <textarea data-k="promptProtocolUnified" rows="10"></textarea>
+            </div>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -4746,8 +4781,15 @@ export function openSettingsModal(input: {
             <div class="bst-prompt-ai-row">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialAffection">Uses current connection profile.</span>
             </div>
-            <div class="bst-prompt-caption">Protocol (read-only)</div>
-            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("affection"))}</pre>
+            <div class="bst-protocol-readonly-wrap">
+              <div class="bst-prompt-caption">Protocol (read-only)</div>
+              <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialAffection)}</pre>
+            </div>
+            <div class="bst-protocol-editable-wrap">
+              <div class="bst-prompt-caption">Protocol (advanced editable)</div>
+              <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptProtocolSequentialAffection" title="Reset protocol to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+              <textarea data-k="promptProtocolSequentialAffection" rows="10"></textarea>
+            </div>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -4763,8 +4805,15 @@ export function openSettingsModal(input: {
             <div class="bst-prompt-ai-row">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialTrust">Uses current connection profile.</span>
             </div>
-            <div class="bst-prompt-caption">Protocol (read-only)</div>
-            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("trust"))}</pre>
+            <div class="bst-protocol-readonly-wrap">
+              <div class="bst-prompt-caption">Protocol (read-only)</div>
+              <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialTrust)}</pre>
+            </div>
+            <div class="bst-protocol-editable-wrap">
+              <div class="bst-prompt-caption">Protocol (advanced editable)</div>
+              <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptProtocolSequentialTrust" title="Reset protocol to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+              <textarea data-k="promptProtocolSequentialTrust" rows="10"></textarea>
+            </div>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -4780,8 +4829,15 @@ export function openSettingsModal(input: {
             <div class="bst-prompt-ai-row">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialDesire">Uses current connection profile.</span>
             </div>
-            <div class="bst-prompt-caption">Protocol (read-only)</div>
-            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("desire"))}</pre>
+            <div class="bst-protocol-readonly-wrap">
+              <div class="bst-prompt-caption">Protocol (read-only)</div>
+              <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialDesire)}</pre>
+            </div>
+            <div class="bst-protocol-editable-wrap">
+              <div class="bst-prompt-caption">Protocol (advanced editable)</div>
+              <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptProtocolSequentialDesire" title="Reset protocol to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+              <textarea data-k="promptProtocolSequentialDesire" rows="10"></textarea>
+            </div>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -4797,8 +4853,15 @@ export function openSettingsModal(input: {
             <div class="bst-prompt-ai-row">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialConnection">Uses current connection profile.</span>
             </div>
-            <div class="bst-prompt-caption">Protocol (read-only)</div>
-            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("connection"))}</pre>
+            <div class="bst-protocol-readonly-wrap">
+              <div class="bst-prompt-caption">Protocol (read-only)</div>
+              <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialConnection)}</pre>
+            </div>
+            <div class="bst-protocol-editable-wrap">
+              <div class="bst-prompt-caption">Protocol (advanced editable)</div>
+              <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptProtocolSequentialConnection" title="Reset protocol to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+              <textarea data-k="promptProtocolSequentialConnection" rows="10"></textarea>
+            </div>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -4810,8 +4873,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable default used when a custom stat has no per-stat override, in all modes)</div>
             <textarea data-k="promptTemplateSequentialCustomNumeric" rows="6"></textarea>
-            <div class="bst-prompt-caption">Protocol (read-only)</div>
-            <pre class="bst-prompt-protocol">${escapeHtml(NUMERIC_PROMPT_PROTOCOL("{{statId}}"))}</pre>
+            <div class="bst-protocol-readonly-wrap">
+              <div class="bst-prompt-caption">Protocol (read-only)</div>
+              <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialCustomNumeric)}</pre>
+            </div>
+            <div class="bst-protocol-editable-wrap">
+              <div class="bst-prompt-caption">Protocol (advanced editable)</div>
+              <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptProtocolSequentialCustomNumeric" title="Reset protocol to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+              <textarea data-k="promptProtocolSequentialCustomNumeric" rows="10"></textarea>
+            </div>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -4823,8 +4893,15 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable default used when enum/boolean/text custom stats have no per-stat override, in all modes)</div>
             <textarea data-k="promptTemplateSequentialCustomNonNumeric" rows="6"></textarea>
-            <div class="bst-prompt-caption">Protocol (read-only)</div>
-            <pre class="bst-prompt-protocol">${escapeHtml("{\n  \"characters\": [\n    {\n      \"name\": \"Character Name\",\n      \"confidence\": 0.0,\n      \"value\": {\n        \"{{statId}}\": {{valueSchema}}\n      }\n    }\n  ]\n}")}</pre>
+            <div class="bst-protocol-readonly-wrap">
+              <div class="bst-prompt-caption">Protocol (read-only)</div>
+              <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialCustomNonNumeric)}</pre>
+            </div>
+            <div class="bst-protocol-editable-wrap">
+              <div class="bst-prompt-caption">Protocol (advanced editable)</div>
+              <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptProtocolSequentialCustomNonNumeric" title="Reset protocol to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+              <textarea data-k="promptProtocolSequentialCustomNonNumeric" rows="10"></textarea>
+            </div>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -4840,8 +4917,15 @@ export function openSettingsModal(input: {
             <div class="bst-prompt-ai-row">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialMood">Uses current connection profile.</span>
             </div>
-            <div class="bst-prompt-caption">Protocol (read-only)</div>
-            <pre class="bst-prompt-protocol">${escapeHtml(MOOD_PROMPT_PROTOCOL)}</pre>
+            <div class="bst-protocol-readonly-wrap">
+              <div class="bst-prompt-caption">Protocol (read-only)</div>
+              <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialMood)}</pre>
+            </div>
+            <div class="bst-protocol-editable-wrap">
+              <div class="bst-prompt-caption">Protocol (advanced editable)</div>
+              <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptProtocolSequentialMood" title="Reset protocol to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+              <textarea data-k="promptProtocolSequentialMood" rows="10"></textarea>
+            </div>
           </div>
         </label>
         <label class="bst-prompt-group">
@@ -4857,8 +4941,15 @@ export function openSettingsModal(input: {
             <div class="bst-prompt-ai-row">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialLastThought">Uses current connection profile.</span>
             </div>
-            <div class="bst-prompt-caption">Protocol (read-only)</div>
-            <pre class="bst-prompt-protocol">${escapeHtml(LAST_THOUGHT_PROMPT_PROTOCOL)}</pre>
+            <div class="bst-protocol-readonly-wrap">
+              <div class="bst-prompt-caption">Protocol (read-only)</div>
+              <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialLastThought)}</pre>
+            </div>
+            <div class="bst-protocol-editable-wrap">
+              <div class="bst-prompt-caption">Protocol (advanced editable)</div>
+              <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptProtocolSequentialLastThought" title="Reset protocol to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
+              <textarea data-k="promptProtocolSequentialLastThought" rows="10"></textarea>
+            </div>
           </div>
         </label>
       </div>
@@ -5181,6 +5272,8 @@ export function openSettingsModal(input: {
   set("confidenceDampening", String(input.settings.confidenceDampening));
   set("moodStickiness", String(input.settings.moodStickiness));
   set("injectTrackerIntoPrompt", String(input.settings.injectTrackerIntoPrompt));
+  set("injectLorebookInGeneration", String(input.settings.injectLorebookInGeneration));
+  set("lorebookGenerationMaxChars", String(input.settings.lorebookGenerationMaxChars));
   set("summarizationNoteVisibleForAI", String(input.settings.summarizationNoteVisibleForAI));
   set("injectSummarizationNote", String(input.settings.injectSummarizationNote));
   set("autoDetectActive", String(input.settings.autoDetectActive));
@@ -5221,6 +5314,16 @@ export function openSettingsModal(input: {
   set("promptTemplateSequentialMood", input.settings.promptTemplateSequentialMood);
   set("promptTemplateSequentialLastThought", input.settings.promptTemplateSequentialLastThought);
   set("promptTemplateInjection", input.settings.promptTemplateInjection);
+  set("unlockProtocolPrompts", String(input.settings.unlockProtocolPrompts));
+  set("promptProtocolUnified", input.settings.promptProtocolUnified);
+  set("promptProtocolSequentialAffection", input.settings.promptProtocolSequentialAffection);
+  set("promptProtocolSequentialTrust", input.settings.promptProtocolSequentialTrust);
+  set("promptProtocolSequentialDesire", input.settings.promptProtocolSequentialDesire);
+  set("promptProtocolSequentialConnection", input.settings.promptProtocolSequentialConnection);
+  set("promptProtocolSequentialCustomNumeric", input.settings.promptProtocolSequentialCustomNumeric);
+  set("promptProtocolSequentialCustomNonNumeric", input.settings.promptProtocolSequentialCustomNonNumeric);
+  set("promptProtocolSequentialMood", input.settings.promptProtocolSequentialMood);
+  set("promptProtocolSequentialLastThought", input.settings.promptProtocolSequentialLastThought);
 
   const initialGlobalStExpressionFrame = getGlobalStExpressionImageOptions(input.settings);
   const readGlobalStExpressionFrame = (): StExpressionImageOptions => {
@@ -6615,6 +6718,8 @@ export function openSettingsModal(input: {
       confidenceDampening: readNumber("confidenceDampening", input.settings.confidenceDampening, 0, 1),
       moodStickiness: readNumber("moodStickiness", input.settings.moodStickiness, 0, 1),
       injectTrackerIntoPrompt: readBool("injectTrackerIntoPrompt", input.settings.injectTrackerIntoPrompt),
+      injectLorebookInGeneration: readBool("injectLorebookInGeneration", input.settings.injectLorebookInGeneration),
+      lorebookGenerationMaxChars: readNumber("lorebookGenerationMaxChars", input.settings.lorebookGenerationMaxChars, 0, 8000),
       summarizationNoteVisibleForAI: readBool("summarizationNoteVisibleForAI", input.settings.summarizationNoteVisibleForAI),
       injectSummarizationNote: readBool("injectSummarizationNote", input.settings.injectSummarizationNote),
       autoDetectActive: readBool("autoDetectActive", input.settings.autoDetectActive),
@@ -6658,6 +6763,16 @@ export function openSettingsModal(input: {
       promptTemplateSequentialMood: read("promptTemplateSequentialMood") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
       promptTemplateSequentialLastThought: read("promptTemplateSequentialLastThought") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
       promptTemplateInjection: read("promptTemplateInjection") || DEFAULT_INJECTION_PROMPT_TEMPLATE,
+      unlockProtocolPrompts: readBool("unlockProtocolPrompts", input.settings.unlockProtocolPrompts),
+      promptProtocolUnified: read("promptProtocolUnified") || DEFAULT_PROTOCOL_UNIFIED,
+      promptProtocolSequentialAffection: read("promptProtocolSequentialAffection") || DEFAULT_PROTOCOL_SEQUENTIAL_AFFECTION,
+      promptProtocolSequentialTrust: read("promptProtocolSequentialTrust") || DEFAULT_PROTOCOL_SEQUENTIAL_TRUST,
+      promptProtocolSequentialDesire: read("promptProtocolSequentialDesire") || DEFAULT_PROTOCOL_SEQUENTIAL_DESIRE,
+      promptProtocolSequentialConnection: read("promptProtocolSequentialConnection") || DEFAULT_PROTOCOL_SEQUENTIAL_CONNECTION,
+      promptProtocolSequentialCustomNumeric: read("promptProtocolSequentialCustomNumeric") || DEFAULT_PROTOCOL_SEQUENTIAL_CUSTOM_NUMERIC,
+      promptProtocolSequentialCustomNonNumeric: read("promptProtocolSequentialCustomNonNumeric") || DEFAULT_PROTOCOL_SEQUENTIAL_CUSTOM_NON_NUMERIC,
+      promptProtocolSequentialMood: read("promptProtocolSequentialMood") || DEFAULT_PROTOCOL_SEQUENTIAL_MOOD,
+      promptProtocolSequentialLastThought: read("promptProtocolSequentialLastThought") || DEFAULT_PROTOCOL_SEQUENTIAL_LAST_THOUGHT,
       customStats: customStatsState.map(cloneCustomStatDefinition)
     };
   };
@@ -6675,9 +6790,13 @@ export function openSettingsModal(input: {
     const injectPromptBlock = modal.querySelector('[data-bst-row="injectPromptBlock"]') as HTMLElement | null;
     const injectPromptDivider = modal.querySelector('[data-bst-row="injectPromptDivider"]') as HTMLElement | null;
     const injectSummarizationNoteRow = modal.querySelector('[data-bst-row="injectSummarizationNote"]') as HTMLElement | null;
+    const injectLorebookInGenerationRow = modal.querySelector('[data-bst-row="injectLorebookInGeneration"]') as HTMLElement | null;
+    const lorebookGenerationMaxCharsRow = modal.querySelector('[data-bst-row="lorebookGenerationMaxChars"]') as HTMLElement | null;
     const moodAdvancedBlock = modal.querySelector('[data-bst-row="moodAdvancedBlock"]') as HTMLElement | null;
     const globalMoodExpressionMap = modal.querySelector('[data-bst-row="globalMoodExpressionMap"]') as HTMLElement | null;
     const stExpressionImageOptions = modal.querySelector('[data-bst-row="stExpressionImageOptions"]') as HTMLElement | null;
+    const protocolReadonlyBlocks = Array.from(modal.querySelectorAll(".bst-protocol-readonly-wrap")) as HTMLElement[];
+    const protocolEditableBlocks = Array.from(modal.querySelectorAll(".bst-protocol-editable-wrap")) as HTMLElement[];
     const current = collectSettings();
     if (maxConcurrentRow) {
       maxConcurrentRow.style.display = current.sequentialExtraction ? "flex" : "none";
@@ -6725,6 +6844,14 @@ export function openSettingsModal(input: {
     if (injectSummarizationNoteRow) {
       injectSummarizationNoteRow.style.display = current.injectTrackerIntoPrompt ? "" : "none";
     }
+    if (injectLorebookInGenerationRow) {
+      injectLorebookInGenerationRow.style.display = current.injectTrackerIntoPrompt ? "" : "none";
+    }
+    if (lorebookGenerationMaxCharsRow) {
+      lorebookGenerationMaxCharsRow.style.display = current.injectTrackerIntoPrompt && current.injectLorebookInGeneration ? "flex" : "none";
+      lorebookGenerationMaxCharsRow.style.flexDirection = "column";
+      lorebookGenerationMaxCharsRow.style.gap = "4px";
+    }
     if (moodAdvancedBlock) {
       moodAdvancedBlock.style.display = current.trackMood ? "block" : "none";
     }
@@ -6733,6 +6860,12 @@ export function openSettingsModal(input: {
     }
     if (stExpressionImageOptions) {
       stExpressionImageOptions.style.display = current.trackMood && current.moodSource === "st_expressions" ? "block" : "none";
+    }
+    for (const node of protocolReadonlyBlocks) {
+      node.style.display = current.unlockProtocolPrompts ? "none" : "block";
+    }
+    for (const node of protocolEditableBlocks) {
+      node.style.display = current.unlockProtocolPrompts ? "block" : "none";
     }
   };
 
@@ -6805,6 +6938,8 @@ export function openSettingsModal(input: {
     confidenceDampening: "How strongly model confidence scales stat deltas (0 = ignore confidence, 1 = full effect).",
     moodStickiness: "Higher values keep previous mood unless confidence is strong.",
     injectTrackerIntoPrompt: "Inject current relationship state into generation prompt for behavioral coherence.",
+    injectLorebookInGeneration: "Optionally append activated lorebook context to hidden generation guidance injection.",
+    lorebookGenerationMaxChars: "Maximum number of lorebook characters injected into hidden guidance (0 disables lorebook injection).",
     summarizationNoteVisibleForAI: "Controls visibility mode for newly generated Summarize notes (prose summaries of current tracked stats). Existing notes are unchanged for safety.",
     injectSummarizationNote: "Include the latest Summarize note (prose summary of current tracked stats) in hidden tracker prompt injection guidance only (no chat-message edits).",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",
@@ -6830,15 +6965,25 @@ export function openSettingsModal(input: {
     includeContextInDiagnostics: "Include extraction prompt/context text in diagnostics dumps (larger logs).",
     includeGraphInDiagnostics: "Include graph-open series payloads in diagnostics trace output.",
     promptTemplateInjection: "Template for injected relationship state guidance (used only when injection is enabled).",
-    promptTemplateUnified: "Unified prompt instruction (protocol block is fixed).",
-    promptTemplateSequentialAffection: "Sequential Affection instruction (protocol block is fixed).",
-    promptTemplateSequentialTrust: "Sequential Trust instruction (protocol block is fixed).",
-    promptTemplateSequentialDesire: "Sequential Desire instruction (protocol block is fixed).",
-    promptTemplateSequentialConnection: "Sequential Connection instruction (protocol block is fixed).",
+    promptTemplateUnified: "Unified prompt instruction (protocol is separately configurable in advanced mode).",
+    promptTemplateSequentialAffection: "Sequential Affection instruction (protocol is separately configurable in advanced mode).",
+    promptTemplateSequentialTrust: "Sequential Trust instruction (protocol is separately configurable in advanced mode).",
+    promptTemplateSequentialDesire: "Sequential Desire instruction (protocol is separately configurable in advanced mode).",
+    promptTemplateSequentialConnection: "Sequential Connection instruction (protocol is separately configurable in advanced mode).",
     promptTemplateSequentialCustomNumeric: "Default instruction for custom numeric per-stat extraction (used in all modes; per-stat override in custom stat wizard still wins).",
     promptTemplateSequentialCustomNonNumeric: "Default instruction for custom non-numeric per-stat extraction (used in all modes; per-stat override in custom stat wizard still wins).",
-    promptTemplateSequentialMood: "Sequential Mood instruction (protocol block is fixed).",
-    promptTemplateSequentialLastThought: "Sequential LastThought instruction (protocol block is fixed)."
+    promptTemplateSequentialMood: "Sequential Mood instruction (protocol is separately configurable in advanced mode).",
+    promptTemplateSequentialLastThought: "Sequential LastThought instruction (protocol is separately configurable in advanced mode).",
+    unlockProtocolPrompts: "Advanced mode: unlock protocol blocks for editing. Incorrect protocol formatting can break extraction.",
+    promptProtocolUnified: "Protocol block for unified extraction (advanced override).",
+    promptProtocolSequentialAffection: "Protocol block for sequential affection extraction (advanced override).",
+    promptProtocolSequentialTrust: "Protocol block for sequential trust extraction (advanced override).",
+    promptProtocolSequentialDesire: "Protocol block for sequential desire extraction (advanced override).",
+    promptProtocolSequentialConnection: "Protocol block for sequential connection extraction (advanced override).",
+    promptProtocolSequentialCustomNumeric: "Protocol block for custom numeric extraction (advanced override).",
+    promptProtocolSequentialCustomNonNumeric: "Protocol block for custom non-numeric extraction (advanced override).",
+    promptProtocolSequentialMood: "Protocol block for sequential mood extraction (advanced override).",
+    promptProtocolSequentialLastThought: "Protocol block for sequential lastThought extraction (advanced override)."
   };
   for (const [key, tooltip] of Object.entries(tooltips) as Array<[keyof BetterSimTrackerSettings, string]>) {
     const inputNode = modal.querySelector(`[data-k="${key}"]`) as HTMLElement | null;
@@ -6887,6 +7032,15 @@ export function openSettingsModal(input: {
     promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
     promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
     promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
+    promptProtocolUnified: DEFAULT_PROTOCOL_UNIFIED,
+    promptProtocolSequentialAffection: DEFAULT_PROTOCOL_SEQUENTIAL_AFFECTION,
+    promptProtocolSequentialTrust: DEFAULT_PROTOCOL_SEQUENTIAL_TRUST,
+    promptProtocolSequentialDesire: DEFAULT_PROTOCOL_SEQUENTIAL_DESIRE,
+    promptProtocolSequentialConnection: DEFAULT_PROTOCOL_SEQUENTIAL_CONNECTION,
+    promptProtocolSequentialCustomNumeric: DEFAULT_PROTOCOL_SEQUENTIAL_CUSTOM_NUMERIC,
+    promptProtocolSequentialCustomNonNumeric: DEFAULT_PROTOCOL_SEQUENTIAL_CUSTOM_NON_NUMERIC,
+    promptProtocolSequentialMood: DEFAULT_PROTOCOL_SEQUENTIAL_MOOD,
+    promptProtocolSequentialLastThought: DEFAULT_PROTOCOL_SEQUENTIAL_LAST_THOUGHT,
   };
 
   type BuiltInSequentialPromptSettingKey =

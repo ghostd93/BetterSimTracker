@@ -2,6 +2,17 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev1] - 2026-02-26
+### Added
+- Optional lorebook context injection in generation prompt injection with size cap controls.
+- Runtime capture of activated World Info entries (`WORLD_INFO_ACTIVATED`) for lorebook-aware generation context.
+- Advanced protocol prompt unlock/edit/reset controls for unified and per-stat extraction protocol templates.
+
+### Changed
+- Prompt builders now support protocol-template overrides across unified, sequential, and custom-stat extraction paths.
+- Lorebook context resolution now includes metadata-based activation payloads and extension prompt buckets.
+- Settings schema and UI now expose protocol override fields and lorebook generation toggles.
+
 ## [2.1.0.2] - 2026-02-25
 ### Fixed
 - Non-numeric custom stat chips (including `text_short`) no longer truncate long values on mobile; values now wrap cleanly instead of clipping with ellipsis.
