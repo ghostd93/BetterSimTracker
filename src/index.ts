@@ -66,6 +66,7 @@ let chatGenerationInFlight = false;
 let chatGenerationSawCharacterRender = false;
 let chatGenerationStartLastAiIndex: number | null = null;
 let swipeGenerationActive = false;
+let pendingLateRenderExtraction = false;
 let slashCommandsRegistered = false;
 let activeExtractionRunId: number | null = null;
 const cancelledExtractionRuns = new Set<number>();
@@ -2155,6 +2156,7 @@ function registerEvents(context: STContext): void {
       swipeGenerationActive = type === "swipe";
       chatGenerationInFlight = true;
       chatGenerationSawCharacterRender = false;
+      pendingLateRenderExtraction = false;
       chatGenerationStartLastAiIndex = getLastAiMessageIndex(context);
       const baseTargetIndex = getGenerationTargetMessageIndex(context);
       const targetIndex = type === "swipe"
@@ -2188,6 +2190,7 @@ function registerEvents(context: STContext): void {
     if (!chatGenerationSawCharacterRender) {
       chatGenerationInFlight = false;
       chatGenerationStartLastAiIndex = null;
+      pendingLateRenderExtraction = true;
       pushTrace("event.generation_ended_ignored", { reason: "no_new_ai_message_rendered" });
       setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
       queueRender();
@@ -2195,6 +2198,7 @@ function registerEvents(context: STContext): void {
     }
     chatGenerationInFlight = false;
     chatGenerationStartLastAiIndex = null;
+    pendingLateRenderExtraction = false;
     pushTrace("event.generation_ended");
     if (swipeGenerationActive) {
       swipeGenerationActive = false;
@@ -2224,6 +2228,7 @@ function registerEvents(context: STContext): void {
     chatGenerationSawCharacterRender = false;
     chatGenerationStartLastAiIndex = null;
     swipeGenerationActive = false;
+    pendingLateRenderExtraction = false;
     lastActivatedLorebookEntries = [];
     clearPendingSwipeExtraction();
     pushTrace("event.chat_changed");
@@ -2266,6 +2271,24 @@ function registerEvents(context: STContext): void {
         pushTrace("extract.swipe.rendered", { reason: pending.reason, targetMessageIndex: pending.messageIndex ?? null });
         scheduleExtraction(pending.reason, pending.messageIndex);
       }
+      if (pendingLateRenderExtraction && !chatGenerationInFlight) {
+        const currentLastAi = getLastAiMessageIndex(context);
+        const hasTrackableTarget =
+          currentLastAi != null &&
+          currentLastAi >= 0 &&
+          currentLastAi < context.chat.length &&
+          isTrackableAiMessage(context.chat[currentLastAi]) &&
+          !getTrackerDataFromMessage(context.chat[currentLastAi]);
+        pushTrace("extract.late_render_check", {
+          pending: true,
+          messageIndex: currentLastAi ?? null,
+          hasTrackableTarget,
+        });
+        if (hasTrackableTarget) {
+          scheduleExtraction("GENERATION_ENDED_LATE_RENDER", currentLastAi, 180);
+        }
+        pendingLateRenderExtraction = false;
+      }
       if (trackerUiState.phase === "generating") {
         const currentLastAi = getLastAiMessageIndex(context);
         setTrackerUi(context, { ...trackerUiState, messageIndex: currentLastAi });
@@ -2292,6 +2315,7 @@ function registerEvents(context: STContext): void {
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
       swipeGenerationActive = false;
+      pendingLateRenderExtraction = false;
       lastActivatedLorebookEntries = [];
       clearPendingSwipeExtraction();
       pushTrace("event.chat_loaded");
@@ -2326,6 +2350,7 @@ function registerEvents(context: STContext): void {
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
       swipeGenerationActive = false;
+      pendingLateRenderExtraction = false;
       clearPendingSwipeExtraction();
       pushTrace("event.message_deleted");
       scheduleRefresh(60);
@@ -2338,6 +2363,7 @@ function registerEvents(context: STContext): void {
       chatGenerationSawCharacterRender = false;
       chatGenerationStartLastAiIndex = null;
       swipeGenerationActive = false;
+      pendingLateRenderExtraction = false;
       lastActivatedLorebookEntries = [];
       clearPendingSwipeExtraction();
       pushTrace("event.chat_deleted");
@@ -2401,6 +2427,7 @@ function registerEvents(context: STContext): void {
         chatGenerationSawCharacterRender = false;
         chatGenerationStartLastAiIndex = null;
         swipeGenerationActive = false;
+        pendingLateRenderExtraction = false;
         if (trackerUiState.phase === "generating") {
           pushTrace("ui.generating.clear", {
             reason: "swipe_event_force_idle",

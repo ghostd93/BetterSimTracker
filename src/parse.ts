@@ -50,12 +50,38 @@ function coerceText(value: unknown): string | null {
 
 const MOOD_LABEL_LOOKUP = new Map(moodOptions.map(label => [label.toLowerCase(), label]));
 const MOOD_LABELS_BY_LENGTH = [...moodOptions].sort((a, b) => b.length - a.length);
+const MOOD_ALIAS_LOOKUP = new Map<string, string>([
+  ["exhausted", "Sad"],
+  ["exhaustion", "Sad"],
+  ["tired", "Sad"],
+  ["fatigued", "Sad"],
+  ["drained", "Sad"],
+  ["sleepy", "Sad"],
+  ["weary", "Sad"],
+  ["worried", "Anxious"],
+  ["nervous", "Anxious"],
+  ["stressed", "Anxious"],
+  ["overwhelmed", "Anxious"],
+  ["upset", "Frustrated"],
+  ["annoyed", "Frustrated"],
+  ["mad", "Angry"],
+  ["calm", "Content"],
+  ["relaxed", "Content"],
+  ["peaceful", "Content"],
+  ["joyful", "Happy"],
+  ["glad", "Happy"],
+]);
 
 function normalizeMoodLabel(value: string): string {
   const cleaned = value.trim().toLowerCase();
   if (!cleaned) return "Neutral";
   const exact = MOOD_LABEL_LOOKUP.get(cleaned);
   if (exact) return exact;
+  const aliasExact = MOOD_ALIAS_LOOKUP.get(cleaned);
+  if (aliasExact) return aliasExact;
+  for (const [needle, mapped] of MOOD_ALIAS_LOOKUP) {
+    if (cleaned.includes(needle)) return mapped;
+  }
   for (const label of MOOD_LABELS_BY_LENGTH) {
     const needle = label.toLowerCase();
     if (cleaned.includes(needle)) return label;

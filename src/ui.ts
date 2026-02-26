@@ -357,6 +357,7 @@ const EDIT_STATS_MODAL_CLASS = "bst-edit-modal";
 const MAX_EDIT_LAST_THOUGHT_CHARS = 600;
 let moodPreviewKeyListener: ((event: KeyboardEvent) => void) | null = null;
 let moodPreviewOpenedAt = 0;
+let textareaCounterSequence = 0;
 type AutoCardColorAssignment = {
   hue: number;
   color: string;
@@ -384,6 +385,60 @@ function escapeHtml(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function bindTextareaCounters(
+  container: ParentNode,
+  shouldSkip?: (textarea: HTMLTextAreaElement) => boolean,
+): () => void {
+  const updateOne = (textarea: HTMLTextAreaElement): void => {
+    if (shouldSkip?.(textarea)) return;
+    let counterId = String(textarea.dataset.bstCounterId ?? "").trim();
+    if (!counterId) {
+      textareaCounterSequence += 1;
+      counterId = `bst-textarea-${textareaCounterSequence}`;
+      textarea.dataset.bstCounterId = counterId;
+    }
+    let counter = container.querySelector(`.bst-textarea-counter[data-bst-counter-id="${counterId}"]`) as HTMLElement | null;
+    if (!counter) {
+      counter = document.createElement("div");
+      counter.className = "bst-textarea-counter";
+      counter.dataset.bstCounterId = counterId;
+      textarea.insertAdjacentElement("afterend", counter);
+    }
+    const max = Number(textarea.getAttribute("maxlength"));
+    const hasMax = Number.isFinite(max) && max > 0;
+    const current = textarea.value.length;
+    counter.textContent = hasMax ? `${current}/${max} chars` : `${current} chars`;
+    if (!hasMax) {
+      counter.removeAttribute("data-state");
+      return;
+    }
+    const warnThreshold = Math.max(1, max - Math.min(30, Math.round(max * 0.1)));
+    if (current >= max) {
+      counter.setAttribute("data-state", "limit");
+    } else if (current >= warnThreshold) {
+      counter.setAttribute("data-state", "warn");
+    } else {
+      counter.setAttribute("data-state", "ok");
+    }
+  };
+
+  const textareas = Array.from(container.querySelectorAll("textarea")) as HTMLTextAreaElement[];
+  for (const textarea of textareas) {
+    if (shouldSkip?.(textarea)) continue;
+    if (textarea.dataset.bstCounterBound !== "1") {
+      const refresh = (): void => updateOne(textarea);
+      textarea.addEventListener("input", refresh);
+      textarea.addEventListener("change", refresh);
+      textarea.dataset.bstCounterBound = "1";
+    }
+    updateOne(textarea);
+  }
+  return (): void => {
+    const nodes = Array.from(container.querySelectorAll("textarea")) as HTMLTextAreaElement[];
+    for (const textarea of nodes) updateOne(textarea);
+  };
 }
 
 function moodToEmojiEntity(moodRaw: string): string {
@@ -2546,7 +2601,8 @@ function ensureStyles(): void {
   opacity: 1;
   color: #ffcaca;
 }
-.bst-custom-char-counter {
+.bst-custom-char-counter,
+.bst-textarea-counter {
   margin-top: 4px;
   text-align: right;
   font-size: 11px;
@@ -2554,11 +2610,13 @@ function ensureStyles(): void {
   opacity: 0.72;
   color: rgba(241, 246, 255, 0.88);
 }
-.bst-custom-char-counter[data-state="warn"] {
+.bst-custom-char-counter[data-state="warn"],
+.bst-textarea-counter[data-state="warn"] {
   opacity: 1;
   color: #ffe08a;
 }
-.bst-custom-char-counter[data-state="limit"] {
+.bst-custom-char-counter[data-state="limit"],
+.bst-textarea-counter[data-state="limit"] {
   opacity: 1;
   color: #ffb3b3;
 }
@@ -3657,6 +3715,7 @@ export function renderTracker(
           <div class="bst-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
           <div class="bst-actions">
             ${!isUserCard ? `<button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> <span class="bst-graph-label">Graph</span></button>` : ""}
+            ${isUserCard && canEdit ? `<button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="retrack" title="Retrack this message" aria-label="Retrack this message"><span aria-hidden="true">&#x21BB;</span></button>` : ""}
             ${canEdit ? `<button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="edit-stats" data-bst-edit-message="${entry.messageIndex}" data-bst-edit-character="${escapeHtml(name)}" title="Edit last tracker stats for ${escapeHtml(displayName)}" aria-label="Edit last tracker stats for ${escapeHtml(displayName)}"><span aria-hidden="true">&#9998;</span></button>` : ""}
             ${!isUserCard ? `<div class="bst-state" title="${isActive ? "Active" : settings.inactiveLabel}">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>` : ""}
           </div>
@@ -3732,12 +3791,14 @@ export function renderTracker(
     root.dataset.bstRenderSignature = renderSignature;
     root.innerHTML = "";
 
+    const cardNoun = cardHtmlByName.length === 1 ? "card" : "cards";
+    const collapseLabel = collapsed ? `Expand ${cardNoun}` : `Collapse ${cardNoun}`;
     const actions = document.createElement("div");
     actions.className = "bst-root-actions";
     actions.innerHTML = `
-      <button class="bst-mini-btn bst-root-action-main" data-bst-action="toggle-all-collapse" title="${collapsed ? "Expand cards" : "Collapse cards"}" aria-expanded="${String(!collapsed)}">
+      <button class="bst-mini-btn bst-root-action-main" data-bst-action="toggle-all-collapse" title="${collapseLabel}" aria-expanded="${String(!collapsed)}">
         <span class="bst-root-action-icon" aria-hidden="true">${collapsed ? "&#9656;" : "&#9662;"}</span>
-        <span class="bst-root-action-label">${collapsed ? "Expand cards" : "Collapse cards"}</span>
+        <span class="bst-root-action-label">${collapseLabel}</span>
       </button>
       ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-root-action-summary${summaryBusy ? " is-loading" : ""}" data-bst-action="send-summary" data-loading="${summaryBusy ? "true" : "false"}" title="${summaryBusy ? "Generating prose summary of current tracked stats..." : "Generate prose summary of current tracked stats and post as a Note"}" aria-label="${summaryBusy ? "Generating prose summary of current tracked stats..." : "Generate prose summary of current tracked stats and post as a Note"}"${summaryBusy ? " disabled" : ""}><span aria-hidden="true">${summaryBusy ? "&#8987;" : "&#128221;"}</span></button>` : ""}
       ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-mini-btn-accent bst-root-action-retrack" data-bst-action="retrack" title="Retrack latest AI message" aria-label="Retrack latest AI message"><span aria-hidden="true">&#x21BB;</span></button>` : ""}
@@ -4098,7 +4159,7 @@ function openEditStatsModal(input: {
       ? `<div class="bst-edit-divider"></div>
          <label class="bst-edit-field">
            <span>Last Thought</span>
-           <textarea rows="3" data-bst-edit-text="lastThought" placeholder="Optional. Keep it concise (max ${MAX_EDIT_LAST_THOUGHT_CHARS} chars).">${escapeHtml(String(currentThought ?? ""))}</textarea>
+           <textarea rows="3" maxlength="${MAX_EDIT_LAST_THOUGHT_CHARS}" data-bst-edit-text="lastThought" placeholder="Optional. Keep it concise (max ${MAX_EDIT_LAST_THOUGHT_CHARS} chars).">${escapeHtml(String(currentThought ?? ""))}</textarea>
          </label>`
       : ""}
     <div class="bst-edit-actions">
@@ -4109,6 +4170,7 @@ function openEditStatsModal(input: {
 
   backdrop.appendChild(modal);
   document.body.appendChild(backdrop);
+  bindTextareaCounters(modal);
 
   const close = () => closeEditStatsModal();
   modal.querySelector('[data-action="close"]')?.addEventListener("click", close);
@@ -5398,6 +5460,7 @@ export function openSettingsModal(input: {
   set("promptProtocolSequentialCustomNonNumeric", input.settings.promptProtocolSequentialCustomNonNumeric);
   set("promptProtocolSequentialMood", input.settings.promptProtocolSequentialMood);
   set("promptProtocolSequentialLastThought", input.settings.promptProtocolSequentialLastThought);
+  const refreshSettingsTextareaCounters = bindTextareaCounters(modal);
 
   const initialGlobalStExpressionFrame = getGlobalStExpressionImageOptions(input.settings);
   const readGlobalStExpressionFrame = (): StExpressionImageOptions => {
@@ -6132,6 +6195,10 @@ export function openSettingsModal(input: {
     const getField = (name: string): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null =>
       wizard.querySelector(`[data-bst-custom-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
     const colorPickerNode = wizard.querySelector('[data-bst-custom-color-picker]') as HTMLInputElement | null;
+    const refreshWizardTextareaCounters = bindTextareaCounters(
+      wizard,
+      textarea => String(textarea.getAttribute("data-bst-custom-field") ?? "").trim().toLowerCase() === "description",
+    );
     let generateDescriptionRequestId = 0;
     let generateTemplateRequestId = 0;
     let generateBehaviorRequestId = 0;
@@ -6297,6 +6364,7 @@ export function openSettingsModal(input: {
       syncKindUi();
       writeReview();
       updateDescriptionCounter();
+      refreshWizardTextareaCounters();
     };
 
     const setErrors = (errors: string[]): boolean => {
@@ -6719,6 +6787,7 @@ export function openSettingsModal(input: {
     document.body.appendChild(wizard);
     syncStepUi();
     updateDescriptionCounter();
+    refreshWizardTextareaCounters();
   };
 
   customAddButton?.addEventListener("click", () => {
@@ -6975,6 +7044,7 @@ export function openSettingsModal(input: {
     input.settings = next;
     input.onSave(next);
     renderCustomStatsList();
+    refreshSettingsTextareaCounters();
     updateGlobalStExpressionSummary();
     syncExtractionVisibility();
   };

@@ -1,4 +1,4 @@
-import { STAT_KEYS } from "./constants";
+import { STAT_KEYS, USER_TRACKER_KEY } from "./constants";
 import { generateJson } from "./generator";
 import { parseCustomDeltaResponse, parseCustomValueResponse, parseUnifiedDeltaResponse } from "./parse";
 import {
@@ -393,6 +393,11 @@ export async function extractStatisticsParallel(input: {
       statId: string,
       kind: "numeric" | "non_numeric",
     ): { existing: string[]; firstRunSeedOnly: string[] } => {
+      // For user-side extraction, custom stats should be inferred immediately
+      // from the current user turn instead of being seed-only.
+      if (activeCharacters.length === 1 && activeCharacters[0] === USER_TRACKER_KEY) {
+        return { existing: [...activeCharacters], firstRunSeedOnly: [] };
+      }
       const hasPrior = Boolean(hasPriorTrackerData);
       const rawMap = kind === "numeric"
         ? (previousCustomStatisticsRaw?.[statId] ?? {})
