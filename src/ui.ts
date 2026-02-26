@@ -3699,9 +3699,11 @@ export function renderTracker(
       ? displayPool
       : displayPool.filter(name => normalizeName(name) !== normalizeName(USER_TRACKER_KEY));
     const displayOrder = new Map(scopedDisplayPool.map((name, index) => [normalizeName(name), index]));
-    const targets = Array.from(new Set(
-      scopedDisplayPool.filter(name => hasAnyStatFor(name) || activeSet.has(normalizeName(name)))
-    ))
+    const includeAllTargets = forceAllInGroup || settings.showInactive;
+    const targetSource = includeAllTargets
+      ? scopedDisplayPool
+      : scopedDisplayPool.filter(name => hasAnyStatFor(name) || activeSet.has(normalizeName(name)));
+    const targets = Array.from(new Set(targetSource))
       .sort((a, b) => {
         const aActive = activeSet.has(normalizeName(a));
         const bActive = activeSet.has(normalizeName(b));
