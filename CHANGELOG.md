@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev21] - 2026-02-26
+### Fixed
+- Delta badges now compare against the nearest prior message that actually contains the same character/stat value, instead of only the immediately previous tracker entry.
+- This restores latest-message deltas in chats where user-only tracker messages appear between character tracker messages.
+- Mood/lastThought/non-numeric carry-forward lookups now use the same nearest-prior-value rule, preventing false resets when the immediate prior entry has no value for that character.
+
 ## [2.1.0.3-dev20] - 2026-02-26
 ### Fixed
 - Group character discovery now merges current group-member resolution with actual AI speaker names from chat history, preventing active-character analysis from dropping participants like Lilly when member resolution is temporarily narrowed.

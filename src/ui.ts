@@ -3452,11 +3452,45 @@ export function renderTracker(
     }
   }
   const latestTrackedMessageIndex = [...sortedEntries].reverse().find(item => item.data)?.messageIndex ?? null;
-  const findPreviousData = (messageIndex: number): TrackerData | null => {
+  const findPreviousDataWithNumericStat = (
+    messageIndex: number,
+    key: string,
+    name: string,
+  ): { data: TrackerData; value: number } | null => {
     for (let i = sortedEntries.length - 1; i >= 0; i -= 1) {
       const candidate = sortedEntries[i];
-      if (candidate.messageIndex >= messageIndex) continue;
-      if (candidate.data) return candidate.data;
+      if (candidate.messageIndex >= messageIndex || !candidate.data) continue;
+      const value = getNumericRawValue(candidate.data, key, name);
+      if (value === undefined || Number.isNaN(value)) continue;
+      return { data: candidate.data, value };
+    }
+    return null;
+  };
+  const findPreviousDataWithNonNumericStat = (
+    messageIndex: number,
+    def: UiNonNumericStatDefinition,
+    name: string,
+  ): TrackerData | null => {
+    for (let i = sortedEntries.length - 1; i >= 0; i -= 1) {
+      const candidate = sortedEntries[i];
+      if (candidate.messageIndex >= messageIndex || !candidate.data) continue;
+      if (hasNonNumericValue(candidate.data, def, name)) return candidate.data;
+    }
+    return null;
+  };
+  const findPreviousDataWithMood = (messageIndex: number, name: string): TrackerData | null => {
+    for (let i = sortedEntries.length - 1; i >= 0; i -= 1) {
+      const candidate = sortedEntries[i];
+      if (candidate.messageIndex >= messageIndex || !candidate.data) continue;
+      if (candidate.data.statistics.mood?.[name] !== undefined) return candidate.data;
+    }
+    return null;
+  };
+  const findPreviousDataWithLastThought = (messageIndex: number, name: string): TrackerData | null => {
+    for (let i = sortedEntries.length - 1; i >= 0; i -= 1) {
+      const candidate = sortedEntries[i];
+      if (candidate.messageIndex >= messageIndex || !candidate.data) continue;
+      if (candidate.data.statistics.lastThought?.[name] !== undefined) return candidate.data;
     }
     return null;
   };
@@ -3678,35 +3712,36 @@ export function renderTracker(
     const cardNumericDefs = allNumericDefs.filter(def => def.showOnCard);
     const allNonNumericDefs = getNonNumericStatDefinitions(settings);
     const cardNonNumericDefs = allNonNumericDefs.filter(def => def.showOnCard);
-    const previousData = findPreviousData(entry.messageIndex);
     const getEffectiveNumericRawValue = (key: string, name: string): number | undefined => {
       const current = getNumericRawValue(data, key, name);
       if (current !== undefined && !Number.isNaN(current)) return current;
-      if (!previousData) return undefined;
-      const previous = getNumericRawValue(previousData, key, name);
-      if (previous !== undefined && !Number.isNaN(previous)) return previous;
+      const previous = findPreviousDataWithNumericStat(entry.messageIndex, key, name);
+      if (previous) return previous.value;
       return undefined;
     };
     const hasEffectiveNumericValue = (key: string, name: string): boolean =>
       getEffectiveNumericRawValue(key, name) !== undefined;
     const hasEffectiveNonNumericValue = (def: UiNonNumericStatDefinition, name: string): boolean =>
-      hasNonNumericValue(data, def, name) || (previousData ? hasNonNumericValue(previousData, def, name) : false);
+      hasNonNumericValue(data, def, name) || Boolean(findPreviousDataWithNonNumericStat(entry.messageIndex, def, name));
     const resolveEffectiveNonNumericValue = (
       def: UiNonNumericStatDefinition,
       name: string,
     ): string | boolean | null => {
       if (hasNonNumericValue(data, def, name)) return resolveNonNumericValue(data, def, name);
-      if (previousData && hasNonNumericValue(previousData, def, name)) return resolveNonNumericValue(previousData, def, name);
+      const previous = findPreviousDataWithNonNumericStat(entry.messageIndex, def, name);
+      if (previous) return resolveNonNumericValue(previous, def, name);
       return resolveNonNumericValue(data, def, name);
     };
     const getEffectiveMoodText = (name: string): string => {
       if (data.statistics.mood?.[name] !== undefined) return String(data.statistics.mood?.[name] ?? "");
-      if (previousData?.statistics.mood?.[name] !== undefined) return String(previousData.statistics.mood?.[name] ?? "");
+      const previous = findPreviousDataWithMood(entry.messageIndex, name);
+      if (previous?.statistics.mood?.[name] !== undefined) return String(previous.statistics.mood?.[name] ?? "");
       return "";
     };
     const getEffectiveLastThoughtText = (name: string): string => {
       if (data.statistics.lastThought?.[name] !== undefined) return String(data.statistics.lastThought?.[name] ?? "");
-      if (previousData?.statistics.lastThought?.[name] !== undefined) return String(previousData.statistics.lastThought?.[name] ?? "");
+      const previous = findPreviousDataWithLastThought(entry.messageIndex, name);
+      if (previous?.statistics.lastThought?.[name] !== undefined) return String(previous.statistics.lastThought?.[name] ?? "");
       return "";
     };
     const hasAnyStatFor = (name: string): boolean =>
@@ -3777,7 +3812,10 @@ export function renderTracker(
       const enabledNumeric = getNumericStatsForCharacter(data, name, settings);
       const enabledNonNumeric = cardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
       const moodText = getEffectiveMoodText(name);
-      const prevMood = previousData?.statistics.mood?.[name] !== undefined ? String(previousData.statistics.mood?.[name]) : moodText;
+      const previousMoodData = findPreviousDataWithMood(entry.messageIndex, name);
+      const prevMood = previousMoodData?.statistics.mood?.[name] !== undefined
+        ? String(previousMoodData.statistics.mood?.[name])
+        : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
       const canEdit = latestTrackedMessageIndex != null && entry.messageIndex === latestTrackedMessageIndex;
       const moodSource = moodText ? getResolvedMoodSource(settings, name, characterAvatar) : "bst_images";
@@ -3836,9 +3874,9 @@ export function renderTracker(
           const hasCurrentValue = currentValueRaw !== undefined && !Number.isNaN(currentValueRaw);
           const effectiveValueRaw = getEffectiveNumericRawValue(key, name);
           const value = toPercent(effectiveValueRaw ?? defDefault);
-          const prevValueRaw = previousData ? getNumericRawValue(previousData, key, name) : undefined;
-          const hasPrevValue = prevValueRaw !== undefined && !Number.isNaN(prevValueRaw);
-          const prevValue = toPercent(hasPrevValue ? prevValueRaw : value);
+          const previousForStat = findPreviousDataWithNumericStat(entry.messageIndex, key, name);
+          const hasPrevValue = Boolean(previousForStat);
+          const prevValue = toPercent(previousForStat ? previousForStat.value : value);
           const delta = Math.round(value - prevValue);
           const deltaClass = delta > 0 ? "bst-delta bst-delta-up" : delta < 0 ? "bst-delta bst-delta-down" : "bst-delta bst-delta-flat";
           const showDelta = latestAiIndex != null && entry.messageIndex === latestAiIndex && hasPrevValue && hasCurrentValue;
