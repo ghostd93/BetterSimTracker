@@ -2443,15 +2443,18 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       runScopedSettings,
       context,
     );
-    const rawHistory = getRecentTrackerHistory(context, 6);
-    const relevantHistory = rawHistory.filter(entry =>
-      activeCharacters.some(name => hasTrackedValueForCharacter(entry, name, runScopedSettings)),
-    );
-    if (relevantHistory.length !== rawHistory.length) {
+    const rawHistoryEntries = getRecentTrackerHistoryEntries(context, 6);
+    const boundedHistoryEntries = rawHistoryEntries.filter(entry => entry.messageIndex < baselineBeforeIndex);
+    const relevantHistory = boundedHistoryEntries
+      .filter(entry => activeCharacters.some(name => hasTrackedValueForCharacter(entry.data, name, runScopedSettings)))
+      .map(entry => entry.data);
+    if (relevantHistory.length !== rawHistoryEntries.length) {
       pushTrace("extract.history_filter", {
         runId,
-        before: rawHistory.length,
+        before: rawHistoryEntries.length,
+        afterIndexBound: boundedHistoryEntries.length,
         after: relevantHistory.length,
+        baselineBeforeIndex,
       });
     }
     const seededHistory = seedHistoryForActiveCharacters(

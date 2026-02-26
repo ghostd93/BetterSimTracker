@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev26] - 2026-02-26
+### Fixed
+- Extraction prompt history now excludes snapshots at/after the current extraction target index, so `Recent tracker snapshots` only reflects prior turns and no longer pulls current-turn default rows.
+
 ## [2.1.0.3-dev25] - 2026-02-26
 ### Fixed
 - Extraction prompts now filter recent history snapshots to entries that actually contain tracked values for the currently active characters, preventing user-only turns from appearing as default-seeded `0` character rows in `Recent tracker snapshots`.
