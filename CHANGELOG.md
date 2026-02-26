@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.1.0.3-dev27] - 2026-02-26
+### Fixed
+- Retrack action visibility now follows the latest tracked snapshot entry (user or AI) instead of only the latest AI message, so user-card retrack no longer targets the message above.
+- User-card inline retrack control was removed and retrack is now consistently exposed in the root actions row next to collapse.
+
 ## [2.1.0.3-dev26] - 2026-02-26
 ### Fixed
 - Extraction prompt history now excludes snapshots at/after the current extraction target index, so `Recent tracker snapshots` only reflects prior turns and no longer pulls current-turn default rows.

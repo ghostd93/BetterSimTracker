@@ -3703,8 +3703,10 @@ export function renderTracker(
       continue;
     }
 
-    const showRetrack = latestAiIndex != null && entry.messageIndex === latestAiIndex;
-    const summaryBusy = Boolean(showRetrack && summaryBusyMessageIndices?.has(entry.messageIndex));
+    const showSummaryAction = latestAiIndex != null && entry.messageIndex === latestAiIndex;
+    const showRetrackAction = latestTrackedMessageIndex != null && entry.messageIndex === latestTrackedMessageIndex;
+    const retrackTargetsUserMessage = showRetrackAction && Boolean(isUserMessageIndex?.(entry.messageIndex));
+    const summaryBusy = Boolean(showSummaryAction && summaryBusyMessageIndices?.has(entry.messageIndex));
     const userMessageEntry = Boolean(isUserMessageIndex?.(entry.messageIndex));
     const collapsed = root.classList.contains("bst-root-collapsed");
     const activeSet = new Set(data.activeCharacters.map(normalizeName));
@@ -3795,7 +3797,9 @@ export function renderTracker(
     const signatureParts: string[] = [
       `msg:${entry.messageIndex}`,
       `collapsed:${collapsed ? "1" : "0"}`,
-      `retrack:${showRetrack ? "1" : "0"}`,
+      `retrack:${showRetrackAction ? "1" : "0"}`,
+      `summary:${showSummaryAction ? "1" : "0"}`,
+      `retrackUser:${retrackTargetsUserMessage ? "1" : "0"}`,
       `summarybusy:${summaryBusy ? "1" : "0"}`,
       `inactive:${settings.showInactive ? "1" : "0"}`,
       `thought:${settings.showLastThought ? "1" : "0"}`,
@@ -3856,7 +3860,6 @@ export function renderTracker(
           <div class="bst-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
           <div class="bst-actions">
             ${!isUserCard ? `<button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> <span class="bst-graph-label">Graph</span></button>` : ""}
-            ${isUserCard && canEdit ? `<button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="retrack" title="Retrack this message" aria-label="Retrack this message"><span aria-hidden="true">&#x21BB;</span></button>` : ""}
             ${canEdit ? `<button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="edit-stats" data-bst-edit-message="${entry.messageIndex}" data-bst-edit-character="${escapeHtml(name)}" title="Edit last tracker stats for ${escapeHtml(displayName)}" aria-label="Edit last tracker stats for ${escapeHtml(displayName)}"><span aria-hidden="true">&#9998;</span></button>` : ""}
             ${!isUserCard ? `<div class="bst-state" title="${isActive ? "Active" : settings.inactiveLabel}">${isActive ? "Active" : `${settings.inactiveLabel} <span class="fa-solid fa-ghost bst-inactive-icon" aria-hidden="true"></span>`}</div>` : ""}
           </div>
@@ -3944,8 +3947,8 @@ export function renderTracker(
         <span class="bst-root-action-icon" aria-hidden="true">${collapsed ? "&#9656;" : "&#9662;"}</span>
         <span class="bst-root-action-label">${collapseLabel}</span>
       </button>
-      ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-root-action-summary${summaryBusy ? " is-loading" : ""}" data-bst-action="send-summary" data-loading="${summaryBusy ? "true" : "false"}" title="${summaryBusy ? "Generating prose summary of current tracked stats..." : "Generate prose summary of current tracked stats and post as a Note"}" aria-label="${summaryBusy ? "Generating prose summary of current tracked stats..." : "Generate prose summary of current tracked stats and post as a Note"}"${summaryBusy ? " disabled" : ""}><span aria-hidden="true">${summaryBusy ? "&#8987;" : "&#128221;"}</span></button>` : ""}
-      ${showRetrack ? `<button class="bst-mini-btn bst-mini-btn-icon bst-mini-btn-accent bst-root-action-retrack" data-bst-action="retrack" title="Retrack latest AI message" aria-label="Retrack latest AI message"><span aria-hidden="true">&#x21BB;</span></button>` : ""}
+      ${showSummaryAction ? `<button class="bst-mini-btn bst-mini-btn-icon bst-root-action-summary${summaryBusy ? " is-loading" : ""}" data-bst-action="send-summary" data-loading="${summaryBusy ? "true" : "false"}" title="${summaryBusy ? "Generating prose summary of current tracked stats..." : "Generate prose summary of current tracked stats and post as a Note"}" aria-label="${summaryBusy ? "Generating prose summary of current tracked stats..." : "Generate prose summary of current tracked stats and post as a Note"}"${summaryBusy ? " disabled" : ""}><span aria-hidden="true">${summaryBusy ? "&#8987;" : "&#128221;"}</span></button>` : ""}
+      ${showRetrackAction ? `<button class="bst-mini-btn bst-mini-btn-icon bst-mini-btn-accent bst-root-action-retrack" data-bst-action="retrack" title="${retrackTargetsUserMessage ? "Retrack this user message" : "Retrack this AI message"}" aria-label="${retrackTargetsUserMessage ? "Retrack this user message" : "Retrack this AI message"}"><span aria-hidden="true">&#x21BB;</span></button>` : ""}
     `;
     root.appendChild(actions);
 
