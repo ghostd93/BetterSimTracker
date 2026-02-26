@@ -1435,6 +1435,71 @@ function clampEditedNumber(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function filterStatisticsToCharacters(
+  statistics: Statistics,
+  allowedCharacters: string[],
+): Statistics {
+  const allowed = new Set(allowedCharacters.map(name => String(name ?? "").trim()).filter(Boolean));
+  const filterMap = (map: Record<string, unknown> | undefined): Record<string, unknown> => {
+    if (!map || typeof map !== "object") return {};
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(map)) {
+      if (allowed.has(String(key ?? "").trim())) out[key] = value;
+    }
+    return out;
+  };
+  return {
+    affection: filterMap(statistics.affection),
+    trust: filterMap(statistics.trust),
+    desire: filterMap(statistics.desire),
+    connection: filterMap(statistics.connection),
+    mood: filterMap(statistics.mood),
+    lastThought: filterMap(statistics.lastThought),
+  } as Statistics;
+}
+
+function filterCustomStatisticsToCharacters(
+  customStatistics: CustomStatistics,
+  allowedCharacters: string[],
+): CustomStatistics {
+  const allowed = new Set(allowedCharacters.map(name => String(name ?? "").trim()).filter(Boolean));
+  const out: CustomStatistics = {};
+  for (const [statId, byCharacter] of Object.entries(customStatistics ?? {})) {
+    const filtered: Record<string, number> = {};
+    for (const [name, value] of Object.entries(byCharacter ?? {})) {
+      if (!allowed.has(String(name ?? "").trim())) continue;
+      const num = Number(value);
+      if (Number.isNaN(num)) continue;
+      filtered[name] = num;
+    }
+    if (Object.keys(filtered).length) out[statId] = filtered;
+  }
+  return out;
+}
+
+function filterCustomNonNumericStatisticsToCharacters(
+  customStatistics: CustomNonNumericStatistics,
+  allowedCharacters: string[],
+): CustomNonNumericStatistics {
+  const allowed = new Set(allowedCharacters.map(name => String(name ?? "").trim()).filter(Boolean));
+  const out: CustomNonNumericStatistics = {};
+  for (const [statId, byCharacter] of Object.entries(customStatistics ?? {})) {
+    const filtered: Record<string, string | boolean> = {};
+    for (const [name, value] of Object.entries(byCharacter ?? {})) {
+      if (!allowed.has(String(name ?? "").trim())) continue;
+      if (typeof value === "boolean") {
+        filtered[name] = value;
+      } else {
+        const text = String(value ?? "").trim();
+        if (!text) continue;
+        filtered[name] = text;
+      }
+    }
+    if (Object.keys(filtered).length) out[statId] = filtered;
+  }
+  return out;
+}
+
 function applyManualTrackerEdits(payload: ManualEditPayload): void {
   const context = getSafeContext();
   if (!context || !settings) return;
@@ -1919,12 +1984,17 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       trackMood: activeSettings.trackMood || (activeSettings.enableUserTracking && activeSettings.userTrackMood),
       trackLastThought: activeSettings.trackLastThought || (activeSettings.enableUserTracking && activeSettings.userTrackLastThought),
     };
-    const merged = mergeStatisticsWithFallback(extracted, previous?.statistics ?? null, mergeSettings);
-    const mergedCustom = mergeCustomStatisticsWithFallback(extractedCustom, previous?.customStatistics ?? null);
-    const mergedCustomNonNumeric = mergeCustomNonNumericStatisticsWithFallback(
+    let merged = mergeStatisticsWithFallback(extracted, previous?.statistics ?? null, mergeSettings);
+    let mergedCustom = mergeCustomStatisticsWithFallback(extractedCustom, previous?.customStatistics ?? null);
+    let mergedCustomNonNumeric = mergeCustomNonNumericStatisticsWithFallback(
       extractedCustomNonNumeric,
       previous?.customNonNumericStatistics ?? null,
     );
+    if (userExtraction) {
+      merged = filterStatisticsToCharacters(merged, [USER_TRACKER_KEY]);
+      mergedCustom = filterCustomStatisticsToCharacters(mergedCustom, [USER_TRACKER_KEY]);
+      mergedCustomNonNumeric = filterCustomNonNumericStatisticsToCharacters(mergedCustomNonNumeric, [USER_TRACKER_KEY]);
+    }
 
     latestData = {
       timestamp: Date.now(),
