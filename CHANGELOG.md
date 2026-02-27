@@ -2,45 +2,21 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.0-dev7] - 2026-02-27
+## [2.2.0.5] - 2026-02-27
 ### Added
-- Tracker edit modal now includes an `Active In This Snapshot` toggle for character cards, allowing manual per-message active/inactive state edits.
+- Persona Management integration for BetterSimTracker user mood images, including per-persona mood-source override and per-mood upload/clear controls.
+- Character tracker edit modal now includes an `Active In This Snapshot` toggle for manual active/inactive correction per message snapshot.
 
 ### Changed
-- Local workflow now ignores `debug.txt` via `.gitignore` to keep diagnostics dumps untracked.
+- New-chat greeting bootstrap now seeds tracker values from configured defaults when no user message exists yet, instead of deriving first values from greeting text.
+- User tracker identity resolution now follows current persona/avatar mapping, so user defaults and persona mood assets apply consistently.
 
-## [2.2.0-dev6] - 2026-02-27
 ### Fixed
-- Persona Management mood panel mount scheduling no longer starves under frequent drawer/class mutations, so the `BetterSimTracker Persona Mood` block now renders reliably.
-
-## [2.2.0-dev5] - 2026-02-27
-### Added
-- New BetterSimTracker persona panel in SillyTavern Persona Management for per-persona mood-source override and per-mood BST image upload/clear controls.
-
-### Changed
-- User tracker card now resolves persona avatar identity (`persona:<avatarId>`) when available, so persona-specific defaults and mood images apply reliably.
-
-## [2.2.0-dev4] - 2026-02-27
-### Changed
-- Greeting-message bootstrap behavior now seeds tracker values from configured defaults when no user message exists yet, instead of extracting generated deltas from the greeting text.
-
-## [2.2.0-dev3] - 2026-02-27
-### Fixed
-- Edit tracker modal now opens in the top layer via `dialog.showModal()` (with high-z fallback), preventing it from rendering underneath mobile SillyTavern UI overlays.
-
-## [2.2.0-dev2] - 2026-02-27
-### Fixed
-- Manual tracker edit button now appears independently for both the latest tracked AI message and the latest tracked User message (instead of only one global latest tracker entry).
-
-## [2.2.0-dev1] - 2026-02-27
-### Fixed
-- Added a late-render extraction poll fallback after `GENERATION_ENDED` so mobile/event-race cases that miss `CHARACTER_MESSAGE_RENDERED` no longer silently skip auto-tracking.
-- Added automatic bootstrap extraction for the latest AI message when a chat loads without tracker payload on that message, fixing missing first-card stat generation on some new chats.
-- Improved scope key derivation when `chatId` is unavailable (derived chat fingerprint fallback) to reduce cross-chat carry-over in local scoped tracker state.
-- Improved manual refresh resilience by auto-retrying once when generation returns empty output.
-- Improved mobile portrait edit modal layout (`safe-area` aware top alignment + viewport-constrained height) so the edit form no longer renders too high/off-screen.
-- User card display name now resolves from the current user/persona label instead of hardcoded `User`.
-- User card ST-expression lookup now attempts resolution using the current user/persona label and avatar fallback when available.
+- Mobile/late-render extraction race handling now retries safely after generation and on manual-refresh empty responses, reducing missing first tracker cards.
+- Latest-card edit availability is now independent for latest AI and latest User tracker entries.
+- Edit modal layering and mobile layout were hardened so the dialog stays above SillyTavern UI and remains usable in portrait mode.
+- Persona Management mood panel mount reliability was improved so the BST persona block renders consistently.
+- Cross-chat scope fallback and user ST-expression name/avatar resolution were stabilized to reduce stale carry-over and missing user expressions.
 
 ## [2.2.0] - 2026-02-26
 ### Added
