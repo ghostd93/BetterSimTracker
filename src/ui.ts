@@ -3463,7 +3463,16 @@ export function renderTracker(
       pushUniqueCharacterName(knownCharactersAcrossEntries, knownAcrossSeen, name);
     }
   }
+  const isUserEntryIndex = (messageIndex: number): boolean => Boolean(isUserMessageIndex?.(messageIndex));
   const latestTrackedMessageIndex = [...sortedEntries].reverse().find(item => item.data)?.messageIndex ?? null;
+  const latestTrackedAiMessageIndex = [...sortedEntries]
+    .reverse()
+    .find(item => item.data && !isUserEntryIndex(item.messageIndex))
+    ?.messageIndex ?? null;
+  const latestTrackedUserMessageIndex = [...sortedEntries]
+    .reverse()
+    .find(item => item.data && isUserEntryIndex(item.messageIndex))
+    ?.messageIndex ?? null;
   const findPreviousDataWithNumericStat = (
     messageIndex: number,
     key: string,
@@ -3836,7 +3845,9 @@ export function renderTracker(
         ? String(previousMoodData.statistics.mood?.[name])
         : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
-      const canEdit = latestTrackedMessageIndex != null && entry.messageIndex === latestTrackedMessageIndex;
+      const canEdit = isUserCard
+        ? (latestTrackedUserMessageIndex != null && entry.messageIndex === latestTrackedUserMessageIndex)
+        : (latestTrackedAiMessageIndex != null && entry.messageIndex === latestTrackedAiMessageIndex);
       const moodSource = moodText ? getResolvedMoodSource(settings, moodLookupName, characterAvatar) : "bst_images";
       const stExpressionImageOptions = moodSource === "st_expressions"
         ? getResolvedStExpressionImageOptions(settings, moodLookupName, characterAvatar)

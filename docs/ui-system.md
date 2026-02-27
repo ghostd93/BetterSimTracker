@@ -38,9 +38,9 @@ Two distinct UI states:
 
 Stop action cancels active extraction run and in-flight generation handles.
 
-## Manual Edit Flow (Latest Snapshot)
+## Manual Edit Flow (Latest Snapshot Per Role)
 
-1. User opens edit modal from latest tracker card.
+1. User opens edit modal from the latest tracked card for that role (`AI` cards or `User` card).
 2. UI validates and normalizes payload.
 3. `index.ts` applies edit payload to latest snapshot maps.
 4. Snapshot is written and chat save is triggered.

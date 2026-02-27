@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0-dev2] - 2026-02-27
+### Fixed
+- Manual tracker edit button now appears independently for both the latest tracked AI message and the latest tracked User message (instead of only one global latest tracker entry).
+
 ## [2.2.0-dev1] - 2026-02-27
 ### Fixed
 - Added a late-render extraction poll fallback after `GENERATION_ENDED` so mobile/event-race cases that miss `CHARACTER_MESSAGE_RENDERED` no longer silently skip auto-tracking.
