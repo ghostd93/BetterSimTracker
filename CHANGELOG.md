@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0-dev6] - 2026-02-27
+### Fixed
+- Persona Management mood panel mount scheduling no longer starves under frequent drawer/class mutations, so the `BetterSimTracker Persona Mood` block now renders reliably.
+
 ## [2.2.0-dev5] - 2026-02-27
 ### Added
 - New BetterSimTracker persona panel in SillyTavern Persona Management for per-persona mood-source override and per-mood BST image upload/clear controls.

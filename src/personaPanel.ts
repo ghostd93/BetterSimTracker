@@ -304,14 +304,21 @@ export function initPersonaPanel(input: InitInput): void {
   if (initDone) return;
   initDone = true;
   let renderTimer: number | null = null;
+  let renderQueued = false;
+  let lastRenderAt = 0;
+  const RENDER_THROTTLE_MS = 120;
+  const runRender = (): void => {
+    renderTimer = null;
+    renderQueued = false;
+    lastRenderAt = Date.now();
+    renderPanel(input, false);
+  };
   const scheduleRender = (): void => {
-    if (renderTimer !== null) {
-      window.clearTimeout(renderTimer);
-    }
-    renderTimer = window.setTimeout(() => {
-      renderTimer = null;
-      renderPanel(input, false);
-    }, 120);
+    if (renderQueued) return;
+    renderQueued = true;
+    const elapsed = Date.now() - lastRenderAt;
+    const waitMs = Math.max(0, RENDER_THROTTLE_MS - elapsed);
+    renderTimer = window.setTimeout(runRender, waitMs);
   };
 
   const observer = new MutationObserver(() => scheduleRender());
@@ -623,4 +630,3 @@ function renderPanel(input: InitInput, force = false): void {
       });
   });
 }
-
