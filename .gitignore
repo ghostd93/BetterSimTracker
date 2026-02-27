@@ -6,6 +6,7 @@ node_modules/
 *.tmp
 *.temp
 .cache/
+debug.txt
 
 # OS/editor noise
 .DS_Store

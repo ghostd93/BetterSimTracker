@@ -2182,6 +2182,7 @@ type ManualEditPayload = {
   character: string;
   numeric: Record<string, number | null>;
   nonNumeric?: Record<string, string | boolean | null>;
+  active?: boolean;
   mood?: string | null;
   lastThought?: string | null;
 };
@@ -2365,10 +2366,24 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
     customNonNumericStatistics: Object.keys(customNonNumeric).length ? customNonNumeric : undefined,
   };
 
+  if (payload.active !== undefined && character !== USER_TRACKER_KEY) {
+    const activeSet = new Set(
+      next.activeCharacters
+        .map(name => String(name ?? "").trim())
+        .filter(Boolean),
+    );
+    if (payload.active) {
+      activeSet.add(character);
+    } else {
+      activeSet.delete(character);
+    }
+    next.activeCharacters = Array.from(activeSet);
+  }
+
   writeTrackerDataToMessage(context, next, messageIndex);
   context.saveChatDebounced?.();
   void context.saveChat?.();
-  pushTrace("tracker.edit", { messageIndex, character });
+  pushTrace("tracker.edit", { messageIndex, character, active: payload.active ?? null });
   refreshFromStoredData();
 }
 

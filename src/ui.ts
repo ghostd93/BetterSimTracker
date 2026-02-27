@@ -4217,6 +4217,7 @@ type EditStatsPayload = {
   character: string;
   numeric: Record<string, number | null>;
   nonNumeric?: Record<string, string | boolean | null>;
+  active?: boolean;
   mood?: string | null;
   lastThought?: string | null;
 };
@@ -4275,6 +4276,9 @@ function openEditStatsModal(input: {
   const currentMood = input.data.statistics.mood?.[input.character];
   const normalizedMood = currentMood ? normalizeMoodLabel(String(currentMood)) : null;
   const currentThought = input.data.statistics.lastThought?.[input.character];
+  const isCurrentlyActive = !isUserCharacter
+    && Array.isArray(input.data.activeCharacters)
+    && input.data.activeCharacters.some(name => String(name ?? "").trim() === input.character);
 
   const numericField = (def: { id: string; label: string; defaultValue: number }): string => {
     const raw = getNumericRawValue(input.data, def.id, input.character);
@@ -4336,6 +4340,13 @@ function openEditStatsModal(input: {
       <button class="bst-btn bst-close-btn" data-action="close" aria-label="Close edit dialog">&times;</button>
     </div>
     <div class="bst-edit-sub">Numeric values are percentages (0-100). Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest tracker snapshot for this character.</div>
+    ${!isUserCharacter
+      ? `<div class="bst-edit-divider"></div>
+         <label class="bst-edit-field">
+           <span>Active In This Snapshot</span>
+           <input type="checkbox" data-bst-edit-meta="active" ${isCurrentlyActive ? "checked" : ""}>
+         </label>`
+      : ""}
     ${builtInDefs.length
       ? `<div class="bst-edit-grid bst-edit-grid-two">${builtInDefs.map(numericField).join("")}</div>`
       : `<div class="bst-edit-sub">No built-in numeric stats are currently tracked.</div>`}
@@ -4493,6 +4504,12 @@ function openEditStatsModal(input: {
       moodValue = raw ? raw : null;
     }
 
+    let activeValue: boolean | undefined = undefined;
+    const activeToggle = modal.querySelector<HTMLInputElement>('[data-bst-edit-meta="active"]');
+    if (activeToggle) {
+      activeValue = Boolean(activeToggle.checked);
+    }
+
     let lastThoughtValue: string | null | undefined = undefined;
     const thoughtInput = modal.querySelector<HTMLTextAreaElement>('[data-bst-edit-text="lastThought"]');
     if (thoughtInput) {
@@ -4505,6 +4522,7 @@ function openEditStatsModal(input: {
       character: input.character,
       numeric,
       nonNumeric,
+      active: activeValue,
       mood: moodValue,
       lastThought: lastThoughtValue,
     });

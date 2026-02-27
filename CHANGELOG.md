@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0-dev7] - 2026-02-27
+### Added
+- Tracker edit modal now includes an `Active In This Snapshot` toggle for character cards, allowing manual per-message active/inactive state edits.
+
+### Changed
+- Local workflow now ignores `debug.txt` via `.gitignore` to keep diagnostics dumps untracked.
+
 ## [2.2.0-dev6] - 2026-02-27
 ### Fixed
 - Persona Management mood panel mount scheduling no longer starves under frequent drawer/class mutations, so the `BetterSimTracker Persona Mood` block now renders reliably.
