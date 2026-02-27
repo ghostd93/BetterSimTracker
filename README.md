@@ -30,6 +30,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Prompt templates (unified + per-stat + custom numeric/non-numeric defaults) with per-prompt reset
 - AI-assisted generation for built-in sequential prompt instructions (`Affection`, `Trust`, `Desire`, `Connection`, `Mood`, `LastThought`)
 - Mood source switch: BST mood images or ST expressions (emoji fallback always available)
+- Per-persona BST mood image management inside ST Persona Management (user tracker card)
 - Per-character card color override (advanced character defaults)
 - Interactive ST expression framing editor with live preview (global + per-character override)
 - Click-to-preview mood image lightbox with close button / backdrop / Esc support (native top-layer dialog path on supported browsers)

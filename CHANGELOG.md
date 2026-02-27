@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0-dev5] - 2026-02-27
+### Added
+- New BetterSimTracker persona panel in SillyTavern Persona Management for per-persona mood-source override and per-mood BST image upload/clear controls.
+
+### Changed
+- User tracker card now resolves persona avatar identity (`persona:<avatarId>`) when available, so persona-specific defaults and mood images apply reliably.
+
 ## [2.2.0-dev4] - 2026-02-27
 ### Changed
 - Greeting-message bootstrap behavior now seeds tracker values from configured defaults when no user message exists yet, instead of extracting generated deltas from the greeting text.

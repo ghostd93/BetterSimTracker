@@ -110,6 +110,14 @@ Provides per-character defaults and mood asset controls.
 - mood image upload/delete
 - ST expression mapping and framing options
 
+## Persona Mood Panel
+
+Provides per-persona mood controls inside SillyTavern Persona Management.
+
+- per-persona mood source override
+- per-mood BST image upload/delete for user tracker card mood rendering
+- sprite-backed storage for uploaded persona mood images
+
 ## Accessibility and UX Notes
 
 - reduced-motion aware animations

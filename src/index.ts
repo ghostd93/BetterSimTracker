@@ -41,6 +41,7 @@ import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModa
 import { cancelActiveGenerations, generateJson } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
 import { initCharacterPanel } from "./characterPanel";
+import { initPersonaPanel } from "./personaPanel";
 import { extractLorebookEntriesFromPayload, readLorebookContext } from "./lorebook";
 
 let settings: BetterSimTrackerSettings | null = null;
@@ -1421,9 +1422,15 @@ function queueRender(): void {
       return userLabel || "User";
     }, characterName => {
       const liveContext = getSafeContext();
-      if (!liveContext?.characters?.length) return null;
       const normalized = String(characterName ?? "").trim().toLowerCase();
       if (!normalized) return null;
+      if (normalized === USER_TRACKER_KEY.toLowerCase()) {
+        const personaAvatarId = resolveCurrentPersonaAvatarId(liveContext);
+        if (personaAvatarId) {
+          return `persona:${personaAvatarId}`;
+        }
+      }
+      if (!liveContext?.characters?.length) return null;
       let character = liveContext.characters.find(item => String(item?.name ?? "").trim().toLowerCase() === normalized);
       if (!character && normalized === USER_TRACKER_KEY.toLowerCase()) {
         const userName = String(liveContext.name1 ?? "").trim().toLowerCase();
@@ -1992,6 +1999,30 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
 
 function getSafeContext(): STContext | null {
   return getContext();
+}
+
+function resolveCurrentPersonaAvatarId(context: STContext | null): string | null {
+  const contextRecord = (context as unknown as Record<string, unknown> | null);
+  const fromContext = contextRecord && typeof contextRecord.user_avatar === "string"
+    ? String(contextRecord.user_avatar).trim()
+    : "";
+  if (fromContext) return fromContext;
+
+  const anyGlobal = globalThis as Record<string, unknown>;
+  const fromGlobal = typeof anyGlobal.user_avatar === "string"
+    ? String(anyGlobal.user_avatar).trim()
+    : "";
+  if (fromGlobal) return fromGlobal;
+
+  const selectedContainer = document.querySelector("#user_avatar_block .avatar-container.selected") as HTMLElement | null;
+  const selectedContainerAvatar = String(selectedContainer?.getAttribute("data-avatar-id") ?? "").trim();
+  if (selectedContainerAvatar) return selectedContainerAvatar;
+
+  const selectedAvatar = document.querySelector("#user_avatar_block .avatar.selected") as HTMLElement | null;
+  const selectedAvatarId = String(selectedAvatar?.getAttribute("data-avatar-id") ?? "").trim();
+  if (selectedAvatarId) return selectedAvatarId;
+
+  return null;
 }
 
 function sanitizeInvalidChatEntries(context: STContext): number {
@@ -3675,6 +3706,13 @@ async function init(): Promise<void> {
     setSettings: next => { settings = next; },
     saveSettings: (ctx, next) => saveSettings(ctx, next),
     onSettingsUpdated: () => refreshFromStoredData()
+  });
+  initPersonaPanel({
+    getContext: () => getSafeContext(),
+    getSettings: () => settings,
+    setSettings: next => { settings = next; },
+    saveSettings: (ctx, next) => saveSettings(ctx, next),
+    onSettingsUpdated: () => refreshFromStoredData(),
   });
   exposeWindowApi();
   ensureSlashCommandsRegistered();
