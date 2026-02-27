@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.5-dev1] - 2026-02-27
+### Fixed
+- Unified extraction now requires fuller built-in stat coverage before accepting a response, reducing partial/weak unified parses.
+- Unified `text_short` custom stats now ignore obvious placeholder echoes (for example, returning `Clothes` for `clothes`) when a real prior value exists.
+
 ## [2.2.0.5] - 2026-02-27
 ### Added
 - Persona Management integration for BetterSimTracker user mood images, including per-persona mood-source override and per-mood upload/clear controls.

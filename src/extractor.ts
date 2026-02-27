@@ -88,6 +88,22 @@ function hasValuesForRequestedBuiltInAndTextStats(
   return false;
 }
 
+function hasCoverageForAllRequestedBuiltInAndTextStats(
+  parsed: ReturnType<typeof parseUnifiedDeltaResponse>,
+  stats: StatKey[],
+): boolean {
+  if (!stats.length) return true;
+  for (const stat of stats) {
+    if (stat === "affection" && !hasAnyValues(parsed.deltas.affection)) return false;
+    if (stat === "trust" && !hasAnyValues(parsed.deltas.trust)) return false;
+    if (stat === "desire" && !hasAnyValues(parsed.deltas.desire)) return false;
+    if (stat === "connection" && !hasAnyValues(parsed.deltas.connection)) return false;
+    if (stat === "mood" && !hasAnyValues(parsed.mood)) return false;
+    if (stat === "lastThought" && !hasAnyValues(parsed.lastThought)) return false;
+  }
+  return true;
+}
+
 function renderTemplate(template: string, values: Record<string, string>): string {
   let output = template;
   for (const [key, value] of Object.entries(values)) {
@@ -130,6 +146,14 @@ function wait(ms: number): Promise<void> {
 
 function normalizeNameForCompare(value: string): string {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function normalizeTextForComparison(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
 }
 
 export async function extractStatisticsParallel(input: {
@@ -520,6 +544,54 @@ export async function extractStatisticsParallel(input: {
       return settings.promptProtocolSequentialLastThought;
     };
 
+    const shouldTreatCustomTextShortValueAsPlaceholder = (
+      statDef: CustomStatDefinition,
+      characterName: string,
+      value: string,
+    ): boolean => {
+      if (settings.sequentialExtraction) return false;
+      if ((statDef.kind ?? "numeric") !== "text_short") return false;
+      const previousValue = previousCustomNonNumericStatistics?.[statDef.id]?.[characterName];
+      if (typeof previousValue !== "string") return false;
+
+      const nextNorm = normalizeTextForComparison(value);
+      if (!nextNorm) return false;
+      const prevNorm = normalizeTextForComparison(previousValue);
+      if (prevNorm && prevNorm === nextNorm) return false;
+
+      const labelNorm = normalizeTextForComparison(statDef.label || statDef.id);
+      const idNorm = normalizeTextForComparison(statDef.id);
+      const defaultNorm = normalizeTextForComparison(
+        typeof statDef.defaultValue === "string" ? statDef.defaultValue : "",
+      );
+
+      if (nextNorm === labelNorm || nextNorm === idNorm) return true;
+      if (defaultNorm && (defaultNorm === labelNorm || defaultNorm === idNorm) && nextNorm === defaultNorm) {
+        return true;
+      }
+      return false;
+    };
+
+    const sanitizeParsedCustomNonNumeric = (
+      statDef: CustomStatDefinition,
+      requestCharacters: string[],
+      parsedOne: ReturnType<typeof parseCustomValueResponse>,
+    ): ReturnType<typeof parseCustomValueResponse> => {
+      if (settings.sequentialExtraction || (statDef.kind ?? "numeric") !== "text_short") return parsedOne;
+      const next = {
+        confidence: { ...(parsedOne.confidence ?? {}) },
+        value: { ...(parsedOne.value ?? {}) },
+      };
+      for (const name of requestCharacters) {
+        const candidate = next.value[name];
+        if (typeof candidate !== "string") continue;
+        if (shouldTreatCustomTextShortValueAsPlaceholder(statDef, name, candidate)) {
+          delete next.value[name];
+        }
+      }
+      return next;
+    };
+
     const runOneBuiltInOrTextRequest = async (
       statList: StatKey[],
     ): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
@@ -559,8 +631,12 @@ export async function extractStatisticsParallel(input: {
       let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList, settings.maxDeltaPerTurn, promptCharacterAliases);
       const firstHasValues = hasParsedValues(parsedOne);
       firstParseHadValues = firstParseHadValues && firstHasValues;
+      const hasRequestedCoverage = (candidate: ReturnType<typeof parseUnifiedDeltaResponse>): boolean =>
+        settings.sequentialExtraction || statList.length <= 1
+          ? hasValuesForRequestedBuiltInAndTextStats(candidate, statList)
+          : hasCoverageForAllRequestedBuiltInAndTextStats(candidate, statList);
       let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
-      if (!hasValuesForRequestedBuiltInAndTextStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
+      if (!hasRequestedCoverage(parsedOne) && retriesLeft > 0 && settings.strictJsonRepair) {
         const retryPrompt = buildStrictJsonRetryPrompt(prompt);
         retryUsed = true;
         retriesLeft -= 1;
@@ -573,14 +649,14 @@ export async function extractStatisticsParallel(input: {
           settings.maxDeltaPerTurn,
           promptCharacterAliases,
         );
-        if (hasValuesForRequestedBuiltInAndTextStats(retryParsed, statList)) {
+        if (hasRequestedCoverage(retryParsed)) {
           raw = retryResponse.text;
           parsedOne = retryParsed;
         }
       }
       if (
         statList.length === 1 &&
-        !hasValuesForRequestedBuiltInAndTextStats(parsedOne, statList) &&
+        !hasRequestedCoverage(parsedOne) &&
         retriesLeft > 0 &&
         settings.strictJsonRepair
       ) {
@@ -596,12 +672,12 @@ export async function extractStatisticsParallel(input: {
           settings.maxDeltaPerTurn,
           promptCharacterAliases,
         );
-        if (hasValuesForRequestedBuiltInAndTextStats(repairParsed, statList)) {
+        if (hasRequestedCoverage(repairParsed)) {
           raw = repairResponse.text;
           parsedOne = repairParsed;
         }
       }
-      while (!hasValuesForRequestedBuiltInAndTextStats(parsedOne, statList) && retriesLeft > 0 && settings.strictJsonRepair) {
+      while (!hasRequestedCoverage(parsedOne) && retriesLeft > 0 && settings.strictJsonRepair) {
         const strictPrompt = buildStrictJsonRetryPrompt(prompt);
         retryUsed = true;
         retriesLeft -= 1;
@@ -614,7 +690,7 @@ export async function extractStatisticsParallel(input: {
           settings.maxDeltaPerTurn,
           promptCharacterAliases,
         );
-        if (hasValuesForRequestedBuiltInAndTextStats(strictParsed, statList)) {
+        if (hasRequestedCoverage(strictParsed)) {
           raw = strictResponse.text;
           parsedOne = strictParsed;
           break;
@@ -699,6 +775,9 @@ export async function extractStatisticsParallel(input: {
           enumOptions: statDef.enumOptions,
           textMaxLength: statDef.textMaxLength,
         }, promptCharacterAliases);
+      if (kind !== "numeric" && parsedNonNumeric) {
+        parsedNonNumeric = sanitizeParsedCustomNonNumeric(statDef, requestCharacters, parsedNonNumeric);
+      }
       const firstHasValues = kind === "numeric"
         ? hasAnyValues(parsedNumeric?.delta ?? {})
         : hasAnyValues(parsedNonNumeric?.value ?? {});
@@ -734,9 +813,10 @@ export async function extractStatisticsParallel(input: {
             enumOptions: statDef.enumOptions,
             textMaxLength: statDef.textMaxLength,
           }, promptCharacterAliases);
-          if (hasAnyValues(strictParsed.value)) {
+          const sanitizedStrictParsed = sanitizeParsedCustomNonNumeric(statDef, requestCharacters, strictParsed);
+          if (hasAnyValues(sanitizedStrictParsed.value)) {
             raw = strictResponse.text;
-            parsedNonNumeric = strictParsed;
+            parsedNonNumeric = sanitizedStrictParsed;
             break;
           }
         }
