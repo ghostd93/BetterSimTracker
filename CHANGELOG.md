@@ -2,25 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.0.5-dev4] - 2026-02-27
+## [2.2.0.7] - 2026-02-27
 ### Changed
-- Extraction source-priority wording is now toggle-aware and minimal: character-card/lorebook disambiguation guidance is injected only when those context sources are enabled.
-
-## [2.2.0.5-dev3] - 2026-02-27
-### Changed
-- Unified extraction mode is now a true single-request flow for built-in and custom stats together (custom stats are no longer requested in separate follow-up calls in unified mode).
+- Unified extraction now submits built-in and custom stats together in a single request.
+- Disambiguation guidance is now toggle-aware: character-card and lorebook guidance is only injected when those sources are enabled.
 
 ### Fixed
-- Unified parse acceptance now validates coverage across requested built-ins and custom stats before accepting output, reducing partial mixed-stat responses.
-
-## [2.2.0.5-dev2] - 2026-02-27
-### Fixed
-- Custom Stats list row layout now constrains long description text so it wraps inside the content column and no longer collides with right-side action buttons.
-
-## [2.2.0.5-dev1] - 2026-02-27
-### Fixed
-- Unified extraction now requires fuller built-in stat coverage before accepting a response, reducing partial/weak unified parses.
-- Unified `text_short` custom stats now ignore obvious placeholder echoes (for example, returning `Clothes` for `clothes`) when a real prior value exists.
+- Unified parse acceptance now validates requested built-in and custom stat coverage before accepting output, reducing partial responses.
+- Unified `text_short` custom stats now reject obvious placeholder echoes when a concrete prior value exists.
+- Custom Stats list rows now wrap long description text within the content column so action buttons remain unobstructed.
 
 ## [2.2.0.5] - 2026-02-27
 ### Added
@@ -615,3 +605,5 @@ And more...
 ## [1.0.0] - 2026-02-18
 
 - First stable public release.
+
+
