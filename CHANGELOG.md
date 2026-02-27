@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0-dev4] - 2026-02-27
+### Changed
+- Greeting-message bootstrap behavior now seeds tracker values from configured defaults when no user message exists yet, instead of extracting generated deltas from the greeting text.
+
 ## [2.2.0-dev3] - 2026-02-27
 ### Fixed
 - Edit tracker modal now opens in the top layer via `dialog.showModal()` (with high-z fallback), preventing it from rendering underneath mobile SillyTavern UI overlays.

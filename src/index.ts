@@ -792,6 +792,15 @@ function getLastMessageIndexIfUser(context: STContext): number | null {
   return getLastUserMessageIndex(context);
 }
 
+function hasTrackableUserMessageBeforeIndex(context: STContext, index: number): boolean {
+  if (!Number.isFinite(index) || index <= 0) return false;
+  const bounded = Math.min(index, context.chat.length);
+  for (let i = 0; i < bounded; i += 1) {
+    if (isTrackableUserMessage(context.chat[i])) return true;
+  }
+  return false;
+}
+
 function hasTrackedValueForCharacter(
   data: TrackerData,
   characterName: string,
@@ -2606,6 +2615,37 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     if (!previous) {
       previous = buildBaselineData(activeCharacters, runScopedSettings);
       pushTrace("extract.baseline", { runId, forMessageIndex: lastIndex, activeCharacters: activeCharacters.length });
+    }
+
+    const shouldSeedDefaultsForGreetingBootstrap = Boolean(
+      !userExtraction &&
+      reason === "AUTO_BOOTSTRAP_MISSING_TRACKER" &&
+      isTrackableAiMessage(lastMessage) &&
+      !previousEntry?.data &&
+      !hasTrackableUserMessageBeforeIndex(context, lastIndex),
+    );
+    if (shouldSeedDefaultsForGreetingBootstrap) {
+      latestData = {
+        timestamp: Date.now(),
+        activeCharacters,
+        statistics: previous.statistics,
+        customStatistics: previous.customStatistics,
+        customNonNumericStatistics: previous.customNonNumericStatistics,
+      };
+      latestDataMessageIndex = lastIndex;
+      writeTrackerDataToMessage(context, latestData, lastIndex);
+      context.saveChatDebounced?.();
+      await context.saveChat?.();
+      queuePromptSync(context);
+      queueRender();
+      pushTrace("extract.bootstrap.defaults", {
+        runId,
+        reason,
+        savedMessageIndex: lastIndex,
+        activeCharacters: activeCharacters.length,
+      });
+      logDebug(activeSettings, "extraction", `Bootstrap defaults seeded (${reason})`);
+      return;
     }
 
     const userName = context.name1 ?? "User";
