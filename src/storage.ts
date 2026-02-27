@@ -153,8 +153,59 @@ export function getLatestTrackerDataWithIndexBefore(
 }
 
 function getScopeKey(context: STContext): string {
+  const shortHash = (input: string): string => {
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i += 1) {
+      hash ^= input.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  };
+  const readString = (value: unknown): string => String(value ?? "").trim();
+  const readObjectString = (obj: unknown, key: string): string => {
+    if (!obj || typeof obj !== "object") return "";
+    return readString((obj as Record<string, unknown>)[key]);
+  };
+  const resolveChatScopeId = (): string => {
+    const anyContext = context as unknown as Record<string, unknown>;
+    const direct = [
+      readString(anyContext.chatId),
+      readString(anyContext.chat_id),
+      readString(anyContext.chatName),
+      readString(anyContext.chat_name),
+      readString(anyContext.chatFileName),
+      readString(anyContext.chat_file_name),
+    ].find(Boolean);
+    if (direct) return direct;
+
+    const meta = (anyContext.chatMetadata ?? anyContext.chat_metadata) as unknown;
+    const metadataId = [
+      readObjectString(meta, "chatId"),
+      readObjectString(meta, "chat_id"),
+      readObjectString(meta, "main_chat"),
+      readObjectString(meta, "name"),
+      readObjectString(meta, "file_name"),
+    ].find(Boolean);
+    if (metadataId) return metadataId;
+
+    const firstMessage = (Array.isArray(context.chat) && context.chat.length > 0)
+      ? (context.chat[0] as unknown as Record<string, unknown>)
+      : null;
+    if (firstMessage) {
+      const seed = [
+        readString(firstMessage.send_date),
+        readString(firstMessage.created_at),
+        readString(firstMessage.time),
+        readString(firstMessage.name),
+        readString(firstMessage.mes).slice(0, 120),
+      ].filter(Boolean).join("|");
+      if (seed) return `derived:${shortHash(seed)}`;
+    }
+    return "nochat";
+  };
+
   const anyContext = context as unknown as Record<string, unknown>;
-  const chatId = String(anyContext.chatId ?? anyContext.chat_id ?? "").trim() || "nochat";
+  const chatId = resolveChatScopeId();
   const target = context.groupId ? `group:${context.groupId}` : `char:${String(context.characterId ?? "unknown")}`;
   return `${chatId}|${target}`;
 }

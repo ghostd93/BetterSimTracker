@@ -66,6 +66,9 @@ let chatGenerationSawCharacterRender = false;
 let chatGenerationStartLastAiIndex: number | null = null;
 let swipeGenerationActive = false;
 let pendingLateRenderExtraction = false;
+let pendingLateRenderStartLastAiIndex: number | null = null;
+let lateRenderPollTimer: number | null = null;
+let autoBootstrapExtractionKey: string | null = null;
 type CapturedGenerationIntent = {
   type: string;
   options: Record<string, unknown>;
@@ -624,10 +627,98 @@ function pushTrace(event: string, details?: Record<string, unknown>): void {
 }
 
 function getDebugScopeKey(context: STContext): string {
-  const anyContext = context as unknown as Record<string, unknown>;
-  const chatId = String(anyContext.chatId ?? anyContext.chat_id ?? "").trim() || "nochat";
+  const shortHash = (input: string): string => {
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i += 1) {
+      hash ^= input.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  };
+  const readString = (value: unknown): string => String(value ?? "").trim();
+  const readObjectString = (obj: unknown, key: string): string => {
+    if (!obj || typeof obj !== "object") return "";
+    return readString((obj as Record<string, unknown>)[key]);
+  };
+  const resolveChatScopeId = (): string => {
+    const anyContext = context as unknown as Record<string, unknown>;
+    const direct = [
+      readString(anyContext.chatId),
+      readString(anyContext.chat_id),
+      readString(anyContext.chatName),
+      readString(anyContext.chat_name),
+      readString(anyContext.chatFileName),
+      readString(anyContext.chat_file_name),
+    ].find(Boolean);
+    if (direct) return direct;
+
+    const meta = (anyContext.chatMetadata ?? anyContext.chat_metadata) as unknown;
+    const metadataId = [
+      readObjectString(meta, "chatId"),
+      readObjectString(meta, "chat_id"),
+      readObjectString(meta, "main_chat"),
+      readObjectString(meta, "name"),
+      readObjectString(meta, "file_name"),
+    ].find(Boolean);
+    if (metadataId) return metadataId;
+
+    const firstMessage = (Array.isArray(context.chat) && context.chat.length > 0)
+      ? (context.chat[0] as unknown as Record<string, unknown>)
+      : null;
+    if (firstMessage) {
+      const seed = [
+        readString(firstMessage.send_date),
+        readString(firstMessage.created_at),
+        readString(firstMessage.time),
+        readString(firstMessage.name),
+        readString(firstMessage.mes).slice(0, 120),
+      ].filter(Boolean).join("|");
+      if (seed) return `derived:${shortHash(seed)}`;
+    }
+    return "nochat";
+  };
+
+  const chatId = resolveChatScopeId();
   const target = context.groupId ? `group:${context.groupId}` : `char:${String(context.characterId ?? "unknown")}`;
   return `bst-debug:${chatId}|${target}`;
+}
+
+function clearLateRenderPollTimer(): void {
+  if (lateRenderPollTimer !== null) {
+    window.clearTimeout(lateRenderPollTimer);
+    lateRenderPollTimer = null;
+  }
+}
+
+function scheduleLateRenderPoll(context: STContext): void {
+  clearLateRenderPollTimer();
+  lateRenderPollTimer = window.setTimeout(() => {
+    lateRenderPollTimer = null;
+    if (!pendingLateRenderExtraction || chatGenerationInFlight || isExtracting) return;
+    const currentLastAi = getLastAiMessageIndex(context);
+    const startLastAi = pendingLateRenderStartLastAiIndex;
+    const hasNewAiMessage =
+      currentLastAi != null &&
+      (startLastAi == null || currentLastAi > startLastAi);
+    const hasTrackableTarget =
+      hasNewAiMessage &&
+      currentLastAi != null &&
+      currentLastAi >= 0 &&
+      currentLastAi < context.chat.length &&
+      isTrackableAiMessage(context.chat[currentLastAi]) &&
+      !getTrackerDataFromMessage(context.chat[currentLastAi]);
+    pushTrace("extract.late_poll_check", {
+      pending: true,
+      currentLastAi: currentLastAi ?? null,
+      startLastAi: startLastAi ?? null,
+      hasTrackableTarget,
+    });
+    if (hasTrackableTarget && currentLastAi != null) {
+      scheduleExtraction("GENERATION_ENDED_LATE_POLL", currentLastAi, 80);
+      pendingLateRenderExtraction = false;
+      pendingLateRenderStartLastAiIndex = null;
+    }
+  }, 700);
 }
 
 function saveDebugRecord(context: STContext, record: DeltaDebugRecord | null): void {
@@ -1230,6 +1321,8 @@ function finalizeUserTurnGateReplay(triggerReason: string): void {
   chatGenerationStartLastAiIndex = null;
   swipeGenerationActive = false;
   pendingLateRenderExtraction = false;
+  pendingLateRenderStartLastAiIndex = null;
+  clearLateRenderPollTimer();
   pushTrace("user_gate.replay_start", {
     triggerReason,
     type: normalizedReplay.type,
@@ -1313,11 +1406,22 @@ function queueRender(): void {
       if (!liveContext || messageIndex < 0 || messageIndex >= liveContext.chat.length) return false;
       return Boolean(liveContext.chat[messageIndex]?.is_user);
     }, characterName => {
+      if (characterName !== USER_TRACKER_KEY) return characterName;
+      const liveContext = getSafeContext();
+      const userLabel = String(liveContext?.name1 ?? "").trim();
+      return userLabel || "User";
+    }, characterName => {
       const liveContext = getSafeContext();
       if (!liveContext?.characters?.length) return null;
       const normalized = String(characterName ?? "").trim().toLowerCase();
       if (!normalized) return null;
-      const character = liveContext.characters.find(item => String(item?.name ?? "").trim().toLowerCase() === normalized);
+      let character = liveContext.characters.find(item => String(item?.name ?? "").trim().toLowerCase() === normalized);
+      if (!character && normalized === USER_TRACKER_KEY.toLowerCase()) {
+        const userName = String(liveContext.name1 ?? "").trim().toLowerCase();
+        if (userName) {
+          character = liveContext.characters.find(item => String(item?.name ?? "").trim().toLowerCase() === userName);
+        }
+      }
       const avatar = String(character?.avatar ?? "").trim();
       return avatar || null;
     }, characterName => {
@@ -2416,8 +2520,9 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     return;
   }
   const lastMessage = context.chat[lastIndex];
+  const isManualRefreshReason = reason === "manual_refresh" || reason === "manual_refresh_retry";
   const forceRetrack =
-    reason === "manual_refresh" ||
+    isManualRefreshReason ||
     reason === "SWIPE_GENERATION_ENDED" ||
     reason === "USER_MESSAGE_RENDERED" ||
     reason === "USER_MESSAGE_EDITED" ||
@@ -2674,9 +2779,22 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       pushTrace("extract.cancelled", { reason });
       return;
     }
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      isManualRefreshReason &&
+      reason !== "manual_refresh_retry" &&
+      /Generator returned empty output/i.test(message)
+    ) {
+      pushTrace("extract.retry", {
+        reason,
+        retryReason: "empty_generator_output",
+        targetMessageIndex: targetMessageIndex ?? null,
+      });
+      scheduleExtraction("manual_refresh_retry", targetMessageIndex, 180);
+    }
     pushTrace("extract.error", {
       reason,
-      message: error instanceof Error ? error.message : String(error)
+      message
     });
     console.error("[BetterSimTracker] Extraction failed:", error);
   } finally {
@@ -2748,12 +2866,41 @@ function refreshFromStoredData(): void {
     latestDataMessageIndex = null;
   }
 
-  if (lastTrackableIndex != null && latestData && source === "message") {
-    latestDataMessageIndex = lastTrackableIndex;
-  } else if (!latestData) {
+  if (!latestData) {
     latestDataMessageIndex = null;
   } else if (latestData && lastTrackableIndex == null) {
     scheduleRefresh(300);
+  }
+  const latestTrackableHasTracker = Boolean(
+    lastTrackableIndex != null &&
+    lastTrackableIndex >= 0 &&
+    lastTrackableIndex < context.chat.length &&
+    getTrackerDataFromMessage(context.chat[lastTrackableIndex]),
+  );
+  const shouldBootstrapAiExtraction = Boolean(
+    settings.enabled &&
+    !isExtracting &&
+    !chatGenerationInFlight &&
+    !pendingLateRenderExtraction &&
+    lastTrackableIndex != null &&
+    lastTrackableIndex >= 0 &&
+    lastTrackableIndex < context.chat.length &&
+    isTrackableAiMessage(context.chat[lastTrackableIndex]) &&
+    !latestTrackableHasTracker &&
+    (latestDataMessageIndex == null || latestDataMessageIndex < lastTrackableIndex),
+  );
+  if (shouldBootstrapAiExtraction && lastTrackableIndex != null) {
+    const bootstrapKey = `${getDebugScopeKey(context)}|ai:${lastTrackableIndex}`;
+    if (autoBootstrapExtractionKey !== bootstrapKey) {
+      autoBootstrapExtractionKey = bootstrapKey;
+      pushTrace("extract.bootstrap.schedule", {
+        reason: "missing_tracker_on_latest_ai",
+        targetMessageIndex: lastTrackableIndex,
+      });
+      scheduleExtraction("AUTO_BOOTSTRAP_MISSING_TRACKER", lastTrackableIndex, 140);
+    }
+  } else if (latestTrackableHasTracker) {
+    autoBootstrapExtractionKey = null;
   }
   if (trackerUiState.phase === "idle") {
     trackerUiState = { ...trackerUiState, messageIndex: latestDataMessageIndex };
@@ -2815,6 +2962,8 @@ function registerEvents(context: STContext): void {
       chatGenerationIntent = intent;
       chatGenerationSawCharacterRender = false;
       pendingLateRenderExtraction = false;
+      pendingLateRenderStartLastAiIndex = null;
+      clearLateRenderPollTimer();
       chatGenerationStartLastAiIndex = getLastAiMessageIndex(context);
       const baseTargetIndex = getGenerationTargetMessageIndex(context);
       const targetIndex = type === "swipe"
@@ -2859,6 +3008,8 @@ function registerEvents(context: STContext): void {
         chatGenerationStartLastAiIndex = null;
         swipeGenerationActive = false;
         pendingLateRenderExtraction = false;
+        pendingLateRenderStartLastAiIndex = null;
+        clearLateRenderPollTimer();
         pushTrace("event.generation_ended_user_gate", { reason: "tracker_extraction_in_progress" });
         return;
       }
@@ -2867,6 +3018,11 @@ function registerEvents(context: STContext): void {
     }
     if (!chatGenerationInFlight) {
       chatGenerationIntent = null;
+      if (pendingLateRenderExtraction) {
+        pendingLateRenderExtraction = false;
+        pendingLateRenderStartLastAiIndex = null;
+        clearLateRenderPollTimer();
+      }
       pushTrace("event.generation_ended_ignored", { reason: "non_chat_or_quiet_generation" });
       if (trackerUiState.phase === "generating") {
         pushTrace("ui.generating.clear", {
@@ -2882,12 +3038,17 @@ function registerEvents(context: STContext): void {
     if (!chatGenerationSawCharacterRender) {
       chatGenerationInFlight = false;
       chatGenerationIntent = null;
-      chatGenerationStartLastAiIndex = null;
       if (userTurnGateActive) {
         pendingLateRenderExtraction = false;
+        pendingLateRenderStartLastAiIndex = null;
+        clearLateRenderPollTimer();
+        chatGenerationStartLastAiIndex = null;
         pushTrace("event.generation_ended_ignored", { reason: "user_gate_no_ai_render" });
       } else {
         pendingLateRenderExtraction = true;
+        pendingLateRenderStartLastAiIndex = chatGenerationStartLastAiIndex;
+        scheduleLateRenderPoll(context);
+        chatGenerationStartLastAiIndex = null;
         pushTrace("event.generation_ended_ignored", { reason: "no_new_ai_message_rendered" });
       }
       setTrackerUi(context, { phase: "idle", done: 0, total: 0, messageIndex: latestDataMessageIndex, stepLabel: null });
@@ -2898,6 +3059,8 @@ function registerEvents(context: STContext): void {
     chatGenerationIntent = null;
     chatGenerationStartLastAiIndex = null;
     pendingLateRenderExtraction = false;
+    pendingLateRenderStartLastAiIndex = null;
+    clearLateRenderPollTimer();
     pushTrace("event.generation_ended");
     if (swipeGenerationActive) {
       swipeGenerationActive = false;
@@ -2929,6 +3092,9 @@ function registerEvents(context: STContext): void {
     chatGenerationStartLastAiIndex = null;
     swipeGenerationActive = false;
     pendingLateRenderExtraction = false;
+    pendingLateRenderStartLastAiIndex = null;
+    clearLateRenderPollTimer();
+    autoBootstrapExtractionKey = null;
     resetUserTurnGate("chat_changed");
     lastActivatedLorebookEntries = [];
     clearPendingSwipeExtraction();
@@ -2989,6 +3155,8 @@ function registerEvents(context: STContext): void {
           scheduleExtraction("GENERATION_ENDED_LATE_RENDER", currentLastAi, 180);
         }
         pendingLateRenderExtraction = false;
+        pendingLateRenderStartLastAiIndex = null;
+        clearLateRenderPollTimer();
       }
       if (trackerUiState.phase === "generating") {
         const currentLastAi = getLastAiMessageIndex(context);
@@ -3039,6 +3207,9 @@ function registerEvents(context: STContext): void {
       chatGenerationStartLastAiIndex = null;
       swipeGenerationActive = false;
       pendingLateRenderExtraction = false;
+      pendingLateRenderStartLastAiIndex = null;
+      clearLateRenderPollTimer();
+      autoBootstrapExtractionKey = null;
       resetUserTurnGate("chat_loaded");
       lastActivatedLorebookEntries = [];
       clearPendingSwipeExtraction();
@@ -3076,6 +3247,8 @@ function registerEvents(context: STContext): void {
       chatGenerationStartLastAiIndex = null;
       swipeGenerationActive = false;
       pendingLateRenderExtraction = false;
+      pendingLateRenderStartLastAiIndex = null;
+      clearLateRenderPollTimer();
       resetUserTurnGate("message_deleted");
       clearPendingSwipeExtraction();
       pushTrace("event.message_deleted");
@@ -3091,6 +3264,9 @@ function registerEvents(context: STContext): void {
       chatGenerationStartLastAiIndex = null;
       swipeGenerationActive = false;
       pendingLateRenderExtraction = false;
+      pendingLateRenderStartLastAiIndex = null;
+      clearLateRenderPollTimer();
+      autoBootstrapExtractionKey = null;
       resetUserTurnGate("chat_deleted");
       lastActivatedLorebookEntries = [];
       clearPendingSwipeExtraction();
@@ -3157,6 +3333,8 @@ function registerEvents(context: STContext): void {
         chatGenerationStartLastAiIndex = null;
         swipeGenerationActive = false;
         pendingLateRenderExtraction = false;
+        pendingLateRenderStartLastAiIndex = null;
+        clearLateRenderPollTimer();
         if (trackerUiState.phase === "generating") {
           pushTrace("ui.generating.clear", {
             reason: "swipe_event_force_idle",

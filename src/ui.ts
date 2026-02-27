@@ -3220,6 +3220,17 @@ function ensureStyles(): void {
     font-size: 11px;
     padding: 5px 10px;
   }
+  .bst-edit-backdrop {
+    place-items: start center;
+    overflow-y: auto;
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
+  }
+  .bst-edit-modal {
+    width: min(100%, calc(100vw - 12px));
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px);
+    margin: 0;
+    border-radius: 12px;
+  }
   .bst-settings {
     left: 0;
     top: 0;
@@ -3431,6 +3442,7 @@ export function renderTracker(
   latestAiIndex: number | null,
   summaryBusyMessageIndices: Set<number> | undefined,
   isUserMessageIndex?: (messageIndex: number) => boolean,
+  resolveDisplayName?: (characterName: string) => string,
   resolveCharacterAvatar?: (characterName: string) => string | null,
   onOpenGraph?: (characterName: string) => void,
   onRetrackMessage?: (messageIndex: number) => void,
@@ -3578,6 +3590,7 @@ export function renderTracker(
           openEditStatsModal({
             messageIndex: idx,
             character,
+            displayName: resolveDisplayName?.(character),
             data,
             settings,
             onSave: onEditStats,
@@ -3810,8 +3823,10 @@ export function renderTracker(
     for (const name of targets) {
       const isActive = activeSet.has(normalizeName(name));
       if (!isActive && !settings.showInactive) continue;
-      const displayName = name === USER_TRACKER_KEY ? "User" : name;
+      const displayName = resolveDisplayName?.(name)
+        ?? (name === USER_TRACKER_KEY ? "User" : name);
       const isUserCard = name === USER_TRACKER_KEY;
+      const moodLookupName = isUserCard ? displayName : name;
       const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
       const enabledNumeric = getNumericStatsForCharacter(data, name, settings);
       const enabledNonNumeric = cardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
@@ -3822,11 +3837,11 @@ export function renderTracker(
         : moodText;
       const moodTrend = prevMood === moodText ? "stable" : "shifted";
       const canEdit = latestTrackedMessageIndex != null && entry.messageIndex === latestTrackedMessageIndex;
-      const moodSource = moodText ? getResolvedMoodSource(settings, name, characterAvatar) : "bst_images";
+      const moodSource = moodText ? getResolvedMoodSource(settings, moodLookupName, characterAvatar) : "bst_images";
       const stExpressionImageOptions = moodSource === "st_expressions"
-        ? getResolvedStExpressionImageOptions(settings, name, characterAvatar)
+        ? getResolvedStExpressionImageOptions(settings, moodLookupName, characterAvatar)
         : null;
-      const moodImage = moodText ? getMoodImageUrl(settings, name, moodText, characterAvatar, onRequestRerender) : null;
+      const moodImage = moodText ? getMoodImageUrl(settings, moodLookupName, moodText, characterAvatar, onRequestRerender) : null;
       const lastThoughtText = settings.showLastThought
         ? getEffectiveLastThoughtText(name)
         : "";
@@ -3849,7 +3864,7 @@ export function renderTracker(
       }).filter(Boolean).join("");
       const showCollapsedMood = moodText !== "";
       const cardColor = (isUserCard ? normalizeHexColor(settings.userCardColor) : null)
-        ?? getResolvedCardColor(settings, name, characterAvatar)
+        ?? getResolvedCardColor(settings, moodLookupName, characterAvatar)
         ?? palette[name]
         ?? getStableAutoCardColor(name);
       const cardKey = `${entry.messageIndex}:${normalizeName(name)}`;
@@ -3908,7 +3923,7 @@ export function renderTracker(
         <div class="bst-mood${moodImage ? " bst-mood-has-image" : ""}" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap ${moodImage ? "bst-mood-wrap--image" : "bst-mood-wrap--emoji"}">
             ${moodImage
-              ? `<button type="button" class="bst-mood-image-trigger" data-bst-action="open-mood-preview" data-bst-image-src="${escapeHtml(moodImage)}" data-bst-image-alt="${escapeHtml(moodText)}" data-bst-image-character="${escapeHtml(name)}" data-bst-image-mood="${escapeHtml(moodText)}" aria-label="Open mood image preview for ${escapeHtml(name)} (${escapeHtml(moodText)})"><span class="bst-mood-image-frame${moodSource === "st_expressions" ? " bst-mood-image-frame--st-expression" : ""}"><img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}"${stExpressionImageStyle}></span></button>`
+              ? `<button type="button" class="bst-mood-image-trigger" data-bst-action="open-mood-preview" data-bst-image-src="${escapeHtml(moodImage)}" data-bst-image-alt="${escapeHtml(moodText)}" data-bst-image-character="${escapeHtml(displayName)}" data-bst-image-mood="${escapeHtml(moodText)}" aria-label="Open mood image preview for ${escapeHtml(displayName)} (${escapeHtml(moodText)})"><span class="bst-mood-image-frame${moodSource === "st_expressions" ? " bst-mood-image-frame--st-expression" : ""}"><img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}"${stExpressionImageStyle}></span></button>`
               : `<span class="bst-mood-chip"><span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span></span>`}
             ${moodImage && lastThoughtText
               ? renderThoughtMarkup(lastThoughtText, thoughtUiKey, "bubble")
@@ -4176,13 +4191,17 @@ function closeEditStatsModal(): void {
 function openEditStatsModal(input: {
   messageIndex: number;
   character: string;
+  displayName?: string;
   data: TrackerData;
   settings: BetterSimTrackerSettings;
   onSave?: (payload: EditStatsPayload) => void;
 }): void {
   ensureStyles();
   closeEditStatsModal();
-  const characterLabel = input.character === USER_TRACKER_KEY ? "User" : input.character;
+  const characterLabel = String(
+    input.displayName
+      ?? (input.character === USER_TRACKER_KEY ? "User" : input.character),
+  ).trim() || (input.character === USER_TRACKER_KEY ? "User" : input.character);
 
   const isUserCharacter = input.character === USER_TRACKER_KEY;
   const customScopeById = new Map(

@@ -27,6 +27,7 @@ Ordering/visibility:
 - active characters first
 - inactive rendering controlled by settings
 - historical snapshot remains attached to original message index
+- user card display name resolves from the current user/persona label (not the internal `__bst_user__` key)
 
 ## Loading State
 
@@ -115,3 +116,4 @@ Provides per-character defaults and mood asset controls.
 - responsive layout behavior for smaller screens
 - compact controls for high-density tracker cards
 - explicit help lines/tooltips for advanced options
+- mobile portrait edit modal uses safe-area aware top anchoring and viewport height limits to prevent clipped/off-screen form controls

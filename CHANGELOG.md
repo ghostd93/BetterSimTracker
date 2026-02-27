@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0-dev1] - 2026-02-27
+### Fixed
+- Added a late-render extraction poll fallback after `GENERATION_ENDED` so mobile/event-race cases that miss `CHARACTER_MESSAGE_RENDERED` no longer silently skip auto-tracking.
+- Added automatic bootstrap extraction for the latest AI message when a chat loads without tracker payload on that message, fixing missing first-card stat generation on some new chats.
+- Improved scope key derivation when `chatId` is unavailable (derived chat fingerprint fallback) to reduce cross-chat carry-over in local scoped tracker state.
+- Improved manual refresh resilience by auto-retrying once when generation returns empty output.
+- Improved mobile portrait edit modal layout (`safe-area` aware top alignment + viewport-constrained height) so the edit form no longer renders too high/off-screen.
+- User card display name now resolves from the current user/persona label instead of hardcoded `User`.
+- User card ST-expression lookup now attempts resolution using the current user/persona label and avatar fallback when available.
+
 ## [2.2.0] - 2026-02-26
 ### Added
 - User-side tracker extraction and display support, including user-focused custom stat tracking and injection scoping.

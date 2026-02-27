@@ -129,3 +129,5 @@ Extractor returns:
 - Empty custom stat baselines are seeded to avoid phantom delta spikes.
 - Prompt history snapshots are filtered to entries with tracked values for currently active characters, so user-only turns do not inject default-seeded character rows into extraction prompts.
 - Parsed maps are initialized defensively to avoid undefined access during merge/apply.
+- If generation-end/render event ordering is delayed, a late-render poll fallback checks for the newly added AI message and schedules extraction to avoid mobile race misses.
+- On chat load, if the latest AI message has no tracker payload yet, a one-shot bootstrap extraction is scheduled for that message.
