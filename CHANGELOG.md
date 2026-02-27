@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.5-dev3] - 2026-02-27
+### Changed
+- Unified extraction mode is now a true single-request flow for built-in and custom stats together (custom stats are no longer requested in separate follow-up calls in unified mode).
+
+### Fixed
+- Unified parse acceptance now validates coverage across requested built-ins and custom stats before accepting output, reducing partial mixed-stat responses.
+
 ## [2.2.0.5-dev2] - 2026-02-27
 ### Fixed
 - Custom Stats list row layout now constrains long description text so it wraps inside the content column and no longer collides with right-side action buttons.

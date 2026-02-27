@@ -1,4 +1,4 @@
-import type { CustomStatKind, CustomNonNumericStatistics, StatKey } from "./types";
+import type { CustomStatDefinition, CustomStatKind, CustomNonNumericStatistics, CustomStatistics, StatKey } from "./types";
 import type { Statistics } from "./types";
 import type { TrackerData } from "./types";
 
@@ -402,6 +402,197 @@ export function buildUnifiedPrompt(
     textStats: textStats.length ? textStats.join(", ") : "none",
     maxDelta: String(safeMaxDelta),
     moodOptions: moodOptions.join(", "),
+  });
+}
+
+export function buildUnifiedAllStatsPrompt(input: {
+  stats: StatKey[];
+  customStats: CustomStatDefinition[];
+  userName: string;
+  characters: string[];
+  contextText: string;
+  current: Statistics | null;
+  currentCustom?: CustomStatistics | null;
+  currentCustomNonNumeric?: CustomNonNumericStatistics | null;
+  history: TrackerData[];
+  maxDeltaPerTurn?: number;
+  template?: string;
+  preferredCharacterName?: string;
+}): string {
+  const envelope = commonEnvelope(input.userName, input.characters, input.contextText);
+  const char = resolvePrimaryCharacter(input.characters, input.preferredCharacterName);
+  const safeMaxDelta = Math.max(1, Math.round(Number(input.maxDeltaPerTurn) || 15));
+  const instruction = input.template?.trim() ? input.template : DEFAULT_UNIFIED_PROMPT_INSTRUCTION;
+  const builtInNumeric = input.stats.filter(stat =>
+    stat === "affection" || stat === "trust" || stat === "desire" || stat === "connection",
+  );
+  const builtInText = input.stats.filter(stat => stat === "mood" || stat === "lastThought");
+  const customNumeric = input.customStats.filter(stat => (stat.kind ?? "numeric") === "numeric");
+  const customNonNumeric = input.customStats.filter(stat => (stat.kind ?? "numeric") !== "numeric");
+  const numericDeltaKeys = [...builtInNumeric, ...customNumeric.map(stat => stat.id)];
+
+  const currentLines = input.characters.map(name => {
+    const chunks: string[] = [];
+    const affection = Number(input.current?.affection?.[name] ?? 50);
+    const trust = Number(input.current?.trust?.[name] ?? 50);
+    const desire = Number(input.current?.desire?.[name] ?? 50);
+    const connection = Number(input.current?.connection?.[name] ?? 50);
+    const mood = String(input.current?.mood?.[name] ?? "Neutral");
+    chunks.push(`affection=${Math.max(0, Math.min(100, Math.round(affection)))}`);
+    chunks.push(`trust=${Math.max(0, Math.min(100, Math.round(trust)))}`);
+    chunks.push(`desire=${Math.max(0, Math.min(100, Math.round(desire)))}`);
+    chunks.push(`connection=${Math.max(0, Math.min(100, Math.round(connection)))}`);
+    chunks.push(`mood=${mood}`);
+    for (const stat of customNumeric) {
+      const customRaw = Number(input.currentCustom?.[stat.id]?.[name] ?? stat.defaultValue);
+      const customValue = Math.max(0, Math.min(100, Math.round(customRaw)));
+      chunks.push(`${stat.id}=${customValue}`);
+    }
+    for (const stat of customNonNumeric) {
+      const kind = stat.kind ?? "text_short";
+      const fallback = kind === "boolean"
+        ? (typeof stat.defaultValue === "boolean" ? stat.defaultValue : false)
+        : String(stat.defaultValue ?? "");
+      const customRaw = input.currentCustomNonNumeric?.[stat.id]?.[name];
+      const customValue = formatCustomNonNumericValue(kind, customRaw, fallback);
+      const literal = typeof customValue === "boolean" ? String(customValue) : `"${customValue}"`;
+      chunks.push(`${stat.id}=${literal}`);
+    }
+    return `- ${name}: ${chunks.join(", ")}`;
+  }).join("\n");
+
+  const historyLines = input.history.slice(0, 3).map((entry, idx) => {
+    const header = `Snapshot ${idx + 1} (newest-${idx}):`;
+    const rows = input.characters.map(name => {
+      const chunks: string[] = [];
+      const affection = Number(entry.statistics.affection?.[name] ?? 50);
+      const trust = Number(entry.statistics.trust?.[name] ?? 50);
+      const desire = Number(entry.statistics.desire?.[name] ?? 50);
+      const connection = Number(entry.statistics.connection?.[name] ?? 50);
+      const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
+      chunks.push(`affection=${Math.round(affection)}`);
+      chunks.push(`trust=${Math.round(trust)}`);
+      chunks.push(`desire=${Math.round(desire)}`);
+      chunks.push(`connection=${Math.round(connection)}`);
+      chunks.push(`mood=${mood}`);
+      for (const stat of customNumeric) {
+        const customRaw = Number(entry.customStatistics?.[stat.id]?.[name] ?? stat.defaultValue);
+        const customValue = Math.max(0, Math.min(100, Math.round(customRaw)));
+        chunks.push(`${stat.id}=${customValue}`);
+      }
+      for (const stat of customNonNumeric) {
+        const kind = stat.kind ?? "text_short";
+        const fallback = kind === "boolean"
+          ? (typeof stat.defaultValue === "boolean" ? stat.defaultValue : false)
+          : String(stat.defaultValue ?? "");
+        const customRaw = entry.customNonNumericStatistics?.[stat.id]?.[name];
+        const customValue = formatCustomNonNumericValue(kind, customRaw, fallback);
+        const literal = typeof customValue === "boolean" ? String(customValue) : `"${customValue}"`;
+        chunks.push(`${stat.id}=${literal}`);
+      }
+      return `  - ${name}: ${chunks.join(", ")}`;
+    }).join("\n");
+    return `${header}\n${rows}`;
+  }).join("\n");
+
+  const deltaSample = numericDeltaKeys.length
+    ? numericDeltaKeys.map(key => `        "${key}": 0`).join(",\n")
+    : "        ";
+  const valueSample = customNonNumeric.length
+    ? customNonNumeric.map(stat => {
+      const kind = stat.kind ?? "text_short";
+      if (kind === "boolean") return `        "${stat.id}": false`;
+      return `        "${stat.id}": ""`;
+    }).join(",\n")
+    : "";
+
+  const nonNumericRules = customNonNumeric.map(stat => {
+    const kind = stat.kind ?? "text_short";
+    if (kind === "enum_single") {
+      const options = Array.isArray(stat.enumOptions)
+        ? stat.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean)
+        : [];
+      return `- ${stat.id} (enum_single): one of [${options.join(", ") || "none"}].`;
+    }
+    if (kind === "boolean") {
+      const trueLabel = String(stat.booleanTrueLabel ?? "enabled").trim() || "enabled";
+      const falseLabel = String(stat.booleanFalseLabel ?? "disabled").trim() || "disabled";
+      return `- ${stat.id} (boolean): strict true/false (true=${trueLabel}, false=${falseLabel}).`;
+    }
+    const textMaxLen = Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120)));
+    return `- ${stat.id} (text_short): one concise single-line text, max ${textMaxLen} chars.`;
+  }).join("\n");
+
+  const protocol = [
+    `Numeric delta stats to update (${numericDeltaKeys.length ? numericDeltaKeys.join(", ") : "none"}):`,
+    `- Return deltas only, each in range -${safeMaxDelta}..${safeMaxDelta}.`,
+    "",
+    `Text stats to update (${builtInText.length ? builtInText.join(", ") : "none"}):`,
+    `- mood must be one of: ${moodOptions.join(", ")}.`,
+    "- lastThought must be one short sentence.",
+    "",
+    customNonNumeric.length
+      ? [
+        `Custom non-numeric stats to update (${customNonNumeric.map(stat => stat.id).join(", ")}):`,
+        "- Return them under `value` object per character using exact stat ids.",
+        nonNumericRules,
+        "",
+      ].join("\n")
+      : "",
+    "Return STRICT JSON only:",
+    "{",
+    "  \"characters\": [",
+    "    {",
+    "      \"name\": \"Character Name\",",
+    "      \"confidence\": 0.0,",
+    "      \"delta\": {",
+    deltaSample,
+    "      }",
+    customNonNumeric.length ? "      ,\"value\": {\n" + valueSample + "\n      }" : "",
+    builtInText.includes("mood") ? "      ,\"mood\": \"Neutral\"" : "",
+    builtInText.includes("lastThought") ? "      ,\"lastThought\": \"\"" : "",
+    "    }",
+    "  ]",
+    "}",
+    "",
+    "Rules:",
+    "- confidence is 0..1 (0 low confidence, 1 high confidence) and reflects your certainty in the extracted update for that character.",
+    `- include one entry for each character name exactly: ${input.characters.join(", ")}.`,
+    "- omit fields for stats that are not requested.",
+    "- output JSON only, no commentary.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const assembled = [
+    MAIN_PROMPT,
+    "",
+    "{{envelope}}",
+    "Current tracker state:",
+    "{{currentLines}}",
+    "",
+    "Recent tracker snapshots:",
+    "{{historyLines}}",
+    "",
+    "Task:",
+    "{{instruction}}",
+    "- Update built-in and custom stats in this single response.",
+    "- For custom numeric stats, use `delta.<statId>`.",
+    "- For custom non-numeric stats, use `value.<statId>`.",
+    "",
+    protocol,
+  ].join("\n");
+
+  return renderTemplate(assembled, {
+    envelope,
+    user: input.userName,
+    userName: input.userName,
+    char,
+    characters: input.characters.join(", "),
+    contextText: input.contextText,
+    currentLines,
+    historyLines: historyLines || "- none",
+    instruction,
   });
 }
 

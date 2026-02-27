@@ -11,6 +11,7 @@ import {
   buildSequentialCustomNonNumericPrompt,
   buildSequentialCustomNumericPrompt,
   buildSequentialPrompt,
+  buildUnifiedAllStatsPrompt,
   buildUnifiedPrompt,
   moodOptions
 } from "./prompts";
@@ -267,7 +268,7 @@ export async function extractStatisticsParallel(input: {
 
   const progressTotal = settings.sequentialExtraction
     ? Math.max(1, (builtInAndTextStats.length + customStats.length) * 3)
-    : Math.max(1, (builtInAndTextStats.length ? 3 : 0) + customStats.length * 3);
+    : Math.max(1, (builtInAndTextStats.length || customStats.length) ? 3 : 1);
   onProgress?.(0, progressTotal, "Preparing context");
 
   try {
@@ -826,49 +827,159 @@ export async function extractStatisticsParallel(input: {
     };
 
     if (!settings.sequentialExtraction) {
-      if (builtInAndTextStats.length) {
-        const one = await runOneBuiltInOrTextRequest(builtInAndTextStats);
-        checkCancelled();
-        rawBlocks.push({ label: "builtins", raw: one.raw });
-        promptBlocks.push({ label: "builtins", prompt: one.prompt });
-        for (const stat of builtInAndTextStats) {
-          applyParsedForBuiltInOrTextStat(stat, one.parsedOne);
+      type UnifiedCustomPlan = {
+        statDef: CustomStatDefinition;
+        kind: "numeric" | "non_numeric";
+        existing: string[];
+      };
+      const customPlans: UnifiedCustomPlan[] = customStats.map(statDef => {
+        const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
+        const split = splitCustomCharactersByBaseline(statDef.id, kind);
+        if (kind === "numeric") {
+          seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+        } else {
+          seedCustomNonNumericStatDefaultsForNames(statDef, split.firstRunSeedOnly);
         }
-      }
+        return {
+          statDef,
+          kind,
+          existing: split.existing,
+        };
+      });
 
-      const customQueue = [...customStats];
-      const customWorkers = Math.max(1, Math.min(settings.maxConcurrentCalls || 1, 8, customQueue.length || 1));
-      const runCustomWorker = async (): Promise<void> => {
-        while (customQueue.length) {
-          checkCancelled();
-          const statDef = customQueue.shift();
-          if (!statDef) return;
-          const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
-          const split = splitCustomCharactersByBaseline(statDef.id, kind);
-          if (kind === "numeric") {
-            seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
-          } else {
-            seedCustomNonNumericStatDefaultsForNames(statDef, split.firstRunSeedOnly);
-          }
-          if (!split.existing.length) {
-            const label = statDef.label || statDef.id;
-            tickProgress(`Seeding ${label}`);
-            tickProgress(`Seeding ${label}`);
-            tickProgress(`Applying ${label}`);
+      const parseUnifiedAllFromRaw = (
+        raw: string,
+      ): {
+        builtIn: ReturnType<typeof parseUnifiedDeltaResponse>;
+        customNumeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>>;
+        customNonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>>;
+      } => {
+        const builtIn = parseUnifiedDeltaResponse(
+          raw,
+          activeCharacters,
+          builtInAndTextStats,
+          settings.maxDeltaPerTurn,
+          promptCharacterAliases,
+        );
+        const customNumeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>> = {};
+        const customNonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>> = {};
+        for (const plan of customPlans) {
+          if (!plan.existing.length) continue;
+          if (plan.kind === "numeric") {
+            customNumeric[plan.statDef.id] = parseCustomDeltaResponse(
+              raw,
+              plan.existing,
+              plan.statDef.id,
+              plan.statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
+              promptCharacterAliases,
+            );
             continue;
           }
-          const one = await runOneCustomRequest(statDef, split.existing);
-          checkCancelled();
-          rawBlocks.push({ label: `custom:${statDef.id}`, raw: one.raw });
-          promptBlocks.push({ label: `custom:${statDef.id}`, prompt: one.prompt });
-          if ((statDef.kind ?? "numeric") === "numeric") {
-            if (one.parsedNumeric) applyParsedForCustomStat(statDef, one.parsedNumeric, split.existing);
+          const parsedValue = parseCustomValueResponse(
+            raw,
+            plan.existing,
+            plan.statDef.id,
+            plan.statDef.kind === "enum_single" || plan.statDef.kind === "boolean" || plan.statDef.kind === "text_short"
+              ? plan.statDef.kind
+              : "text_short",
+            {
+              enumOptions: plan.statDef.enumOptions,
+              textMaxLength: plan.statDef.textMaxLength,
+            },
+            promptCharacterAliases,
+          );
+          customNonNumeric[plan.statDef.id] = sanitizeParsedCustomNonNumeric(plan.statDef, plan.existing, parsedValue);
+        }
+        return { builtIn, customNumeric, customNonNumeric };
+      };
+
+      const hasUnifiedAllCoverage = (
+        parsedAll: {
+          builtIn: ReturnType<typeof parseUnifiedDeltaResponse>;
+          customNumeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>>;
+          customNonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>>;
+        },
+      ): boolean => {
+        const builtInCovered = builtInAndTextStats.length <= 1
+          ? hasValuesForRequestedBuiltInAndTextStats(parsedAll.builtIn, builtInAndTextStats)
+          : hasCoverageForAllRequestedBuiltInAndTextStats(parsedAll.builtIn, builtInAndTextStats);
+        if (!builtInCovered && builtInAndTextStats.length > 0) return false;
+        for (const plan of customPlans) {
+          if (!plan.existing.length) continue;
+          if (plan.kind === "numeric") {
+            if (!hasAnyValues(parsedAll.customNumeric[plan.statDef.id]?.delta ?? {})) return false;
           } else {
-            if (one.parsedNonNumeric) applyParsedForCustomNonNumericStat(statDef, one.parsedNonNumeric, split.existing);
+            if (!hasAnyValues(parsedAll.customNonNumeric[plan.statDef.id]?.value ?? {})) return false;
           }
         }
+        return true;
       };
-      await Promise.all(Array.from({ length: customWorkers }, () => runCustomWorker()));
+
+      const shouldRequestUnifiedAll = builtInAndTextStats.length > 0 || customPlans.some(plan => plan.existing.length > 0);
+      if (!shouldRequestUnifiedAll) {
+        tickProgress("Seeding defaults");
+        tickProgress("Seeding defaults");
+        tickProgress("Applying defaults");
+      } else {
+        const allRequestedStats = [
+          ...builtInAndTextStats,
+          ...customStats.map(stat => stat.id),
+        ];
+        const builtPrompt = buildUnifiedAllStatsPrompt({
+          stats: builtInAndTextStats,
+          customStats,
+          userName,
+          characters: activeCharacters,
+          contextText,
+          current: previousStatistics,
+          currentCustom: previousCustomStatistics ?? {},
+          currentCustomNonNumeric: previousCustomNonNumericStatistics ?? {},
+          history,
+          maxDeltaPerTurn: settings.maxDeltaPerTurn,
+          template: settings.promptTemplateUnified,
+          preferredCharacterName,
+        });
+        const prompt = applyPromptCharacterAliases(builtPrompt);
+        tickProgress("Requesting stats");
+        let response = await callGenerate(prompt, allRequestedStats, "initial");
+        checkCancelled();
+        let raw = response.text;
+        tickProgress("Parsing stats");
+        let parsedAll = parseUnifiedAllFromRaw(raw);
+        const hasAnyCustomValues = Object.values(parsedAll.customNumeric).some(item => hasAnyValues(item.delta))
+          || Object.values(parsedAll.customNonNumeric).some(item => hasAnyValues(item.value));
+        firstParseHadValues = firstParseHadValues && (hasParsedValues(parsedAll.builtIn) || hasAnyCustomValues);
+        let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
+        while (!hasUnifiedAllCoverage(parsedAll) && retriesLeft > 0 && settings.strictJsonRepair) {
+          retryUsed = true;
+          retriesLeft -= 1;
+          const strictPrompt = buildStrictJsonRetryPrompt(prompt);
+          const strictResponse = await callGenerate(strictPrompt, allRequestedStats, "strict_loop");
+          checkCancelled();
+          const strictParsedAll = parseUnifiedAllFromRaw(strictResponse.text);
+          if (hasUnifiedAllCoverage(strictParsedAll)) {
+            raw = strictResponse.text;
+            parsedAll = strictParsedAll;
+            break;
+          }
+        }
+        tickProgress("Applying stats");
+        rawBlocks.push({ label: "unified", raw });
+        promptBlocks.push({ label: "unified", prompt });
+        for (const stat of builtInAndTextStats) {
+          applyParsedForBuiltInOrTextStat(stat, parsedAll.builtIn);
+        }
+        for (const plan of customPlans) {
+          if (!plan.existing.length) continue;
+          if (plan.kind === "numeric") {
+            const parsedOne = parsedAll.customNumeric[plan.statDef.id];
+            if (parsedOne) applyParsedForCustomStat(plan.statDef, parsedOne, plan.existing);
+          } else {
+            const parsedOne = parsedAll.customNonNumeric[plan.statDef.id];
+            if (parsedOne) applyParsedForCustomNonNumericStat(plan.statDef, parsedOne, plan.existing);
+          }
+        }
+      }
     } else {
       const builtInQueue = [...builtInAndTextStats];
       const builtInWorkers = Math.max(1, Math.min(settings.maxConcurrentCalls || 1, 8, builtInQueue.length || 1));
