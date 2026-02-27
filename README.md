@@ -130,26 +130,27 @@ flowchart TD
   B -- No --> Z[Skip tracker update]
   B -- Yes --> C[Resolve active characters]
   C --> D[Load previous tracker state]
-  D --> E[Resolve enabled built in text and custom stats]
-  E --> F{Built in text mode}
-  F -- Unified mode --> G[Single built in text request]
-  F -- Sequential mode --> H[Per stat built in text requests]
-  G --> I[Parse and apply built in numeric deltas mood lastThought]
-  H --> I
-  I --> J[Custom stats phase always per stat]
-  J --> K{Per custom stat and character baseline}
-  K --> L{Prior baseline exists?}
-  L -- No --> M[Seed stat default only no model request]
-  L -- Yes --> N[Request and parse custom stat]
-  N --> O{Custom stat kind}
-  O -- Numeric --> P[Apply numeric delta scaling + clamp]
-  O -- Non numeric --> Q[Validate enum boolean text_short and apply]
-  M --> R[Merge missing fields from previous/defaults]
-  P --> R
-  Q --> R
-  R --> S[Save snapshot to message/chat metadata/local storage]
-  S --> T[Render tracker cards + graph]
-  T --> U[Sync prompt injection]
+  D --> E[Resolve enabled built-in and custom stats]
+  E --> F[Build context from recent messages]
+  F --> G{Cards or lorebook enabled?}
+  G -- Yes --> H[Append card/lorebook context for disambiguation]
+  G -- No --> I[Use recent-message context only]
+  H --> J[Split custom stats by baseline availability]
+  I --> J
+  J --> K{Extraction mode}
+  K -- Unified --> L[Single request for built-ins and eligible custom stats]
+  K -- Sequential --> M[Per-stat requests for built-ins and eligible custom stats]
+  L --> N[Parse response blocks for built-ins and custom stats]
+  M --> O[Parse per-stat responses]
+  N --> P[Apply built-in deltas, mood, and lastThought]
+  O --> P
+  P --> Q[Apply custom numeric and non-numeric values]
+  J --> R[Seed defaults for custom stats with no baseline]
+  Q --> S[Merge missing fields from previous/defaults]
+  R --> S
+  S --> T[Save snapshot to message/chat metadata/local storage]
+  T --> U[Render tracker cards + graph]
+  U --> V[Sync prompt injection]
 ```
 
 ### 2) Stat Calculation Flow
@@ -201,7 +202,7 @@ Numeric scaling formula used by runtime:
 ## Settings Overview
 
 - `Sequential Extraction`: one request per stat (more robust, slower)
-- `Unified Extraction`: one combined request for built-in/text stats (custom stats still per-stat)
+- `Unified Extraction`: one combined request for built-ins and eligible custom stats
 - `Max Concurrent Requests`: parallelism in sequential mode
 - `Strict JSON Repair`: retries if model output is invalid
 - `Auto Detect Active`: scene-based active character detection
@@ -233,7 +234,7 @@ Numeric scaling formula used by runtime:
 ### Extraction
 
 - `Connection Profile`: use a specific SillyTavern connection profile for tracker extraction. Empty = active profile.
-- `Sequential Extraction (per stat)`: one prompt per stat (`affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`). Slower, usually more robust parsing.
+- `Sequential Extraction (per stat)`: one prompt per requested stat (`affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`, plus eligible custom stats). Slower, usually more robust parsing.
 - `Max Concurrent Requests`: only used in sequential mode. Controls parallel request count.
 - `Strict JSON Repair`: retry/repair logic when model output is malformed or missing required fields.
 - `Max Retries Per Stat`: max additional retry attempts per stage after the initial generation.
@@ -305,18 +306,20 @@ Behavior notes:
    - not generated-media/system image attachment message.
 4. Existing tracker data is not overwritten unless trigger is forced (`manual_refresh`, edit/swipe events).
 5. Active characters are resolved first (`Auto Detect Active` + `Activity Lookback`).
-6. Built-in/text stats are requested in fixed order:
+6. Custom baseline eligibility is resolved per stat and character:
+   - no prior baseline -> seed default only (no model request),
+   - prior baseline exists -> include in model extraction.
+7. Built-in/text stats are requested in fixed order:
    - `affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`
-   - Custom stats are requested per custom stat definition (after built-ins/text in the run).
-7. Mode behavior:
-   - Unified mode: one prompt for enabled built-in/text stats; custom stats still run per-stat.
-   - Sequential mode: one prompt per built-in/text stat; custom stats also run per-stat; with concurrency > 1, stages run in parallel (finish order not guaranteed).
-8. Retry chain per stage (when `Strict JSON Repair` is enabled):
+8. Mode behavior:
+   - Unified mode: one prompt for enabled built-ins and all eligible custom stats.
+   - Sequential mode: one prompt per requested stat; with concurrency > 1, stages run in parallel (finish order not guaranteed).
+9. Retry chain per stage (when `Strict JSON Repair` is enabled):
    - initial generation,
    - strict JSON retry,
    - stat-specific repair retry (`mood` / `lastThought` only),
    - additional strict retries until retry budget is exhausted.
-9. Application rules:
+10. Application rules:
    - Numeric stats use deltas from previous values, clamped by `Max Delta Per Turn`, then confidence-scaled by `Confidence Dampening`.
    - `mood` uses `Mood Stickiness` (low confidence can keep previous mood).
    - Missing parsed fields keep previous values via merge fallback.
