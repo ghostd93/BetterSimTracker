@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0-dev3] - 2026-02-27
+### Fixed
+- Edit tracker modal now opens in the top layer via `dialog.showModal()` (with high-z fallback), preventing it from rendering underneath mobile SillyTavern UI overlays.
+
 ## [2.2.0-dev2] - 2026-02-27
 ### Fixed
 - Manual tracker edit button now appears independently for both the latest tracked AI message and the latest tracked User message (instead of only one global latest tracker entry).

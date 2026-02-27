@@ -117,3 +117,4 @@ Provides per-character defaults and mood asset controls.
 - compact controls for high-density tracker cards
 - explicit help lines/tooltips for advanced options
 - mobile portrait edit modal uses safe-area aware top anchoring and viewport height limits to prevent clipped/off-screen form controls
+- edit modal uses top-layer dialog mounting when available (with fallback), so it stays above SillyTavern overlays on mobile

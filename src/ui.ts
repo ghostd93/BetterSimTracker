@@ -354,6 +354,7 @@ const MOOD_PREVIEW_DIALOG_CLASS = "bst-mood-preview-dialog";
 const MOOD_PREVIEW_BODY_CLASS = "bst-mood-preview-open";
 const EDIT_STATS_BACKDROP_CLASS = "bst-edit-backdrop";
 const EDIT_STATS_MODAL_CLASS = "bst-edit-modal";
+const EDIT_STATS_DIALOG_CLASS = "bst-edit-dialog";
 const MAX_EDIT_LAST_THOUGHT_CHARS = 600;
 let moodPreviewKeyListener: ((event: KeyboardEvent) => void) | null = null;
 let moodPreviewOpenedAt = 0;
@@ -2676,6 +2677,26 @@ function ensureStyles(): void {
   place-items: center;
   padding: 12px;
 }
+.bst-edit-dialog {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 12px;
+  width: 100vw;
+  height: 100dvh;
+  max-width: 100vw;
+  max-height: 100dvh;
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  z-index: 2147483647;
+}
+.bst-edit-dialog::backdrop {
+  background: rgba(6, 10, 18, 0.72);
+  z-index: 2147483647;
+}
 .bst-edit-modal {
   width: min(760px, calc(100vw - 20px));
   max-height: calc(100dvh - 24px);
@@ -3221,6 +3242,11 @@ function ensureStyles(): void {
     padding: 5px 10px;
   }
   .bst-edit-backdrop {
+    place-items: start center;
+    overflow-y: auto;
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
+  }
+  .bst-edit-dialog {
     place-items: start center;
     overflow-y: auto;
     padding: calc(env(safe-area-inset-top, 0px) + 8px) 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
@@ -4196,6 +4222,17 @@ type EditStatsPayload = {
 };
 
 function closeEditStatsModal(): void {
+  const dialog = document.querySelector(`.${EDIT_STATS_DIALOG_CLASS}`) as HTMLDialogElement | null;
+  if (dialog) {
+    if (dialog.open) {
+      try {
+        dialog.close();
+      } catch {
+        // Ignore close errors from already-closing dialog.
+      }
+    }
+    dialog.remove();
+  }
   document.querySelector(`.${EDIT_STATS_BACKDROP_CLASS}`)?.remove();
 }
 
@@ -4291,14 +4328,6 @@ function openEditStatsModal(input: {
     `;
   };
 
-  const backdrop = document.createElement("div");
-  backdrop.className = EDIT_STATS_BACKDROP_CLASS;
-  backdrop.addEventListener("click", event => {
-    if (event.target === backdrop) {
-      closeEditStatsModal();
-    }
-  });
-
   const modal = document.createElement("div");
   modal.className = EDIT_STATS_MODAL_CLASS;
   modal.innerHTML = `
@@ -4345,8 +4374,62 @@ function openEditStatsModal(input: {
     </div>
   `;
 
-  backdrop.appendChild(modal);
-  document.body.appendChild(backdrop);
+  const canUseDialog = typeof window.HTMLDialogElement !== "undefined"
+    && typeof document.createElement("dialog").showModal === "function";
+
+  if (canUseDialog) {
+    const dialog = document.createElement("dialog");
+    dialog.className = EDIT_STATS_DIALOG_CLASS;
+    dialog.style.setProperty("position", "fixed", "important");
+    dialog.style.setProperty("inset", "0", "important");
+    dialog.style.setProperty("display", "grid", "important");
+    dialog.style.setProperty("place-items", "center", "important");
+    dialog.style.setProperty("margin", "0", "important");
+    dialog.style.setProperty("width", "100vw", "important");
+    dialog.style.setProperty("height", "100dvh", "important");
+    dialog.style.setProperty("max-width", "100vw", "important");
+    dialog.style.setProperty("max-height", "100dvh", "important");
+    dialog.style.setProperty("padding", "12px", "important");
+    dialog.style.setProperty("border", "0", "important");
+    dialog.style.setProperty("background", "transparent", "important");
+    dialog.style.setProperty("overflow", "auto", "important");
+    dialog.style.setProperty("z-index", "2147483647", "important");
+
+    dialog.addEventListener("click", event => {
+      if (event.target === dialog) {
+        closeEditStatsModal();
+      }
+    });
+    dialog.addEventListener("cancel", event => {
+      event.preventDefault();
+      closeEditStatsModal();
+    });
+    dialog.appendChild(modal);
+    document.body.appendChild(dialog);
+    try {
+      dialog.showModal();
+    } catch {
+      dialog.setAttribute("open", "");
+    }
+  } else {
+    const backdrop = document.createElement("div");
+    backdrop.className = EDIT_STATS_BACKDROP_CLASS;
+    backdrop.style.setProperty("position", "fixed", "important");
+    backdrop.style.setProperty("inset", "0", "important");
+    backdrop.style.setProperty("display", "grid", "important");
+    backdrop.style.setProperty("place-items", "center", "important");
+    backdrop.style.setProperty("padding", "12px", "important");
+    backdrop.style.setProperty("background", "rgba(6, 10, 18, 0.72)", "important");
+    backdrop.style.setProperty("z-index", "2147483647", "important");
+    backdrop.style.setProperty("overflow", "auto", "important");
+    backdrop.addEventListener("click", event => {
+      if (event.target === backdrop) {
+        closeEditStatsModal();
+      }
+    });
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+  }
   bindTextareaCounters(modal);
 
   const close = () => closeEditStatsModal();
