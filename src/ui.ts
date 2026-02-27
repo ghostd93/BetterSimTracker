@@ -2428,8 +2428,8 @@ function ensureStyles(): void {
   gap: 8px;
 }
 .bst-custom-stat-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-start;
   gap: 10px;
   padding: 10px;
@@ -2464,6 +2464,9 @@ function ensureStyles(): void {
 .bst-custom-stat-meta {
   font-size: 11px;
   opacity: 0.85;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .bst-custom-stat-flags {
   display: flex;
@@ -2484,6 +2487,8 @@ function ensureStyles(): void {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  justify-content: flex-end;
+  align-content: flex-start;
 }
 .bst-custom-stat-empty {
   border: 1px dashed rgba(255,255,255,0.2);
@@ -3332,7 +3337,7 @@ function ensureStyles(): void {
     flex: 1 1 0;
   }
   .bst-custom-stat-row {
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
   }
   .bst-custom-stat-actions {
     width: 100%;

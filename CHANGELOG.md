@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.5-dev2] - 2026-02-27
+### Fixed
+- Custom Stats list row layout now constrains long description text so it wraps inside the content column and no longer collides with right-side action buttons.
+
 ## [2.2.0.5-dev1] - 2026-02-27
 ### Fixed
 - Unified extraction now requires fuller built-in stat coverage before accepting a response, reducing partial/weak unified parses.
