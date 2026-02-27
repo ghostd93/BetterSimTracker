@@ -271,6 +271,33 @@ function renderTemplate(template: string, values: Record<string, string>): strin
   return output;
 }
 
+function buildSourcePriorityRule(includeCharacterCards: boolean, includeLorebook: boolean): string {
+  if (includeCharacterCards && includeLorebook) {
+    return "- Use recent messages first; use character cards and lorebook only to disambiguate when context is unclear.";
+  }
+  if (includeCharacterCards) {
+    return "- Use recent messages first; use character cards only to disambiguate when context is unclear.";
+  }
+  if (includeLorebook) {
+    return "- Use recent messages first; use lorebook only to disambiguate when context is unclear.";
+  }
+  return "";
+}
+
+function applySourcePriorityRule(
+  instruction: string,
+  includeCharacterCards: boolean,
+  includeLorebook: boolean,
+): string {
+  const cleaned = instruction
+    .replace(/^- (Use|Prefer) recent messages first; use [^\n]+\.$/gim, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return [cleaned, buildSourcePriorityRule(includeCharacterCards, includeLorebook)]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function primaryCharacter(characters: string[]): string {
   const first = characters.find(name => typeof name === "string" && name.trim());
   return first?.trim() || "Character";
@@ -340,6 +367,8 @@ export function buildUnifiedPrompt(
   template?: string,
   protocolTemplate?: string,
   preferredCharacterName?: string,
+  includeCharacterCardsInPrompt = true,
+  includeLorebookInExtraction = true,
 ): string {
   const envelope = commonEnvelope(userName, characters, contextText);
   const char = resolvePrimaryCharacter(characters, preferredCharacterName);
@@ -371,7 +400,12 @@ export function buildUnifiedPrompt(
   }).join("\n");
 
   const safeMaxDelta = Math.max(1, Math.round(Number(maxDeltaPerTurn) || 15));
-  const instruction = template?.trim() ? template : DEFAULT_UNIFIED_PROMPT_INSTRUCTION;
+  const instructionRaw = template?.trim() ? template : DEFAULT_UNIFIED_PROMPT_INSTRUCTION;
+  const instruction = applySourcePriorityRule(
+    instructionRaw,
+    includeCharacterCardsInPrompt,
+    includeLorebookInExtraction,
+  );
   const protocol = protocolTemplate?.trim() ? protocolTemplate : UNIFIED_PROMPT_PROTOCOL;
   const assembled = [
     MAIN_PROMPT,
@@ -418,11 +452,18 @@ export function buildUnifiedAllStatsPrompt(input: {
   maxDeltaPerTurn?: number;
   template?: string;
   preferredCharacterName?: string;
+  includeCharacterCardsInPrompt?: boolean;
+  includeLorebookInExtraction?: boolean;
 }): string {
   const envelope = commonEnvelope(input.userName, input.characters, input.contextText);
   const char = resolvePrimaryCharacter(input.characters, input.preferredCharacterName);
   const safeMaxDelta = Math.max(1, Math.round(Number(input.maxDeltaPerTurn) || 15));
-  const instruction = input.template?.trim() ? input.template : DEFAULT_UNIFIED_PROMPT_INSTRUCTION;
+  const instructionRaw = input.template?.trim() ? input.template : DEFAULT_UNIFIED_PROMPT_INSTRUCTION;
+  const instruction = applySourcePriorityRule(
+    instructionRaw,
+    Boolean(input.includeCharacterCardsInPrompt),
+    Boolean(input.includeLorebookInExtraction),
+  );
   const builtInNumeric = input.stats.filter(stat =>
     stat === "affection" || stat === "trust" || stat === "desire" || stat === "connection",
   );
@@ -607,6 +648,8 @@ export function buildSequentialPrompt(
   template?: string,
   protocolTemplate?: string,
   preferredCharacterName?: string,
+  includeCharacterCardsInPrompt = true,
+  includeLorebookInExtraction = true,
 ): string {
   const envelope = commonEnvelope(userName, characters, contextText);
   const char = resolvePrimaryCharacter(characters, preferredCharacterName);
@@ -638,9 +681,14 @@ export function buildSequentialPrompt(
   }).join("\n");
 
   const safeMaxDelta = Math.max(1, Math.round(Number(maxDeltaPerTurn) || 15));
-  const instruction = template?.trim()
+  const instructionRaw = template?.trim()
     ? template
     : DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS[stat] || DEFAULT_UNIFIED_PROMPT_INSTRUCTION;
+  const instruction = applySourcePriorityRule(
+    instructionRaw,
+    includeCharacterCardsInPrompt,
+    includeLorebookInExtraction,
+  );
   const defaultProtocol = stat === "mood"
     ? MOOD_PROMPT_PROTOCOL
     : stat === "lastThought"
@@ -694,6 +742,8 @@ export function buildSequentialCustomNumericPrompt(input: {
   template?: string;
   protocolTemplate?: string;
   preferredCharacterName?: string;
+  includeCharacterCardsInPrompt?: boolean;
+  includeLorebookInExtraction?: boolean;
 }): string {
   const statId = input.statId.trim();
   const statLabel = input.statLabel.trim() || statId;
@@ -730,7 +780,7 @@ export function buildSequentialCustomNumericPrompt(input: {
   }).join("\n");
 
   const instructionTemplate = input.template?.trim() || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION;
-  const instruction = renderTemplate(instructionTemplate, {
+  const instructionRendered = renderTemplate(instructionTemplate, {
     statId,
     statLabel,
     statDescription,
@@ -743,6 +793,11 @@ export function buildSequentialCustomNumericPrompt(input: {
     envelope,
     contextText: input.contextText,
   });
+  const instruction = applySourcePriorityRule(
+    instructionRendered,
+    Boolean(input.includeCharacterCardsInPrompt),
+    Boolean(input.includeLorebookInExtraction),
+  );
 
   const protocol = input.protocolTemplate?.trim() || NUMERIC_PROMPT_PROTOCOL(statId);
   const assembled = [
@@ -871,6 +926,8 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   template?: string;
   protocolTemplate?: string;
   preferredCharacterName?: string;
+  includeCharacterCardsInPrompt?: boolean;
+  includeLorebookInExtraction?: boolean;
 }): string {
   const statId = input.statId.trim();
   const statLabel = input.statLabel.trim() || statId;
@@ -923,7 +980,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   }).join("\n");
 
   const instructionTemplate = input.template?.trim() || DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION;
-  const instruction = renderTemplate(instructionTemplate, {
+  const instructionRendered = renderTemplate(instructionTemplate, {
     statId,
     statLabel,
     statDescription,
@@ -942,6 +999,11 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     booleanFalseLabel: falseLabel,
     valueSchema,
   });
+  const instruction = applySourcePriorityRule(
+    instructionRendered,
+    Boolean(input.includeCharacterCardsInPrompt),
+    Boolean(input.includeLorebookInExtraction),
+  );
 
   const assembled = [
     MAIN_PROMPT,

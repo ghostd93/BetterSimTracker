@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.5-dev4] - 2026-02-27
+### Changed
+- Extraction source-priority wording is now toggle-aware and minimal: character-card/lorebook disambiguation guidance is injected only when those context sources are enabled.
+
 ## [2.2.0.5-dev3] - 2026-02-27
 ### Changed
 - Unified extraction mode is now a true single-request flow for built-in and custom stats together (custom stats are no longer requested in separate follow-up calls in unified mode).

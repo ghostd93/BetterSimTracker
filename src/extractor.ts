@@ -610,6 +610,8 @@ export async function extractStatisticsParallel(input: {
             getSequentialTemplate(statList[0]),
             getSequentialProtocolTemplate(statList[0]),
             preferredCharacterName,
+            settings.includeCharacterCardsInPrompt,
+            settings.includeLorebookInExtraction,
           )
         : buildUnifiedPrompt(
             statList,
@@ -622,6 +624,8 @@ export async function extractStatisticsParallel(input: {
             settings.promptTemplateUnified,
             settings.promptProtocolUnified,
             preferredCharacterName,
+            settings.includeCharacterCardsInPrompt,
+            settings.includeLorebookInExtraction,
           );
       const prompt = applyPromptCharacterAliases(builtPrompt);
       tickProgress(`Requesting ${statLabel}`);
@@ -732,6 +736,8 @@ export async function extractStatisticsParallel(input: {
             || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
           protocolTemplate: settings.promptProtocolSequentialCustomNumeric,
           preferredCharacterName,
+          includeCharacterCardsInPrompt: settings.includeCharacterCardsInPrompt,
+          includeLorebookInExtraction: settings.includeLorebookInExtraction,
         })
         : buildSequentialCustomNonNumericPrompt({
           statId,
@@ -754,6 +760,8 @@ export async function extractStatisticsParallel(input: {
             || DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
           protocolTemplate: settings.promptProtocolSequentialCustomNonNumeric,
           preferredCharacterName,
+          includeCharacterCardsInPrompt: settings.includeCharacterCardsInPrompt,
+          includeLorebookInExtraction: settings.includeLorebookInExtraction,
         });
       const prompt = applyPromptCharacterAliases(builtPrompt);
       tickProgress(`Requesting ${label}`);
@@ -938,6 +946,8 @@ export async function extractStatisticsParallel(input: {
           maxDeltaPerTurn: settings.maxDeltaPerTurn,
           template: settings.promptTemplateUnified,
           preferredCharacterName,
+          includeCharacterCardsInPrompt: settings.includeCharacterCardsInPrompt,
+          includeLorebookInExtraction: settings.includeLorebookInExtraction,
         });
         const prompt = applyPromptCharacterAliases(builtPrompt);
         tickProgress("Requesting stats");
