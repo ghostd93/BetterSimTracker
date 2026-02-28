@@ -18,7 +18,7 @@ All notable changes to BetterSimTracker are documented here.
 - Unified/sequential prompt contracts for arrays now emphasize item-level maintenance (add/remove/edit) instead of full-list rewrites.
 
 ### Fixed
-- Persona/user defaults isolation was hardened to prevent collisions with character-scoped defaults (including same-name persona/character cases like `Kuba`).
+- Persona/user defaults isolation was hardened to prevent collisions with character-scoped defaults (including same-name persona/character cases).
 - User tracker default seeding/application now resolves persona scope consistently, including custom non-numeric defaults.
 - Persona Defaults panel no longer re-renders while text selection is active inside the panel, fixing text-selection interruptions during editing.
 - Connection profile alias normalization now avoids stale pseudo-profile IDs when using active/current/default-style selectors.
