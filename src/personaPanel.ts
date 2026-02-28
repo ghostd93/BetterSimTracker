@@ -345,6 +345,15 @@ function normalizeArrayItems(value: unknown, maxLength: number): string[] {
   return out;
 }
 
+function renderPersonaArrayDefaultRowHtml(id: string, value: string, maxLength: number): string {
+  return `
+    <div class="bst-array-default-row">
+      <input type="text" data-bst-persona-custom-default-array-item="${escapeHtml(id)}" maxlength="${maxLength}" value="${escapeHtml(value)}" placeholder="Item value">
+      <button type="button" class="bst-btn bst-btn-danger bst-icon-btn" data-action="persona-default-array-remove" aria-label="Remove item" title="Remove item"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+    </div>
+  `;
+}
+
 export function initPersonaPanel(input: InitInput): void {
   if (initDone) return;
   initDone = true;
@@ -500,10 +509,19 @@ function renderPanel(input: InitInput, force = false): void {
     if (kind === "array") {
       const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
       const items = normalizeArrayItems(customNonNumericDefaultsRaw[id], maxLength);
+      const rows = (items.length ? items : [""]).slice(0, 20);
       return `
-        <label>${escapeHtml(label)} Default (one item per line, max 20)
-          <textarea rows="4" data-bst-persona-custom-default-array="${escapeHtml(id)}" data-bst-max-length="${maxLength}" placeholder="Use stat default">${escapeHtml(items.join("\n"))}</textarea>
-        </label>
+        <div class="bst-array-default-editor" data-bst-persona-custom-default-array-editor="${escapeHtml(id)}" data-bst-max-length="${maxLength}">
+          <label>${escapeHtml(label)} Default</label>
+          <div class="bst-array-default-list" data-bst-persona-custom-default-array-list="${escapeHtml(id)}">
+            ${rows.map(item => renderPersonaArrayDefaultRowHtml(id, item, maxLength)).join("")}
+          </div>
+          <div class="bst-array-default-actions">
+            <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="persona-default-array-add" data-bst-persona-custom-default-array-add="${escapeHtml(id)}" aria-label="Add item" title="Add item"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+            <span class="bst-editor-counter" data-bst-persona-custom-default-array-counter="${escapeHtml(id)}">${items.length}/20 items</span>
+          </div>
+          <textarea rows="1" style="display:none" data-bst-persona-custom-default-array="${escapeHtml(id)}" data-bst-max-length="${maxLength}" aria-hidden="true">${escapeHtml(items.join("\n"))}</textarea>
+        </div>
       `;
     }
     const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
@@ -769,6 +787,75 @@ function renderPanel(input: InitInput, force = false): void {
       });
       persistSettings(next);
     });
+  });
+
+  panel.querySelectorAll<HTMLElement>("[data-bst-persona-custom-default-array-editor]").forEach(editor => {
+    const id = String(editor.dataset.bstPersonaCustomDefaultArrayEditor ?? "").trim().toLowerCase();
+    if (!id) return;
+    const maxLength = Math.max(20, Math.min(200, Math.round(Number(editor.dataset.bstMaxLength) || 120)));
+    const listNode = editor.querySelector<HTMLElement>(`[data-bst-persona-custom-default-array-list="${cssEscape(id)}"]`);
+    const counterNode = editor.querySelector<HTMLElement>(`[data-bst-persona-custom-default-array-counter="${cssEscape(id)}"]`);
+    const addBtn = editor.querySelector<HTMLButtonElement>(`[data-bst-persona-custom-default-array-add="${cssEscape(id)}"]`);
+    const hiddenNode = editor.querySelector<HTMLTextAreaElement>(`textarea[data-bst-persona-custom-default-array="${cssEscape(id)}"]`);
+    if (!listNode || !counterNode || !addBtn || !hiddenNode) return;
+
+    const getItemInputs = (): HTMLInputElement[] =>
+      Array.from(listNode.querySelectorAll<HTMLInputElement>(`input[data-bst-persona-custom-default-array-item="${cssEscape(id)}"]`));
+
+    const syncEditorUi = (): string[] => {
+      const values = getItemInputs().map(inputNode => inputNode.value);
+      const normalized = normalizeArrayItems(values, maxLength);
+      hiddenNode.value = normalized.join("\n");
+      counterNode.textContent = `${normalized.length}/20 items`;
+      counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");
+      addBtn.disabled = getItemInputs().length >= 20;
+      return normalized;
+    };
+
+    const ensureAtLeastOneRow = (): void => {
+      if (getItemInputs().length > 0) return;
+      listNode.insertAdjacentHTML("beforeend", renderPersonaArrayDefaultRowHtml(id, "", maxLength));
+    };
+
+    addBtn.addEventListener("click", () => {
+      if (getItemInputs().length >= 20) return;
+      listNode.insertAdjacentHTML("beforeend", renderPersonaArrayDefaultRowHtml(id, "", maxLength));
+      syncEditorUi();
+    });
+
+    listNode.addEventListener("click", event => {
+      const target = event.target as HTMLElement | null;
+      const removeBtn = target?.closest<HTMLButtonElement>('[data-action="persona-default-array-remove"]');
+      if (!removeBtn) return;
+      const row = removeBtn.closest(".bst-array-default-row");
+      if (!row) return;
+      const inputs = getItemInputs();
+      if (inputs.length <= 1) {
+        const onlyInput = inputs[0];
+        if (onlyInput) onlyInput.value = "";
+      } else {
+        row.remove();
+      }
+      ensureAtLeastOneRow();
+      syncEditorUi();
+      hiddenNode.dispatchEvent(new Event("change"));
+    });
+
+    listNode.addEventListener("input", event => {
+      const target = event.target as HTMLInputElement | null;
+      if (!target?.matches(`input[data-bst-persona-custom-default-array-item="${cssEscape(id)}"]`)) return;
+      syncEditorUi();
+    });
+
+    listNode.addEventListener("change", event => {
+      const target = event.target as HTMLInputElement | null;
+      if (!target?.matches(`input[data-bst-persona-custom-default-array-item="${cssEscape(id)}"]`)) return;
+      syncEditorUi();
+      hiddenNode.dispatchEvent(new Event("change"));
+    });
+
+    ensureAtLeastOneRow();
+    syncEditorUi();
   });
 
   panel.querySelectorAll<HTMLTextAreaElement>("[data-bst-persona-custom-default-array]").forEach(node => {

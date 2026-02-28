@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev5] - 2026-02-28
+### Added
+- Persona Management panel now includes persona-scoped User defaults (mood + user-trackable custom stat defaults).
+
+### Changed
+- Tracker edit modal now uses structured add/remove item controls for `array` custom stats instead of a raw textarea.
+- Persona-scoped `array` defaults now use structured add/remove item controls instead of a raw textarea.
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev4] - 2026-02-28
 ### Changed
 - Version bump for latest `dev` fixes.
