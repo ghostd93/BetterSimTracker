@@ -571,13 +571,19 @@ function renderPanel(input: InitInput, force = false): void {
     <div class="bst-character-help">
       Effective mood source right now: <strong>${effectiveMoodSource === "st_expressions" ? "ST expressions" : "BST mood images"}</strong>.
     </div>
-    <div class="bst-character-divider">User Defaults (Persona Scoped)</div>
+    <div class="bst-character-divider">Persona Defaults</div>
     <div class="bst-character-help">
       These defaults apply to the user tracker when this persona is active.
     </div>
     <div class="bst-character-grid">
       <label class="bst-character-wide">Mood Default
-        <input type="text" data-bst-persona-default="mood" value="${escapeHtml(String(defaults.mood ?? ""))}" placeholder="Use stat default" ${settings.userTrackMood ? "" : "disabled"}>
+        <select data-bst-persona-default="mood" ${settings.userTrackMood ? "" : "disabled"}>
+          <option value="">Use stat default</option>
+          ${moodLabels.map(label => {
+            const selected = normalizeMoodLabel(String(defaults.mood ?? "")) === label ? "selected" : "";
+            return `<option value="${escapeHtml(label)}" ${selected}>${escapeHtml(label)}</option>`;
+          }).join("")}
+        </select>
       </label>
       <label class="bst-character-wide">Last Thought Default
         <textarea rows="3" maxlength="${LAST_THOUGHT_DEFAULT_MAX_CHARS}" data-bst-persona-default="lastThought" placeholder="Use stat default" ${settings.userTrackLastThought ? "" : "disabled"}>${escapeHtml(String(defaults.lastThought ?? ""))}</textarea>
@@ -678,7 +684,7 @@ function renderPanel(input: InitInput, force = false): void {
     renderPanel(input, true);
   });
 
-  panel.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[data-bst-persona-default]").forEach(node => {
+  panel.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-bst-persona-default]").forEach(node => {
     node.addEventListener("change", () => {
       const key = String(node.dataset.bstPersonaDefault ?? "").trim();
       if (!key) return;
@@ -686,11 +692,15 @@ function renderPanel(input: InitInput, force = false): void {
       const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
         const copy = { ...current };
         if (key === "mood") {
-          if (!settings.userTrackMood || !value) {
+          const normalizedMood = normalizeMoodLabel(value);
+          if (!settings.userTrackMood || !normalizedMood) {
             delete copy.mood;
+            if (node instanceof HTMLSelectElement) {
+              node.value = "";
+            }
           } else {
-            copy.mood = value.slice(0, 80);
-            node.value = String(copy.mood);
+            copy.mood = normalizedMood;
+            node.value = String(normalizedMood);
           }
         } else if (key === "lastThought") {
           if (!settings.userTrackLastThought || !value) {

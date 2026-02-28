@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.1] - 2026-02-28
+### Changed
+- Persona panel section label renamed from `User Defaults (Persona Scoped)` to `Persona Defaults`.
+
+### Fixed
+- Persona `Mood Default` now uses a constrained dropdown (allowed mood labels + `Use stat default`) instead of free-text input.
+
 ## [2.2.1] - 2026-02-28
 ### Added
 - New custom stat kind: `array` (max 20 items) implemented end-to-end, including extraction, defaults, parser/storage normalization, prompt/protocol coverage, injection support, and tracker editing.
