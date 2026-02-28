@@ -439,13 +439,21 @@ function renderPanel(input: InitInput, force = false): void {
   } else if (!force) {
     const active = document.activeElement;
     if (active && panel.contains(active)) return;
+    const selection = globalThis.getSelection?.();
+    const anchorNode = selection?.anchorNode ?? null;
+    const focusNode = selection?.focusNode ?? null;
+    const hasPanelSelection = Boolean(
+      (anchorNode && panel.contains(anchorNode)) ||
+      (focusNode && panel.contains(focusNode)),
+    );
+    if (hasPanelSelection) return;
   }
 
   const persona = getSelectedPersona(context);
   if (!persona) {
     panel.innerHTML = `
-      <div class="bst-character-title">BetterSimTracker Persona Mood</div>
-      <div class="bst-character-sub">Select a persona to edit BST mood images.</div>
+      <div class="bst-character-title">BetterSimTracker Persona Defaults</div>
+      <div class="bst-character-sub">Select a persona to edit BST user defaults and mood image settings.</div>
     `;
     return;
   }
@@ -546,8 +554,8 @@ function renderPanel(input: InitInput, force = false): void {
   };
 
   panel.innerHTML = `
-    <div class="bst-character-title">BetterSimTracker Persona Mood</div>
-    <div class="bst-character-sub">Per-persona mood source and BST mood images for the user tracker card.</div>
+    <div class="bst-character-title">BetterSimTracker Persona Defaults</div>
+    <div class="bst-character-sub">Per-persona user defaults, mood source override, and BST mood images for the user tracker card.</div>
     <div class="bst-character-help">Active persona: <strong>${escapeHtml(persona.personaName)}</strong></div>
     <div class="bst-character-help">Persona avatar key: <code>${escapeHtml(persona.avatarId || "(missing)")}</code></div>
     <div class="bst-character-divider">Mood Source Override</div>

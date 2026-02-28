@@ -13,12 +13,14 @@ All notable changes to BetterSimTracker are documented here.
 ### Changed
 - Array/enum editors were upgraded to structured add/remove row UX with compact icon actions and live counters across wizard/defaults/edit flows.
 - Mobile and modal UX polish for tracker editing and default editors (checkbox alignment, spacing, row stability, action-button alignment).
+- Persona panel heading/description were renamed to reflect full persona-scoped defaults management (not mood-only).
 - Input bounds enforcement was standardized across settings/wizard/edit controls.
 - Unified/sequential prompt contracts for arrays now emphasize item-level maintenance (add/remove/edit) instead of full-list rewrites.
 
 ### Fixed
 - Persona/user defaults isolation was hardened to prevent collisions with character-scoped defaults (including same-name persona/character cases like `Kuba`).
 - User tracker default seeding/application now resolves persona scope consistently, including custom non-numeric defaults.
+- Persona Defaults panel no longer re-renders while text selection is active inside the panel, fixing text-selection interruptions during editing.
 - Connection profile alias normalization now avoids stale pseudo-profile IDs when using active/current/default-style selectors.
 - Recovery placeholders now persist across reloads and restore correctly from chat metadata.
 - Nested provider/API error extraction was improved so UI diagnostics match real backend error messages.
