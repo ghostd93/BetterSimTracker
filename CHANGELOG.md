@@ -7,6 +7,8 @@ All notable changes to BetterSimTracker are documented here.
 - Custom Stat wizard (`array` kind) now uses a structured default-item editor (add/remove item rows with live `items/20` counter) instead of a raw textarea.
 - Array default editing is now normalized through the same item rules used by extraction/storage, improving consistency and reducing malformed list defaults.
 - Custom Stat wizard (`enum_single` kind) now uses a structured allowed-values editor (add/remove option rows with live `options/12` counter) instead of a raw textarea.
+- Array/enum list editors now use compact icon actions (`+` add, trash remove) for cleaner controls on desktop and mobile.
+- Numeric input bounds enforcement is now shared and immediate across BST settings, custom stat wizard, and tracker edit modal.
 
 ## [2.2.0.7-dev2] - 2026-02-28
 ### Added

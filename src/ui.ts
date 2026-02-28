@@ -715,6 +715,30 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function clampNumberInputToBounds(input: HTMLInputElement): boolean {
+  if (input.type !== "number") return false;
+  const rawText = String(input.value ?? "").trim();
+  if (!rawText.length) return false;
+  const parsed = Number(rawText);
+  if (!Number.isFinite(parsed)) return false;
+  const minAttr = input.getAttribute("min");
+  const maxAttr = input.getAttribute("max");
+  const minValue = minAttr !== null && minAttr.trim().length ? Number(minAttr) : NaN;
+  const maxValue = maxAttr !== null && maxAttr.trim().length ? Number(maxAttr) : NaN;
+  let next = parsed;
+  if (Number.isFinite(minValue)) next = Math.max(next, minValue);
+  if (Number.isFinite(maxValue)) next = Math.min(next, maxValue);
+  const stepRaw = String(input.getAttribute("step") ?? "").trim();
+  const forceInteger = !stepRaw.length || stepRaw === "1";
+  if (forceInteger) next = Math.round(next);
+  const nextText = String(next);
+  if (nextText !== input.value) {
+    input.value = nextText;
+    return true;
+  }
+  return false;
+}
+
 function computeZoomPanOffset(position: number, zoom: number): number {
   return Math.round((50 - position) * (zoom - 1) * 100) / 100;
 }
@@ -2654,6 +2678,15 @@ function ensureStyles(): void {
 .bst-array-default-actions .bst-btn,
 .bst-enum-options-actions .bst-btn {
   min-width: 96px;
+}
+.bst-icon-btn {
+  width: 34px;
+  height: 34px;
+  min-width: 34px !important;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .bst-custom-wizard-panel {
   display: none;
@@ -4651,6 +4684,14 @@ function openEditStatsModal(input: {
     document.body.appendChild(backdrop);
   }
   bindTextareaCounters(modal);
+  modal.querySelectorAll<HTMLInputElement>('input[type="number"]').forEach(node => {
+    node.addEventListener("input", () => {
+      clampNumberInputToBounds(node);
+    });
+    node.addEventListener("change", () => {
+      clampNumberInputToBounds(node);
+    });
+  });
 
   const close = () => closeEditStatsModal();
   modal.querySelector('[data-action="close"]')?.addEventListener("click", close);
@@ -5691,16 +5732,8 @@ export function openSettingsModal(input: {
       let clearTimer: number | null = null;
       let clampedThisFocus = false;
       const clamp = (): void => {
-        if (input.value.trim() === "") return;
-        const raw = Number(input.value);
-        if (Number.isNaN(raw)) return;
-        let next = raw;
-        if (typeof min === "number") next = Math.max(min, next);
-        if (typeof max === "number") next = Math.min(max, next);
-        if (next !== raw) {
-          input.value = String(next);
-          clampedThisFocus = true;
-        }
+        const changed = clampNumberInputToBounds(input);
+        if (changed) clampedThisFocus = true;
       };
       input.addEventListener("input", clamp);
       input.addEventListener("blur", () => {
@@ -6662,7 +6695,7 @@ export function openSettingsModal(input: {
             <div class="bst-enum-options-editor">
               <div class="bst-enum-options-list" data-bst-enum-options-list></div>
               <div class="bst-enum-options-actions">
-                <button type="button" class="bst-btn bst-btn-soft" data-action="enum-option-add">Add option</button>
+                <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="enum-option-add" aria-label="Add option" title="Add option"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
                 <span class="bst-custom-char-counter" data-bst-enum-options-counter></span>
               </div>
             </div>
@@ -6699,7 +6732,7 @@ export function openSettingsModal(input: {
             <div class="bst-array-default-editor">
               <div class="bst-array-default-list" data-bst-array-default-list></div>
               <div class="bst-array-default-actions">
-                <button type="button" class="bst-btn bst-btn-soft" data-action="array-default-add">Add item</button>
+                <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="array-default-add" aria-label="Add item" title="Add item"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
                 <span class="bst-custom-char-counter" data-bst-array-default-counter></span>
               </div>
             </div>
@@ -6864,14 +6897,14 @@ export function openSettingsModal(input: {
     const arrayEditorRowHtml = (value: string, maxLength: number): string => `
       <div class="bst-array-default-row">
         <input type="text" data-bst-array-item="1" maxlength="${maxLength}" value="${escapeHtml(value)}" placeholder="Item value">
-        <button type="button" class="bst-btn bst-btn-danger" data-action="array-default-remove">Remove</button>
+        <button type="button" class="bst-btn bst-btn-danger bst-icon-btn" data-action="array-default-remove" aria-label="Remove item" title="Remove item"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
       </div>
     `;
 
     const enumEditorRowHtml = (value: string): string => `
       <div class="bst-enum-options-row">
         <input type="text" data-bst-enum-option="1" maxlength="200" value="${escapeHtml(value)}" placeholder="Option value">
-        <button type="button" class="bst-btn bst-btn-danger" data-action="enum-option-remove">Remove</button>
+        <button type="button" class="bst-btn bst-btn-danger bst-icon-btn" data-action="enum-option-remove" aria-label="Remove option" title="Remove option"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
       </div>
     `;
 
@@ -7552,12 +7585,14 @@ export function openSettingsModal(input: {
 
     wizard.querySelectorAll("input, textarea, select").forEach(node => {
       node.addEventListener("input", () => {
+        if (node instanceof HTMLInputElement) clampNumberInputToBounds(node);
         syncDraftFromFields();
         syncKindUi();
         writeReview();
         updateDescriptionCounter();
       });
       node.addEventListener("change", () => {
+        if (node instanceof HTMLInputElement) clampNumberInputToBounds(node);
         syncDraftFromFields();
         syncKindUi();
         writeReview();
