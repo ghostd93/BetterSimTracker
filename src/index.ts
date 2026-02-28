@@ -1629,11 +1629,31 @@ function clearTrackerRecovery(messageIndex: number | null | undefined): void {
 
 function sanitizeTrackerRecoveryDetail(raw: string): string {
   const compact = String(raw ?? "")
-    .replace(/\r\n/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/\r\n/g, "\n")
+    .replace(/[^\x09\x0A\x20-\x7E]/g, " ")
     .trim();
   if (!compact) return "Unknown extraction error.";
-  return compact.slice(0, 240);
+  return compact.slice(0, 700);
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const message = String(error.message ?? "").trim();
+    if (message && message !== "[object Object]") return message;
+    const metaError = (error as Error & { meta?: Record<string, unknown> }).meta?.error;
+    const metaText = String(metaError ?? "").trim();
+    if (metaText && metaText !== "[object Object]") return metaText;
+  }
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const direct = String(record.message ?? record.error ?? "").trim();
+    if (direct && direct !== "[object Object]") return direct;
+    const meta = record.meta as Record<string, unknown> | undefined;
+    const metaText = String(meta?.error ?? "").trim();
+    if (metaText && metaText !== "[object Object]") return metaText;
+  }
+  const fallback = String(error ?? "").trim();
+  return fallback && fallback !== "[object Object]" ? fallback : "Unknown extraction error.";
 }
 
 function setTrackerRecovery(
@@ -3016,7 +3036,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       }
       return;
     }
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     let retryScheduled = false;
     if (
       isManualRefreshReason &&

@@ -9,6 +9,79 @@ interface GenerateResponse {
   choices?: Array<{ message?: { content?: string }; text?: string }>;
 }
 
+function normalizeGenerationError(raw: unknown): string {
+  const messages: string[] = [];
+  const seen = new WeakSet<object>();
+  let statusCode: number | null = null;
+  let statusText = "";
+
+  const addMessage = (value: unknown): void => {
+    const text = String(value ?? "").trim();
+    if (!text || text === "[object Object]") return;
+    if (!messages.includes(text)) messages.push(text);
+  };
+
+  const visit = (value: unknown, depth = 0): void => {
+    if (depth > 3 || value == null) return;
+    if (typeof value === "string") {
+      const text = value.trim();
+      if (!text) return;
+      if ((text.startsWith("{") && text.endsWith("}")) || (text.startsWith("[") && text.endsWith("]"))) {
+        try {
+          visit(JSON.parse(text), depth + 1);
+        } catch {
+          addMessage(text);
+        }
+        return;
+      }
+      addMessage(text);
+      return;
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      addMessage(value);
+      return;
+    }
+    if (value instanceof Error) {
+      addMessage(value.message);
+      visit((value as Error & { cause?: unknown }).cause, depth + 1);
+      return;
+    }
+    if (typeof value !== "object") return;
+    if (seen.has(value as object)) return;
+    seen.add(value as object);
+
+    const record = value as Record<string, unknown>;
+    const statusRaw = record.status;
+    if (typeof statusRaw === "number" && Number.isFinite(statusRaw)) statusCode = Math.round(statusRaw);
+    if (typeof record.statusText === "string" && record.statusText.trim()) statusText = record.statusText.trim();
+
+    addMessage(record.message);
+    addMessage(record.error_description);
+    addMessage(record.detail);
+    addMessage(record.reason);
+    addMessage(record.error);
+    if (record.code != null && (typeof record.code === "string" || typeof record.code === "number")) {
+      addMessage(`code ${record.code}`);
+    }
+
+    const nestedKeys = ["error", "data", "body", "response", "meta", "details", "cause"];
+    for (const key of nestedKeys) {
+      visit(record[key], depth + 1);
+    }
+  };
+
+  visit(raw);
+
+  if (statusCode != null) {
+    const prefix = statusText ? `HTTP ${statusCode} ${statusText}` : `HTTP ${statusCode}`;
+    const first = messages[0];
+    return first ? `${prefix}: ${first}` : prefix;
+  }
+  if (messages.length) return messages[0];
+  const fallback = String(raw ?? "").trim();
+  return fallback && fallback !== "[object Object]" ? fallback : "Generation failed.";
+}
+
 function extractContent(payload: GenerateResponse): string {
   if (typeof payload.content === "string") return payload.content;
   const first = payload.choices?.[0];
@@ -258,11 +331,12 @@ async function generateViaGenerator(prompt: string, profileId: string, limits: T
             timestamp: Date.now()
           };
           if (error) {
+            const normalizedError = normalizeGenerationError(error);
             if (abortController.signal.aborted) {
-              reject(Object.assign(new DOMException("Request aborted by user", "AbortError"), { meta: { ...baseMeta, error: String(error) } }));
+              reject(Object.assign(new DOMException("Request aborted by user", "AbortError"), { meta: { ...baseMeta, error: normalizedError } }));
               return;
             }
-            reject(Object.assign(new Error(String(error)), { meta: { ...baseMeta, error: String(error) } }));
+            reject(Object.assign(new Error(normalizedError), { meta: { ...baseMeta, error: normalizedError } }));
             return;
           }
           if (!data) {
@@ -356,6 +430,7 @@ async function generateViaActiveRuntime(
       },
     };
   } catch (error) {
+    const normalizedError = normalizeGenerationError(error);
     if (abortController.signal.aborted) {
       throw Object.assign(new DOMException("Request aborted by user", "AbortError"), {
         meta: {
@@ -366,11 +441,11 @@ async function generateViaActiveRuntime(
           durationMs: Date.now() - startedAt,
           outputChars: 0,
           timestamp: Date.now(),
-          error: String(error),
+          error: normalizedError,
         } satisfies GenerateRequestMeta,
       });
     }
-    throw Object.assign(new Error(String(error)), {
+    throw Object.assign(new Error(normalizedError), {
       meta: {
         profileId: "__active_runtime__",
         promptChars,
@@ -379,7 +454,7 @@ async function generateViaActiveRuntime(
         durationMs: Date.now() - startedAt,
         outputChars: 0,
         timestamp: Date.now(),
-        error: String(error),
+        error: normalizedError,
       } satisfies GenerateRequestMeta,
     });
   } finally {
