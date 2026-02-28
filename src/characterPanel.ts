@@ -293,6 +293,21 @@ function normalizeArrayItems(value: unknown, maxLength: number): string[] {
   return out;
 }
 
+function isCustomStatTrackableForScope(definition: CustomStatDefinition, scope: "character" | "user"): boolean {
+  if (definition.track === false) return false;
+  if (scope === "character") return definition.trackCharacters !== false;
+  return definition.trackUser !== false;
+}
+
+function renderCharacterArrayDefaultRowHtml(id: string, value: string, maxLength: number): string {
+  return `
+    <div class="bst-array-default-row">
+      <input type="text" data-bst-custom-default-array-item="${escapeHtml(id)}" maxlength="${maxLength}" value="${escapeHtml(value)}" placeholder="Item value">
+      <button type="button" class="bst-btn bst-btn-danger bst-icon-btn" data-action="character-default-array-remove" aria-label="Remove item" title="Remove item"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+    </div>
+  `;
+}
+
 function clampPercentInputElement(input: HTMLInputElement): void {
   const value = input.value.trim();
   if (!value) return;
@@ -595,6 +610,11 @@ function renderPanel(input: InitInput, force = false): void {
   const customStatDefinitions = Array.isArray(settings.customStats)
     ? settings.customStats as CustomStatDefinition[]
     : [];
+  const trackAffection = settings.trackAffection !== false;
+  const trackTrust = settings.trackTrust !== false;
+  const trackDesire = settings.trackDesire !== false;
+  const trackConnection = settings.trackConnection !== false;
+  const trackMood = settings.trackMood !== false;
   const customNumericDefaultsRaw = defaults.customStatDefaults && typeof defaults.customStatDefaults === "object"
     ? defaults.customStatDefaults as Record<string, unknown>
     : {};
@@ -609,6 +629,14 @@ function renderPanel(input: InitInput, force = false): void {
     const id = String(definition.id ?? "").trim().toLowerCase();
     const label = String(definition.label ?? "").trim();
     if (!id || !label) return "";
+    const trackableInCharacterDefaults = isCustomStatTrackableForScope(definition, "character");
+    if (!trackableInCharacterDefaults) {
+      return `
+        <div class="bst-character-help">
+          <strong>${escapeHtml(label)} Default:</strong> unavailable (not tracked for characters).
+        </div>
+      `;
+    }
     const kind = normalizeCustomStatKind(definition.kind);
     if (kind === "numeric") {
       const rawValue = customNumericDefaultsRaw[id];
@@ -652,11 +680,20 @@ function renderPanel(input: InitInput, force = false): void {
     if (kind === "array") {
       const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
       const items = normalizeArrayItems(customNonNumericDefaultsRaw[id], maxLength);
+      const rows = (items.length ? items : [""]).slice(0, 20);
       const value = items.join("\n");
       return `
-        <label>${escapeHtml(label)} Default (one item per line, max 20)
-          <textarea rows="4" data-bst-custom-default-array="${escapeHtml(id)}" data-bst-max-length="${maxLength}" placeholder="Use stat default">${escapeHtml(value)}</textarea>
-        </label>
+        <div class="bst-array-default-editor" data-bst-custom-default-array-editor="${escapeHtml(id)}" data-bst-max-length="${maxLength}">
+          <label>${escapeHtml(label)} Default</label>
+          <div class="bst-array-default-list" data-bst-custom-default-array-list="${escapeHtml(id)}">
+            ${rows.map(item => renderCharacterArrayDefaultRowHtml(id, item, maxLength)).join("")}
+          </div>
+          <div class="bst-array-default-actions">
+            <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="character-default-array-add" data-bst-custom-default-array-add="${escapeHtml(id)}" aria-label="Add item" title="Add item"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+            <span class="bst-editor-counter" data-bst-custom-default-array-counter="${escapeHtml(id)}">${items.length}/20 items</span>
+          </div>
+          <textarea rows="1" style="display:none" data-bst-custom-default-array="${escapeHtml(id)}" data-bst-max-length="${maxLength}" aria-hidden="true">${escapeHtml(value)}</textarea>
+        </div>
       `;
     }
     const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
@@ -682,11 +719,11 @@ function renderPanel(input: InitInput, force = false): void {
     <div class="bst-character-title">BetterSimTracker Defaults</div>
     <div class="bst-character-sub">Per-character defaults and optional mood source overrides.</div>
     <div class="bst-character-grid">
-      <label>Affection Default <input type="number" min="0" max="100" step="1" data-bst-default="affection" value="${defaults.affection ?? ""}"></label>
-      <label>Trust Default <input type="number" min="0" max="100" step="1" data-bst-default="trust" value="${defaults.trust ?? ""}"></label>
-      <label>Desire Default <input type="number" min="0" max="100" step="1" data-bst-default="desire" value="${defaults.desire ?? ""}"></label>
-      <label>Connection Default <input type="number" min="0" max="100" step="1" data-bst-default="connection" value="${defaults.connection ?? ""}"></label>
-      <label class="bst-character-wide">Mood Default <input type="text" data-bst-default="mood" value="${defaults.mood ?? ""}" placeholder="Neutral"></label>
+      <label>Affection Default <input type="number" min="0" max="100" step="1" data-bst-default="affection" value="${defaults.affection ?? ""}" ${trackAffection ? "" : "disabled"}></label>
+      <label>Trust Default <input type="number" min="0" max="100" step="1" data-bst-default="trust" value="${defaults.trust ?? ""}" ${trackTrust ? "" : "disabled"}></label>
+      <label>Desire Default <input type="number" min="0" max="100" step="1" data-bst-default="desire" value="${defaults.desire ?? ""}" ${trackDesire ? "" : "disabled"}></label>
+      <label>Connection Default <input type="number" min="0" max="100" step="1" data-bst-default="connection" value="${defaults.connection ?? ""}" ${trackConnection ? "" : "disabled"}></label>
+      <label class="bst-character-wide">Mood Default <input type="text" data-bst-default="mood" value="${defaults.mood ?? ""}" placeholder="Neutral" ${trackMood ? "" : "disabled"}></label>
       <label class="bst-character-wide">Card Color (optional)
         <div class="bst-color-inputs">
           <input data-bst-color="cardColor" type="color" value="${escapeHtml(cardColorPreview)}">
@@ -694,6 +731,11 @@ function renderPanel(input: InitInput, force = false): void {
         </div>
       </label>
     </div>
+    ${trackAffection && trackTrust && trackDesire && trackConnection && trackMood ? "" : `
+      <div class="bst-character-help">
+        Some built-in defaults are unavailable because those stats are not tracked in extension settings.
+      </div>
+    `}
     <div class="bst-character-help">Leave card color empty to use the automatic palette for this character. Hex colors like #2b7cff.</div>
     <div class="bst-character-divider">Custom Stat Defaults</div>
     ${customStatFieldsHtml
@@ -1016,6 +1058,75 @@ function renderPanel(input: InitInput, force = false): void {
       });
       persistSettings(next);
     });
+  });
+
+  panel.querySelectorAll<HTMLElement>("[data-bst-custom-default-array-editor]").forEach(editor => {
+    const id = String(editor.dataset.bstCustomDefaultArrayEditor ?? "").trim().toLowerCase();
+    if (!id) return;
+    const maxLength = Math.max(20, Math.min(200, Math.round(Number(editor.dataset.bstMaxLength) || 120)));
+    const listNode = editor.querySelector<HTMLElement>(`[data-bst-custom-default-array-list="${cssEscape(id)}"]`);
+    const counterNode = editor.querySelector<HTMLElement>(`[data-bst-custom-default-array-counter="${cssEscape(id)}"]`);
+    const addBtn = editor.querySelector<HTMLButtonElement>(`[data-bst-custom-default-array-add="${cssEscape(id)}"]`);
+    const hiddenNode = editor.querySelector<HTMLTextAreaElement>(`textarea[data-bst-custom-default-array="${cssEscape(id)}"]`);
+    if (!listNode || !counterNode || !addBtn || !hiddenNode) return;
+
+    const getItemInputs = (): HTMLInputElement[] =>
+      Array.from(listNode.querySelectorAll<HTMLInputElement>(`input[data-bst-custom-default-array-item="${cssEscape(id)}"]`));
+
+    const syncEditorUi = (): string[] => {
+      const values = getItemInputs().map(inputNode => inputNode.value);
+      const normalized = normalizeArrayItems(values, maxLength);
+      hiddenNode.value = normalized.join("\n");
+      counterNode.textContent = `${normalized.length}/20 items`;
+      counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");
+      addBtn.disabled = getItemInputs().length >= 20;
+      return normalized;
+    };
+
+    const ensureAtLeastOneRow = (): void => {
+      if (getItemInputs().length > 0) return;
+      listNode.insertAdjacentHTML("beforeend", renderCharacterArrayDefaultRowHtml(id, "", maxLength));
+    };
+
+    addBtn.addEventListener("click", () => {
+      if (getItemInputs().length >= 20) return;
+      listNode.insertAdjacentHTML("beforeend", renderCharacterArrayDefaultRowHtml(id, "", maxLength));
+      syncEditorUi();
+    });
+
+    listNode.addEventListener("click", event => {
+      const target = event.target as HTMLElement | null;
+      const removeBtn = target?.closest<HTMLButtonElement>('[data-action="character-default-array-remove"]');
+      if (!removeBtn) return;
+      const row = removeBtn.closest(".bst-array-default-row");
+      if (!row) return;
+      const inputs = getItemInputs();
+      if (inputs.length <= 1) {
+        const onlyInput = inputs[0];
+        if (onlyInput) onlyInput.value = "";
+      } else {
+        row.remove();
+      }
+      ensureAtLeastOneRow();
+      syncEditorUi();
+      hiddenNode.dispatchEvent(new Event("change"));
+    });
+
+    listNode.addEventListener("input", event => {
+      const target = event.target as HTMLInputElement | null;
+      if (!target?.matches(`input[data-bst-custom-default-array-item="${cssEscape(id)}"]`)) return;
+      syncEditorUi();
+    });
+
+    listNode.addEventListener("change", event => {
+      const target = event.target as HTMLInputElement | null;
+      if (!target?.matches(`input[data-bst-custom-default-array-item="${cssEscape(id)}"]`)) return;
+      syncEditorUi();
+      hiddenNode.dispatchEvent(new Event("change"));
+    });
+
+    ensureAtLeastOneRow();
+    syncEditorUi();
   });
 
   const moodSourceSelect = panel.querySelector<HTMLSelectElement>('select[data-bst-default="moodSource"]');
