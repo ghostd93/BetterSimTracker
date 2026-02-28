@@ -568,7 +568,7 @@ function renderPanel(input: InitInput, force = false): void {
     </div>
     ${settings.userTrackMood ? "" : `<div class="bst-character-help">Mood default is unavailable because User Mood tracking is disabled.</div>`}
     ${userCustomDefaultFieldsHtml
-      ? `<div class="bst-character-grid bst-character-grid-three">${userCustomDefaultFieldsHtml}</div>`
+      ? `<div class="bst-character-grid">${userCustomDefaultFieldsHtml}</div>`
       : `<div class="bst-character-help">No user-trackable custom stats configured yet.</div>`}
     <div style="display:${showBstMoodImageControls ? "grid" : "none"}; gap:8px;">
       <div class="bst-character-divider">Mood Images</div>

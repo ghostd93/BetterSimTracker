@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev6] - 2026-02-28
+### Changed
+- Persona User Defaults custom-stat layout now uses full-width rows in Persona Management to avoid cramped array editors in narrow drawer widths.
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev5] - 2026-02-28
 ### Added
 - Persona Management panel now includes persona-scoped User defaults (mood + user-trackable custom stat defaults).
