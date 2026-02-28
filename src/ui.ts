@@ -817,7 +817,9 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     showInGraph: kind === "numeric" && Boolean(definition.showInGraph),
     includeInInjection: Boolean(definition.includeInInjection),
     color: typeof definition.color === "string" ? definition.color : undefined,
-    sequentialPromptTemplate: typeof definition.sequentialPromptTemplate === "string" ? definition.sequentialPromptTemplate : undefined,
+    promptOverride: typeof definition.promptOverride === "string"
+      ? definition.promptOverride
+      : (typeof definition.sequentialPromptTemplate === "string" ? definition.sequentialPromptTemplate : undefined),
   };
 }
 
@@ -6222,7 +6224,7 @@ export function openSettingsModal(input: {
     privateToOwner: boolean;
     includeInInjection: boolean;
     color: string;
-    sequentialPromptTemplate: string;
+    promptOverride: string;
     lockId: boolean;
   };
 
@@ -6246,7 +6248,7 @@ export function openSettingsModal(input: {
         privateToOwner: false,
         includeInInjection: true,
         color: "",
-        sequentialPromptTemplate: "",
+        promptOverride: "",
         lockId: false,
       };
     }
@@ -6282,7 +6284,7 @@ export function openSettingsModal(input: {
       privateToOwner: Boolean(clone.privateToOwner),
       includeInInjection: clone.includeInInjection,
       color: clone.color ?? "",
-      sequentialPromptTemplate: clone.sequentialPromptTemplate ?? "",
+      promptOverride: clone.promptOverride ?? "",
       lockId: mode === "edit",
     };
   };
@@ -6381,8 +6383,8 @@ export function openSettingsModal(input: {
       if (!draft.trackCharacters && !draft.trackUser) {
         errors.push("Enable at least one scope: Track for Characters or Track for User.");
       }
-      if (draft.sequentialPromptTemplate.length > 20000) {
-        errors.push("Custom sequential prompt template is too long.");
+      if (draft.promptOverride.length > 20000) {
+        errors.push("Custom prompt override is too long.");
       }
     }
 
@@ -6407,7 +6409,7 @@ export function openSettingsModal(input: {
     const maxDeltaValue = maxDeltaText ? Number(maxDeltaText) : null;
     const behaviorGuidance = draft.behaviorGuidance.trim();
     const color = draft.color.trim();
-    const template = draft.sequentialPromptTemplate.trim();
+    const template = draft.promptOverride.trim();
     const kind = normalizeCustomStatKind(draft.kind);
     const enumOptions = normalizeCustomEnumOptions(draft.enumOptionsText.split(/\r?\n/));
     const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(draft.textMaxLength) || 120)));
@@ -6452,7 +6454,7 @@ export function openSettingsModal(input: {
       showOnCard: track,
       showInGraph: kind === "numeric" ? track : false,
       color: color || undefined,
-      sequentialPromptTemplate: template || undefined,
+      promptOverride: template || undefined,
     };
   };
 
@@ -6877,7 +6879,7 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
         </div>
         <label>Per-Stat Prompt Override (optional)
-          <textarea data-bst-custom-field="sequentialPromptTemplate" rows="6" placeholder="Optional per-stat override used in all extraction modes. Leave empty to use the global custom-stat fallback for this kind.">${escapeHtml(draft.sequentialPromptTemplate)}</textarea>
+          <textarea data-bst-custom-field="promptOverride" rows="6" placeholder="Optional per-stat override used in all extraction modes. Leave empty to use the global custom-stat fallback for this kind.">${escapeHtml(draft.promptOverride)}</textarea>
         </label>
         <div class="bst-help-line" data-bst-kind-help="templateFallback">Used in all extraction modes. Empty override uses global Custom Numeric Default.</div>
         <div class="bst-help-line">Template placeholders: <code>{{user}}</code>, <code>{{char}}</code>, <code>{{characters}}</code>, <code>{{contextText}}</code>, <code>{{envelope}}</code>, <code>{{statId}}</code>.</div>
@@ -7091,7 +7093,7 @@ export function openSettingsModal(input: {
       const privateToOwnerNode = getField("privateToOwner") as HTMLInputElement | null;
       const injectNode = getField("includeInInjection") as HTMLInputElement | null;
       const colorNode = getField("color");
-      const templateNode = getField("sequentialPromptTemplate");
+      const templateNode = getField("promptOverride");
       draft.label = String(labelNode?.value ?? "");
       draft.id = String(idNode?.value ?? "").toLowerCase();
       draft.kind = normalizeCustomStatKind(kindNode?.value);
@@ -7119,7 +7121,7 @@ export function openSettingsModal(input: {
       draft.privateToOwner = Boolean(privateToOwnerNode?.checked);
       draft.includeInInjection = Boolean(injectNode?.checked);
       draft.color = String(colorNode?.value ?? "");
-      draft.sequentialPromptTemplate = String(templateNode?.value ?? "");
+      draft.promptOverride = String(templateNode?.value ?? "");
     };
 
     const syncColorPickerFromText = (): void => {
@@ -7201,7 +7203,7 @@ export function openSettingsModal(input: {
           : "Color helps visually distinguish this stat on cards. Non-numeric stats are not graphed in this version.";
       }
 
-      const templateNode = getField("sequentialPromptTemplate") as HTMLTextAreaElement | null;
+      const templateNode = getField("promptOverride") as HTMLTextAreaElement | null;
       if (templateNode) {
         templateNode.placeholder = kind === "numeric"
           ? "Optional per-stat override used in all extraction modes. Literal example: Update only respect_score deltas from recent messages based on respect cues. Leave empty to use global Custom Numeric Default."
@@ -7572,7 +7574,7 @@ export function openSettingsModal(input: {
           .replaceAll("{{statLabel}}", label)
           .replaceAll("{{statDescription}}", description);
 
-        const templateNode = getField("sequentialPromptTemplate") as HTMLTextAreaElement | null;
+        const templateNode = getField("promptOverride") as HTMLTextAreaElement | null;
         if (!templateNode) {
           throw new Error("Sequential template field is unavailable.");
         }
@@ -8284,6 +8286,7 @@ export function closeSettingsModal(): void {
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
 }
+
 
 
 

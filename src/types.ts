@@ -50,6 +50,8 @@ export interface CustomStatDefinition {
   showInGraph: boolean;
   includeInInjection: boolean;
   color?: string;
+  promptOverride?: string;
+  // Legacy key kept for backward-compatible import paths.
   sequentialPromptTemplate?: string;
 }
 

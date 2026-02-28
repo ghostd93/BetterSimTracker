@@ -775,7 +775,7 @@ export async function extractStatisticsParallel(input: {
           current: previousStatistics,
           currentCustom: previousCustomStatistics ?? {},
           history,
-          template: statDef.sequentialPromptTemplate
+          template: (statDef.promptOverride ?? statDef.sequentialPromptTemplate)
             || settings.promptTemplateSequentialCustomNumeric
             || DEFAULT_SEQUENTIAL_CUSTOM_NUMERIC_PROMPT_INSTRUCTION,
           protocolTemplate: settings.promptProtocolSequentialCustomNumeric,
@@ -803,7 +803,7 @@ export async function extractStatisticsParallel(input: {
           current: previousStatistics,
           currentCustomNonNumeric: previousCustomNonNumericStatistics ?? {},
           history,
-          template: statDef.sequentialPromptTemplate
+          template: (statDef.promptOverride ?? statDef.sequentialPromptTemplate)
             || settings.promptTemplateSequentialCustomNonNumeric
             || DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
           protocolTemplate: settings.promptProtocolSequentialCustomNonNumeric,

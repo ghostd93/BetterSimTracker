@@ -80,7 +80,7 @@ Common fields:
 - `showInGraph`
 - `includeInInjection`
 - `color`
-- `sequentialPromptTemplate`
+- `promptOverride` (legacy alias accepted: `sequentialPromptTemplate`)
 - `behaviorGuidance`
 
 Kind-specific fields:

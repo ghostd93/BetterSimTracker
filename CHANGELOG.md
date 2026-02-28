@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3] - 2026-02-28
+### Changed
+- Custom-stat per-stat prompt field is now canonically named `promptOverride` across UI/config semantics.
+
+### Fixed
+- Backward compatibility retained: legacy `sequentialPromptTemplate` is still accepted on import/read, but normalized to `promptOverride` to avoid mode-naming confusion when sharing JSON configs.
+
 ## [2.2.1.2] - 2026-02-28
 ### Fixed
 - Unified custom `array` parsing now accepts JSON array values returned under `value.<statId>`, so item removals/updates (for example clothing changes) apply correctly instead of being dropped.

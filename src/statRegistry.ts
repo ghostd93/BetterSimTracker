@@ -12,7 +12,7 @@ export interface NumericStatDefinition {
   includeInInjection: boolean;
   builtIn: boolean;
   color?: string;
-  sequentialPromptTemplate?: string;
+  promptOverride?: string;
 }
 
 const BUILT_IN_NUMERIC_META: Record<NumericStatKey, { label: string; description: string; color: string }> = {
@@ -93,7 +93,7 @@ export function getCustomNumericStatDefinitions(settings: BetterSimTrackerSettin
     includeInInjection: def.includeInInjection,
     builtIn: false,
     color: def.color,
-    sequentialPromptTemplate: def.sequentialPromptTemplate,
+    promptOverride: def.promptOverride ?? def.sequentialPromptTemplate,
   }));
 }
 

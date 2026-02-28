@@ -766,9 +766,11 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
     const color = typeof obj.color === "string"
       ? obj.color.trim().slice(0, 32)
       : "";
-    const template = typeof obj.sequentialPromptTemplate === "string"
-      ? obj.sequentialPromptTemplate.trim().slice(0, 20000)
-      : "";
+    const template = typeof obj.promptOverride === "string"
+      ? obj.promptOverride.trim().slice(0, 20000)
+      : (typeof obj.sequentialPromptTemplate === "string"
+        ? obj.sequentialPromptTemplate.trim().slice(0, 20000)
+        : "");
     const kind = normalizeKind(obj.kind);
     const enumOptions = normalizeEnumOptions(obj.enumOptions);
     const textMaxLength = clampInt(obj.textMaxLength, 120, 20, 200);
@@ -832,7 +834,7 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       showInGraph: kind === "numeric" ? asBool(obj.showInGraph, true) : false,
       includeInInjection: asBool(obj.includeInInjection, true),
       color: color || undefined,
-      sequentialPromptTemplate: template || undefined,
+      promptOverride: template || undefined,
     };
     out.push(entry);
     seen.add(id);
