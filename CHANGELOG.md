@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev10] - 2026-02-28
+### Fixed
+- Tracker recovery error cards now extract nested API/provider error payloads more deeply (including JSON-string payloads and HTTP status context), improving visibility of the real failure reason shown by SillyTavern popups.
+
+### Changed
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev9] - 2026-02-28
 ### Fixed
 - Connection profile normalization now treats legacy aliases (`active/current/default/auto` variants) as non-explicit profile selection, preventing stale pseudo-profile IDs from breaking tracker generation.

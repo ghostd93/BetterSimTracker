@@ -1697,21 +1697,92 @@ function sanitizeTrackerRecoveryDetail(raw: string): string {
 }
 
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    const message = String(error.message ?? "").trim();
-    if (message && message !== "[object Object]") return message;
-    const metaError = (error as Error & { meta?: Record<string, unknown> }).meta?.error;
-    const metaText = String(metaError ?? "").trim();
-    if (metaText && metaText !== "[object Object]") return metaText;
+  const messages: string[] = [];
+  const seen = new WeakSet<object>();
+  let statusCode: number | null = null;
+  let statusText = "";
+
+  const pushMessage = (value: unknown): void => {
+    const text = String(value ?? "").trim();
+    if (!text || text === "[object Object]") return;
+    if (!messages.includes(text)) messages.push(text);
+  };
+
+  const visit = (value: unknown, depth = 0): void => {
+    if (depth > 4 || value == null) return;
+    if (typeof value === "string") {
+      const text = value.trim();
+      if (!text) return;
+      if ((text.startsWith("{") && text.endsWith("}")) || (text.startsWith("[") && text.endsWith("]"))) {
+        try {
+          visit(JSON.parse(text), depth + 1);
+        } catch {
+          pushMessage(text);
+        }
+        return;
+      }
+      pushMessage(text);
+      return;
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      pushMessage(value);
+      return;
+    }
+    if (value instanceof Error) {
+      pushMessage(value.message);
+      visit((value as Error & { cause?: unknown }).cause, depth + 1);
+      visit((value as Error & { meta?: unknown }).meta, depth + 1);
+      return;
+    }
+    if (typeof value !== "object") return;
+    if (seen.has(value as object)) return;
+    seen.add(value as object);
+
+    const record = value as Record<string, unknown>;
+    const rawStatus = record.status;
+    if (typeof rawStatus === "number" && Number.isFinite(rawStatus)) {
+      statusCode = Math.round(rawStatus);
+    } else if (typeof rawStatus === "string") {
+      const parsed = Number(rawStatus);
+      if (!Number.isNaN(parsed)) statusCode = Math.round(parsed);
+    }
+    if (typeof record.statusText === "string" && record.statusText.trim()) {
+      statusText = record.statusText.trim();
+    }
+
+    pushMessage(record.message);
+    pushMessage(record.error_description);
+    pushMessage(record.detail);
+    pushMessage(record.reason);
+    pushMessage(record.error);
+    if (record.code != null && (typeof record.code === "string" || typeof record.code === "number")) {
+      pushMessage(`code ${record.code}`);
+    }
+
+    const nestedKeys = [
+      "meta",
+      "response",
+      "responseText",
+      "body",
+      "data",
+      "details",
+      "cause",
+      "payload",
+      "result",
+    ];
+    for (const key of nestedKeys) {
+      visit(record[key], depth + 1);
+    }
+  };
+
+  visit(error);
+
+  if (statusCode != null) {
+    const prefix = statusText ? `HTTP ${statusCode} ${statusText}` : `HTTP ${statusCode}`;
+    const first = messages[0];
+    return first ? `${prefix}: ${first}` : prefix;
   }
-  if (error && typeof error === "object") {
-    const record = error as Record<string, unknown>;
-    const direct = String(record.message ?? record.error ?? "").trim();
-    if (direct && direct !== "[object Object]") return direct;
-    const meta = record.meta as Record<string, unknown> | undefined;
-    const metaText = String(meta?.error ?? "").trim();
-    if (metaText && metaText !== "[object Object]") return metaText;
-  }
+  if (messages.length) return messages[0];
   const fallback = String(error ?? "").trim();
   return fallback && fallback !== "[object Object]" ? fallback : "Unknown extraction error.";
 }
