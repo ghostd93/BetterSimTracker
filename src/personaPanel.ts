@@ -280,9 +280,14 @@ function getSelectedPersona(context: STContext): SelectedPersona | null {
 }
 
 function getPersonaIdentity(persona: SelectedPersona): CharacterDefaultsIdentity {
+  const fallbackPersonaKey = persona.avatarId
+    ? `persona:${persona.avatarId}`
+    : `persona_name:${slugify(persona.personaName || "user")}`;
   return {
-    name: persona.personaName,
-    avatar: persona.avatarId ? `persona:${persona.avatarId}` : null,
+    // Keep persona-scoped defaults isolated from character defaults.
+    // Always prefer avatar-key namespace (including fallback when avatar id is unavailable).
+    name: null,
+    avatar: fallbackPersonaKey,
   };
 }
 

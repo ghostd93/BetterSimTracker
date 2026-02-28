@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev11] - 2026-02-28
+### Fixed
+- Persona panel defaults no longer fall back to character-name keys when persona avatar id is missing; persona-scoped defaults now always use persona-namespaced keys, preventing collisions with character defaults.
+
+### Changed
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev10] - 2026-02-28
 ### Fixed
 - Tracker recovery error cards now extract nested API/provider error payloads more deeply (including JSON-string payloads and HTTP status context), improving visibility of the real failure reason shown by SillyTavern popups.
