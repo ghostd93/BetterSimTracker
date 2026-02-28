@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev16] - 2026-02-28
+### Fixed
+- Added spacing under the Edit Tracker modal `Active In This Snapshot` row for clearer separation before stat fields.
+
+### Changed
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev15] - 2026-02-28
 ### Fixed
 - Edit Tracker modal `Active In This Snapshot` now uses the same checkbox component styling as settings (`bst-check`), matching visuals/behavior across the extension.

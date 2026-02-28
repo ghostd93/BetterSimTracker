@@ -2902,6 +2902,9 @@ function ensureStyles(): void {
   font-size: 12px;
   color: rgba(241, 246, 255, 0.94);
 }
+.bst-edit-field.bst-check {
+  margin-bottom: 8px;
+}
 .bst-edit-field input:not([type="checkbox"]),
 .bst-edit-field select,
 .bst-edit-field textarea {
