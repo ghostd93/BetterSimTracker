@@ -203,7 +203,20 @@ function asProfileIdCandidate(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  if (trimmed.toLowerCase() === "default") return null;
+  const normalized = trimmed.toLowerCase();
+  if (
+    normalized === "default" ||
+    normalized === "active" ||
+    normalized === "active connection" ||
+    normalized === "use active connection" ||
+    normalized === "current" ||
+    normalized === "current connection" ||
+    normalized === "auto" ||
+    normalized === "__active__" ||
+    normalized === "__active_runtime__"
+  ) {
+    return null;
+  }
   return trimmed;
 }
 
@@ -266,6 +279,10 @@ export function resolveConnectionProfileId(settings: BetterSimTrackerSettings, c
   }
 
   return null;
+}
+
+export function hasExplicitConnectionProfileValue(value: unknown): boolean {
+  return asProfileIdCandidate(value) != null;
 }
 
 export function saveSettings(
@@ -494,7 +511,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     enabled: asBool(input.enabled, defaultSettings.enabled),
     maxConcurrentCalls: clampInt(input.maxConcurrentCalls, defaultSettings.maxConcurrentCalls, 1, 8),
     contextMessages: clampInt(input.contextMessages, defaultSettings.contextMessages, 1, 40),
-    connectionProfile: typeof input.connectionProfile === "string" ? input.connectionProfile.trim() : defaultSettings.connectionProfile,
+    connectionProfile: asProfileIdCandidate(input.connectionProfile) ?? defaultSettings.connectionProfile,
     injectTrackerIntoPrompt: asBool(input.injectTrackerIntoPrompt, defaultSettings.injectTrackerIntoPrompt),
     includeLorebookInExtraction,
     lorebookExtractionMaxChars,

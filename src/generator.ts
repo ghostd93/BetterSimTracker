@@ -2,7 +2,7 @@ import type { BetterSimTrackerSettings, GenerateRequestMeta } from "./types";
 import type { STContext } from "./types";
 import { Generator } from "sillytavern-utils-lib";
 import type { Message } from "sillytavern-utils-lib";
-import { getContext, resolveConnectionProfileId } from "./settings";
+import { getContext, hasExplicitConnectionProfileValue, resolveConnectionProfileId } from "./settings";
 
 interface GenerateResponse {
   content?: string;
@@ -287,8 +287,7 @@ function isProfileMissingError(error: unknown): boolean {
 }
 
 function hasExplicitConnectionProfile(settings: BetterSimTrackerSettings): boolean {
-  const value = String(settings.connectionProfile ?? "").trim();
-  return Boolean(value && value.toLowerCase() !== "default");
+  return hasExplicitConnectionProfileValue(settings.connectionProfile);
 }
 
 async function generateViaGenerator(prompt: string, profileId: string, limits: TokenLimits): Promise<{ text: string; meta: GenerateRequestMeta }> {
@@ -479,9 +478,12 @@ export async function generateJson(
     try {
       return await generateViaGenerator(prompt, profileId, limits);
     } catch (error) {
-      if (hasExplicitConnectionProfile(settings) || !isProfileMissingError(error)) {
-        throw error;
-      }
+      const explicit = hasExplicitConnectionProfile(settings);
+      const profileMissing = isProfileMissingError(error);
+      // Recovery strategy:
+      // - non-explicit ("active/default") profile mode: always retry through active runtime
+      // - explicit profile mode: retry only when profile resolution is clearly invalid/missing
+      if (explicit && !profileMissing) throw error;
       return generateViaActiveRuntime(prompt, limits, context);
     }
   }

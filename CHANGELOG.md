@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev9] - 2026-02-28
+### Fixed
+- Connection profile normalization now treats legacy aliases (`active/current/default/auto` variants) as non-explicit profile selection, preventing stale pseudo-profile IDs from breaking tracker generation.
+- Generator explicit-profile detection now uses shared profile-normalization logic for consistent fallback behavior.
+
+### Changed
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev8] - 2026-02-28
 ### Fixed
 - Persona-scoped User Defaults now use an explicit single-column grid for custom-stat defaults, preventing 50% width compression in narrow persona drawers.
