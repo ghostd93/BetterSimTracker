@@ -1,4 +1,4 @@
-import { CUSTOM_STAT_ID_REGEX, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS, STYLE_ID, USER_TRACKER_KEY } from "./constants";
+﻿import { CUSTOM_STAT_ID_REGEX, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS, STYLE_ID, USER_TRACKER_KEY } from "./constants";
 import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import { generateJson } from "./generator";
 import { logDebug } from "./settings";
@@ -482,9 +482,20 @@ function bindTextareaCounters(
   container: ParentNode,
   shouldSkip?: (textarea: HTMLTextAreaElement) => boolean,
 ): () => void {
+  const shouldIgnore = (textarea: HTMLTextAreaElement): boolean => {
+    if (shouldSkip?.(textarea)) return true;
+    const styles = window.getComputedStyle(textarea);
+    return styles.display === "none" || styles.visibility === "hidden";
+  };
+
   const updateOne = (textarea: HTMLTextAreaElement): void => {
-    if (shouldSkip?.(textarea)) return;
     let counterId = String(textarea.dataset.bstCounterId ?? "").trim();
+    if (shouldIgnore(textarea)) {
+      if (counterId) {
+        container.querySelector(`.bst-textarea-counter[data-bst-counter-id="${counterId}"]`)?.remove();
+      }
+      return;
+    }
     if (!counterId) {
       textareaCounterSequence += 1;
       counterId = `bst-textarea-${textareaCounterSequence}`;
@@ -517,7 +528,7 @@ function bindTextareaCounters(
 
   const textareas = Array.from(container.querySelectorAll("textarea")) as HTMLTextAreaElement[];
   for (const textarea of textareas) {
-    if (shouldSkip?.(textarea)) continue;
+    if (shouldIgnore(textarea)) continue;
     if (textarea.dataset.bstCounterBound !== "1") {
       const refresh = (): void => updateOne(textarea);
       textarea.addEventListener("input", refresh);
@@ -1828,9 +1839,9 @@ function ensureStyles(): void {
 .bst-delta-up { color: #94f7a8; }
 .bst-delta-down { color: #ff9ea8; }
 .bst-delta-flat { color: #d4d9e8; }
-.bst-delta-up::before { content: "▲ "; }
-.bst-delta-down::before { content: "▼ "; }
-.bst-delta-flat::before { content: "• "; }
+.bst-delta-up::before { content: "â–˛ "; }
+.bst-delta-down::before { content: "â–Ľ "; }
+.bst-delta-flat::before { content: "â€˘ "; }
 .bst-thought {
   margin-top: 8px;
   font-size: 11px;
@@ -4685,7 +4696,7 @@ function openEditStatsModal(input: {
   }
   bindTextareaCounters(modal);
   modal.querySelectorAll<HTMLInputElement>('input[type="number"]').forEach(node => {
-    node.addEventListener("input", () => {
+    node.addEventListener("blur", () => {
       clampNumberInputToBounds(node);
     });
     node.addEventListener("change", () => {
@@ -5285,13 +5296,13 @@ export function openSettingsModal(input: {
           <div class="bst-help-line">Shown only when Inject Tracker Into Prompt is enabled.</div>
           <div class="bst-help-line">Placeholders you can use:</div>
           <ul class="bst-help-list">
-            <li><code>{{header}}</code> — privacy + usage rules header</li>
-            <li><code>{{statSemantics}}</code> — enabled stat meanings</li>
-            <li><code>{{behaviorBands}}</code> — low/medium/high behavior bands</li>
-            <li><code>{{reactRules}}</code> — how-to-react rules</li>
-            <li><code>{{priorityRules}}</code> — priority rules block</li>
-            <li><code>{{lines}}</code> — per-character state lines</li>
-            <li><code>{{summarizationNote}}</code> — optional latest tracker summary note (when enabled)</li>
+            <li><code>{{header}}</code> â€” privacy + usage rules header</li>
+            <li><code>{{statSemantics}}</code> â€” enabled stat meanings</li>
+            <li><code>{{behaviorBands}}</code> â€” low/medium/high behavior bands</li>
+            <li><code>{{reactRules}}</code> â€” how-to-react rules</li>
+            <li><code>{{priorityRules}}</code> â€” priority rules block</li>
+            <li><code>{{lines}}</code> â€” per-character state lines</li>
+            <li><code>{{summarizationNote}}</code> â€” optional latest tracker summary note (when enabled)</li>
           </ul>
           <div class="bst-prompt-group bst-prompt-inline">
             <div class="bst-prompt-head">
@@ -5398,22 +5409,22 @@ export function openSettingsModal(input: {
         <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
         <div class="bst-help-line">Placeholders you can use:</div>
         <ul class="bst-help-list">
-          <li><code>{{envelope}}</code> — prebuilt header with user/characters + recent messages</li>
-          <li><code>{{user}}</code> — current user name (<code>{{userName}}</code> alias also works)</li>
-          <li><code>{{char}}</code> — tracked message speaker (fallback: first character in scope)</li>
-          <li><code>{{characters}}</code> — comma-separated character names</li>
-          <li><code>{{contextText}}</code> — raw recent messages text</li>
-          <li><code>{{currentLines}}</code> — current tracker state lines</li>
-          <li><code>{{historyLines}}</code> — recent tracker snapshot lines</li>
-          <li><code>{{numericStats}}</code> — requested numeric stats list</li>
-          <li><code>{{textStats}}</code> — requested text stats list</li>
-          <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
-          <li><code>{{moodOptions}}</code> — allowed mood labels</li>
-          <li><code>{{statId}}</code>/<code>{{statLabel}}</code> — custom stat identity (custom per-stat template)</li>
-          <li><code>{{statDescription}}</code>/<code>{{statDefault}}</code> — custom stat metadata (custom per-stat template)</li>
-          <li><code>{{statKind}}</code>/<code>{{valueSchema}}</code> — non-numeric stat kind + expected value format</li>
-          <li><code>{{allowedValues}}</code>/<code>{{textMaxLen}}</code> — enum option list or text-short limit</li>
-          <li><code>{{defaultValueLiteral}}</code>/<code>{{booleanTrueLabel}}</code>/<code>{{booleanFalseLabel}}</code> — non-numeric defaults/labels</li>
+          <li><code>{{envelope}}</code> â€” prebuilt header with user/characters + recent messages</li>
+          <li><code>{{user}}</code> â€” current user name (<code>{{userName}}</code> alias also works)</li>
+          <li><code>{{char}}</code> â€” tracked message speaker (fallback: first character in scope)</li>
+          <li><code>{{characters}}</code> â€” comma-separated character names</li>
+          <li><code>{{contextText}}</code> â€” raw recent messages text</li>
+          <li><code>{{currentLines}}</code> â€” current tracker state lines</li>
+          <li><code>{{historyLines}}</code> â€” recent tracker snapshot lines</li>
+          <li><code>{{numericStats}}</code> â€” requested numeric stats list</li>
+          <li><code>{{textStats}}</code> â€” requested text stats list</li>
+          <li><code>{{maxDelta}}</code> â€” configured max delta per turn</li>
+          <li><code>{{moodOptions}}</code> â€” allowed mood labels</li>
+          <li><code>{{statId}}</code>/<code>{{statLabel}}</code> â€” custom stat identity (custom per-stat template)</li>
+          <li><code>{{statDescription}}</code>/<code>{{statDefault}}</code> â€” custom stat metadata (custom per-stat template)</li>
+          <li><code>{{statKind}}</code>/<code>{{valueSchema}}</code> â€” non-numeric stat kind + expected value format</li>
+          <li><code>{{allowedValues}}</code>/<code>{{textMaxLen}}</code> â€” enum option list or text-short limit</li>
+          <li><code>{{defaultValueLiteral}}</code>/<code>{{booleanTrueLabel}}</code>/<code>{{booleanFalseLabel}}</code> â€” non-numeric defaults/labels</li>
         </ul>
       </details>
       <div class="bst-check-grid">
@@ -5706,7 +5717,7 @@ export function openSettingsModal(input: {
       const parts: string[] = [];
       if (minAttr !== null && minAttr !== "") parts.push(`min ${minAttr}`);
       if (maxAttr !== null && maxAttr !== "") parts.push(`max ${maxAttr}`);
-      span.textContent = parts.join(" · ");
+      span.textContent = parts.join(" Â· ");
       label.appendChild(span);
     });
   };
@@ -5735,14 +5746,14 @@ export function openSettingsModal(input: {
         const changed = clampNumberInputToBounds(input);
         if (changed) clampedThisFocus = true;
       };
-      input.addEventListener("input", clamp);
+      // Keep typing fluid; enforce bounds on commit.
       input.addEventListener("blur", () => {
         clamp();
         if (!clampedThisFocus) return;
         const parts: string[] = [];
         if (typeof min === "number") parts.push(`min ${min}`);
         if (typeof max === "number") parts.push(`max ${max}`);
-        notice.textContent = `Allowed range: ${parts.join(" · ")}. Value adjusted.`;
+        notice.textContent = `Allowed range: ${parts.join(" Â· ")}. Value adjusted.`;
         notice.style.display = "block";
         if (clearTimer !== null) window.clearTimeout(clearTimer);
         clearTimer = window.setTimeout(() => {
@@ -7585,11 +7596,13 @@ export function openSettingsModal(input: {
 
     wizard.querySelectorAll("input, textarea, select").forEach(node => {
       node.addEventListener("input", () => {
-        if (node instanceof HTMLInputElement) clampNumberInputToBounds(node);
         syncDraftFromFields();
         syncKindUi();
         writeReview();
         updateDescriptionCounter();
+      });
+      node.addEventListener("blur", () => {
+        if (node instanceof HTMLInputElement) clampNumberInputToBounds(node);
       });
       node.addEventListener("change", () => {
         if (node instanceof HTMLInputElement) clampNumberInputToBounds(node);
@@ -8158,6 +8171,7 @@ export function closeSettingsModal(): void {
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
 }
+
 
 
 
