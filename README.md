@@ -148,13 +148,15 @@ flowchart TD
   N --> O
   O --> P[Apply built-in deltas, mood, lastThought]
   P --> Q[Apply custom numeric and non-numeric values]
-  Q --> R[Merge missing fields from previous/defaults]
-  R --> S{Extraction succeeded?}
-  S -- Yes --> T[Save snapshot to message/chat metadata/local storage]
-  S -- No and no prior tracker --> U[Render inline recovery card with reason and Retry or Generate button]
-  T --> V[Render tracker cards + graph]
-  U --> V
-  V --> W[Sync prompt injection]
+  Q --> R[Filter owner-private stats to resolved owner scope]
+  R --> S[Merge missing fields from previous/defaults]
+  S --> T{Extraction succeeded?}
+  T -- Yes --> U[Save snapshot to message/chat metadata/local storage]
+  T -- No and no prior tracker --> V[Render inline recovery card with reason and Retry or Generate button]
+  T -- Stopped and no prior tracker --> V
+  U --> W[Render tracker cards + graph]
+  V --> W
+  W --> X[Sync prompt injection with owner-private filtering]
 ```
 
 ### 2) Stat Calculation Flow
@@ -181,10 +183,11 @@ flowchart TD
   Q -- boolean --> S[Accept strict true/false]
   Q -- text_short --> T[Trim and enforce max length]
   Q -- array --> T2[Normalize item list and enforce max item count]
+  T2 --> T3[Apply incremental list maintenance semantics add remove edit]
   R --> U[Save non-numeric custom stat]
   S --> U
   T --> U
-  T2 --> U
+  T3 --> U
 ```
 
 Numeric scaling formula used by runtime:
