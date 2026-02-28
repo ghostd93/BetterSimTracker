@@ -5,6 +5,7 @@ All notable changes to BetterSimTracker are documented here.
 ## [2.2.0.7-dev4] - 2026-02-28
 ### Changed
 - Version bump for latest `dev` fixes.
+- Tracker recovery placeholders (error/stopped card with retry/generate action) are now persisted in chat metadata and restored after page reload.
 
 ## [2.2.0.7-dev3] - 2026-02-28
 ### Changed

@@ -104,6 +104,7 @@ let summaryVisibilityReloadInFlight = false;
 const BUILT_IN_NUMERIC_KEYS = new Set(["affection", "trust", "desire", "connection"]);
 const EDIT_MOOD_LABELS = new Map(moodOptions.map(label => [label.toLowerCase(), label]));
 const LOREBOOK_ACTIVATED_METADATA_KEY = "bstLorebookActivatedEntries";
+const TRACKER_RECOVERY_METADATA_KEY = "bstTrackerRecoveries";
 let lastActivatedLorebookEntries: string[] = [];
 
 function collectSummaryCharacters(data: TrackerData): string[] {
@@ -1383,6 +1384,7 @@ function queueRender(): void {
     const context = getSafeContext();
     const entries: Array<{ messageIndex: number; data: TrackerData | null; recovery?: TrackerRecoveryEntry | null }> = [];
 
+    let recoveryMapMutated = false;
     if (context) {
       for (let i = 0; i < context.chat.length; i += 1) {
         const message = context.chat[i];
@@ -1390,13 +1392,17 @@ function queueRender(): void {
         const data = getTrackerDataFromMessage(message);
         if (!data) continue;
         entries.push({ messageIndex: i, data, recovery: null });
-        clearTrackerRecovery(i);
+        const hadRecovery = trackerRecoveryByMessage.has(i);
+        clearTrackerRecoveryWithOptions(i, false);
+        if (hadRecovery) recoveryMapMutated = true;
       }
     }
 
     if (latestData && latestDataMessageIndex != null && !entries.some(entry => entry.messageIndex === latestDataMessageIndex)) {
       entries.push({ messageIndex: latestDataMessageIndex, data: latestData, recovery: null });
-      clearTrackerRecovery(latestDataMessageIndex);
+      const hadRecovery = trackerRecoveryByMessage.has(latestDataMessageIndex);
+      clearTrackerRecoveryWithOptions(latestDataMessageIndex, false);
+      if (hadRecovery) recoveryMapMutated = true;
     }
 
     if (
@@ -1421,11 +1427,15 @@ function queueRender(): void {
       for (const [messageIndex, recovery] of trackerRecoveryByMessage.entries()) {
         if (messageIndex < 0 || messageIndex >= context.chat.length) {
           trackerRecoveryByMessage.delete(messageIndex);
+          recoveryMapMutated = true;
           continue;
         }
         if (!isRenderableTrackerIndex(context, messageIndex)) continue;
         if (entries.some(entry => entry.messageIndex === messageIndex)) continue;
         entries.push({ messageIndex, data: null, recovery });
+      }
+      if (recoveryMapMutated) {
+        persistTrackerRecoveries(context);
       }
     }
     pushTrace("render.queue", {
@@ -1623,8 +1633,58 @@ function setTrackerUi(context: STContext, next: TrackerUiState): void {
 }
 
 function clearTrackerRecovery(messageIndex: number | null | undefined): void {
+  clearTrackerRecoveryWithOptions(messageIndex, true);
+}
+
+function clearTrackerRecoveryWithOptions(messageIndex: number | null | undefined, persist: boolean): void {
   if (typeof messageIndex !== "number" || !Number.isFinite(messageIndex) || messageIndex < 0) return;
-  trackerRecoveryByMessage.delete(messageIndex);
+  const deleted = trackerRecoveryByMessage.delete(messageIndex);
+  if (!deleted || !persist) return;
+  const context = getSafeContext();
+  if (!context) return;
+  persistTrackerRecoveries(context);
+}
+
+function persistTrackerRecoveries(context: STContext): void {
+  if (!context.chatMetadata || typeof context.chatMetadata !== "object") {
+    context.chatMetadata = {};
+  }
+  const serialized: Record<string, TrackerRecoveryEntry> = {};
+  for (const [messageIndex, entry] of trackerRecoveryByMessage.entries()) {
+    if (!Number.isFinite(messageIndex) || messageIndex < 0) continue;
+    serialized[String(messageIndex)] = {
+      kind: entry.kind === "stopped" ? "stopped" : "error",
+      title: String(entry.title ?? "").trim() || "Tracker generation failed",
+      detail: sanitizeTrackerRecoveryDetail(entry.detail ?? ""),
+      actionLabel: String(entry.actionLabel ?? "").trim() || "Retry Tracker",
+    };
+  }
+  context.chatMetadata[TRACKER_RECOVERY_METADATA_KEY] = serialized;
+  context.saveMetadataDebounced?.();
+  context.saveChatDebounced?.();
+}
+
+function readPersistedTrackerRecoveries(context: STContext): void {
+  trackerRecoveryByMessage.clear();
+  const raw = context.chatMetadata?.[TRACKER_RECOVERY_METADATA_KEY];
+  if (!raw || typeof raw !== "object") return;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const idx = Number(key);
+    if (!Number.isFinite(idx) || idx < 0) continue;
+    if (!value || typeof value !== "object") continue;
+    const record = value as Record<string, unknown>;
+    const kindRaw = String(record.kind ?? "").trim().toLowerCase();
+    const kind = kindRaw === "stopped" ? "stopped" : "error";
+    const title = String(record.title ?? "").trim();
+    const detail = sanitizeTrackerRecoveryDetail(String(record.detail ?? ""));
+    const actionLabel = String(record.actionLabel ?? "").trim();
+    trackerRecoveryByMessage.set(idx, {
+      kind,
+      title: title || (kind === "stopped" ? "Tracker generation stopped" : "Tracker generation failed"),
+      detail,
+      actionLabel: actionLabel || (kind === "stopped" ? "Generate Tracker" : "Retry Tracker"),
+    });
+  }
 }
 
 function sanitizeTrackerRecoveryDetail(raw: string): string {
@@ -1662,6 +1722,9 @@ function setTrackerRecovery(
 ): void {
   if (!Number.isFinite(messageIndex) || messageIndex < 0) return;
   trackerRecoveryByMessage.set(messageIndex, entry);
+  const context = getSafeContext();
+  if (!context) return;
+  persistTrackerRecoveries(context);
 }
 
 function findCharacterByName(context: STContext | null, name: string): Character | null {
@@ -3081,6 +3144,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
 function refreshFromStoredData(): void {
   const context = getSafeContext();
   if (!context || !settings) return;
+  readPersistedTrackerRecoveries(context);
 
   allCharacterNames = getAllTrackedCharacterNames(context);
   if (settings.enableUserTracking && !allCharacterNames.includes(USER_TRACKER_KEY)) {
@@ -3846,6 +3910,8 @@ function clearCurrentChat(): void {
   const activeContext = getSafeContext();
   if (!activeContext) return;
   clearTrackerDataForCurrentChat(activeContext);
+  trackerRecoveryByMessage.clear();
+  persistTrackerRecoveries(activeContext);
   clearDebugRecord(activeContext);
   debugTrace = [];
   lastActivatedLorebookEntries = [];
