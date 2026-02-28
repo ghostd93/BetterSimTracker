@@ -2,142 +2,26 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.0.7-dev17] - 2026-02-28
-### Fixed
-- User-tracker defaults now resolve with strict persona-scoped identity for `__bst_user__`, preventing collisions with character defaults when persona name matches a character (e.g. `Kuba`).
-- On mobile, array/enum editor rows keep `input + trash` in one row instead of pushing trash buttons under inputs.
-
-### Changed
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev16] - 2026-02-28
-### Fixed
-- Added spacing under the Edit Tracker modal `Active In This Snapshot` row for clearer separation before stat fields.
-
-### Changed
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev15] - 2026-02-28
-### Fixed
-- Edit Tracker modal `Active In This Snapshot` now uses the same checkbox component styling as settings (`bst-check`), matching visuals/behavior across the extension.
-
-### Changed
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev14] - 2026-02-28
-### Fixed
-- Edit Tracker modal `Active In This Snapshot` checkbox now enforces native checkbox appearance and fixed square dimensions, preventing oval/egg-shaped rendering on themed clients.
-
-### Changed
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev13] - 2026-02-28
-### Fixed
-- Edit Tracker modal checkbox controls (including `Active In This Snapshot`) no longer inherit full-width text-input styling, preventing stretched toggle rendering.
-
-### Changed
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev12] - 2026-02-28
+## [2.2.1] - 2026-02-28
 ### Added
-- Settable `Last Thought` defaults in Character Defaults and Persona User Defaults panels.
+- New custom stat kind: `array` (max 20 items) implemented end-to-end, including extraction, defaults, parser/storage normalization, prompt/protocol coverage, injection support, and tracker editing.
+- Owner-scoped privacy controls for stats: `LastThought` and custom stats can be marked `Private (owner-scoped)` to limit cross-character leakage.
+- Tracker recovery cards now include exact error reason details and direct `Retry Tracker` / `Generate Tracker` actions.
+- Persona Management now includes persona-scoped user defaults (mood, lastThought, and user-trackable custom stat defaults).
+- Settable `Last Thought` defaults for Character Defaults and Persona User Defaults.
+
+### Changed
+- Array/enum editors were upgraded to structured add/remove row UX with compact icon actions and live counters across wizard/defaults/edit flows.
+- Mobile and modal UX polish for tracker editing and default editors (checkbox alignment, spacing, row stability, action-button alignment).
+- Input bounds enforcement was standardized across settings/wizard/edit controls.
+- Unified/sequential prompt contracts for arrays now emphasize item-level maintenance (add/remove/edit) instead of full-list rewrites.
 
 ### Fixed
-- Default seeding now applies configured `lastThought` defaults instead of always forcing empty text on baseline creation.
-
-### Changed
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev11] - 2026-02-28
-### Fixed
-- Persona panel defaults no longer fall back to character-name keys when persona avatar id is missing; persona-scoped defaults now always use persona-namespaced keys, preventing collisions with character defaults.
-
-### Changed
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev10] - 2026-02-28
-### Fixed
-- Tracker recovery error cards now extract nested API/provider error payloads more deeply (including JSON-string payloads and HTTP status context), improving visibility of the real failure reason shown by SillyTavern popups.
-
-### Changed
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev9] - 2026-02-28
-### Fixed
-- Connection profile normalization now treats legacy aliases (`active/current/default/auto` variants) as non-explicit profile selection, preventing stale pseudo-profile IDs from breaking tracker generation.
-- Generator explicit-profile detection now uses shared profile-normalization logic for consistent fallback behavior.
-
-### Changed
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev8] - 2026-02-28
-### Fixed
-- Persona-scoped User Defaults now use an explicit single-column grid for custom-stat defaults, preventing 50% width compression in narrow persona drawers.
-
-### Changed
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev7] - 2026-02-28
-### Fixed
-- Array/enum row-editor inputs now stretch to full row width in constrained panels (including Persona Management user defaults), preventing half-width input rendering.
-
-### Changed
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev6] - 2026-02-28
-### Changed
-- Persona User Defaults custom-stat layout now uses full-width rows in Persona Management to avoid cramped array editors in narrow drawer widths.
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev5] - 2026-02-28
-### Added
-- Persona Management panel now includes persona-scoped User defaults (mood + user-trackable custom stat defaults).
-
-### Changed
-- Tracker edit modal now uses structured add/remove item controls for `array` custom stats instead of a raw textarea.
-- Persona-scoped `array` defaults now use structured add/remove item controls instead of a raw textarea.
-- Version bump for latest `dev` fixes.
-
-## [2.2.0.7-dev4] - 2026-02-28
-### Changed
-- Version bump for latest `dev` fixes.
-- Tracker recovery placeholders (error/stopped card with retry/generate action) are now persisted in chat metadata and restored after page reload.
-
-## [2.2.0.7-dev3] - 2026-02-28
-### Changed
-- Custom Stat wizard (`array` kind) now uses a structured default-item editor (add/remove item rows with live `items/20` counter) instead of a raw textarea.
-- Array default editing is now normalized through the same item rules used by extraction/storage, improving consistency and reducing malformed list defaults.
-- Custom Stat wizard (`enum_single` kind) now uses a structured allowed-values editor (add/remove option rows with live `options/12` counter) instead of a raw textarea.
-- Array/enum list editors now use compact icon actions (`+` add, trash remove) for cleaner controls on desktop and mobile.
-- Numeric input bounds enforcement is now shared and immediate across BST settings, custom stat wizard, and tracker edit modal.
-- Recovery cards now surface normalized provider/API error text more reliably (including nested error payloads), with longer readable details.
-
-## [2.2.0.7-dev2] - 2026-02-28
-### Added
-- New custom stat kind: `array` (non-numeric list, max 20 items) with full extraction, defaults, parsing, and storage support.
-- Array values now render on tracker cards as item chips with `+N more` expand/collapse when more than 4 items are present.
-- Character defaults panel now supports array defaults (one item per line, capped at 20).
-
-### Changed
-- Sequential and unified prompts now include array-aware schema/rules, including item-level maintenance guidance (add/remove/edit) instead of full-list rewrites.
-- `Generate with AI` helpers for custom prompts/guidance now emit array-specific constraints and behavior cues.
-- Edit Tracker modal now supports editing array stats via multiline item input.
-
-### Fixed
-- Runtime default seeding and manual-edit normalization no longer coerce array stats into plain text in edge paths.
-- Prompt injection, parser contracts, and non-numeric protocol rendering now handle array values consistently.
-
-## [2.2.0.7-dev1] - 2026-02-28
-### Added
-- Owner-scoped privacy controls for stats: `LastThought` can now be marked private, and custom stats now support a `Private (owner-scoped)` toggle.
-- Inline tracker recovery card for missing snapshots, including exact failure reason text and one-click `Retry Tracker` / `Generate Tracker` actions.
-
-### Changed
-- Private stat extraction now runs owner-scoped in both unified and sequential modes, while public stats continue to run in normal shared batches.
-- Prompt injection now excludes private stats for non-owner contexts, including private `LastThought`.
-
-### Fixed
-- If extraction is stopped/cancelled on a message that had no previous tracker, the message now shows a direct recovery action instead of forcing manual refresh/reload workarounds.
+- Persona/user defaults isolation was hardened to prevent collisions with character-scoped defaults (including same-name persona/character cases like `Kuba`).
+- User tracker default seeding/application now resolves persona scope consistently, including custom non-numeric defaults.
+- Connection profile alias normalization now avoids stale pseudo-profile IDs when using active/current/default-style selectors.
+- Recovery placeholders now persist across reloads and restore correctly from chat metadata.
+- Nested provider/API error extraction was improved so UI diagnostics match real backend error messages.
 
 ## [2.2.0.7] - 2026-02-27
 ### Changed
