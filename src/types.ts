@@ -172,6 +172,7 @@ export interface CharacterDefaults {
   desire?: number;
   connection?: number;
   mood?: string;
+  lastThought?: string;
   cardColor?: string;
   customStatDefaults?: Record<CustomStatKey, number>;
   customNonNumericStatDefaults?: Record<CustomStatKey, string | boolean | string[]>;

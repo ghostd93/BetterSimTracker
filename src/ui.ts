@@ -3231,7 +3231,8 @@ function ensureStyles(): void {
 }
 .bst-character-panel input[type="text"],
 .bst-character-panel input[type="number"],
-.bst-character-panel select {
+.bst-character-panel select,
+.bst-character-panel textarea {
   background: rgba(16,20,30,0.7);
   border: 1px solid rgba(255,255,255,0.18);
   color: #f4f7ff;

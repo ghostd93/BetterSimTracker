@@ -65,6 +65,7 @@ const EXPRESSION_CHECK_TTL_MS = 30_000;
 const expressionAvailabilityCache = new Map<string, { checkedAt: number; hasExpressions: boolean }>();
 let lastEditorCharacterId: number | null = null;
 let editorListenerBound = false;
+const LAST_THOUGHT_DEFAULT_MAX_CHARS = 600;
 
 function notify(message: string, type: "info" | "success" | "warning" | "error" = "info"): void {
   const anyGlobal = globalThis as Record<string, unknown>;
@@ -615,6 +616,7 @@ function renderPanel(input: InitInput, force = false): void {
   const trackDesire = settings.trackDesire !== false;
   const trackConnection = settings.trackConnection !== false;
   const trackMood = settings.trackMood !== false;
+  const trackLastThought = settings.trackLastThought !== false;
   const customNumericDefaultsRaw = defaults.customStatDefaults && typeof defaults.customStatDefaults === "object"
     ? defaults.customStatDefaults as Record<string, unknown>
     : {};
@@ -724,6 +726,9 @@ function renderPanel(input: InitInput, force = false): void {
       <label>Desire Default <input type="number" min="0" max="100" step="1" data-bst-default="desire" value="${defaults.desire ?? ""}" ${trackDesire ? "" : "disabled"}></label>
       <label>Connection Default <input type="number" min="0" max="100" step="1" data-bst-default="connection" value="${defaults.connection ?? ""}" ${trackConnection ? "" : "disabled"}></label>
       <label class="bst-character-wide">Mood Default <input type="text" data-bst-default="mood" value="${defaults.mood ?? ""}" placeholder="Neutral" ${trackMood ? "" : "disabled"}></label>
+      <label class="bst-character-wide">Last Thought Default
+        <textarea rows="3" maxlength="${LAST_THOUGHT_DEFAULT_MAX_CHARS}" data-bst-default="lastThought" placeholder="Use stat default" ${trackLastThought ? "" : "disabled"}>${escapeHtml(String(defaults.lastThought ?? ""))}</textarea>
+      </label>
       <label class="bst-character-wide">Card Color (optional)
         <div class="bst-color-inputs">
           <input data-bst-color="cardColor" type="color" value="${escapeHtml(cardColorPreview)}">
@@ -731,7 +736,7 @@ function renderPanel(input: InitInput, force = false): void {
         </div>
       </label>
     </div>
-    ${trackAffection && trackTrust && trackDesire && trackConnection && trackMood ? "" : `
+    ${trackAffection && trackTrust && trackDesire && trackConnection && trackMood && trackLastThought ? "" : `
       <div class="bst-character-help">
         Some built-in defaults are unavailable because those stats are not tracked in extension settings.
       </div>
@@ -862,7 +867,7 @@ function renderPanel(input: InitInput, force = false): void {
     });
   }
 
-  panel.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-bst-default]").forEach(node => {
+  panel.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-bst-default]").forEach(node => {
     node.addEventListener("change", async () => {
       const key = node.dataset.bstDefault ?? "";
       const value = node.value;
@@ -889,6 +894,14 @@ function renderPanel(input: InitInput, force = false): void {
             delete copy.mood;
           } else {
             copy.mood = sanitized;
+          }
+        } else if (key === "lastThought") {
+          const sanitized = String(value ?? "").trim().slice(0, LAST_THOUGHT_DEFAULT_MAX_CHARS);
+          node.value = sanitized;
+          if (!sanitized) {
+            delete copy.lastThought;
+          } else {
+            copy.lastThought = sanitized;
           }
         } else if (key === "cardColor") {
           const normalized = normalizeHexColor(value);

@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev12] - 2026-02-28
+### Added
+- Settable `Last Thought` defaults in Character Defaults and Persona User Defaults panels.
+
+### Fixed
+- Default seeding now applies configured `lastThought` defaults instead of always forcing empty text on baseline creation.
+
+### Changed
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev11] - 2026-02-28
 ### Fixed
 - Persona panel defaults no longer fall back to character-name keys when persona avatar id is missing; persona-scoped defaults now always use persona-namespaced keys, preventing collisions with character defaults.

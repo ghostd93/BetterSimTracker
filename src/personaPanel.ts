@@ -25,6 +25,7 @@ const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_WIDTH = 1024;
 const MAX_IMAGE_HEIGHT = 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const LAST_THOUGHT_DEFAULT_MAX_CHARS = 600;
 const EXPRESSION_CHECK_TTL_MS = 30_000;
 const expressionAvailabilityCache = new Map<string, { checkedAt: number; hasExpressions: boolean }>();
 const moodLabelSet = new Set(moodOptions.map(label => label.toLowerCase()));
@@ -570,8 +571,12 @@ function renderPanel(input: InitInput, force = false): void {
       <label class="bst-character-wide">Mood Default
         <input type="text" data-bst-persona-default="mood" value="${escapeHtml(String(defaults.mood ?? ""))}" placeholder="Use stat default" ${settings.userTrackMood ? "" : "disabled"}>
       </label>
+      <label class="bst-character-wide">Last Thought Default
+        <textarea rows="3" maxlength="${LAST_THOUGHT_DEFAULT_MAX_CHARS}" data-bst-persona-default="lastThought" placeholder="Use stat default" ${settings.userTrackLastThought ? "" : "disabled"}>${escapeHtml(String(defaults.lastThought ?? ""))}</textarea>
+      </label>
     </div>
     ${settings.userTrackMood ? "" : `<div class="bst-character-help">Mood default is unavailable because User Mood tracking is disabled.</div>`}
+    ${settings.userTrackLastThought ? "" : `<div class="bst-character-help">Last Thought default is unavailable because User Last Thought tracking is disabled.</div>`}
     ${userCustomDefaultFieldsHtml
       ? `<div class="bst-character-grid bst-character-grid-single">${userCustomDefaultFieldsHtml}</div>`
       : `<div class="bst-character-help">No user-trackable custom stats configured yet.</div>`}
@@ -665,7 +670,7 @@ function renderPanel(input: InitInput, force = false): void {
     renderPanel(input, true);
   });
 
-  panel.querySelectorAll<HTMLInputElement>("[data-bst-persona-default]").forEach(node => {
+  panel.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[data-bst-persona-default]").forEach(node => {
     node.addEventListener("change", () => {
       const key = String(node.dataset.bstPersonaDefault ?? "").trim();
       if (!key) return;
@@ -678,6 +683,14 @@ function renderPanel(input: InitInput, force = false): void {
           } else {
             copy.mood = value.slice(0, 80);
             node.value = String(copy.mood);
+          }
+        } else if (key === "lastThought") {
+          if (!settings.userTrackLastThought || !value) {
+            delete copy.lastThought;
+            node.value = "";
+          } else {
+            copy.lastThought = value.slice(0, LAST_THOUGHT_DEFAULT_MAX_CHARS);
+            node.value = String(copy.lastThought);
           }
         }
         return copy;

@@ -1846,6 +1846,7 @@ function getConfiguredCharacterDefaults(
   desire?: number;
   connection?: number;
   mood?: string;
+  lastThought?: string;
   customStatDefaults?: Record<string, number>;
   customNonNumericStatDefaults?: Record<string, string | boolean | string[]>;
 } {
@@ -1864,6 +1865,7 @@ function getConfiguredCharacterDefaults(
   const desire = parseDefaultNumber(merged.desire);
   const connection = parseDefaultNumber(merged.connection);
   const mood = parseDefaultText(merged.mood);
+  const lastThought = parseDefaultText(merged.lastThought);
   const customStatDefaultsRaw = merged.customStatDefaults;
   const customStatDefaults: Record<string, number> = {};
   if (customStatDefaultsRaw && typeof customStatDefaultsRaw === "object") {
@@ -1910,6 +1912,7 @@ function getConfiguredCharacterDefaults(
     ...(desire != null ? { desire } : {}),
     ...(connection != null ? { connection } : {}),
     ...(mood != null ? { mood } : {}),
+    ...(lastThought != null ? { lastThought } : {}),
     ...(Object.keys(customStatDefaults).length ? { customStatDefaults } : {}),
     ...(Object.keys(customNonNumericStatDefaults).length ? { customNonNumericStatDefaults } : {}),
   };
@@ -1948,7 +1951,7 @@ function buildSeededStatisticsForActiveCharacters(
       seeded.mood[name] = configured.mood ?? settingsInput.defaultMood;
     }
     if (seeded.lastThought[name] === undefined) {
-      seeded.lastThought[name] = "";
+      seeded.lastThought[name] = configured.lastThought ?? "";
     }
   }
 
@@ -2149,6 +2152,7 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
     desire: number;
     connection: number;
     mood: string;
+    lastThought: string;
     custom: Record<string, number>;
     customNonNumeric: Record<string, string | boolean | string[]>;
   } => {
@@ -2192,6 +2196,7 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
       defaults.desire !== undefined ||
       defaults.connection !== undefined ||
       defaults.mood !== undefined ||
+      defaults.lastThought !== undefined ||
       Object.keys(defaults.customStatDefaults ?? {}).length > 0 ||
       Object.keys(defaults.customNonNumericStatDefaults ?? {}).length > 0;
 
@@ -2202,12 +2207,13 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
         desire: pickNumber(defaults.desire, contextual.desire),
         connection: pickNumber(defaults.connection, contextual.connection),
         mood: pickText(defaults.mood, contextual.mood),
+        lastThought: pickText(defaults.lastThought, ""),
         custom: customDefaults,
         customNonNumeric: customNonNumericDefaults,
       };
     }
 
-    return { ...contextual, custom: customDefaults, customNonNumeric: customNonNumericDefaults };
+    return { ...contextual, lastThought: "", custom: customDefaults, customNonNumeric: customNonNumericDefaults };
   };
 
   const baselinePerCharacter = new Map<string, ReturnType<typeof getCardDefaults>>();
@@ -2259,7 +2265,7 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
         ? Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.mood ?? s.defaultMood]))
         : {},
       lastThought: s.trackLastThought
-        ? Object.fromEntries(activeCharacters.map(name => [name, ""]))
+        ? Object.fromEntries(activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.lastThought ?? ""]))
         : {}
     },
     customStatistics,
