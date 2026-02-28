@@ -2679,6 +2679,11 @@ function ensureStyles(): void {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
 }
+.bst-array-default-row input,
+.bst-enum-options-row input {
+  width: 100%;
+  min-width: 0;
+}
 .bst-array-default-actions,
 .bst-enum-options-actions {
   display: flex;
