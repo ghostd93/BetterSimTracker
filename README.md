@@ -22,6 +22,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Inline recovery card when extraction fails/stops before first tracker save (shows reason + `Retry/Generate` action)
 - Summarize button (AI-generated detailed prose summary, 4-6 sentences, grounded in currently tracked dimensions, no numeric stat values; with settings to make the note AI-visible and/or inject it into prompt guidance)
 - Edit last tracker stats inline (pencil icon on the latest card; numeric clamp + mood picker + last thought editor + kind-aware custom non-numeric editors)
+- `array` custom stat kind (max 20 items) with card-friendly chip rendering and `+N more` expand/collapse for long lists
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
   - raw/smoothed view
@@ -179,9 +180,11 @@ flowchart TD
   Q -- enum_single --> R[Accept only configured enum token]
   Q -- boolean --> S[Accept strict true/false]
   Q -- text_short --> T[Trim and enforce max length]
+  Q -- array --> T2[Normalize item list and enforce max item count]
   R --> U[Save non-numeric custom stat]
   S --> U
   T --> U
+  T2 --> U
 ```
 
 Numeric scaling formula used by runtime:
@@ -217,7 +220,7 @@ Numeric scaling formula used by runtime:
 - `Injection Prompt Template`: editable template for injected guidance (shown only when injection is enabled)
 - `Prompt Templates`: edit unified + per-stat sequential prompt instructions plus global custom-numeric and custom-non-numeric sequential defaults (protocol blocks are fixed; repair prompts are fixed)
 - `Manage Built-in Stats`: open a wizard to control built-in stat participation in extraction/cards/graph/injection (`lastThought` includes owner-scoped privacy toggle)
-- `Custom Stats`: create and manage additional custom stats (`numeric`, `enum_single`, `boolean`, `text_short`) via step-by-step wizard in settings, including owner-scoped privacy toggle per stat
+- `Custom Stats`: create and manage additional custom stats (`numeric`, `enum_single`, `boolean`, `text_short`, `array`) via step-by-step wizard in settings, including owner-scoped privacy toggle per stat
 - `Profile Token Limits`: extraction now respects profile max tokens and truncation length (when available)
 - `Max Tokens Override`: force max tokens for extraction (0 = auto)
 - `Context Size Override`: force truncation length for extraction (0 = auto)
@@ -337,7 +340,7 @@ Behavior notes:
     - `Inject` (numeric built-ins only)
     - `Private` (lastThought only, owner-scoped in prompt injection)
 - `Custom Stats` section:
-  - `Add Custom Stat` wizard with kind-aware flow (`numeric`, `enum_single`, `boolean`, `text_short`)
+  - `Add Custom Stat` wizard with kind-aware flow (`numeric`, `enum_single`, `boolean`, `text_short`, `array`)
   - `Edit` and `Clone` for faster setup reuse
   - `Remove` uses soft-remove flow (historical payload remains stored, active tracking stops)
   - numeric custom stats use unified `Enabled` toggle (`Track + Card + Graph`) plus `includeInInjection`
@@ -387,7 +390,7 @@ Two editable prompt types are supported:
 - Unified prompt: used when sequential extraction is off.
 - Per-stat prompts: used in sequential mode (`affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`).
 - `Custom Numeric Default` prompt: global default for custom numeric per-stat extraction in all modes when a custom stat does not define its own template override.
-- `Custom Non-Numeric Default` prompt: global default for `enum_single` / `boolean` / `text_short` per-stat extraction in all modes when a custom stat does not define its own template override.
+- `Custom Non-Numeric Default` prompt: global default for `enum_single` / `boolean` / `text_short` / `array` per-stat extraction in all modes when a custom stat does not define its own template override.
 - Default desire prompt guardrail: only increase desire when the recent messages are explicitly romantic/sexual; non-romantic context should be 0 or negative.
 
 Each prompt instruction can be reset to its default with the per-prompt reset button. Protocol blocks are read-only.
@@ -412,7 +415,8 @@ Available placeholders:
 - `{{allowedValues}}`: enum options list (`enum_single` only).
 - `{{valueSchema}}`: expected output schema for non-numeric extraction.
 - `{{defaultValueLiteral}}`: schema-safe default literal for non-numeric kinds.
-- `{{textMaxLen}}`: max allowed length for `text_short`.
+- `{{textMaxLen}}`: max allowed length for `text_short` and `array` items.
+- `{{arrayMaxItems}}`: max allowed item count for `array` kinds.
 - `{{booleanTrueLabel}}` / `{{booleanFalseLabel}}`: boolean semantic labels.
 
 Note: strict/repair prompts are not editable.
@@ -428,7 +432,7 @@ Per-character defaults can be set in character card Advanced definitions:
 - `mood`
 - `cardColor` (hex, optional per-character card color override)
 - `customStatDefaults` (for configured custom stats; key = stat id, value = 0..100)
-- `customNonNumericStatDefaults` (for configured non-numeric custom stats; key = stat id, value = enum token / boolean / short text)
+- `customNonNumericStatDefaults` (for configured non-numeric custom stats; key = stat id, value = enum token / boolean / short text / string array)
 
 All numeric character defaults are limited to `0..100` (UI + save sanitization).
 Card color accepts hex (`#RRGGBB`); leave empty to keep the automatic palette color.

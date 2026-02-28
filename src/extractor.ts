@@ -17,6 +17,7 @@ import {
 } from "./prompts";
 import type {
   BetterSimTrackerSettings,
+  CustomNonNumericValue,
   CustomNonNumericStatistics,
   CustomStatDefinition,
   CustomStatistics,
@@ -307,7 +308,7 @@ export async function extractStatisticsParallel(input: {
       mood: {} as Record<string, string>,
       lastThought: {} as Record<string, string>,
       customStatistics: {} as Record<string, Record<string, number>>,
-      customNonNumericStatistics: {} as Record<string, Record<string, string | boolean>>,
+      customNonNumericStatistics: {} as Record<string, Record<string, CustomNonNumericValue>>,
     };
     const moodFallbackApplied = new Set<string>();
     const parsed = {
@@ -318,7 +319,7 @@ export async function extractStatisticsParallel(input: {
         desire: {} as Record<string, number>,
         connection: {} as Record<string, number>,
         custom: {} as Record<string, Record<string, number>>,
-        customNonNumeric: {} as Record<string, Record<string, string | boolean>>,
+        customNonNumeric: {} as Record<string, Record<string, CustomNonNumericValue>>,
       },
       mood: {} as Record<string, string>,
       lastThought: {} as Record<string, string>,
@@ -457,10 +458,35 @@ export async function extractStatisticsParallel(input: {
       if (!outputCustomNonNumeric[statId]) outputCustomNonNumeric[statId] = {};
       const kind = statDef.kind ?? "numeric";
       for (const name of names) {
-        let seedValue: string | boolean;
+        let seedValue: CustomNonNumericValue;
         const previous = previousCustomNonNumericStatistics?.[statId]?.[name];
         if (previous !== undefined) {
-          seedValue = previous;
+          if (Array.isArray(previous)) {
+            const seen = new Set<string>();
+            const normalized: string[] = [];
+            for (const item of previous) {
+              const clean = String(item ?? "").trim();
+              if (!clean || seen.has(clean)) continue;
+              seen.add(clean);
+              normalized.push(clean);
+              if (normalized.length >= 20) break;
+            }
+            seedValue = normalized;
+          } else {
+            seedValue = previous;
+          }
+        } else if (kind === "array") {
+          const defaults = Array.isArray(statDef.defaultValue) ? statDef.defaultValue : [];
+          const seen = new Set<string>();
+          const normalized: string[] = [];
+          for (const item of defaults) {
+            const clean = String(item ?? "").trim();
+            if (!clean || seen.has(clean)) continue;
+            seen.add(clean);
+            normalized.push(clean);
+            if (normalized.length >= 20) break;
+          }
+          seedValue = normalized;
         } else if (kind === "boolean") {
           seedValue = typeof statDef.defaultValue === "boolean" ? statDef.defaultValue : false;
         } else {
@@ -762,7 +788,11 @@ export async function extractStatisticsParallel(input: {
           statKind: kind,
           statLabel: label,
           statDescription: statDef.description,
-          statDefault: typeof statDef.defaultValue === "boolean" ? statDef.defaultValue : String(statDef.defaultValue ?? ""),
+          statDefault: kind === "boolean"
+            ? (typeof statDef.defaultValue === "boolean" ? statDef.defaultValue : false)
+            : kind === "array"
+              ? (Array.isArray(statDef.defaultValue) ? statDef.defaultValue : [])
+              : String(statDef.defaultValue ?? ""),
           enumOptions: statDef.enumOptions,
           textMaxLength: statDef.textMaxLength,
           booleanTrueLabel: statDef.booleanTrueLabel,
@@ -911,7 +941,7 @@ export async function extractStatisticsParallel(input: {
               raw,
               plan.existing,
               plan.statDef.id,
-              plan.statDef.kind === "enum_single" || plan.statDef.kind === "boolean" || plan.statDef.kind === "text_short"
+              plan.statDef.kind === "enum_single" || plan.statDef.kind === "boolean" || plan.statDef.kind === "text_short" || plan.statDef.kind === "array"
                 ? plan.statDef.kind
                 : "text_short",
               {

@@ -49,6 +49,7 @@ Primary implementation files:
   - `enum_single`
   - `boolean`
   - `text_short`
+  - `array`
 
 ## Change Discipline
 

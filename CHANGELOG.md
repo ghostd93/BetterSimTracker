@@ -2,6 +2,21 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev2] - 2026-02-28
+### Added
+- New custom stat kind: `array` (non-numeric list, max 20 items) with full extraction, defaults, parsing, and storage support.
+- Array values now render on tracker cards as item chips with `+N more` expand/collapse when more than 4 items are present.
+- Character defaults panel now supports array defaults (one item per line, capped at 20).
+
+### Changed
+- Sequential and unified prompts now include array-aware schema/rules, including item-level maintenance guidance (add/remove/edit) instead of full-list rewrites.
+- `Generate with AI` helpers for custom prompts/guidance now emit array-specific constraints and behavior cues.
+- Edit Tracker modal now supports editing array stats via multiline item input.
+
+### Fixed
+- Runtime default seeding and manual-edit normalization no longer coerce array stats into plain text in edge paths.
+- Prompt injection, parser contracts, and non-numeric protocol rendering now handle array values consistently.
+
 ## [2.2.0.7-dev1] - 2026-02-28
 ### Added
 - Owner-scoped privacy controls for stats: `LastThought` can now be marked private, and custom stats now support a `Private (owner-scoped)` toggle.

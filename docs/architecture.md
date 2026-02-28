@@ -53,7 +53,7 @@ BetterSimTracker is a SillyTavern extension that tracks relationship state per A
 4. Extractor returns:
   - `statistics` (built-ins + text)
   - `customStatistics` (numeric custom)
-  - `customNonNumericStatistics` (enum/boolean/text custom)
+  - `customNonNumericStatistics` (enum/boolean/text/array custom)
   - optional diagnostics payload
 5. `index.ts` merges fallback values for missing fields and persists result.
 6. UI re-renders the affected message tracker cards.

@@ -30,6 +30,7 @@ import {
 import { getAllNumericStatDefinitions } from "./statRegistry";
 import type {
   BetterSimTrackerSettings,
+  CustomNonNumericValue,
   CustomNonNumericStatistics,
   CustomStatistics,
   DeltaDebugRecord,
@@ -1662,6 +1663,25 @@ function parseDefaultText(raw: unknown): string | null {
   return text ? text : null;
 }
 
+function normalizeArrayItems(raw: unknown, maxLength = 200, maxItems = 20): string[] {
+  const boundedMaxLength = Math.max(20, Math.min(200, Math.round(Number(maxLength) || 120)));
+  const asList = Array.isArray(raw)
+    ? raw.map(item => String(item ?? ""))
+    : (typeof raw === "string"
+      ? raw.split(/\r?\n|[,;]/g)
+      : []);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of asList) {
+    const text = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, boundedMaxLength);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
 function getConfiguredCharacterDefaults(
   context: STContext | null,
   settingsInput: BetterSimTrackerSettings,
@@ -1673,7 +1693,7 @@ function getConfiguredCharacterDefaults(
   connection?: number;
   mood?: string;
   customStatDefaults?: Record<string, number>;
-  customNonNumericStatDefaults?: Record<string, string | boolean>;
+  customNonNumericStatDefaults?: Record<string, string | boolean | string[]>;
 } {
   const character = findCharacterByName(context, name);
   const extFromCharacter = character?.extensions as Record<string, unknown> | undefined;
@@ -1702,11 +1722,23 @@ function getConfiguredCharacterDefaults(
     }
   }
   const customNonNumericStatDefaultsRaw = merged.customNonNumericStatDefaults;
-  const customNonNumericStatDefaults: Record<string, string | boolean> = {};
+  const customDefById = new Map(
+    (settingsInput.customStats ?? []).map(def => [String(def.id ?? "").trim().toLowerCase(), def] as const),
+  );
+  const customNonNumericStatDefaults: Record<string, string | boolean | string[]> = {};
   if (customNonNumericStatDefaultsRaw && typeof customNonNumericStatDefaultsRaw === "object") {
     for (const [key, value] of Object.entries(customNonNumericStatDefaultsRaw as Record<string, unknown>)) {
       const id = String(key ?? "").trim().toLowerCase();
       if (!id) continue;
+      const statDef = customDefById.get(id);
+      const kind = statDef?.kind ?? "text_short";
+      if (kind === "array") {
+        const maxLength = Math.max(20, Math.min(200, Math.round(Number(statDef?.textMaxLength) || 120)));
+        const items = normalizeArrayItems(value, maxLength, 20);
+        if (!items.length) continue;
+        customNonNumericStatDefaults[id] = items;
+        continue;
+      }
       if (typeof value === "boolean") {
         customNonNumericStatDefaults[id] = value;
         continue;
@@ -1840,7 +1872,7 @@ function buildSeededCustomNonNumericStatisticsForActiveCharacters(
       ? def.enumOptions.map(option => String(option ?? "")).filter(option => option.length > 0 && !hasScriptLikeContent(option))
       : [];
     const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(def.textMaxLength) || 120)));
-    const normalizeValue = (raw: unknown): string | boolean => {
+    const normalizeValue = (raw: unknown): CustomNonNumericValue => {
       if (kind === "boolean") {
         if (typeof raw === "boolean") return raw;
         if (typeof raw === "string") {
@@ -1856,6 +1888,11 @@ function buildSeededCustomNonNumericStatisticsForActiveCharacters(
         const matched = resolveEnumOption(enumOptions, raw);
         const selected = matched ?? fallback;
         return hasScriptLikeContent(selected) ? (enumOptions[0] ?? "") : selected;
+      }
+      if (kind === "array") {
+        const fallback = normalizeArrayItems(def.defaultValue, textMaxLength, 20);
+        const items = normalizeArrayItems(raw, textMaxLength, 20);
+        return items.length ? items : fallback;
       }
       const fallback = String(def.defaultValue ?? "").trim().replace(/\s+/g, " ");
       const text = typeof raw === "string"
@@ -1959,12 +1996,12 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
     connection: number;
     mood: string;
     custom: Record<string, number>;
-    customNonNumeric: Record<string, string | boolean>;
+    customNonNumeric: Record<string, string | boolean | string[]>;
   } => {
     const contextual = inferFromContext(name);
     const defaults = getConfiguredCharacterDefaults(context, s, name);
     const customDefaults: Record<string, number> = {};
-    const customNonNumericDefaults: Record<string, string | boolean> = {};
+    const customNonNumericDefaults: Record<string, string | boolean | string[]> = {};
     for (const def of s.customStats ?? []) {
       if (!def.track) continue;
       const kind = def.kind ?? "numeric";
@@ -1979,6 +2016,14 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
         customNonNumericDefaults[statId] = typeof configuredCustom === "boolean"
           ? configuredCustom
           : (typeof def.defaultValue === "boolean" ? def.defaultValue : false);
+      } else if (kind === "array") {
+        const maxLength = Math.max(20, Math.min(200, Math.round(Number(def.textMaxLength) || 120)));
+        const configuredCustom = defaults.customNonNumericStatDefaults?.[statId];
+        const configuredItems = Array.isArray(configuredCustom)
+          ? normalizeArrayItems(configuredCustom, maxLength, 20)
+          : normalizeArrayItems(configuredCustom, maxLength, 20);
+        const fallbackItems = normalizeArrayItems(def.defaultValue, maxLength, 20);
+        customNonNumericDefaults[statId] = configuredItems.length ? configuredItems : fallbackItems;
       } else {
         const configuredCustom = defaults.customNonNumericStatDefaults?.[statId];
         const text = typeof configuredCustom === "string"
@@ -2029,8 +2074,13 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
         activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.custom?.[statId] ?? (Number.isNaN(fallback) ? 50 : fallback)]),
       );
     } else {
+      const maxLength = Math.max(20, Math.min(200, Math.round(Number(def.textMaxLength) || 120)));
       customNonNumericStatistics[statId] = Object.fromEntries(
-        activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.customNonNumeric?.[statId] ?? (kind === "boolean" ? false : String(def.defaultValue ?? "").trim())]),
+        activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.customNonNumeric?.[statId] ?? (kind === "boolean"
+          ? false
+          : kind === "array"
+            ? normalizeArrayItems(def.defaultValue, maxLength, 20)
+            : String(def.defaultValue ?? "").trim())]),
       );
     }
   }
@@ -2247,7 +2297,7 @@ type ManualEditPayload = {
   messageIndex: number;
   character: string;
   numeric: Record<string, number | null>;
-  nonNumeric?: Record<string, string | boolean | null>;
+  nonNumeric?: Record<string, string | boolean | string[] | null>;
   active?: boolean;
   mood?: string | null;
   lastThought?: string | null;
@@ -2313,11 +2363,15 @@ function filterCustomNonNumericStatisticsToCharacters(
   const allowed = new Set(allowedCharacters.map(name => String(name ?? "").trim()).filter(Boolean));
   const out: CustomNonNumericStatistics = {};
   for (const [statId, byCharacter] of Object.entries(customStatistics ?? {})) {
-    const filtered: Record<string, string | boolean> = {};
+    const filtered: Record<string, string | boolean | string[]> = {};
     for (const [name, value] of Object.entries(byCharacter ?? {})) {
       if (!allowed.has(String(name ?? "").trim())) continue;
       if (typeof value === "boolean") {
         filtered[name] = value;
+      } else if (Array.isArray(value)) {
+        const items = normalizeArrayItems(value, 200, 20);
+        if (!items.length) continue;
+        filtered[name] = items;
       } else {
         const text = String(value ?? "").trim();
         if (!text) continue;
@@ -2400,6 +2454,10 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
     if (!customNonNumeric[statKey]) customNonNumeric[statKey] = {};
     if (typeof rawValue === "boolean") {
       customNonNumeric[statKey][character] = rawValue;
+      continue;
+    }
+    if (Array.isArray(rawValue)) {
+      customNonNumeric[statKey][character] = normalizeArrayItems(rawValue, 200, 20);
       continue;
     }
     const text = String(rawValue).trim().replace(/\s+/g, " ");

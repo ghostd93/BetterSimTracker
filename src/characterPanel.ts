@@ -256,7 +256,7 @@ function clampStat(value: string): number | null {
 }
 
 function normalizeCustomStatKind(value: unknown): CustomStatKind {
-  if (value === "enum_single" || value === "boolean" || value === "text_short") return value;
+  if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array") return value;
   return "numeric";
 }
 
@@ -272,6 +272,23 @@ function normalizeCustomEnumOptions(value: unknown): string[] {
     seen.add(option);
     out.push(option);
     if (out.length >= 12) break;
+  }
+  return out;
+}
+
+function normalizeArrayItems(value: unknown, maxLength: number): string[] {
+  const boundedMaxLength = Math.max(20, Math.min(200, Math.round(Number(maxLength) || 120)));
+  const values = Array.isArray(value)
+    ? value.map(item => String(item ?? ""))
+    : (typeof value === "string" ? value.split(/\r?\n|[,;]/g) : []);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of values) {
+    const text = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, boundedMaxLength);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+    if (out.length >= 20) break;
   }
   return out;
 }
@@ -632,6 +649,16 @@ function renderPanel(input: InitInput, force = false): void {
         </label>
       `;
     }
+    if (kind === "array") {
+      const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
+      const items = normalizeArrayItems(customNonNumericDefaultsRaw[id], maxLength);
+      const value = items.join("\n");
+      return `
+        <label>${escapeHtml(label)} Default (one item per line, max 20)
+          <textarea rows="4" data-bst-custom-default-array="${escapeHtml(id)}" data-bst-max-length="${maxLength}" placeholder="Use stat default">${escapeHtml(value)}</textarea>
+        </label>
+      `;
+    }
     const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
     const rawValue = String(customNonNumericDefaultsRaw[id] ?? "").trim().replace(/\s+/g, " ");
     return `
@@ -951,6 +978,34 @@ function renderPanel(input: InitInput, force = false): void {
           delete existing[id];
         } else {
           existing[id] = value;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.customNonNumericStatDefaults;
+        } else {
+          copy.customNonNumericStatDefaults = existing;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLTextAreaElement>("[data-bst-custom-default-array]").forEach(node => {
+    node.addEventListener("change", () => {
+      const id = String(node.dataset.bstCustomDefaultArray ?? "").trim().toLowerCase();
+      if (!id) return;
+      const maxLength = Math.max(20, Math.min(200, Math.round(Number(node.dataset.bstMaxLength) || 120)));
+      const items = normalizeArrayItems(node.value, maxLength);
+      node.value = items.join("\n");
+      const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
+        const copy = { ...current };
+        const existing = copy.customNonNumericStatDefaults && typeof copy.customNonNumericStatDefaults === "object"
+          ? { ...(copy.customNonNumericStatDefaults as Record<string, unknown>) }
+          : {};
+        if (!items.length) {
+          delete existing[id];
+        } else {
+          existing[id] = items;
         }
         if (Object.keys(existing).length === 0) {
           delete copy.customNonNumericStatDefaults;

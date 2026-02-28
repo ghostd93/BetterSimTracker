@@ -24,6 +24,21 @@ function numeric(value: unknown): number | null {
 
 function renderNonNumericValue(value: unknown): string | null {
   if (typeof value === "boolean") return value ? "true" : "false";
+  if (Array.isArray(value)) {
+    const items: string[] = [];
+    const seenItems = new Set<string>();
+    for (const item of value) {
+      const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
+      if (!cleaned) continue;
+      const dedupeKey = cleaned.toLowerCase();
+      if (seenItems.has(dedupeKey)) continue;
+      seenItems.add(dedupeKey);
+      items.push(cleaned);
+      if (items.length >= 20) break;
+    }
+    if (!items.length) return null;
+    return `[${items.map(item => `"${item.replace(/"/g, "\\\"")}"`).join(", ")}]`;
+  }
   if (typeof value !== "string") return null;
   const text = value.trim().replace(/\s+/g, " ");
   return text ? `"${text.slice(0, 120)}"` : null;

@@ -77,6 +77,7 @@ For each custom stat:
 - `enum_single`: must match allowed token.
 - `boolean`: strict true/false.
 - `text_short`: normalized and clipped to max length.
+- `array`: normalized list of short strings (max 20 items, per-item max length). Updates are item-level whenever possible.
 
 ## Retry Strategy
 

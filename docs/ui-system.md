@@ -82,7 +82,7 @@ Key capabilities:
 Kind-aware steps and fields:
 
 - basics (`id`, `label`, `description`, `kind`)
-- kind-specific constraints (`enum options`, `boolean labels`, `text max length`)
+- kind-specific constraints (`enum options`, `boolean labels`, `text max length`, `array item limits`)
 - tracking/display/injection toggles
 - owner privacy toggle (`privateToOwner`)
 - optional sequential override

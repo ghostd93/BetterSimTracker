@@ -670,8 +670,8 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
   if (!Array.isArray(raw)) return [];
   const out: BetterSimTrackerSettings["customStats"] = [];
   const seen = new Set<string>();
-  const normalizeKind = (value: unknown): "numeric" | "enum_single" | "boolean" | "text_short" => {
-    if (value === "enum_single" || value === "boolean" || value === "text_short") return value;
+  const normalizeKind = (value: unknown): "numeric" | "enum_single" | "boolean" | "text_short" | "array" => {
+    if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array") return value;
     return "numeric";
   };
   const hasScriptLikeContent = (text: string): boolean =>
@@ -707,6 +707,27 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
     }
     return outValues;
   };
+  const normalizeArrayItems = (value: unknown, maxItemLength: number): string[] => {
+    const toCleanItem = (raw: unknown): string => String(raw ?? "").trim().replace(/\s+/g, " ").slice(0, maxItemLength);
+    const fromArray = Array.isArray(value) ? value : null;
+    const fromString = typeof value === "string"
+      ? value.split(/\r?\n|[,;]+/g)
+      : null;
+    const source = fromArray ?? fromString ?? [];
+    const seenItems = new Set<string>();
+    const outItems: string[] = [];
+    for (const item of source) {
+      const cleaned = toCleanItem(item);
+      if (!cleaned) continue;
+      if (hasScriptLikeContent(cleaned)) continue;
+      const dedupeKey = cleaned.toLowerCase();
+      if (seenItems.has(dedupeKey)) continue;
+      seenItems.add(dedupeKey);
+      outItems.push(cleaned);
+      if (outItems.length >= 20) break;
+    }
+    return outItems;
+  };
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const obj = item as Record<string, unknown>;
@@ -741,7 +762,7 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       ? obj.booleanFalseLabel.trim().slice(0, 40)
       : "";
 
-    const resolveDefaultValue = (): number | string | boolean => {
+    const resolveDefaultValue = (): number | string | boolean | string[] => {
       if (kind === "numeric") {
         return clampInt(obj.defaultValue, 50, 0, 100);
       }
@@ -759,6 +780,9 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
         const matched = resolveEnumOption(enumOptions, obj.defaultValue);
         if (matched != null && !hasScriptLikeContent(matched)) return matched;
         return fallback;
+      }
+      if (kind === "array") {
+        return normalizeArrayItems(obj.defaultValue, textMaxLength);
       }
       const text = typeof obj.defaultValue === "string" ? obj.defaultValue.trim().replace(/\s+/g, " ") : "";
       return text.slice(0, textMaxLength);
@@ -782,7 +806,7 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       enumOptions: kind === "enum_single" ? enumOptions : undefined,
       booleanTrueLabel: kind === "boolean" ? (booleanTrueLabel || "enabled") : undefined,
       booleanFalseLabel: kind === "boolean" ? (booleanFalseLabel || "disabled") : undefined,
-      textMaxLength: kind === "text_short" ? textMaxLength : undefined,
+      textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
       track: trackCharacters || trackUser,
       trackCharacters,
       trackUser,
@@ -818,7 +842,7 @@ function sanitizeCustomStatDefaults(
 function sanitizeCustomNonNumericStatDefaults(
   raw: unknown,
   customStats: BetterSimTrackerSettings["customStats"],
-): Record<string, string | boolean> | null {
+): Record<string, string | boolean | string[]> | null {
   const hasScriptLikeContent = (text: string): boolean =>
     /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
   const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
@@ -839,7 +863,7 @@ function sanitizeCustomNonNumericStatDefaults(
   };
   if (!raw || typeof raw !== "object") return null;
   const byId = new Map(customStats.map(stat => [stat.id, stat]));
-  const out: Record<string, string | boolean> = {};
+  const out: Record<string, string | boolean | string[]> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const id = key.trim().toLowerCase();
     if (!id) continue;
@@ -857,7 +881,7 @@ function sanitizeCustomNonNumericStatDefaults(
       }
       continue;
     }
-    const textMaxLength = kind === "text_short"
+    const textMaxLength = kind === "text_short" || kind === "array"
       ? clampInt(stat.textMaxLength, 120, 20, 200)
       : 120;
     const options = kind === "enum_single"
@@ -866,6 +890,27 @@ function sanitizeCustomNonNumericStatDefaults(
     if (kind === "enum_single") {
       const matched = resolveEnumOption(options, value);
       if (matched != null && !hasScriptLikeContent(matched)) out[id] = matched;
+      continue;
+    }
+    if (kind === "array") {
+      const source = Array.isArray(value)
+        ? value
+        : typeof value === "string"
+          ? value.split(/\r?\n|[,;]+/g)
+          : [];
+      const items: string[] = [];
+      const seenItems = new Set<string>();
+      for (const item of source) {
+        const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, textMaxLength);
+        if (!cleaned) continue;
+        if (hasScriptLikeContent(cleaned)) continue;
+        const dedupeKey = cleaned.toLowerCase();
+        if (seenItems.has(dedupeKey)) continue;
+        seenItems.add(dedupeKey);
+        items.push(cleaned);
+        if (items.length >= 20) break;
+      }
+      if (items.length) out[id] = items;
       continue;
     }
     const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";

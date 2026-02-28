@@ -248,6 +248,7 @@ export const DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION = [
   "- Determine the best current value for {{statLabel}} from recent messages.",
   "- Update only {{statId}} and ignore other stats.",
   "- Return one valid value per character using the exact schema for this stat kind.",
+  "- For array kind, apply item-level updates (add/remove/edit items) and avoid rewriting the entire list unless context clearly requires replacement.",
   "- Keep updates conservative and context-grounded.",
   "- Prefer recent messages first; use character cards only to disambiguate when needed.",
 ].join("\n");
@@ -493,10 +494,17 @@ export function buildUnifiedAllStatsPrompt(input: {
       const kind = stat.kind ?? "text_short";
       const fallback = kind === "boolean"
         ? (typeof stat.defaultValue === "boolean" ? stat.defaultValue : false)
-        : String(stat.defaultValue ?? "");
+        : kind === "array"
+          ? (Array.isArray(stat.defaultValue) ? stat.defaultValue : [])
+          : String(stat.defaultValue ?? "");
       const customRaw = input.currentCustomNonNumeric?.[stat.id]?.[name];
-      const customValue = formatCustomNonNumericValue(kind, customRaw, fallback);
-      const literal = typeof customValue === "boolean" ? String(customValue) : `"${customValue}"`;
+      const customValue = formatCustomNonNumericValue(
+        kind,
+        customRaw,
+        fallback,
+        Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120))),
+      );
+      const literal = customNonNumericLiteral(customValue);
       chunks.push(`${stat.id}=${literal}`);
     }
     return `- ${name}: ${chunks.join(", ")}`;
@@ -525,10 +533,17 @@ export function buildUnifiedAllStatsPrompt(input: {
         const kind = stat.kind ?? "text_short";
         const fallback = kind === "boolean"
           ? (typeof stat.defaultValue === "boolean" ? stat.defaultValue : false)
-          : String(stat.defaultValue ?? "");
+          : kind === "array"
+            ? (Array.isArray(stat.defaultValue) ? stat.defaultValue : [])
+            : String(stat.defaultValue ?? "");
         const customRaw = entry.customNonNumericStatistics?.[stat.id]?.[name];
-        const customValue = formatCustomNonNumericValue(kind, customRaw, fallback);
-        const literal = typeof customValue === "boolean" ? String(customValue) : `"${customValue}"`;
+        const customValue = formatCustomNonNumericValue(
+          kind,
+          customRaw,
+          fallback,
+          Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120))),
+        );
+        const literal = customNonNumericLiteral(customValue);
         chunks.push(`${stat.id}=${literal}`);
       }
       return `  - ${name}: ${chunks.join(", ")}`;
@@ -543,6 +558,7 @@ export function buildUnifiedAllStatsPrompt(input: {
     ? customNonNumeric.map(stat => {
       const kind = stat.kind ?? "text_short";
       if (kind === "boolean") return `        "${stat.id}": false`;
+      if (kind === "array") return `        "${stat.id}": []`;
       return `        "${stat.id}": ""`;
     }).join(",\n")
     : "";
@@ -559,6 +575,10 @@ export function buildUnifiedAllStatsPrompt(input: {
       const trueLabel = String(stat.booleanTrueLabel ?? "enabled").trim() || "enabled";
       const falseLabel = String(stat.booleanFalseLabel ?? "disabled").trim() || "disabled";
       return `- ${stat.id} (boolean): strict true/false (true=${trueLabel}, false=${falseLabel}).`;
+    }
+    if (kind === "array") {
+      const textMaxLen = Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120)));
+      return `- ${stat.id} (array): JSON array of 0..20 short strings; each item max ${textMaxLen} chars; prefer item-level add/remove/edit over full-list rewrites.`;
     }
     const textMaxLen = Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120)));
     return `- ${stat.id} (text_short): one concise single-line text, max ${textMaxLen} chars.`;
@@ -829,11 +849,38 @@ export function buildSequentialCustomNumericPrompt(input: {
   });
 }
 
+function normalizeArrayItems(value: unknown, maxItemLen: number): string[] {
+  const source = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/\r?\n|[,;]+/g)
+      : [];
+  const items: string[] = [];
+  const seenItems = new Set<string>();
+  for (const item of source) {
+    const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, maxItemLen);
+    if (!cleaned) continue;
+    const dedupeKey = cleaned.toLowerCase();
+    if (seenItems.has(dedupeKey)) continue;
+    seenItems.add(dedupeKey);
+    items.push(cleaned);
+    if (items.length >= 20) break;
+  }
+  return items;
+}
+
+function customNonNumericLiteral(value: string | boolean | string[]): string {
+  if (typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return JSON.stringify(value);
+  return `"${String(value)}"`;
+}
+
 function formatCustomNonNumericValue(
   kind: CustomStatKind,
   value: unknown,
-  fallback: string | boolean,
-): string | boolean {
+  fallback: string | boolean | string[],
+  textMaxLen = 120,
+): string | boolean | string[] {
   if (kind === "boolean") {
     if (typeof value === "boolean") return value;
     if (typeof value === "string") {
@@ -842,6 +889,13 @@ function formatCustomNonNumericValue(
       if (cleaned === "false") return false;
     }
     return Boolean(fallback);
+  }
+
+  if (kind === "array") {
+    const items = normalizeArrayItems(value, textMaxLen);
+    if (items.length) return items;
+    const fallbackItems = normalizeArrayItems(fallback, textMaxLen);
+    return fallbackItems;
   }
 
   const text = typeof value === "string" ? value.trim() : "";
@@ -854,6 +908,7 @@ function getCustomNonNumericProtocolValues(input: {
   statId: string;
   allowedValues: string[];
   textMaxLen: number;
+  arrayMaxItems: number;
   trueLabel: string;
   falseLabel: string;
 }): { valueSchemaRules: string; valueSchemaSample: string } {
@@ -876,6 +931,18 @@ function getCustomNonNumericProtocolValues(input: {
     };
   }
 
+  if (input.kind === "array") {
+    return {
+      valueSchemaRules: [
+        `- Return a JSON array of strings for ${input.statId}.`,
+        `- Array length must be between 0 and ${input.arrayMaxItems}.`,
+        `- Each item must be concise and no longer than ${input.textMaxLen} characters.`,
+        "- Prefer item-level maintenance (add/remove/edit) over full-list rewrites unless the scene clearly resets the list.",
+      ].join("\n"),
+      valueSchemaSample: "[\"item one\", \"item two\"]",
+    };
+  }
+
   return {
     valueSchemaRules: [
       `- Return one concise single-line text value for ${input.statId}.`,
@@ -890,6 +957,7 @@ function customNonNumericProtocol(input: {
   statId: string;
   allowedValues: string[];
   textMaxLen: number;
+  arrayMaxItems: number;
   trueLabel: string;
   falseLabel: string;
   template?: string;
@@ -902,6 +970,7 @@ function customNonNumericProtocol(input: {
     valueSchemaSample: values.valueSchemaSample,
     allowedValues: input.allowedValues.join(", "),
     textMaxLen: String(input.textMaxLen),
+    arrayMaxItems: String(input.arrayMaxItems),
     booleanTrueLabel: input.trueLabel,
     booleanFalseLabel: input.falseLabel,
   });
@@ -912,7 +981,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   statKind: Exclude<CustomStatKind, "numeric">;
   statLabel: string;
   statDescription?: string;
-  statDefault: string | boolean;
+  statDefault: string | boolean | string[];
   enumOptions?: string[];
   textMaxLength?: number;
   booleanTrueLabel?: string;
@@ -942,14 +1011,21 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   const envelope = commonEnvelope(input.userName, input.characters, input.contextText);
   const char = resolvePrimaryCharacter(input.characters, input.preferredCharacterName);
 
-  const defaultValue = formatCustomNonNumericValue(statKind, input.statDefault, statKind === "boolean" ? false : "");
-  const defaultLiteral = typeof defaultValue === "boolean" ? String(defaultValue) : defaultValue;
+  const defaultFallback = statKind === "boolean"
+    ? false
+    : statKind === "array"
+      ? []
+      : "";
+  const defaultValue = formatCustomNonNumericValue(statKind, input.statDefault, defaultFallback);
+  const defaultLiteral = customNonNumericLiteral(defaultValue);
   const allowedValuesLiteral = enumOptions.join(", ");
   const valueSchema = statKind === "enum_single"
     ? "enum"
     : statKind === "boolean"
       ? "boolean"
-      : `text<=${textMaxLen}`;
+      : statKind === "array"
+        ? `array<=20(item<=${textMaxLen})`
+        : `text<=${textMaxLen}`;
 
   const currentLines = input.characters.map(name => {
     const affection = Number(input.current?.affection?.[name] ?? 50);
@@ -959,7 +1035,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     const mood = String(input.current?.mood?.[name] ?? "Neutral");
     const customRaw = input.currentCustomNonNumeric?.[statId]?.[name];
     const customValue = formatCustomNonNumericValue(statKind, customRaw, defaultValue);
-    const customLiteral = typeof customValue === "boolean" ? String(customValue) : `"${customValue}"`;
+    const customLiteral = customNonNumericLiteral(customValue);
     return `- ${name}: affection=${Math.max(0, Math.min(100, Math.round(affection)))}, trust=${Math.max(0, Math.min(100, Math.round(trust)))}, desire=${Math.max(0, Math.min(100, Math.round(desire)))}, connection=${Math.max(0, Math.min(100, Math.round(connection)))}, mood=${mood}, ${statId}=${customLiteral}`;
   }).join("\n");
 
@@ -973,7 +1049,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
       const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
       const customRaw = entry.customNonNumericStatistics?.[statId]?.[name];
       const customValue = formatCustomNonNumericValue(statKind, customRaw, defaultValue);
-      const customLiteral = typeof customValue === "boolean" ? String(customValue) : `"${customValue}"`;
+      const customLiteral = customNonNumericLiteral(customValue);
       return `  - ${name}: affection=${Math.round(affection)}, trust=${Math.round(trust)}, desire=${Math.round(desire)}, connection=${Math.round(connection)}, mood=${mood}, ${statId}=${customLiteral}`;
     }).join("\n");
     return `${header}\n${rows}`;
@@ -984,7 +1060,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     statId,
     statLabel,
     statDescription,
-    statDefault: String(defaultLiteral),
+    statDefault: defaultLiteral,
     maxDelta: "",
     user: input.userName,
     userName: input.userName,
@@ -995,6 +1071,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     statKind,
     allowedValues: allowedValuesLiteral,
     textMaxLen: String(textMaxLen),
+    arrayMaxItems: "20",
     booleanTrueLabel: trueLabel,
     booleanFalseLabel: falseLabel,
     valueSchema,
@@ -1023,6 +1100,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
       statId,
       allowedValues: enumOptions,
       textMaxLen,
+      arrayMaxItems: 20,
       trueLabel,
       falseLabel,
       template: input.protocolTemplate,
@@ -1090,6 +1168,14 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
         `- Include concrete evidence cues for switching ${statId} from false->true and true->false.`,
       ];
     }
+    if (statKind === "array") {
+      return [
+        `- Explicitly say to update only ${statId} value and ignore other stats.`,
+        "- Require JSON array output of short strings (maximum 20 items total).",
+        `- Require item-level maintenance: add/remove/edit specific ${statId} items based on evidence.`,
+        "- Avoid full-list rewrites unless recent context clearly replaces the whole list.",
+      ];
+    }
     return [
       `- Explicitly say to update only ${statId} value and ignore other stats.`,
       `- Require one concise single-line text value (max ${textMaxLength} chars).`,
@@ -1113,6 +1199,7 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
     `- Description: ${statDescription}`,
     ...(statKind === "enum_single" ? [`- Allowed values: ${enumOptions.join(", ") || "(none provided)"}`] : []),
     ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
+    ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, "- Max items: 20"] : []),
     ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     "",
     "Task:",
@@ -1169,6 +1256,7 @@ export function buildCustomStatDescriptionGenerationPrompt(input: {
     `- Current description: ${currentDescription}`,
     ...(statKind === "enum_single" ? [`- Allowed values: ${enumOptions.join(", ") || "(none provided)"}`] : []),
     ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
+    ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, "- Max items: 20"] : []),
     ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     "",
     "Task:",
@@ -1321,6 +1409,17 @@ export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
         `- Include one stability line about how to stay consistent with current ${statId} state across nearby turns.`,
       ];
     }
+    if (statKind === "array") {
+      return [
+        "Write exactly 5 short bullet lines for this exact stat.",
+        "Requirements:",
+        "- Each line must start with \"- \".",
+        `- Mention ${statId} and ${statLabel} literally at least once across the block.`,
+        `- Treat ${statId} as a list of short items and keep behavior aligned to current list contents.`,
+        `- Include one line for add-item cues, one for remove-item cues, and one for edit-item cues.`,
+        `- Include one line that enforces incremental updates (item-level maintenance) instead of full-list rewrites.`,
+      ];
+    }
     return [
       "Write exactly 5 short bullet lines for this exact stat.",
       "Requirements:",
@@ -1348,6 +1447,7 @@ export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
     `- Description: ${statDescription}`,
     ...(statKind === "enum_single" ? [`- Allowed values: ${enumOptions.join(", ") || "(none provided)"}`] : []),
     ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
+    ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, "- Max items: 20"] : []),
     ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     `- Current guidance: ${currentGuidance || "(empty)"}`,
     "",

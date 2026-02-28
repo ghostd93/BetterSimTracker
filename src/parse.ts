@@ -1,5 +1,5 @@
 import { moodOptions } from "./prompts";
-import type { CustomStatKind, NumericStatKey, StatKey, StatValue } from "./types";
+import type { CustomNonNumericValue, CustomStatKind, NumericStatKey, StatKey, StatValue } from "./types";
 import type { Statistics } from "./types";
 
 type CharacterNameAliases = Record<string, string>;
@@ -416,7 +416,7 @@ export function parseCustomValueResponse(
   nameAliases?: CharacterNameAliases,
 ): {
   confidence: Record<string, number>;
-  value: Record<string, string | boolean>;
+  value: Record<string, CustomNonNumericValue>;
 } {
   const hasScriptLikeContent = (text: string): boolean =>
     /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
@@ -440,7 +440,7 @@ export function parseCustomValueResponse(
   const byName = new Map<string, Record<string, unknown>>();
   const result = {
     confidence: {} as Record<string, number>,
-    value: {} as Record<string, string | boolean>,
+    value: {} as Record<string, CustomNonNumericValue>,
   };
   if (!parsed || typeof parsed !== "object") return result;
 
@@ -467,6 +467,26 @@ export function parseCustomValueResponse(
     ? input.enumOptions.map(item => String(item ?? "")).filter(item => item.length > 0 && !hasScriptLikeContent(item))
     : [];
   const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
+  const normalizeArrayItems = (raw: unknown): string[] => {
+    const source = Array.isArray(raw)
+      ? raw
+      : typeof raw === "string"
+        ? raw.split(/\r?\n|[,;]+/g)
+        : [];
+    const items: string[] = [];
+    const seenItems = new Set<string>();
+    for (const item of source) {
+      const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, textMaxLength);
+      if (!cleaned) continue;
+      if (hasScriptLikeContent(cleaned)) continue;
+      const dedupeKey = cleaned.toLowerCase();
+      if (seenItems.has(dedupeKey)) continue;
+      seenItems.add(dedupeKey);
+      items.push(cleaned);
+      if (items.length >= 20) break;
+    }
+    return items;
+  };
 
   for (const name of activeCharacters) {
     const row = byName.get(name);
@@ -493,6 +513,11 @@ export function parseCustomValueResponse(
     if (kind === "enum_single") {
       const matched = resolveEnumOption(enumOptions, candidate);
       if (matched != null && !hasScriptLikeContent(matched)) result.value[name] = matched;
+      continue;
+    }
+    if (kind === "array") {
+      const items = normalizeArrayItems(candidate);
+      if (items.length > 0) result.value[name] = items;
       continue;
     }
     const cleaned = candidate.trim().replace(/\s+/g, " ");

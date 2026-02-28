@@ -66,14 +66,39 @@ function normalizeCustomStatistics(raw: unknown): CustomStatistics {
 function normalizeCustomNonNumericStatistics(raw: unknown): CustomNonNumericStatistics {
   if (!raw || typeof raw !== "object") return {};
   const out: CustomNonNumericStatistics = {};
+  const normalizeArrayItems = (value: unknown): string[] => {
+    const source = Array.isArray(value)
+      ? value
+      : typeof value === "string"
+        ? value.split(/\r?\n|[,;]+/g)
+        : [];
+    const items: string[] = [];
+    const seenItems = new Set<string>();
+    for (const item of source) {
+      const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, 200);
+      if (!cleaned) continue;
+      const dedupeKey = cleaned.toLowerCase();
+      if (seenItems.has(dedupeKey)) continue;
+      seenItems.add(dedupeKey);
+      items.push(cleaned);
+      if (items.length >= 20) break;
+    }
+    return items;
+  };
   for (const [statId, values] of Object.entries(raw as Record<string, unknown>)) {
     if (!values || typeof values !== "object" || Array.isArray(values)) continue;
     const statKey = String(statId ?? "").trim().toLowerCase();
     if (!statKey) continue;
-    const byCharacter: Record<string, string | boolean> = {};
+    const byCharacter: Record<string, string | boolean | string[]> = {};
     for (const [characterName, value] of Object.entries(values as Record<string, unknown>)) {
       if (typeof value === "boolean") {
         byCharacter[characterName] = value;
+        continue;
+      }
+      if (Array.isArray(value)) {
+        const items = normalizeArrayItems(value);
+        if (!items.length) continue;
+        byCharacter[characterName] = items;
         continue;
       }
       if (typeof value === "string") {

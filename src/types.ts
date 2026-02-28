@@ -4,8 +4,8 @@ export type StatKey = (typeof STAT_KEYS)[number];
 export type NumericStatKey = "affection" | "trust" | "desire" | "connection";
 export type TextStatKey = "mood" | "lastThought";
 export type CustomStatKey = string;
-export type CustomStatKind = "numeric" | "enum_single" | "boolean" | "text_short";
-export type CustomNonNumericValue = string | boolean;
+export type CustomStatKind = "numeric" | "enum_single" | "boolean" | "text_short" | "array";
+export type CustomNonNumericValue = string | boolean | string[];
 export type MoodLabel =
   | "Happy"
   | "Sad"
@@ -36,7 +36,7 @@ export interface CustomStatDefinition {
   label: string;
   description?: string;
   behaviorGuidance?: string;
-  defaultValue: number | string | boolean;
+  defaultValue: number | string | boolean | string[];
   maxDeltaPerTurn?: number;
   enumOptions?: string[];
   booleanTrueLabel?: string;
@@ -174,7 +174,7 @@ export interface CharacterDefaults {
   mood?: string;
   cardColor?: string;
   customStatDefaults?: Record<CustomStatKey, number>;
-  customNonNumericStatDefaults?: Record<CustomStatKey, string | boolean>;
+  customNonNumericStatDefaults?: Record<CustomStatKey, string | boolean | string[]>;
   moodSource?: MoodSource;
   moodExpressionMap?: MoodExpressionMap;
   stExpressionImageOptions?: StExpressionImageOptions;
@@ -300,7 +300,7 @@ export interface DeltaDebugRecord {
       desire: Record<string, number>;
       connection: Record<string, number>;
       custom?: Record<string, Record<string, number>>;
-      customNonNumeric?: Record<string, Record<string, string | boolean>>;
+      customNonNumeric?: Record<string, Record<string, CustomNonNumericValue>>;
     };
     mood: Record<string, string>;
     lastThought: Record<string, string>;
@@ -313,7 +313,7 @@ export interface DeltaDebugRecord {
     mood: Record<string, string>;
     lastThought: Record<string, string>;
     customStatistics?: Record<string, Record<string, number>>;
-    customNonNumericStatistics?: Record<string, Record<string, string | boolean>>;
+    customNonNumericStatistics?: Record<string, Record<string, CustomNonNumericValue>>;
   };
   meta?: {
     promptChars: number;

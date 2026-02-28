@@ -62,7 +62,7 @@ type UiNonNumericStatDefinition = {
   id: string;
   label: string;
   kind: Exclude<CustomStatKind, "numeric">;
-  defaultValue: string | boolean;
+  defaultValue: string | boolean | string[];
   enumOptions: string[];
   booleanTrueLabel: string;
   booleanFalseLabel: string;
@@ -125,12 +125,29 @@ function shortLabelFrom(label: string): string {
 }
 
 function normalizeCustomStatKind(value: unknown): CustomStatKind {
-  if (value === "enum_single" || value === "boolean" || value === "text_short") return value;
+  if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array") return value;
   return "numeric";
 }
 
 function normalizeNonNumericTextValue(value: unknown, maxLength: number): string {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, Math.max(20, Math.min(200, maxLength)));
+}
+
+function normalizeNonNumericArrayItems(value: unknown, maxLength: number): string[] {
+  const boundedMaxLength = Math.max(20, Math.min(200, maxLength));
+  const source = Array.isArray(value)
+    ? value.map(item => String(item ?? ""))
+    : (typeof value === "string" ? value.split(/\r?\n|[,;]/g) : []);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of source) {
+    const text = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, boundedMaxLength);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+    if (out.length >= 20) break;
+  }
+  return out;
 }
 
 function normalizeCustomEnumOptions(value: unknown): string[] {
@@ -185,9 +202,11 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
       const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(def.textMaxLength) || 120)));
       const booleanTrueLabel = String(def.booleanTrueLabel ?? "enabled").trim().slice(0, 40) || "enabled";
       const booleanFalseLabel = String(def.booleanFalseLabel ?? "disabled").trim().slice(0, 40) || "disabled";
-      let defaultValue: string | boolean;
+      let defaultValue: string | boolean | string[];
       if (kind === "boolean") {
         defaultValue = typeof def.defaultValue === "boolean" ? def.defaultValue : false;
+      } else if (kind === "array") {
+        defaultValue = normalizeNonNumericArrayItems(def.defaultValue, textMaxLength);
       } else {
         if (kind === "enum_single" && enumOptions.length > 0) {
           const matched = resolveEnumOption(enumOptions, def.defaultValue);
@@ -291,7 +310,7 @@ function resolveNonNumericValue(
   entry: TrackerData,
   def: UiNonNumericStatDefinition,
   characterName: string,
-): string | boolean | null {
+): string | boolean | string[] | null {
   const raw = getNonNumericRawValue(entry, def.id, characterName);
   if (def.kind === "boolean") {
     if (typeof raw === "boolean") return raw;
@@ -302,6 +321,10 @@ function resolveNonNumericValue(
     const matched = resolveEnumOption(def.enumOptions, raw ?? def.defaultValue);
     if (matched != null) return matched;
     return def.enumOptions[0] ?? null;
+  }
+  if (def.kind === "array") {
+    const items = normalizeNonNumericArrayItems(raw ?? def.defaultValue, def.textMaxLength);
+    return items;
   }
   const maxLength = def.textMaxLength;
   const text = normalizeNonNumericTextValue(raw ?? def.defaultValue, maxLength);
@@ -318,15 +341,26 @@ function hasNonNumericValue(
   if (raw === undefined) return false;
   if (def.kind === "boolean") return typeof raw === "boolean";
   if (def.kind === "enum_single") return resolveEnumOption(def.enumOptions, raw) != null;
+  if (def.kind === "array") {
+    if (Array.isArray(raw)) return true;
+    if (typeof raw === "string") return normalizeNonNumericArrayItems(raw, def.textMaxLength).length > 0;
+    return false;
+  }
   if (typeof raw !== "string") return false;
   const text = normalizeNonNumericTextValue(raw, def.textMaxLength);
   if (!text) return false;
   return true;
 }
 
-function formatNonNumericForDisplay(def: UiNonNumericStatDefinition, value: string | boolean): string {
+function formatNonNumericForDisplay(def: UiNonNumericStatDefinition, value: string | boolean | string[]): string {
   if (def.kind === "boolean") {
     return value ? def.booleanTrueLabel : def.booleanFalseLabel;
+  }
+  if (def.kind === "array") {
+    const items = Array.isArray(value) ? value : normalizeNonNumericArrayItems(value, def.textMaxLength);
+    if (!items.length) return "0 items";
+    if (items.length === 1) return items[0];
+    return `${items[0]} +${items.length - 1}`;
   }
   return String(value);
 }
@@ -355,6 +389,7 @@ type RenderEntry = {
 const ROOT_CLASS = "bst-root";
 const collapsedTrackerMessages = new Set<number>();
 const expandedThoughtKeys = new Set<string>();
+const expandedArrayValueKeys = new Set<string>();
 const renderedCardKeys = new Set<string>();
 const MOOD_PREVIEW_BACKDROP_CLASS = "bst-mood-preview-backdrop";
 const MOOD_PREVIEW_MODAL_CLASS = "bst-mood-preview-modal";
@@ -708,7 +743,7 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
   const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
   const booleanTrueLabel = String(definition.booleanTrueLabel ?? "enabled").trim().slice(0, 40) || "enabled";
   const booleanFalseLabel = String(definition.booleanFalseLabel ?? "disabled").trim().slice(0, 40) || "disabled";
-  const resolveDefaultValue = (): number | string | boolean => {
+  const resolveDefaultValue = (): number | string | boolean | string[] => {
     if (kind === "numeric") {
       return Math.max(0, Math.min(100, Math.round(Number(definition.defaultValue) || 50)));
     }
@@ -717,6 +752,9 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     }
     if (kind === "enum_single" && enumOptions.length > 0) {
       return resolveEnumOption(enumOptions, definition.defaultValue) ?? enumOptions[0];
+    }
+    if (kind === "array") {
+      return normalizeNonNumericArrayItems(definition.defaultValue, textMaxLength);
     }
     const text = normalizeNonNumericTextValue(definition.defaultValue, textMaxLength);
     return text;
@@ -735,7 +773,7 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     enumOptions: kind === "enum_single" ? enumOptions : undefined,
     booleanTrueLabel: kind === "boolean" ? booleanTrueLabel : undefined,
     booleanFalseLabel: kind === "boolean" ? booleanFalseLabel : undefined,
-    textMaxLength: kind === "text_short" ? textMaxLength : undefined,
+    textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
     track: Boolean(definition.track),
     trackCharacters: Boolean(definition.trackCharacters ?? definition.track),
     trackUser: Boolean(definition.trackUser ?? definition.track),
@@ -1528,6 +1566,42 @@ function ensureStyles(): void {
 }
 .bst-row.bst-row-non-numeric .bst-label > span:first-child {
   min-width: 0;
+}
+.bst-array-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.bst-array-item-chip {
+  display: inline-block;
+  max-width: min(72%, 360px);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--bst-stat-color, var(--bst-accent)) 60%, #ffffff 40%);
+  background: color-mix(in srgb, var(--bst-stat-color, var(--bst-accent)) 18%, rgba(13, 18, 30, 0.9) 82%);
+  color: #f5f9ff;
+  font-size: 11px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.bst-array-item-empty {
+  font-size: 11px;
+  opacity: 0.75;
+}
+.bst-array-toggle {
+  border: 1px solid rgba(255,255,255,0.34);
+  background: rgba(14, 20, 30, 0.82);
+  color: #dbe8ff;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.bst-array-toggle:hover {
+  border-color: rgba(255,255,255,0.54);
 }
 .bst-label {
   display: flex;
@@ -3200,6 +3274,9 @@ function ensureStyles(): void {
     grid-template-columns: minmax(0, 1fr);
     gap: 4px;
   }
+  .bst-array-item-chip {
+    max-width: 100%;
+  }
   .bst-non-numeric-chip {
     max-width: 100%;
     margin-left: 0;
@@ -3624,6 +3701,19 @@ export function renderTracker(
           }
           return;
         }
+        const arrayToggle = target?.closest('[data-bst-action="toggle-array-values"]') as HTMLElement | null;
+        if (arrayToggle) {
+          const key = String(arrayToggle.getAttribute("data-bst-array-key") ?? "").trim();
+          if (!key) return;
+          if (expandedArrayValueKeys.has(key)) {
+            expandedArrayValueKeys.delete(key);
+          } else {
+            expandedArrayValueKeys.add(key);
+          }
+          root.dataset.bstRenderSignature = "";
+          onRequestRerender?.();
+          return;
+        }
         const button = target?.closest('[data-bst-action="graph"]') as HTMLElement | null;
         if (button) {
           const name = String(button.getAttribute("data-character") ?? "").trim();
@@ -3830,7 +3920,7 @@ export function renderTracker(
     const resolveEffectiveNonNumericValue = (
       def: UiNonNumericStatDefinition,
       name: string,
-    ): string | boolean | null => {
+    ): string | boolean | string[] | null => {
       if (hasNonNumericValue(data, def, name)) return resolveNonNumericValue(data, def, name);
       const previous = findPreviousDataWithNonNumericStat(entry.messageIndex, def, name);
       if (previous) return resolveNonNumericValue(previous, def, name);
@@ -3999,8 +4089,31 @@ export function renderTracker(
         }).join("")}
         ${enabledNonNumeric.map(def => {
           const resolved = resolveEffectiveNonNumericValue(def, name);
-          const displayValue = resolved == null ? "not set" : formatNonNumericForDisplay(def, resolved);
           const color = def.color || "#9bd5ff";
+          if (def.kind === "array") {
+            const items = Array.isArray(resolved) ? resolved : normalizeNonNumericArrayItems(resolved, def.textMaxLength);
+            const arrayKey = `arr:${entry.messageIndex}:${normalizeName(name)}:${def.id}`;
+            const expanded = expandedArrayValueKeys.has(arrayKey);
+            const hasOverflow = items.length > 4;
+            const visibleItems = hasOverflow && !expanded ? items.slice(0, 4) : items;
+            const chips = visibleItems.length
+              ? visibleItems.map(item => `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(item)}">${escapeHtml(item)}</span>`).join("")
+              : `<span class="bst-array-item-empty">No items</span>`;
+            return `
+              <div class="bst-row bst-row-non-numeric">
+                <div class="bst-label">
+                  <span>${escapeHtml(def.label)}</span>
+                </div>
+                <div class="bst-array-items">
+                  ${chips}
+                  ${hasOverflow
+                    ? `<button type="button" class="bst-array-toggle" data-bst-action="toggle-array-values" data-bst-array-key="${escapeHtml(arrayKey)}" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "Show less" : `+${items.length - 4} more`}</button>`
+                    : ""}
+                </div>
+              </div>
+            `;
+          }
+          const displayValue = resolved == null ? "not set" : formatNonNumericForDisplay(def, resolved);
           return `
             <div class="bst-row bst-row-non-numeric">
               <div class="bst-label">
@@ -4031,6 +4144,7 @@ export function renderTracker(
       const nonNumericSignature = enabledNonNumeric.map(def => {
         const value = resolveEffectiveNonNumericValue(def, name);
         if (value == null) return `${def.id}:not_set`;
+        if (Array.isArray(value)) return `${def.id}:[${value.join("|")}]`;
         return `${def.id}:${typeof value === "boolean" ? String(value) : value}`;
       }).join("|");
       signatureParts.push(`card:${name}:${isActive ? "1" : "0"}:${moodText}:${moodImage ?? ""}:${lastThoughtText}:${nonNumericSignature}:${cardColor}:${cardHtml}`);
@@ -4270,7 +4384,7 @@ type EditStatsPayload = {
   messageIndex: number;
   character: string;
   numeric: Record<string, number | null>;
-  nonNumeric?: Record<string, string | boolean | null>;
+  nonNumeric?: Record<string, string | boolean | string[] | null>;
   active?: boolean;
   mood?: string | null;
   lastThought?: string | null;
@@ -4374,6 +4488,16 @@ function openEditStatsModal(input: {
             <option value="true" ${selected === true ? "selected" : ""}>${escapeHtml(def.booleanTrueLabel)}</option>
             <option value="false" ${selected === false ? "selected" : ""}>${escapeHtml(def.booleanFalseLabel)}</option>
           </select>
+        </label>
+      `;
+    }
+    if (def.kind === "array") {
+      const items = Array.isArray(currentValue) ? currentValue : normalizeNonNumericArrayItems(currentValue, def.textMaxLength);
+      const value = items.join("\n");
+      return `
+        <label class="bst-edit-field">
+          <span>${escapeHtml(def.label)}</span>
+          <textarea rows="4" data-bst-edit-non-numeric="${escapeHtml(def.id)}" data-bst-edit-kind="array" placeholder="One item per line, up to 20 items.">${escapeHtml(value)}</textarea>
         </label>
       `;
     }
@@ -4522,8 +4646,8 @@ function openEditStatsModal(input: {
       numeric[key] = clamped;
     });
 
-    const nonNumeric: Record<string, string | boolean | null> = {};
-    modal.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-bst-edit-non-numeric]").forEach(node => {
+    const nonNumeric: Record<string, string | boolean | string[] | null> = {};
+    modal.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-bst-edit-non-numeric]").forEach(node => {
       const key = String(node.dataset.bstEditNonNumeric ?? "").trim().toLowerCase();
       if (!key) return;
       const def = nonNumericDefById.get(key);
@@ -4544,6 +4668,12 @@ function openEditStatsModal(input: {
         if (nonNumeric[key] == null) {
           node.value = "";
         }
+        return;
+      }
+      if (kind === "array") {
+        const items = normalizeNonNumericArrayItems(String(node.value ?? ""), def.textMaxLength);
+        nonNumeric[key] = items.length ? items : null;
+        node.value = items.join("\n");
         return;
       }
       const text = normalizeNonNumericTextValue(raw, def.textMaxLength);
@@ -5155,7 +5285,7 @@ export function openSettingsModal(input: {
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-sliders"></span>Custom Stats</h4>
       <div class="bst-custom-stats-top">
-        <div class="bst-help-line">Add custom stats (numeric, enum, boolean, short text). Maximum ${MAX_CUSTOM_STATS} custom stats.</div>
+        <div class="bst-help-line">Add custom stats (numeric, enum, boolean, short text, array). Maximum ${MAX_CUSTOM_STATS} custom stats.</div>
         <button type="button" class="bst-btn bst-btn-soft" data-action="custom-add">Add Custom Stat</button>
       </div>
       <div class="bst-custom-stats-list" data-bst-row="customStatsList"></div>
@@ -5362,7 +5492,7 @@ export function openSettingsModal(input: {
             <button class="bst-prompt-reset" data-action="reset-prompt" data-reset-for="promptTemplateSequentialCustomNonNumeric" title="Reset to default."><span class="fa-solid fa-rotate-left" aria-hidden="true"></span></button>
           </div>
           <div class="bst-prompt-body">
-            <div class="bst-prompt-caption">Instruction (editable default used when enum/boolean/text custom stats have no per-stat override, in all modes)</div>
+            <div class="bst-prompt-caption">Instruction (editable default used when enum/boolean/text/array custom stats have no per-stat override, in all modes)</div>
             <textarea data-k="promptTemplateSequentialCustomNonNumeric" rows="6"></textarea>
             <div class="bst-protocol-readonly-wrap">
               <div class="bst-prompt-caption">Protocol (read-only)</div>
@@ -5948,13 +6078,17 @@ export function openSettingsModal(input: {
       behaviorGuidance: clone.behaviorGuidance ?? "",
       defaultValue: kind === "numeric"
         ? String(Number.isFinite(Number(clone.defaultValue)) ? Math.round(Number(clone.defaultValue)) : 50)
-        : (kind === "boolean" ? "" : String(clone.defaultValue ?? "")),
+        : kind === "boolean"
+          ? ""
+          : kind === "array"
+            ? normalizeNonNumericArrayItems(clone.defaultValue, textMaxLength).join("\n")
+            : String(clone.defaultValue ?? ""),
       defaultBoolean: kind === "boolean" ? Boolean(clone.defaultValue) : false,
       maxDeltaPerTurn: kind === "numeric" && clone.maxDeltaPerTurn != null ? String(Math.round(clone.maxDeltaPerTurn)) : "",
       enumOptionsText: kind === "enum_single" ? normalizeCustomEnumOptions(clone.enumOptions).join("\n") : "",
       booleanTrueLabel: String(clone.booleanTrueLabel ?? "enabled").trim() || "enabled",
       booleanFalseLabel: String(clone.booleanFalseLabel ?? "disabled").trim() || "disabled",
-      textMaxLength: kind === "text_short" ? String(textMaxLength) : "120",
+      textMaxLength: kind === "text_short" || kind === "array" ? String(textMaxLength) : "120",
       trackCharacters,
       trackUser,
       privateToOwner: Boolean(clone.privateToOwner),
@@ -6030,6 +6164,19 @@ export function openSettingsModal(input: {
       } else if (draft.kind === "boolean") {
         if (!draft.booleanTrueLabel.trim()) errors.push("True label is required for boolean stats.");
         if (!draft.booleanFalseLabel.trim()) errors.push("False label is required for boolean stats.");
+      } else if (draft.kind === "array") {
+        const maxLen = Number(draft.textMaxLength);
+        if (!Number.isFinite(maxLen) || maxLen < 20 || maxLen > 200) {
+          errors.push("Text max length must be between 20 and 200.");
+        }
+        const bounded = Math.max(20, Math.min(200, Math.round(maxLen || 120)));
+        const items = normalizeNonNumericArrayItems(draft.defaultValue, bounded);
+        if (items.length > 20) {
+          errors.push("Array default supports up to 20 items.");
+        }
+        if (items.some(item => item.length > bounded)) {
+          errors.push("One or more array items exceed max length.");
+        }
       } else if (draft.kind === "text_short") {
         const maxLen = Number(draft.textMaxLength);
         if (!Number.isFinite(maxLen) || maxLen < 20 || maxLen > 200) {
@@ -6090,6 +6237,9 @@ export function openSettingsModal(input: {
         if (matched != null) return matched;
         return enumOptions[0] ?? "";
       }
+      if (kind === "array") {
+        return normalizeNonNumericArrayItems(draft.defaultValue, textMaxLength);
+      }
       return normalizeNonNumericTextValue(draft.defaultValue, textMaxLength);
     })();
     return {
@@ -6105,7 +6255,7 @@ export function openSettingsModal(input: {
       enumOptions: kind === "enum_single" ? enumOptions : undefined,
       booleanTrueLabel: kind === "boolean" ? trueLabel : undefined,
       booleanFalseLabel: kind === "boolean" ? falseLabel : undefined,
-      textMaxLength: kind === "text_short" ? textMaxLength : undefined,
+      textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
       track,
       trackCharacters,
       trackUser,
@@ -6159,6 +6309,13 @@ export function openSettingsModal(input: {
         if (kind === "enum_single") {
           const options = normalizeCustomEnumOptions(stat.enumOptions);
           return `Default: ${String(stat.defaultValue ?? "").trim() || "(empty)"} | Options: ${options.length} | Graph: disabled`;
+        }
+        if (kind === "array") {
+          const limit = Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120)));
+          const items = normalizeNonNumericArrayItems(stat.defaultValue, limit);
+          const preview = items.length ? items.slice(0, 2).join(", ") : "(empty)";
+          const suffix = items.length > 2 ? ` +${items.length - 2} more` : "";
+          return `Default: ${preview}${suffix} | Items: ${items.length}/20 | Item max: ${limit} | Graph: disabled`;
         }
         const limit = Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120)));
         return `Default: ${String(stat.defaultValue ?? "").trim() || "(empty)"} | Max length: ${limit} | Graph: disabled`;
@@ -6443,6 +6600,7 @@ export function openSettingsModal(input: {
               <option value="enum_single" ${draft.kind === "enum_single" ? "selected" : ""}>Enum (single choice)</option>
               <option value="boolean" ${draft.kind === "boolean" ? "selected" : ""}>Boolean (true/false)</option>
               <option value="text_short" ${draft.kind === "text_short" ? "selected" : ""}>Short text</option>
+              <option value="array" ${draft.kind === "array" ? "selected" : ""}>Array (list)</option>
             </select>
           </label>
         </div>
@@ -6495,6 +6653,14 @@ export function openSettingsModal(input: {
             <input type="text" data-bst-custom-field="textDefaultValue" value="${escapeHtml(draft.kind === "text_short" ? draft.defaultValue : "")}" placeholder="focused on de-escalation">
           </label>
           <label>Text Max Length (20-200)
+            <input type="number" min="20" max="200" data-bst-custom-field="textMaxLength" value="${escapeHtml(draft.textMaxLength)}">
+          </label>
+        </div>
+        <div class="bst-custom-wizard-grid" data-bst-kind-panel="array" style="display:none;">
+          <label>Default Items (one per line, max 20)
+            <textarea data-bst-custom-field="arrayDefaultValue" rows="5" placeholder="white sundress&#10;black boots">${escapeHtml(draft.kind === "array" ? draft.defaultValue : "")}</textarea>
+          </label>
+          <label>Item Max Length (20-200)
             <input type="number" min="20" max="200" data-bst-custom-field="textMaxLength" value="${escapeHtml(draft.textMaxLength)}">
           </label>
         </div>
@@ -6611,6 +6777,7 @@ export function openSettingsModal(input: {
       const numericDefaultNode = getField("numericDefaultValue");
       const enumDefaultNode = getField("enumDefaultValue");
       const textDefaultNode = getField("textDefaultValue");
+      const arrayDefaultNode = getField("arrayDefaultValue");
       const defaultBooleanNode = getField("defaultBoolean") as HTMLSelectElement | null;
       const maxDeltaNode = getField("maxDeltaPerTurn");
       const enumOptionsNode = getField("enumOptionsText");
@@ -6632,6 +6799,8 @@ export function openSettingsModal(input: {
         draft.defaultValue = String(numericDefaultNode?.value ?? "");
       } else if (draft.kind === "enum_single") {
         draft.defaultValue = String(enumDefaultNode?.value ?? "");
+      } else if (draft.kind === "array") {
+        draft.defaultValue = String(arrayDefaultNode?.value ?? "");
       } else if (draft.kind === "text_short") {
         draft.defaultValue = String(textDefaultNode?.value ?? "");
       } else {
@@ -6704,6 +6873,8 @@ export function openSettingsModal(input: {
           valueHelpNode.textContent = "Enum stats store one value from the allowed list (no delta, no graph).";
         } else if (kind === "boolean") {
           valueHelpNode.textContent = "Boolean stats store true/false (no delta, no graph).";
+        } else if (kind === "array") {
+          valueHelpNode.textContent = "Array stats store up to 20 short items and should be updated incrementally (add/remove/edit items).";
         } else {
           valueHelpNode.textContent = "Short text stats store concise single-line state text (no delta, no graph).";
         }
@@ -6731,6 +6902,8 @@ export function openSettingsModal(input: {
           behaviorNode.placeholder = "Optional. Example:\n- guarded -> cautious tone, minimal disclosure.\n- cautious -> polite engagement with measured openness.\n- open -> proactive engagement and clearer emotional availability.\n- increase cues -> explicit trust/rapport signs.\n- decrease cues -> conflict, withdrawal, contradiction.";
         } else if (kind === "boolean") {
           behaviorNode.placeholder = "Optional. Example:\n- {{statId}} true -> behavior follows the enabled state.\n- {{statId}} false -> behavior follows the disabled state.\n- increase cues -> evidence that should switch to true.\n- decrease cues -> evidence that should switch to false.";
+        } else if (kind === "array") {
+          behaviorNode.placeholder = "Optional. Example:\n- interpret {{statId}} as a live list of short state items.\n- keep replies aligned with current items.\n- add cues -> add a specific item.\n- remove cues -> remove obsolete item.\n- edit cues -> update one existing item, avoid rewriting whole list.";
         } else {
           behaviorNode.placeholder = "Optional. Example:\n- interpret {{statId}} as short scene-state text.\n- keep responses aligned with the current text state.\n- increase cues -> evidence to update the text state.\n- decrease cues -> evidence to simplify or reset the text state.";
         }

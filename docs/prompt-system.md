@@ -50,6 +50,8 @@ Non-editable safety templates:
 2. global `Custom Non-Numeric Default`
 3. built-in default constant
 
+Supported kinds: `enum_single`, `boolean`, `text_short`, `array`.
+
 ## Macros and Render Context
 
 Key macros:
@@ -66,6 +68,7 @@ Key macros:
   - `{{statKind}}`
   - `{{allowedValues}}`
   - `{{textMaxLen}}`
+  - `{{arrayMaxItems}}`
   - `{{booleanTrueLabel}}`, `{{booleanFalseLabel}}`
   - `{{valueSchema}}`
 

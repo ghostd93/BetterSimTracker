@@ -17,6 +17,7 @@ Defined in `src/types.ts`.
 - `enum_single`
 - `boolean`
 - `text_short`
+- `array`
 
 ### Tracker Payload (`TrackerData`)
 
@@ -27,7 +28,7 @@ Defined in `src/types.ts`.
   - `affection`, `trust`, `desire`, `connection` as number maps by character
   - `mood`, `lastThought` as text maps by character
 - `customStatistics` (numeric custom values)
-- `customNonNumericStatistics` (enum/boolean/text custom values)
+- `customNonNumericStatistics` (enum/boolean/text/array custom values)
 
 ## Settings Schema (`BetterSimTrackerSettings`)
 
@@ -88,6 +89,7 @@ Kind-specific fields:
 - `enum_single`: `defaultValue`, `enumOptions[]`
 - `boolean`: `defaultValue`, `booleanTrueLabel`, `booleanFalseLabel`
 - `text_short`: `defaultValue`, `textMaxLength`
+- `array`: `defaultValue` (`string[]`), `textMaxLength` (per-item limit), max `20` items
 
 ## Persistence Surfaces
 
