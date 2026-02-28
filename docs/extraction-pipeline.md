@@ -25,13 +25,14 @@ Extractor is called with:
 
 ### Unified Mode (`sequentialExtraction=false`)
 
-- Built-in + text stats are requested in one unified prompt.
-- Custom stats (numeric and non-numeric) run as per-stat requests.
+- Public built-in/text + public custom stats run in unified batch mode.
+- Owner-private stats (custom + optional built-in `lastThought`) run in owner-scoped unified batches.
 
 ### Sequential Mode (`sequentialExtraction=true`)
 
-- Built-in/text stats run one stat per request.
-- Custom stats still run per-stat requests.
+- Public built-in/text stats run one stat per request.
+- Public custom stats run per-stat requests.
+- Owner-private stats run owner-scoped sequential passes (per owner).
 - Worker count honors `maxConcurrentCalls` with hard safety clamp.
 
 ## Custom Stat Request Behavior
@@ -43,6 +44,7 @@ For each custom stat:
   - existing baseline (request from model)
 2. Seed-only characters receive default values without model call.
 3. Existing characters are requested using kind-specific prompt/protocol.
+4. For owner-private stats, split/apply is scoped to the owner batch only.
 
 ## Parse and Apply
 
@@ -132,3 +134,4 @@ Extractor returns:
 - If generation-end/render event ordering is delayed, a late-render poll fallback checks for the newly added AI message and schedules extraction to avoid mobile race misses.
 - On chat load, if the latest AI message has no tracker payload yet, a one-shot bootstrap run is scheduled for that message.
 - If that bootstrap target is an initial greeting (no prior user message), tracker values are seeded from configured defaults instead of model extraction.
+- If extraction fails or is manually stopped before first save for a target message, runtime exposes an inline recovery card with reason + retry action.

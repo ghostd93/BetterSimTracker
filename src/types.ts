@@ -45,6 +45,7 @@ export interface CustomStatDefinition {
   track: boolean;
   trackCharacters?: boolean;
   trackUser?: boolean;
+  privateToOwner?: boolean;
   showOnCard: boolean;
   showInGraph: boolean;
   includeInInjection: boolean;
@@ -100,6 +101,7 @@ export interface BetterSimTrackerSettings {
   trackConnection: boolean;
   trackMood: boolean;
   trackLastThought: boolean;
+  lastThoughtPrivate: boolean;
   enableUserTracking: boolean;
   userTrackMood: boolean;
   userTrackLastThought: boolean;

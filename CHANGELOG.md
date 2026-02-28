@@ -2,6 +2,18 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev1] - 2026-02-28
+### Added
+- Owner-scoped privacy controls for stats: `LastThought` can now be marked private, and custom stats now support a `Private (owner-scoped)` toggle.
+- Inline tracker recovery card for missing snapshots, including exact failure reason text and one-click `Retry Tracker` / `Generate Tracker` actions.
+
+### Changed
+- Private stat extraction now runs owner-scoped in both unified and sequential modes, while public stats continue to run in normal shared batches.
+- Prompt injection now excludes private stats for non-owner contexts, including private `LastThought`.
+
+### Fixed
+- If extraction is stopped/cancelled on a message that had no previous tracker, the message now shows a direct recovery action instead of forcing manual refresh/reload workarounds.
+
 ## [2.2.0.7] - 2026-02-27
 ### Changed
 - Unified extraction now submits built-in and custom stats together in a single request.

@@ -193,6 +193,10 @@ export async function extractStatisticsParallel(input: {
   } = input;
   const builtInAndTextStats = enabledBuiltInAndTextStats(settings);
   const customStats = enabledCustomStats(settings);
+  const builtInPrivateStats = builtInAndTextStats.filter(stat => stat === "lastThought" && settings.lastThoughtPrivate);
+  const builtInPublicStats = builtInAndTextStats.filter(stat => !builtInPrivateStats.includes(stat));
+  const customPrivateStats = customStats.filter(stat => Boolean(stat.privateToOwner));
+  const customPublicStats = customStats.filter(stat => !stat.privateToOwner);
   const output = emptyStatistics();
   const outputCustom: CustomStatistics = {};
   const outputCustomNonNumeric: CustomNonNumericStatistics = {};
@@ -266,9 +270,21 @@ export async function extractStatisticsParallel(input: {
     };
   }
 
+  const unifiedBatchCount = (() => {
+    if (settings.sequentialExtraction) return 0;
+    const hasPublicBatch = builtInPublicStats.length > 0 || customPublicStats.length > 0;
+    const hasPrivateBatch = builtInPrivateStats.length > 0 || customPrivateStats.length > 0;
+    const privateBatches = hasPrivateBatch ? activeCharacters.length : 0;
+    return (hasPublicBatch ? 1 : 0) + privateBatches;
+  })();
+  const sequentialStatPasses =
+    builtInPublicStats.length +
+    customPublicStats.length +
+    (builtInPrivateStats.length * activeCharacters.length) +
+    (customPrivateStats.length > 0 ? customPrivateStats.length * activeCharacters.length : 0);
   const progressTotal = settings.sequentialExtraction
-    ? Math.max(1, (builtInAndTextStats.length + customStats.length) * 3)
-    : Math.max(1, (builtInAndTextStats.length || customStats.length) ? 3 : 1);
+    ? Math.max(1, sequentialStatPasses * 3)
+    : Math.max(1, unifiedBatchCount * 3);
   onProgress?.(0, progressTotal, "Preparing context");
 
   try {
@@ -458,11 +474,12 @@ export async function extractStatisticsParallel(input: {
     const splitCustomCharactersByBaseline = (
       statId: string,
       kind: "numeric" | "non_numeric",
+      names: string[] = activeCharacters,
     ): { existing: string[]; firstRunSeedOnly: string[] } => {
       // For user-side extraction, custom stats should be inferred immediately
       // from the current user turn instead of being seed-only.
-      if (activeCharacters.length === 1 && activeCharacters[0] === USER_TRACKER_KEY) {
-        return { existing: [...activeCharacters], firstRunSeedOnly: [] };
+      if (names.length === 1 && names[0] === USER_TRACKER_KEY) {
+        return { existing: [...names], firstRunSeedOnly: [] };
       }
       const hasPrior = Boolean(hasPriorTrackerData);
       const rawMap = kind === "numeric"
@@ -470,7 +487,7 @@ export async function extractStatisticsParallel(input: {
         : (previousCustomNonNumericStatistics?.[statId] ?? {});
       const existing: string[] = [];
       const firstRunSeedOnly: string[] = [];
-      for (const name of activeCharacters) {
+      for (const name of names) {
         if (hasPrior && rawMap[name] !== undefined) {
           existing.push(name);
         } else {
@@ -595,6 +612,7 @@ export async function extractStatisticsParallel(input: {
 
     const runOneBuiltInOrTextRequest = async (
       statList: StatKey[],
+      requestCharacters: string[] = activeCharacters,
     ): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
       checkCancelled();
       const statLabel = statList.length === 1 ? statList[0] : "stats";
@@ -602,7 +620,7 @@ export async function extractStatisticsParallel(input: {
         ? buildSequentialPrompt(
             statList[0],
             userName,
-            activeCharacters,
+            requestCharacters,
             contextText,
             previousStatistics,
             history,
@@ -616,7 +634,7 @@ export async function extractStatisticsParallel(input: {
         : buildUnifiedPrompt(
             statList,
             userName,
-            activeCharacters,
+            requestCharacters,
             contextText,
             previousStatistics,
             history,
@@ -633,7 +651,7 @@ export async function extractStatisticsParallel(input: {
       checkCancelled();
       let raw = rawResponse.text;
       tickProgress(`Parsing ${statLabel}`);
-      let parsedOne = parseUnifiedDeltaResponse(raw, activeCharacters, statList, settings.maxDeltaPerTurn, promptCharacterAliases);
+      let parsedOne = parseUnifiedDeltaResponse(raw, requestCharacters, statList, settings.maxDeltaPerTurn, promptCharacterAliases);
       const firstHasValues = hasParsedValues(parsedOne);
       firstParseHadValues = firstParseHadValues && firstHasValues;
       const hasRequestedCoverage = (candidate: ReturnType<typeof parseUnifiedDeltaResponse>): boolean =>
@@ -649,7 +667,7 @@ export async function extractStatisticsParallel(input: {
         checkCancelled();
         const retryParsed = parseUnifiedDeltaResponse(
           retryResponse.text,
-          activeCharacters,
+          requestCharacters,
           statList,
           settings.maxDeltaPerTurn,
           promptCharacterAliases,
@@ -672,7 +690,7 @@ export async function extractStatisticsParallel(input: {
         checkCancelled();
         const repairParsed = parseUnifiedDeltaResponse(
           repairResponse.text,
-          activeCharacters,
+          requestCharacters,
           statList,
           settings.maxDeltaPerTurn,
           promptCharacterAliases,
@@ -690,7 +708,7 @@ export async function extractStatisticsParallel(input: {
         checkCancelled();
         const strictParsed = parseUnifiedDeltaResponse(
           strictResponse.text,
-          activeCharacters,
+          requestCharacters,
           statList,
           settings.maxDeltaPerTurn,
           promptCharacterAliases,
@@ -835,109 +853,117 @@ export async function extractStatisticsParallel(input: {
     };
 
     if (!settings.sequentialExtraction) {
-      type UnifiedCustomPlan = {
-        statDef: CustomStatDefinition;
-        kind: "numeric" | "non_numeric";
-        existing: string[];
-      };
-      const customPlans: UnifiedCustomPlan[] = customStats.map(statDef => {
-        const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
-        const split = splitCustomCharactersByBaseline(statDef.id, kind);
-        if (kind === "numeric") {
-          seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
-        } else {
-          seedCustomNonNumericStatDefaultsForNames(statDef, split.firstRunSeedOnly);
-        }
-        return {
-          statDef,
-          kind,
-          existing: split.existing,
+      const runUnifiedBatch = async (
+        batchLabel: string,
+        requestCharacters: string[],
+        batchBuiltInStats: StatKey[],
+        batchCustomStats: CustomStatDefinition[],
+      ): Promise<void> => {
+        type UnifiedCustomPlan = {
+          statDef: CustomStatDefinition;
+          kind: "numeric" | "non_numeric";
+          existing: string[];
         };
-      });
-
-      const parseUnifiedAllFromRaw = (
-        raw: string,
-      ): {
-        builtIn: ReturnType<typeof parseUnifiedDeltaResponse>;
-        customNumeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>>;
-        customNonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>>;
-      } => {
-        const builtIn = parseUnifiedDeltaResponse(
-          raw,
-          activeCharacters,
-          builtInAndTextStats,
-          settings.maxDeltaPerTurn,
-          promptCharacterAliases,
-        );
-        const customNumeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>> = {};
-        const customNonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>> = {};
-        for (const plan of customPlans) {
-          if (!plan.existing.length) continue;
-          if (plan.kind === "numeric") {
-            customNumeric[plan.statDef.id] = parseCustomDeltaResponse(
-              raw,
-              plan.existing,
-              plan.statDef.id,
-              plan.statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
-              promptCharacterAliases,
-            );
-            continue;
+        const customPlans: UnifiedCustomPlan[] = batchCustomStats.map(statDef => {
+          const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
+          const split = splitCustomCharactersByBaseline(statDef.id, kind, requestCharacters);
+          if (kind === "numeric") {
+            seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          } else {
+            seedCustomNonNumericStatDefaultsForNames(statDef, split.firstRunSeedOnly);
           }
-          const parsedValue = parseCustomValueResponse(
-            raw,
-            plan.existing,
-            plan.statDef.id,
-            plan.statDef.kind === "enum_single" || plan.statDef.kind === "boolean" || plan.statDef.kind === "text_short"
-              ? plan.statDef.kind
-              : "text_short",
-            {
-              enumOptions: plan.statDef.enumOptions,
-              textMaxLength: plan.statDef.textMaxLength,
-            },
-            promptCharacterAliases,
-          );
-          customNonNumeric[plan.statDef.id] = sanitizeParsedCustomNonNumeric(plan.statDef, plan.existing, parsedValue);
-        }
-        return { builtIn, customNumeric, customNonNumeric };
-      };
+          return {
+            statDef,
+            kind,
+            existing: split.existing,
+          };
+        });
 
-      const hasUnifiedAllCoverage = (
-        parsedAll: {
+        const parseUnifiedAllFromRaw = (
+          raw: string,
+        ): {
           builtIn: ReturnType<typeof parseUnifiedDeltaResponse>;
           customNumeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>>;
           customNonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>>;
-        },
-      ): boolean => {
-        const builtInCovered = builtInAndTextStats.length <= 1
-          ? hasValuesForRequestedBuiltInAndTextStats(parsedAll.builtIn, builtInAndTextStats)
-          : hasCoverageForAllRequestedBuiltInAndTextStats(parsedAll.builtIn, builtInAndTextStats);
-        if (!builtInCovered && builtInAndTextStats.length > 0) return false;
-        for (const plan of customPlans) {
-          if (!plan.existing.length) continue;
-          if (plan.kind === "numeric") {
-            if (!hasAnyValues(parsedAll.customNumeric[plan.statDef.id]?.delta ?? {})) return false;
-          } else {
-            if (!hasAnyValues(parsedAll.customNonNumeric[plan.statDef.id]?.value ?? {})) return false;
+        } => {
+          const builtIn = parseUnifiedDeltaResponse(
+            raw,
+            requestCharacters,
+            batchBuiltInStats,
+            settings.maxDeltaPerTurn,
+            promptCharacterAliases,
+          );
+          const customNumeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>> = {};
+          const customNonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>> = {};
+          for (const plan of customPlans) {
+            if (!plan.existing.length) continue;
+            if (plan.kind === "numeric") {
+              customNumeric[plan.statDef.id] = parseCustomDeltaResponse(
+                raw,
+                plan.existing,
+                plan.statDef.id,
+                plan.statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
+                promptCharacterAliases,
+              );
+              continue;
+            }
+            const parsedValue = parseCustomValueResponse(
+              raw,
+              plan.existing,
+              plan.statDef.id,
+              plan.statDef.kind === "enum_single" || plan.statDef.kind === "boolean" || plan.statDef.kind === "text_short"
+                ? plan.statDef.kind
+                : "text_short",
+              {
+                enumOptions: plan.statDef.enumOptions,
+                textMaxLength: plan.statDef.textMaxLength,
+              },
+              promptCharacterAliases,
+            );
+            customNonNumeric[plan.statDef.id] = sanitizeParsedCustomNonNumeric(plan.statDef, plan.existing, parsedValue);
           }
-        }
-        return true;
-      };
+          return { builtIn, customNumeric, customNonNumeric };
+        };
 
-      const shouldRequestUnifiedAll = builtInAndTextStats.length > 0 || customPlans.some(plan => plan.existing.length > 0);
-      if (!shouldRequestUnifiedAll) {
-        tickProgress("Seeding defaults");
-        tickProgress("Seeding defaults");
-        tickProgress("Applying defaults");
-      } else {
+        const hasUnifiedAllCoverage = (
+          parsedAll: {
+            builtIn: ReturnType<typeof parseUnifiedDeltaResponse>;
+            customNumeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>>;
+            customNonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>>;
+          },
+        ): boolean => {
+          const builtInCovered = batchBuiltInStats.length <= 1
+            ? hasValuesForRequestedBuiltInAndTextStats(parsedAll.builtIn, batchBuiltInStats)
+            : hasCoverageForAllRequestedBuiltInAndTextStats(parsedAll.builtIn, batchBuiltInStats);
+          if (!builtInCovered && batchBuiltInStats.length > 0) return false;
+          for (const plan of customPlans) {
+            if (!plan.existing.length) continue;
+            if (plan.kind === "numeric") {
+              if (!hasAnyValues(parsedAll.customNumeric[plan.statDef.id]?.delta ?? {})) return false;
+            } else {
+              if (!hasAnyValues(parsedAll.customNonNumeric[plan.statDef.id]?.value ?? {})) return false;
+            }
+          }
+          return true;
+        };
+
+        const shouldRequestUnifiedAll = batchBuiltInStats.length > 0 || customPlans.some(plan => plan.existing.length > 0);
+        if (!shouldRequestUnifiedAll) {
+          tickProgress("Seeding defaults");
+          tickProgress("Seeding defaults");
+          tickProgress("Applying defaults");
+          return;
+        }
+
         const allRequestedStats = [
-          ...builtInAndTextStats,
-          ...customStats.map(stat => stat.id),
+          ...batchBuiltInStats,
+          ...batchCustomStats.map(stat => stat.id),
         ];
         const builtPrompt = buildUnifiedAllStatsPrompt({
-          stats: builtInAndTextStats,
-          customStats,
+          stats: batchBuiltInStats,
+          customStats: batchCustomStats,
           userName,
-          characters: activeCharacters,
+          characters: requestCharacters,
           contextText,
           current: previousStatistics,
           currentCustom: previousCustomStatistics ?? {},
@@ -951,7 +977,7 @@ export async function extractStatisticsParallel(input: {
         });
         const prompt = applyPromptCharacterAliases(builtPrompt);
         tickProgress("Requesting stats");
-        let response = await callGenerate(prompt, allRequestedStats, "initial");
+        const response = await callGenerate(prompt, allRequestedStats, "initial");
         checkCancelled();
         let raw = response.text;
         tickProgress("Parsing stats");
@@ -974,9 +1000,9 @@ export async function extractStatisticsParallel(input: {
           }
         }
         tickProgress("Applying stats");
-        rawBlocks.push({ label: "unified", raw });
-        promptBlocks.push({ label: "unified", prompt });
-        for (const stat of builtInAndTextStats) {
+        rawBlocks.push({ label: batchLabel, raw });
+        promptBlocks.push({ label: batchLabel, prompt });
+        for (const stat of batchBuiltInStats) {
           applyParsedForBuiltInOrTextStat(stat, parsedAll.builtIn);
         }
         for (const plan of customPlans) {
@@ -989,9 +1015,18 @@ export async function extractStatisticsParallel(input: {
             if (parsedOne) applyParsedForCustomNonNumericStat(plan.statDef, parsedOne, plan.existing);
           }
         }
+      };
+
+      if (builtInPublicStats.length > 0 || customPublicStats.length > 0) {
+        await runUnifiedBatch("unified", activeCharacters, builtInPublicStats, customPublicStats);
+      }
+      if (builtInPrivateStats.length > 0 || customPrivateStats.length > 0) {
+        for (const owner of activeCharacters) {
+          await runUnifiedBatch(`unified-private:${owner}`, [owner], builtInPrivateStats, customPrivateStats);
+        }
       }
     } else {
-      const builtInQueue = [...builtInAndTextStats];
+      const builtInQueue = [...builtInPublicStats];
       const builtInWorkers = Math.max(1, Math.min(settings.maxConcurrentCalls || 1, 8, builtInQueue.length || 1));
       const runBuiltInWorker = async (): Promise<void> => {
         while (builtInQueue.length) {
@@ -1007,7 +1042,7 @@ export async function extractStatisticsParallel(input: {
       };
       await Promise.all(Array.from({ length: builtInWorkers }, () => runBuiltInWorker()));
 
-      const customQueue = [...customStats];
+      const customQueue = [...customPublicStats];
       const customWorkers = Math.max(1, Math.min(settings.maxConcurrentCalls || 1, 8, customQueue.length || 1));
       const runCustomWorker = async (): Promise<void> => {
         while (customQueue.length) {
@@ -1040,6 +1075,46 @@ export async function extractStatisticsParallel(input: {
         }
       };
       await Promise.all(Array.from({ length: customWorkers }, () => runCustomWorker()));
+
+      for (const owner of activeCharacters) {
+        for (const stat of builtInPrivateStats) {
+          checkCancelled();
+          const one = await runOneBuiltInOrTextRequest([stat], [owner]);
+          checkCancelled();
+          rawBlocks.push({ label: `${stat}:${owner}`, raw: one.raw });
+          promptBlocks.push({ label: `${stat}:${owner}`, prompt: one.prompt });
+          applyParsedForBuiltInOrTextStat(stat, one.parsedOne);
+        }
+      }
+
+      for (const statDef of customPrivateStats) {
+        const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
+        for (const owner of activeCharacters) {
+          checkCancelled();
+          const split = splitCustomCharactersByBaseline(statDef.id, kind, [owner]);
+          if (kind === "numeric") {
+            seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          } else {
+            seedCustomNonNumericStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          }
+          if (!split.existing.length) {
+            const label = statDef.label || statDef.id;
+            tickProgress(`Seeding ${label}`);
+            tickProgress(`Seeding ${label}`);
+            tickProgress(`Applying ${label}`);
+            continue;
+          }
+          const one = await runOneCustomRequest(statDef, split.existing);
+          checkCancelled();
+          rawBlocks.push({ label: `custom:${statDef.id}:${owner}`, raw: one.raw });
+          promptBlocks.push({ label: `custom:${statDef.id}:${owner}`, prompt: one.prompt });
+          if ((statDef.kind ?? "numeric") === "numeric") {
+            if (one.parsedNumeric) applyParsedForCustomStat(statDef, one.parsedNumeric, split.existing);
+          } else {
+            if (one.parsedNonNumeric) applyParsedForCustomNonNumericStat(statDef, one.parsedNonNumeric, split.existing);
+          }
+        }
+      }
     }
 
     const rawOutputAggregate = rawBlocks.map(item => `--- ${item.label} ---\n${item.raw}`).join("\n\n");

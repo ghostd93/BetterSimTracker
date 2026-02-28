@@ -17,7 +17,9 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Settings checkboxes now use consistent round accent-matched styling across ST themes/mobile UI overrides
 - Built-in stats manager wizard with unified `Enabled` toggle (`Track + Card + Graph`) plus `Inject` control for numeric built-ins
 - Custom stats section in settings with guided `Add / Edit / Clone / Remove` wizard flow (numeric + non-numeric custom stats, max 8 total, color picker + hex input, AI-assisted description improvement, AI generation for stat-specific Per-Stat Prompt Override, optional behavior-injection guidance with AI generation)
+- Private stat controls: owner-scoped privacy toggle for custom stats and built-in `lastThought`
 - Retrack button (regenerate tracker for the latest tracked message entry, AI or user)
+- Inline recovery card when extraction fails/stops before first tracker save (shows reason + `Retry/Generate` action)
 - Summarize button (AI-generated detailed prose summary, 4-6 sentences, grounded in currently tracked dimensions, no numeric stat values; with settings to make the note AI-visible and/or inject it into prompt guidance)
 - Edit last tracker stats inline (pencil icon on the latest card; numeric clamp + mood picker + last thought editor + kind-aware custom non-numeric editors)
 - Relationship graph modal:
@@ -112,7 +114,7 @@ Maintainer-focused technical docs are available in `docs/`:
 ## Quick Usage
 
 1. Send/generate an AI message.
-2. Tracker appears under AI messages (not user messages).
+2. Tracker appears under AI messages by default (and under user messages when user tracking is enabled).
 3. Open extension settings from Extensions panel.
 4. Optional:
    - enable prompt injection
@@ -135,22 +137,23 @@ flowchart TD
   F --> G{Cards or lorebook enabled?}
   G -- Yes --> H[Append card/lorebook context for disambiguation]
   G -- No --> I[Use recent-message context only]
-  H --> J[Split custom stats by baseline availability]
+  H --> J{Extraction mode}
   I --> J
-  J --> K{Extraction mode}
-  K -- Unified --> L[Single request for built-ins and eligible custom stats]
-  K -- Sequential --> M[Per-stat requests for built-ins and eligible custom stats]
-  L --> N[Parse response blocks for built-ins and custom stats]
-  M --> O[Parse per-stat responses]
-  N --> P[Apply built-in deltas, mood, and lastThought]
-  O --> P
+  J -- Unified --> K[Build public batch and owner-private batches]
+  J -- Sequential --> L[Build per-stat public queues and owner-private passes]
+  K --> M[Run unified request batches]
+  L --> N[Run per-stat request passes]
+  M --> O[Parse responses]
+  N --> O
+  O --> P[Apply built-in deltas, mood, lastThought]
   P --> Q[Apply custom numeric and non-numeric values]
-  J --> R[Seed defaults for custom stats with no baseline]
-  Q --> S[Merge missing fields from previous/defaults]
-  R --> S
-  S --> T[Save snapshot to message/chat metadata/local storage]
-  T --> U[Render tracker cards + graph]
-  U --> V[Sync prompt injection]
+  Q --> R[Merge missing fields from previous/defaults]
+  R --> S{Extraction succeeded?}
+  S -- Yes --> T[Save snapshot to message/chat metadata/local storage]
+  S -- No and no prior tracker --> U[Render inline recovery card with reason and Retry or Generate button]
+  T --> V[Render tracker cards + graph]
+  U --> V
+  V --> W[Sync prompt injection]
 ```
 
 ### 2) Stat Calculation Flow
@@ -195,6 +198,7 @@ Numeric scaling formula used by runtime:
 - On the first post-generation extraction in a chat (no previous snapshot), sequential mode is forced to one request at a time for stability.
 - First-run custom stat values are seeded from configured defaults and not requested from the model until a prior value exists.
 - Tracker progress includes a Stop button to cancel extraction.
+- If extraction is stopped/failed before any tracker is saved for that message, an inline recovery card is shown with reason text and a retry action.
 - On reload, tracker state is restored from saved chat metadata/message data.
 - If extraction fails, provisional baseline values are not saved as final tracker state.
 - If BetterSimTracker `Connection Profile` is empty, extraction automatically uses SillyTavern's currently active connection profile.
@@ -202,7 +206,7 @@ Numeric scaling formula used by runtime:
 ## Settings Overview
 
 - `Sequential Extraction`: one request per stat (more robust, slower)
-- `Unified Extraction`: one combined request for built-ins and eligible custom stats
+- `Unified Extraction`: unified batch extraction (public stats in shared batch, private stats in owner-scoped batches)
 - `Max Concurrent Requests`: parallelism in sequential mode
 - `Strict JSON Repair`: retries if model output is invalid
 - `Auto Detect Active`: scene-based active character detection
@@ -212,8 +216,8 @@ Numeric scaling formula used by runtime:
 - `Inject Summarization Note`: appends the latest Summarize note (prose summary of current tracked stats) into hidden prompt injection guidance
 - `Injection Prompt Template`: editable template for injected guidance (shown only when injection is enabled)
 - `Prompt Templates`: edit unified + per-stat sequential prompt instructions plus global custom-numeric and custom-non-numeric sequential defaults (protocol blocks are fixed; repair prompts are fixed)
-- `Manage Built-in Stats`: open a wizard to control built-in stat participation in extraction/cards/graph/injection
-- `Custom Stats`: create and manage additional custom stats (`numeric`, `enum_single`, `boolean`, `text_short`) via step-by-step wizard in settings
+- `Manage Built-in Stats`: open a wizard to control built-in stat participation in extraction/cards/graph/injection (`lastThought` includes owner-scoped privacy toggle)
+- `Custom Stats`: create and manage additional custom stats (`numeric`, `enum_single`, `boolean`, `text_short`) via step-by-step wizard in settings, including owner-scoped privacy toggle per stat
 - `Profile Token Limits`: extraction now respects profile max tokens and truncation length (when available)
 - `Max Tokens Override`: force max tokens for extraction (0 = auto)
 - `Context Size Override`: force truncation length for extraction (0 = auto)
@@ -234,7 +238,7 @@ Numeric scaling formula used by runtime:
 ### Extraction
 
 - `Connection Profile`: use a specific SillyTavern connection profile for tracker extraction. Empty = active profile.
-- `Sequential Extraction (per stat)`: one prompt per requested stat (`affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`, plus eligible custom stats). Slower, usually more robust parsing.
+- `Sequential Extraction (per stat)`: one prompt per requested public stat (`affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`, plus eligible custom stats), with owner-private stats processed in owner-scoped passes. Slower, usually more robust parsing.
 - `Max Concurrent Requests`: only used in sequential mode. Controls parallel request count.
 - `Strict JSON Repair`: retry/repair logic when model output is malformed or missing required fields.
 - `Max Retries Per Stat`: max additional retry attempts per stage after the initial generation.
@@ -312,8 +316,8 @@ Behavior notes:
 7. Built-in/text stats are requested in fixed order:
    - `affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`
 8. Mode behavior:
-   - Unified mode: one prompt for enabled built-ins and all eligible custom stats.
-   - Sequential mode: one prompt per requested stat; with concurrency > 1, stages run in parallel (finish order not guaranteed).
+   - Unified mode: one prompt batch for public stats; owner-private stats are extracted in owner-scoped unified batches.
+   - Sequential mode: one prompt per requested public stat; owner-private stats run in owner-scoped passes (finish order not guaranteed with concurrency > 1).
 9. Retry chain per stage (when `Strict JSON Repair` is enabled):
    - initial generation,
    - strict JSON retry,
@@ -331,12 +335,14 @@ Behavior notes:
   - configure per built-in:
     - `Enabled` (numeric = `Track + Card + Graph`, text stats = `Track`)
     - `Inject` (numeric built-ins only)
+    - `Private` (lastThought only, owner-scoped in prompt injection)
 - `Custom Stats` section:
   - `Add Custom Stat` wizard with kind-aware flow (`numeric`, `enum_single`, `boolean`, `text_short`)
   - `Edit` and `Clone` for faster setup reuse
   - `Remove` uses soft-remove flow (historical payload remains stored, active tracking stops)
   - numeric custom stats use unified `Enabled` toggle (`Track + Card + Graph`) plus `includeInInjection`
   - non-numeric custom stats use `Track + Card` plus `includeInInjection` (not graphed in current version)
+  - optional `Private (owner-scoped)` toggle keeps stat values scoped to current owner in extraction/injection
   - `Improve description with AI` (Basics step) rewrites the current description draft into a clearer extraction-focused definition
   - `Generate with AI` (Tracking Behavior step) drafts a stat-specific `Per-Stat Prompt Override` from required `Label`, `ID`, and `Description` with kind-aware schema constraints
   - `Generate with AI` (Behavior Injection step) drafts richer optional guidance lines used only in prompt injection for this custom stat (`low/medium/high` behavior + `increase/decrease` evidence cues)
@@ -351,7 +357,7 @@ Behavior notes:
   - Framer preview and tracker cards use the same positioning math, so preview framing matches tracker rendering
   - Positioning uses zoom-aware pan compensation (`object-position` + translated scale), and existing tracker cards update immediately when framing is changed
 
-You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only stats that are both tracked and explicitly enabled for injection (`Inject` for built-ins, `includeInInjection` for custom stats).
+You can disable any metric you do not want extracted. Disabled stats stop updating on future extractions; historical cards and graphs still show recorded values. Prompt injection uses only stats that are both tracked and explicitly enabled for injection (`Inject` for built-ins, `includeInInjection` for custom stats). Owner-private stats are injected only for the resolved target owner.
 
 ### Display
 

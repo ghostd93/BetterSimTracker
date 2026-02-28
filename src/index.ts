@@ -37,7 +37,17 @@ import type {
   Statistics,
   TrackerData
 } from "./types";
-import { closeGraphModal, closeSettingsModal, getGraphPreferences, openGraphModal, openSettingsModal, removeTrackerUI, renderTracker, type TrackerUiState } from "./ui";
+import {
+  closeGraphModal,
+  closeSettingsModal,
+  getGraphPreferences,
+  openGraphModal,
+  openSettingsModal,
+  removeTrackerUI,
+  renderTracker,
+  type TrackerRecoveryEntry,
+  type TrackerUiState,
+} from "./ui";
 import { cancelActiveGenerations, generateJson } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
 import { initCharacterPanel } from "./characterPanel";
@@ -51,6 +61,7 @@ let allCharacterNames: string[] = [];
 let latestData: TrackerData | null = null;
 let latestDataMessageIndex: number | null = null;
 let trackerUiState: TrackerUiState = { phase: "idle", done: 0, total: 0, messageIndex: null, stepLabel: null };
+const trackerRecoveryByMessage = new Map<number, TrackerRecoveryEntry>();
 let renderQueued = false;
 let extractionTimer: number | null = null;
 let swipeExtractionTimer: number | null = null;
@@ -1369,7 +1380,7 @@ function queueRender(): void {
     renderQueued = false;
     if (!settings) return;
     const context = getSafeContext();
-    const entries: Array<{ messageIndex: number; data: TrackerData | null }> = [];
+    const entries: Array<{ messageIndex: number; data: TrackerData | null; recovery?: TrackerRecoveryEntry | null }> = [];
 
     if (context) {
       for (let i = 0; i < context.chat.length; i += 1) {
@@ -1377,12 +1388,14 @@ function queueRender(): void {
         if (!isTrackableMessage(message)) continue;
         const data = getTrackerDataFromMessage(message);
         if (!data) continue;
-        entries.push({ messageIndex: i, data });
+        entries.push({ messageIndex: i, data, recovery: null });
+        clearTrackerRecovery(i);
       }
     }
 
     if (latestData && latestDataMessageIndex != null && !entries.some(entry => entry.messageIndex === latestDataMessageIndex)) {
-      entries.push({ messageIndex: latestDataMessageIndex, data: latestData });
+      entries.push({ messageIndex: latestDataMessageIndex, data: latestData, recovery: null });
+      clearTrackerRecovery(latestDataMessageIndex);
     }
 
     if (
@@ -1392,7 +1405,7 @@ function queueRender(): void {
       isRenderableTrackerIndex(context, trackerUiState.messageIndex) &&
       !entries.some(entry => entry.messageIndex === trackerUiState.messageIndex)
     ) {
-      entries.push({ messageIndex: trackerUiState.messageIndex, data: null });
+      entries.push({ messageIndex: trackerUiState.messageIndex, data: null, recovery: null });
     }
     if (
       trackerUiState.phase === "generating" &&
@@ -1401,7 +1414,18 @@ function queueRender(): void {
       isRenderableTrackerIndex(context, trackerUiState.messageIndex) &&
       !entries.some(entry => entry.messageIndex === trackerUiState.messageIndex)
     ) {
-      entries.push({ messageIndex: trackerUiState.messageIndex, data: null });
+      entries.push({ messageIndex: trackerUiState.messageIndex, data: null, recovery: null });
+    }
+    if (context) {
+      for (const [messageIndex, recovery] of trackerRecoveryByMessage.entries()) {
+        if (messageIndex < 0 || messageIndex >= context.chat.length) {
+          trackerRecoveryByMessage.delete(messageIndex);
+          continue;
+        }
+        if (!isRenderableTrackerIndex(context, messageIndex)) continue;
+        if (entries.some(entry => entry.messageIndex === messageIndex)) continue;
+        entries.push({ messageIndex, data: null, recovery });
+      }
     }
     pushTrace("render.queue", {
       entries: entries.length,
@@ -1465,6 +1489,7 @@ function queueRender(): void {
         debug: settings.debug
       });
     }, messageIndex => {
+      clearTrackerRecovery(messageIndex);
       void runExtraction("manual_refresh", messageIndex);
     }, messageIndex => {
       void sendTrackerSummaryToChat(messageIndex);
@@ -1483,19 +1508,38 @@ function queueRender(): void {
       return getTrackerDataFromMessage(liveContext.chat[messageIndex]);
     }, () => {
       queueRender();
+    }, messageIndex => {
+      clearTrackerRecovery(messageIndex);
+      void runExtraction("manual_refresh", messageIndex);
     });
   });
 }
 
 function queuePromptSync(context: STContext): void {
   if (!settings) return;
+  const customPrivacySignature = (settings.customStats ?? [])
+    .slice(0, 12)
+    .map(stat => [
+      stat.id,
+      stat.kind ?? "numeric",
+      stat.includeInInjection ? 1 : 0,
+      stat.track ? 1 : 0,
+      stat.trackCharacters ? 1 : 0,
+      stat.trackUser ? 1 : 0,
+      stat.privateToOwner ? 1 : 0,
+    ].join(":"))
+    .join("|");
   const signature = [
     settings.enabled ? "1" : "0",
     settings.injectTrackerIntoPrompt ? "1" : "0",
     settings.enableUserTracking ? "1" : "0",
     settings.includeUserTrackerInInjection ? "1" : "0",
+    settings.trackMood ? "1" : "0",
+    settings.trackLastThought ? "1" : "0",
+    settings.lastThoughtPrivate ? "1" : "0",
     settings.userTrackMood ? "1" : "0",
     settings.userTrackLastThought ? "1" : "0",
+    customPrivacySignature,
     latestData?.timestamp ?? 0,
     context.groupId ?? "",
     context.characterId ?? "",
@@ -1575,6 +1619,28 @@ function setTrackerUi(context: STContext, next: TrackerUiState): void {
   } else {
     context.activateSendButtons?.();
   }
+}
+
+function clearTrackerRecovery(messageIndex: number | null | undefined): void {
+  if (typeof messageIndex !== "number" || !Number.isFinite(messageIndex) || messageIndex < 0) return;
+  trackerRecoveryByMessage.delete(messageIndex);
+}
+
+function sanitizeTrackerRecoveryDetail(raw: string): string {
+  const compact = String(raw ?? "")
+    .replace(/\r\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!compact) return "Unknown extraction error.";
+  return compact.slice(0, 240);
+}
+
+function setTrackerRecovery(
+  messageIndex: number,
+  entry: TrackerRecoveryEntry,
+): void {
+  if (!Number.isFinite(messageIndex) || messageIndex < 0) return;
+  trackerRecoveryByMessage.set(messageIndex, entry);
 }
 
 function findCharacterByName(context: STContext | null, name: string): Character | null {
@@ -2575,6 +2641,8 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     return;
   }
   const lastMessage = context.chat[lastIndex];
+  const hadTrackerAtStart = Boolean(getTrackerDataFromMessage(lastMessage));
+  clearTrackerRecovery(lastIndex);
   const isManualRefreshReason = reason === "manual_refresh" || reason === "manual_refresh_retry";
   const forceRetrack =
     isManualRefreshReason ||
@@ -2618,6 +2686,14 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     });
     if (!activeCharacters.length) {
       pushTrace("extract.skip", { reason: "no_active_characters", runId });
+      if (!hadTrackerAtStart) {
+        setTrackerRecovery(lastIndex, {
+          kind: "error",
+          title: "Tracker generation skipped",
+          detail: "No active characters were detected for this message.",
+          actionLabel: "Retry Tracker",
+        });
+      }
       return;
     }
     const scopedCustomStats = (activeSettings.customStats ?? []).map(stat => {
@@ -2772,6 +2848,14 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       (extractionSettings.customStats ?? []).some(stat => Boolean(stat.track));
     if (!hasEnabledStatsForRun) {
       pushTrace("extract.skip", { reason: "no_enabled_stats", trigger: reason, runId });
+      if (!hadTrackerAtStart) {
+        setTrackerRecovery(lastIndex, {
+          kind: "error",
+          title: "Tracker generation skipped",
+          detail: "No stats are enabled for this extraction scope.",
+          actionLabel: "Retry Tracker",
+        });
+      }
       return;
     }
     if (shouldForceSingleRequestAtStart) {
@@ -2847,6 +2931,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     latestDataMessageIndex = lastIndex;
 
     writeTrackerDataToMessage(context, latestData, lastIndex);
+    clearTrackerRecovery(lastIndex);
     context.saveChatDebounced?.();
     await context.saveChat?.();
 
@@ -2863,9 +2948,18 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     const isAbortError = error instanceof DOMException && error.name === "AbortError";
     if (isAbortError) {
       pushTrace("extract.cancelled", { reason });
+      if (!hadTrackerAtStart) {
+        setTrackerRecovery(lastIndex, {
+          kind: "stopped",
+          title: "Tracker generation stopped",
+          detail: "No tracker was saved for this message.",
+          actionLabel: "Generate Tracker",
+        });
+      }
       return;
     }
     const message = error instanceof Error ? error.message : String(error);
+    let retryScheduled = false;
     if (
       isManualRefreshReason &&
       reason !== "manual_refresh_retry" &&
@@ -2877,11 +2971,20 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
         targetMessageIndex: targetMessageIndex ?? null,
       });
       scheduleExtraction("manual_refresh_retry", targetMessageIndex, 180);
+      retryScheduled = true;
     }
     pushTrace("extract.error", {
       reason,
       message
     });
+    if (!hadTrackerAtStart && !retryScheduled) {
+      setTrackerRecovery(lastIndex, {
+        kind: "error",
+        title: "Tracker generation failed",
+        detail: sanitizeTrackerRecoveryDetail(message),
+        actionLabel: "Retry Tracker",
+      });
+    }
     console.error("[BetterSimTracker] Extraction failed:", error);
   } finally {
     cancelledExtractionRuns.delete(runId);
@@ -3559,6 +3662,7 @@ function openSettings(): void {
           stExpressionImagePositionY: currentSettings.stExpressionImagePositionY,
           strictJsonRepair: currentSettings.strictJsonRepair,
           maxRetriesPerStat: currentSettings.maxRetriesPerStat,
+          lastThoughtPrivate: currentSettings.lastThoughtPrivate,
           customStats: currentSettings.customStats
         },
         activity: lastActivityAnalysis,

@@ -339,9 +339,17 @@ export type TrackerUiState = {
   stepLabel?: string | null;
 };
 
+export type TrackerRecoveryEntry = {
+  kind: "error" | "stopped";
+  title: string;
+  detail: string;
+  actionLabel: string;
+};
+
 type RenderEntry = {
   messageIndex: number;
   data: TrackerData | null;
+  recovery?: TrackerRecoveryEntry | null;
 };
 
 const ROOT_CLASS = "bst-root";
@@ -731,6 +739,7 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     track: Boolean(definition.track),
     trackCharacters: Boolean(definition.trackCharacters ?? definition.track),
     trackUser: Boolean(definition.trackUser ?? definition.track),
+    privateToOwner: Boolean(definition.privateToOwner),
     showOnCard: Boolean(definition.showOnCard),
     showInGraph: kind === "numeric" && Boolean(definition.showInGraph),
     includeInInjection: Boolean(definition.includeInInjection),
@@ -3482,6 +3491,7 @@ export function renderTracker(
   onEditStats?: (payload: EditStatsPayload) => void,
   resolveEntryData?: (messageIndex: number) => TrackerData | null,
   onRequestRerender?: () => void,
+  onRecoverTracker?: (messageIndex: number) => void,
 ): void {
   ensureStyles();
   const palette = allocateCharacterColors(allCharacters);
@@ -3645,6 +3655,14 @@ export function renderTracker(
           }
           return;
         }
+        const recover = target?.closest('[data-bst-action="recover-tracker"]') as HTMLElement | null;
+        if (recover) {
+          const idx = Number(root.dataset.messageIndex);
+          if (!Number.isNaN(idx)) {
+            onRecoverTracker?.(idx);
+          }
+          return;
+        }
         const sendSummary = target?.closest('[data-bst-action="send-summary"]') as HTMLButtonElement | null;
         if (sendSummary) {
           if (sendSummary.disabled || sendSummary.dataset.loading === "true") {
@@ -3750,9 +3768,40 @@ export function renderTracker(
 
     const data = entry.data;
     if (!data) {
-      root.style.display = "none";
+      const recovery = entry.recovery;
+      if (!recovery) {
+        root.style.display = "none";
+        root.dataset.bstRenderPhase = "idle";
+        root.dataset.bstRenderSignature = "";
+        continue;
+      }
+      root.style.display = "grid";
+      const recoverySignature = [
+        `msg:${entry.messageIndex}`,
+        `recovery:${recovery.kind}`,
+        `title:${recovery.title}`,
+        `detail:${recovery.detail}`,
+        `action:${recovery.actionLabel}`,
+      ].join("|#|");
+      if (root.dataset.bstRenderPhase === "idle" && root.dataset.bstRenderSignature === recoverySignature) {
+        continue;
+      }
       root.dataset.bstRenderPhase = "idle";
-      root.dataset.bstRenderSignature = "";
+      root.dataset.bstRenderSignature = recoverySignature;
+      root.innerHTML = "";
+      const recoveryBox = document.createElement("div");
+      recoveryBox.className = "bst-loading";
+      recoveryBox.innerHTML = `
+        <div class="bst-loading-row">
+          <span>${escapeHtml(recovery.title)}</span>
+          <span>${recovery.kind === "error" ? "error" : "stopped"}</span>
+        </div>
+        <div class="bst-loading-sub">${escapeHtml(recovery.detail)}</div>
+        <div class="bst-loading-actions">
+          <button class="bst-btn bst-btn-soft" data-bst-action="recover-tracker">${escapeHtml(recovery.actionLabel)}</button>
+        </div>
+      `;
+      root.appendChild(recoveryBox);
       continue;
     }
 
@@ -5852,6 +5901,7 @@ export function openSettingsModal(input: {
     textMaxLength: string;
     trackCharacters: boolean;
     trackUser: boolean;
+    privateToOwner: boolean;
     includeInInjection: boolean;
     color: string;
     sequentialPromptTemplate: string;
@@ -5875,6 +5925,7 @@ export function openSettingsModal(input: {
         textMaxLength: "120",
         trackCharacters: true,
         trackUser: true,
+        privateToOwner: false,
         includeInInjection: true,
         color: "",
         sequentialPromptTemplate: "",
@@ -5906,6 +5957,7 @@ export function openSettingsModal(input: {
       textMaxLength: kind === "text_short" ? String(textMaxLength) : "120",
       trackCharacters,
       trackUser,
+      privateToOwner: Boolean(clone.privateToOwner),
       includeInInjection: clone.includeInInjection,
       color: clone.color ?? "",
       sequentialPromptTemplate: clone.sequentialPromptTemplate ?? "",
@@ -6029,6 +6081,7 @@ export function openSettingsModal(input: {
     const trackCharacters = Boolean(draft.trackCharacters);
     const trackUser = Boolean(draft.trackUser);
     const track = trackCharacters || trackUser;
+    const privateToOwner = Boolean(draft.privateToOwner);
     const resolvedDefault = (() => {
       if (kind === "numeric") return Math.max(0, Math.min(100, Math.round(Number(draft.defaultValue))));
       if (kind === "boolean") return Boolean(draft.defaultBoolean);
@@ -6056,6 +6109,7 @@ export function openSettingsModal(input: {
       track,
       trackCharacters,
       trackUser,
+      privateToOwner,
       includeInInjection: draft.includeInInjection,
       showOnCard: track,
       showInGraph: kind === "numeric" ? track : false,
@@ -6089,6 +6143,7 @@ export function openSettingsModal(input: {
         `char:${trackCharacters ? "on" : "off"}`,
         `user:${trackUser ? "on" : "off"}`,
         kind,
+        stat.privateToOwner ? "private" : "shared",
         stat.includeInInjection ? "injection" : "no injection",
       ];
       const description = (stat.description ?? "").trim();
@@ -6150,6 +6205,7 @@ export function openSettingsModal(input: {
       mood: current.trackMood,
       lastThought: current.trackLastThought,
     };
+    let draftLastThoughtPrivate = Boolean(current.lastThoughtPrivate);
 
     const backdropNode = document.createElement("div");
     backdropNode.className = "bst-custom-wizard-backdrop";
@@ -6173,7 +6229,9 @@ export function openSettingsModal(input: {
             <label class="bst-check"><input type="checkbox" data-bst-builtin-enabled="${key}" ${enabled ? "checked" : ""}>${isNumeric ? "Enabled (Track + Card + Graph)" : "Enabled (Track)"}</label>
             ${isNumeric
               ? `<label class="bst-check"><input type="checkbox" data-bst-builtin-inject="${key}" ${draftUi[key as keyof BuiltInNumericStatUiSettings].includeInInjection ? "checked" : ""}>Include in prompt injection</label>`
-              : ""}
+              : key === "lastThought"
+                ? `<label class="bst-check"><input type="checkbox" data-bst-builtin-last-thought-private="1" ${draftLastThoughtPrivate ? "checked" : ""}>Private (owner-scoped)</label>`
+                : ""}
           </div>
         </div>
       `;
@@ -6192,6 +6250,7 @@ export function openSettingsModal(input: {
         <ul class="bst-help-list">
           <li><strong>Enabled</strong>: one toggle for Track + Card + Graph on numeric built-ins, and Track on text built-ins.</li>
           <li><strong>Include in prompt injection</strong>: controls prompt injection lines for numeric built-ins.</li>
+          <li><strong>Private (owner-scoped)</strong>: for lastThought, keep it visible only to the current target owner in prompt injection.</li>
         </ul>
       </div>
       <div class="bst-custom-wizard-panel" data-bst-builtin-panel="2">
@@ -6235,6 +6294,7 @@ export function openSettingsModal(input: {
           draftUi[numericKey].includeInInjection = Boolean((wizard.querySelector(`[data-bst-builtin-inject="${key}"]`) as HTMLInputElement | null)?.checked);
         }
       }
+      draftLastThoughtPrivate = Boolean((wizard.querySelector('[data-bst-builtin-last-thought-private="1"]') as HTMLInputElement | null)?.checked);
     };
 
     const close = (): void => closeCustomWizard();
@@ -6257,6 +6317,7 @@ export function openSettingsModal(input: {
       input.settings.trackConnection = draftTrack.connection;
       input.settings.trackMood = draftTrack.mood;
       input.settings.trackLastThought = draftTrack.lastThought;
+      input.settings.lastThoughtPrivate = draftLastThoughtPrivate;
       close();
       persistLive();
     });
@@ -6444,6 +6505,7 @@ export function openSettingsModal(input: {
         <div class="bst-check-grid bst-toggle-block">
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="trackCharacters" ${draft.trackCharacters ? "checked" : ""}>Track for Characters</label>
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="trackUser" ${draft.trackUser ? "checked" : ""}>Track for User</label>
+          <label class="bst-check"><input type="checkbox" data-bst-custom-field="privateToOwner" ${draft.privateToOwner ? "checked" : ""}>Private (owner-scoped)</label>
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
         </div>
         <label>Per-Stat Prompt Override (optional)
@@ -6557,6 +6619,7 @@ export function openSettingsModal(input: {
       const textMaxLengthNode = getField("textMaxLength");
       const trackCharactersNode = getField("trackCharacters") as HTMLInputElement | null;
       const trackUserNode = getField("trackUser") as HTMLInputElement | null;
+      const privateToOwnerNode = getField("privateToOwner") as HTMLInputElement | null;
       const injectNode = getField("includeInInjection") as HTMLInputElement | null;
       const colorNode = getField("color");
       const templateNode = getField("sequentialPromptTemplate");
@@ -6582,6 +6645,7 @@ export function openSettingsModal(input: {
       draft.textMaxLength = String(textMaxLengthNode?.value ?? "");
       draft.trackCharacters = Boolean(trackCharactersNode?.checked);
       draft.trackUser = Boolean(trackUserNode?.checked);
+      draft.privateToOwner = Boolean(privateToOwnerNode?.checked);
       draft.includeInInjection = Boolean(injectNode?.checked);
       draft.color = String(colorNode?.value ?? "");
       draft.sequentialPromptTemplate = String(templateNode?.value ?? "");
@@ -7211,6 +7275,7 @@ export function openSettingsModal(input: {
       trackConnection: readBool("trackConnection", input.settings.trackConnection),
       trackMood: readBool("trackMood", input.settings.trackMood),
       trackLastThought: readBool("trackLastThought", input.settings.trackLastThought),
+      lastThoughtPrivate: input.settings.lastThoughtPrivate,
       enableUserTracking: readBool("enableUserTracking", input.settings.enableUserTracking),
       userTrackMood: readBool("userTrackMood", input.settings.userTrackMood),
       userTrackLastThought: readBool("userTrackLastThought", input.settings.userTrackLastThought),

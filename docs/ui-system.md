@@ -38,6 +38,11 @@ Two distinct UI states:
 
 Stop action cancels active extraction run and in-flight generation handles.
 
+If extraction stops/fails before first tracker save for the target message, UI renders an inline recovery card with:
+
+- exact skip/error reason text
+- action button (`Retry Tracker` or `Generate Tracker`)
+
 ## Manual Edit Flow (Latest Snapshot Per Role)
 
 1. User opens edit modal from the latest tracked card for that role (`AI` cards or `User` card).
@@ -79,6 +84,7 @@ Kind-aware steps and fields:
 - basics (`id`, `label`, `description`, `kind`)
 - kind-specific constraints (`enum options`, `boolean labels`, `text max length`)
 - tracking/display/injection toggles
+- owner privacy toggle (`privateToOwner`)
 - optional sequential override
 - optional behavior guidance
 

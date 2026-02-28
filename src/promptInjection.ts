@@ -29,6 +29,53 @@ function renderNonNumericValue(value: unknown): string | null {
   return text ? `"${text.slice(0, 120)}"` : null;
 }
 
+function normalizeOwnerName(value: string): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function resolveInjectionTargetOwner(context: STContext, data: TrackerData): string | null {
+  const userName = String(context.name1 ?? "").trim();
+  const userAliases = new Set(
+    [userName, USER_TRACKER_KEY, "user"]
+      .map(normalizeOwnerName)
+      .filter(Boolean),
+  );
+  const candidates: string[] = [];
+
+  const characterId = Number(context.characterId);
+  if (Number.isFinite(characterId) && characterId >= 0 && Array.isArray(context.characters) && context.characters[characterId]) {
+    const fromCharacterId = String(context.characters[characterId]?.name ?? "").trim();
+    if (fromCharacterId) candidates.push(fromCharacterId);
+  }
+
+  const fromName2 = String(context.name2 ?? "").trim();
+  if (fromName2) candidates.push(fromName2);
+
+  const chat = Array.isArray(context.chat) ? context.chat : [];
+  for (let i = chat.length - 1; i >= 0; i -= 1) {
+    const message = chat[i] as { is_user?: unknown; name?: unknown };
+    if (message?.is_user) continue;
+    const name = String(message?.name ?? "").trim();
+    if (name) {
+      candidates.push(name);
+      break;
+    }
+  }
+
+  if (data.activeCharacters.length === 1) {
+    candidates.push(String(data.activeCharacters[0] ?? "").trim());
+  }
+
+  for (const candidate of candidates) {
+    const normalized = normalizeOwnerName(candidate);
+    if (!normalized) continue;
+    if (userAliases.has(normalized)) return USER_TRACKER_KEY;
+    return candidate;
+  }
+
+  return null;
+}
+
 function customStatTracksScope(
   stat: { track?: boolean; trackCharacters?: boolean; trackUser?: boolean },
   scope: "character" | "user",
@@ -89,6 +136,8 @@ function readLatestSummaryNote(context: STContext): string {
 
 function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, context: STContext): string {
   const latestSummaryNote = settings.injectSummarizationNote ? readLatestSummaryNote(context) : "";
+  const targetOwner = resolveInjectionTargetOwner(context, data);
+  const targetOwnerKey = normalizeOwnerName(targetOwner ?? "");
   const injectionPromptMaxChars = Math.max(500, Math.min(30000, Math.round(Number(settings.injectionPromptMaxChars) || 6000)));
   const builtInUi = settings.builtInNumericStatUi ?? {
     affection: { showOnCard: true, showInGraph: true, includeInInjection: true },
@@ -98,6 +147,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
   };
   const allEnabledCustom = (settings.customStats ?? [])
     .filter(stat => stat.includeInInjection && customStatTracksAnyScope(stat))
+    .filter(stat => !stat.privateToOwner || Boolean(targetOwnerKey))
     .slice(0, 8);
   const allEnabledCustomNumeric = allEnabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
   const allEnabledCustomNonNumeric = allEnabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
@@ -121,8 +171,11 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     const hasCharacterLine = names.some(name => name !== USER_TRACKER_KEY);
     const scopedEnabledCustom = enabledCustom.filter(
       stat =>
-        (hasCharacterLine && customStatTracksScope(stat, "character")) ||
-        (hasUserLine && customStatTracksScope(stat, "user")),
+        (!stat.privateToOwner || Boolean(targetOwnerKey)) &&
+        (
+          (hasCharacterLine && customStatTracksScope(stat, "character")) ||
+          (hasUserLine && customStatTracksScope(stat, "user"))
+        ),
     );
     const enabledCustomNumeric = scopedEnabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
     const enabledCustomNonNumeric = scopedEnabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
@@ -156,7 +209,8 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     const enabledBuiltInKeys = new Set(enabledBuiltIns.map(entry => entry.key));
     const hasAnyNumeric = enabledBuiltIns.length > 0 || enabledCustomNumeric.length > 0;
     const includeLastThought = settings.trackLastThought || (settings.includeUserTrackerInInjection && settings.enableUserTracking && settings.userTrackLastThought);
-    const hasAnyNonNumeric = enabledCustomNonNumeric.length > 0 || includeLastThought;
+    const includeLastThoughtByPrivacy = includeLastThought && (!settings.lastThoughtPrivate || Boolean(targetOwnerKey));
+    const hasAnyNonNumeric = enabledCustomNonNumeric.length > 0 || includeLastThoughtByPrivacy;
     const includeMood = settings.trackMood;
     const includeSummarizationNote = Boolean(latestSummaryNote);
     if (!hasAnyNumeric && !hasAnyNonNumeric && !includeMood && !includeSummarizationNote) return "";
@@ -165,17 +219,20 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       const isUser = name === USER_TRACKER_KEY;
       const displayName = isUser ? (String(context.name1 ?? "").trim() || "User") : name;
       const parts: string[] = [];
+      const ownerMatch = Boolean(targetOwnerKey) && normalizeOwnerName(name) === targetOwnerKey;
       for (const stat of enabledBuiltIns) {
         if (isUser) continue;
         const value = numeric(data.statistics[stat.key]?.[name] ?? 50) ?? 50;
         parts.push(`${stat.label} ${value}`);
       }
       for (const stat of enabledCustomNumeric) {
+        if (stat.privateToOwner && !ownerMatch) continue;
         if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
         const value = numeric(data.customStatistics?.[stat.id]?.[name] ?? stat.defaultValue) ?? stat.defaultValue;
         parts.push(`${stat.id} ${value}`);
       }
       for (const stat of enabledCustomNonNumeric) {
+        if (stat.privateToOwner && !ownerMatch) continue;
         if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
         const value = renderNonNumericValue(data.customNonNumericStatistics?.[stat.id]?.[name] ?? stat.defaultValue);
         if (value != null) {
@@ -186,14 +243,19 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         const mood = String(data.statistics.mood?.[name] ?? "Neutral").trim() || "Neutral";
         parts.push(`mood ${mood}`);
       }
-      if ((isUser && settings.userTrackLastThought) || (!isUser && settings.trackLastThought)) {
+      const includeThoughtForLine =
+        ((isUser && settings.userTrackLastThought) || (!isUser && settings.trackLastThought)) &&
+        (!settings.lastThoughtPrivate || ownerMatch);
+      if (includeThoughtForLine) {
         const thought = renderNonNumericValue(data.statistics.lastThought?.[name]);
         if (thought != null) {
           parts.push(`lastThought ${thought}`);
         }
       }
+      if (!parts.length) return "";
       return `- ${displayName}: ${parts.join(", ")}`;
-    });
+    }).filter(Boolean);
+    if (!lines.length) return "";
 
     const header = [
       "[Relationship State - internal guidance]",
@@ -219,7 +281,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
           : `- ${stat.id}: custom stat "${label}"`;
       }),
       ...(includeMood ? ["- mood: immediate emotional tone for this turn"] : []),
-      ...(includeLastThought ? ["- lastThought: brief internal thought grounded in recent messages"] : []),
+      ...(includeLastThoughtByPrivacy ? ["- lastThought: brief internal thought grounded in recent messages"] : []),
     ].join("\n");
     const behaviorBands = hasAnyNumeric
       ? [

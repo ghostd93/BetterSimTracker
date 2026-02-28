@@ -78,6 +78,10 @@ Injection behavior (`src/promptInjection.ts`):
 - Runs only when enabled and tracker data exists.
 - Builds hidden guidance block from current tracker state.
 - Includes built-ins and custom stats that are marked `includeInInjection`.
+- Applies owner privacy rules:
+  - built-in `lastThought` can be owner-private,
+  - custom stats can be owner-private (`privateToOwner=true`),
+  - private stats are injected only for the resolved target owner.
 - Honors `injectPromptDepth` (0..8) insertion depth.
 - Can append latest summary note when `injectSummarizationNote=true`.
 

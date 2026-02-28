@@ -37,6 +37,7 @@ Key groups:
   - `enabled`
   - `sequentialExtraction`
   - `injectTrackerIntoPrompt`
+  - `lastThoughtPrivate`
 - Extraction controls:
   - `maxConcurrentCalls`
   - `contextMessages`
@@ -71,6 +72,9 @@ Common fields:
 - `label`
 - `description`
 - `track`
+- `trackCharacters`
+- `trackUser`
+- `privateToOwner`
 - `showOnCard`
 - `showInGraph`
 - `includeInInjection`
