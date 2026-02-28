@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev3] - 2026-02-28
+### Changed
+- Custom Stat wizard (`array` kind) now uses a structured default-item editor (add/remove item rows with live `items/20` counter) instead of a raw textarea.
+- Array default editing is now normalized through the same item rules used by extraction/storage, improving consistency and reducing malformed list defaults.
+- Custom Stat wizard (`enum_single` kind) now uses a structured allowed-values editor (add/remove option rows with live `options/12` counter) instead of a raw textarea.
+
 ## [2.2.0.7-dev2] - 2026-02-28
 ### Added
 - New custom stat kind: `array` (non-numeric list, max 20 items) with full extraction, defaults, parsing, and storage support.

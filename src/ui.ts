@@ -2628,6 +2628,33 @@ function ensureStyles(): void {
 .bst-custom-wizard-grid-single {
   grid-template-columns: minmax(0, 1fr);
 }
+.bst-array-default-editor,
+.bst-enum-options-editor {
+  display: grid;
+  gap: 8px;
+}
+.bst-array-default-list,
+.bst-enum-options-list {
+  display: grid;
+  gap: 6px;
+}
+.bst-array-default-row,
+.bst-enum-options-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+.bst-array-default-actions,
+.bst-enum-options-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bst-array-default-actions .bst-btn,
+.bst-enum-options-actions .bst-btn {
+  min-width: 96px;
+}
 .bst-custom-wizard-panel {
   display: none;
   margin-top: 8px;
@@ -3443,6 +3470,10 @@ function ensureStyles(): void {
     padding: 12px 10px 14px;
   }
   .bst-custom-wizard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bst-array-default-row,
+  .bst-enum-options-row {
     grid-template-columns: minmax(0, 1fr);
   }
   .bst-custom-wizard-actions {
@@ -6627,8 +6658,15 @@ export function openSettingsModal(input: {
           </label>
         </div>
         <div class="bst-custom-wizard-grid bst-custom-wizard-grid-single" data-bst-kind-panel="enum_single" style="display:none;">
-          <label>Allowed Values (2-12, one per line)
-            <textarea data-bst-custom-field="enumOptionsText" rows="5" placeholder="guarded&#10;cautious&#10;open">${escapeHtml(draft.enumOptionsText)}</textarea>
+          <label>Allowed Values (2-12)
+            <div class="bst-enum-options-editor">
+              <div class="bst-enum-options-list" data-bst-enum-options-list></div>
+              <div class="bst-enum-options-actions">
+                <button type="button" class="bst-btn bst-btn-soft" data-action="enum-option-add">Add option</button>
+                <span class="bst-custom-char-counter" data-bst-enum-options-counter></span>
+              </div>
+            </div>
+            <textarea data-bst-custom-field="enumOptionsText" rows="1" style="display:none;">${escapeHtml(draft.enumOptionsText)}</textarea>
           </label>
           <label>Default Enum Value
             <input type="text" data-bst-custom-field="enumDefaultValue" maxlength="200" value="${escapeHtml(draft.kind === "enum_single" ? draft.defaultValue : "")}" placeholder="guarded">
@@ -6657,8 +6695,15 @@ export function openSettingsModal(input: {
           </label>
         </div>
         <div class="bst-custom-wizard-grid" data-bst-kind-panel="array" style="display:none;">
-          <label>Default Items (one per line, max 20)
-            <textarea data-bst-custom-field="arrayDefaultValue" rows="5" placeholder="white sundress&#10;black boots">${escapeHtml(draft.kind === "array" ? draft.defaultValue : "")}</textarea>
+          <label>Default Items (max 20)
+            <div class="bst-array-default-editor">
+              <div class="bst-array-default-list" data-bst-array-default-list></div>
+              <div class="bst-array-default-actions">
+                <button type="button" class="bst-btn bst-btn-soft" data-action="array-default-add">Add item</button>
+                <span class="bst-custom-char-counter" data-bst-array-default-counter></span>
+              </div>
+            </div>
+            <textarea data-bst-custom-field="arrayDefaultValue" rows="1" style="display:none;">${escapeHtml(draft.kind === "array" ? draft.defaultValue : "")}</textarea>
           </label>
           <label>Item Max Length (20-200)
             <input type="number" min="20" max="200" data-bst-custom-field="textMaxLength" value="${escapeHtml(draft.textMaxLength)}">
@@ -6745,6 +6790,12 @@ export function openSettingsModal(input: {
     const getField = (name: string): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null =>
       wizard.querySelector(`[data-bst-custom-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
     const colorPickerNode = wizard.querySelector('[data-bst-custom-color-picker]') as HTMLInputElement | null;
+    const arrayDefaultsListNode = wizard.querySelector("[data-bst-array-default-list]") as HTMLElement | null;
+    const arrayDefaultsCounterNode = wizard.querySelector("[data-bst-array-default-counter]") as HTMLElement | null;
+    const arrayDefaultsAddBtn = wizard.querySelector('[data-action="array-default-add"]') as HTMLButtonElement | null;
+    const enumOptionsListNode = wizard.querySelector("[data-bst-enum-options-list]") as HTMLElement | null;
+    const enumOptionsCounterNode = wizard.querySelector("[data-bst-enum-options-counter]") as HTMLElement | null;
+    const enumOptionsAddBtn = wizard.querySelector('[data-action="enum-option-add"]') as HTMLButtonElement | null;
     const refreshWizardTextareaCounters = bindTextareaCounters(
       wizard,
       textarea => String(textarea.getAttribute("data-bst-custom-field") ?? "").trim().toLowerCase() === "description",
@@ -6766,6 +6817,100 @@ export function openSettingsModal(input: {
         return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
       }
       return fallback;
+    };
+
+    const getArrayEditorItemMaxLength = (): number =>
+      Math.max(20, Math.min(200, Math.round(Number((getField("textMaxLength") as HTMLInputElement | null)?.value || draft.textMaxLength) || 120)));
+
+    const getArrayEditorItemInputs = (): HTMLInputElement[] =>
+      Array.from(arrayDefaultsListNode?.querySelectorAll<HTMLInputElement>('[data-bst-array-item="1"]') ?? []);
+
+    const updateArrayEditorCounter = (count: number): void => {
+      if (!arrayDefaultsCounterNode) return;
+      arrayDefaultsCounterNode.textContent = `${count}/20 items`;
+      const state = count >= 20 ? "limit" : count >= 16 ? "warn" : "ok";
+      arrayDefaultsCounterNode.setAttribute("data-state", state);
+    };
+
+    const syncArrayEditorToHiddenField = (): string => {
+      const hiddenNode = getField("arrayDefaultValue") as HTMLTextAreaElement | null;
+      const maxLen = getArrayEditorItemMaxLength();
+      const values = getArrayEditorItemInputs().map(input => input.value);
+      const normalized = normalizeNonNumericArrayItems(values, maxLen);
+      if (hiddenNode) hiddenNode.value = normalized.join("\n");
+      updateArrayEditorCounter(normalized.length);
+      return normalized.join("\n");
+    };
+
+    const getEnumEditorOptionInputs = (): HTMLInputElement[] =>
+      Array.from(enumOptionsListNode?.querySelectorAll<HTMLInputElement>('[data-bst-enum-option="1"]') ?? []);
+
+    const updateEnumEditorCounter = (count: number): void => {
+      if (!enumOptionsCounterNode) return;
+      enumOptionsCounterNode.textContent = `${count}/12 options`;
+      const state = count >= 12 ? "limit" : count >= 10 ? "warn" : "ok";
+      enumOptionsCounterNode.setAttribute("data-state", state);
+    };
+
+    const syncEnumEditorToHiddenField = (): string => {
+      const hiddenNode = getField("enumOptionsText") as HTMLTextAreaElement | null;
+      const values = getEnumEditorOptionInputs().map(input => input.value);
+      const normalized = normalizeCustomEnumOptions(values);
+      if (hiddenNode) hiddenNode.value = normalized.join("\n");
+      updateEnumEditorCounter(normalized.length);
+      return normalized.join("\n");
+    };
+
+    const arrayEditorRowHtml = (value: string, maxLength: number): string => `
+      <div class="bst-array-default-row">
+        <input type="text" data-bst-array-item="1" maxlength="${maxLength}" value="${escapeHtml(value)}" placeholder="Item value">
+        <button type="button" class="bst-btn bst-btn-danger" data-action="array-default-remove">Remove</button>
+      </div>
+    `;
+
+    const enumEditorRowHtml = (value: string): string => `
+      <div class="bst-enum-options-row">
+        <input type="text" data-bst-enum-option="1" maxlength="200" value="${escapeHtml(value)}" placeholder="Option value">
+        <button type="button" class="bst-btn bst-btn-danger" data-action="enum-option-remove">Remove</button>
+      </div>
+    `;
+
+    const renderArrayEditorFromDraft = (): void => {
+      if (!arrayDefaultsListNode) return;
+      const maxLen = getArrayEditorItemMaxLength();
+      const sourceValue = draft.kind === "array" ? draft.defaultValue : "";
+      const items = normalizeNonNumericArrayItems(sourceValue, maxLen);
+      const rows = (items.length ? items : [""]).slice(0, 20);
+      arrayDefaultsListNode.innerHTML = rows.map(value => arrayEditorRowHtml(value, maxLen)).join("");
+      syncArrayEditorToHiddenField();
+    };
+
+    const renderEnumEditorFromDraft = (): void => {
+      if (!enumOptionsListNode) return;
+      const options = normalizeCustomEnumOptions(draft.enumOptionsText.split(/\r?\n/));
+      const rows = (options.length ? options : ["", ""]).slice(0, 12);
+      while (rows.length < 2) rows.push("");
+      enumOptionsListNode.innerHTML = rows.map(value => enumEditorRowHtml(value)).join("");
+      syncEnumEditorToHiddenField();
+    };
+
+    const ensureArrayEditorRowExists = (): void => {
+      if (!arrayDefaultsListNode) return;
+      if (getArrayEditorItemInputs().length === 0) {
+        const maxLen = getArrayEditorItemMaxLength();
+        arrayDefaultsListNode.innerHTML = arrayEditorRowHtml("", maxLen);
+      }
+      syncArrayEditorToHiddenField();
+    };
+
+    const ensureEnumEditorRows = (): void => {
+      if (!enumOptionsListNode) return;
+      let count = getEnumEditorOptionInputs().length;
+      while (count < 2) {
+        enumOptionsListNode.insertAdjacentHTML("beforeend", enumEditorRowHtml(""));
+        count += 1;
+      }
+      syncEnumEditorToHiddenField();
     };
 
     const syncDraftFromFields = (): void => {
@@ -6800,7 +6945,7 @@ export function openSettingsModal(input: {
       } else if (draft.kind === "enum_single") {
         draft.defaultValue = String(enumDefaultNode?.value ?? "");
       } else if (draft.kind === "array") {
-        draft.defaultValue = String(arrayDefaultNode?.value ?? "");
+        draft.defaultValue = syncArrayEditorToHiddenField() || String(arrayDefaultNode?.value ?? "");
       } else if (draft.kind === "text_short") {
         draft.defaultValue = String(textDefaultNode?.value ?? "");
       } else {
@@ -6808,7 +6953,7 @@ export function openSettingsModal(input: {
       }
       draft.defaultBoolean = String(defaultBooleanNode?.value ?? "false").toLowerCase() === "true";
       draft.maxDeltaPerTurn = String(maxDeltaNode?.value ?? "");
-      draft.enumOptionsText = String(enumOptionsNode?.value ?? "");
+      draft.enumOptionsText = syncEnumEditorToHiddenField() || String(enumOptionsNode?.value ?? "");
       draft.booleanTrueLabel = String(trueLabelNode?.value ?? "");
       draft.booleanFalseLabel = String(falseLabelNode?.value ?? "");
       draft.textMaxLength = String(textMaxLengthNode?.value ?? "");
@@ -6857,6 +7002,18 @@ export function openSettingsModal(input: {
         const panelKind = String(panel.dataset.bstKindPanel ?? "");
         panel.style.display = panelKind === kind ? (panel.classList.contains("bst-custom-wizard-grid") ? "grid" : "block") : "none";
       });
+      if (kind === "array") {
+        ensureArrayEditorRowExists();
+        const maxLen = getArrayEditorItemMaxLength();
+        for (const node of getArrayEditorItemInputs()) {
+          node.maxLength = maxLen;
+          if (node.value.length > maxLen) node.value = node.value.slice(0, maxLen);
+        }
+        syncArrayEditorToHiddenField();
+      } else if (kind === "enum_single") {
+        ensureEnumEditorRows();
+        syncEnumEditorToHiddenField();
+      }
 
       const fallbackHelpNode = wizard.querySelector('[data-bst-kind-help="templateFallback"]') as HTMLElement | null;
       if (fallbackHelpNode) {
@@ -7046,6 +7203,70 @@ export function openSettingsModal(input: {
       syncKindUi();
       writeReview();
     });
+    arrayDefaultsAddBtn?.addEventListener("click", () => {
+      if (!arrayDefaultsListNode) return;
+      const maxLen = getArrayEditorItemMaxLength();
+      const count = getArrayEditorItemInputs().length;
+      if (count >= 20) return;
+      arrayDefaultsListNode.insertAdjacentHTML("beforeend", arrayEditorRowHtml("", maxLen));
+      const nextInput = getArrayEditorItemInputs().at(-1);
+      nextInput?.focus();
+      syncDraftFromFields();
+      syncKindUi();
+      writeReview();
+      updateDescriptionCounter();
+    });
+    enumOptionsAddBtn?.addEventListener("click", () => {
+      if (!enumOptionsListNode) return;
+      const count = getEnumEditorOptionInputs().length;
+      if (count >= 12) return;
+      enumOptionsListNode.insertAdjacentHTML("beforeend", enumEditorRowHtml(""));
+      const nextInput = getEnumEditorOptionInputs().at(-1);
+      nextInput?.focus();
+      syncDraftFromFields();
+      syncKindUi();
+      writeReview();
+      updateDescriptionCounter();
+    });
+    wizard.addEventListener("click", event => {
+      const target = event.target as HTMLElement | null;
+      const arrayRemoveBtn = target?.closest('[data-action="array-default-remove"]') as HTMLButtonElement | null;
+      if (arrayRemoveBtn) {
+        const row = arrayRemoveBtn.closest(".bst-array-default-row");
+        row?.remove();
+        ensureArrayEditorRowExists();
+        syncDraftFromFields();
+        syncKindUi();
+        writeReview();
+        updateDescriptionCounter();
+        return;
+      }
+      const enumRemoveBtn = target?.closest('[data-action="enum-option-remove"]') as HTMLButtonElement | null;
+      if (!enumRemoveBtn) return;
+      const currentInputs = getEnumEditorOptionInputs();
+      const row = enumRemoveBtn.closest(".bst-enum-options-row");
+      if (currentInputs.length <= 2) {
+        const inputNode = row?.querySelector<HTMLInputElement>('[data-bst-enum-option="1"]');
+        if (inputNode) inputNode.value = "";
+      } else {
+        row?.remove();
+      }
+      ensureEnumEditorRows();
+      syncDraftFromFields();
+      syncKindUi();
+      writeReview();
+      updateDescriptionCounter();
+    });
+    wizard.addEventListener("input", event => {
+      const target = event.target as HTMLElement | null;
+      const itemInput = target?.closest('[data-bst-array-item="1"]') as HTMLInputElement | null;
+      const enumInput = target?.closest('[data-bst-enum-option="1"]') as HTMLInputElement | null;
+      if (!itemInput && !enumInput) return;
+      syncDraftFromFields();
+      syncKindUi();
+      writeReview();
+      updateDescriptionCounter();
+    });
     const applyPickerColor = (): void => {
       // Firefox may emit only "change" for <input type="color"> dialog commits.
       syncColorTextFromPicker();
@@ -7058,6 +7279,8 @@ export function openSettingsModal(input: {
       syncColorPickerFromText();
     });
     syncColorPickerFromText();
+    renderArrayEditorFromDraft();
+    renderEnumEditorFromDraft();
     setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "idle");
     setGenerateStatus(generateStatusNode, "Uses current connection profile.", "idle");
     setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "idle");
