@@ -3530,7 +3530,8 @@ function ensureStyles(): void {
   }
   .bst-array-default-row,
   .bst-enum-options-row {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
   }
   .bst-custom-wizard-actions {
     flex-wrap: wrap;

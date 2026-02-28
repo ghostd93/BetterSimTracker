@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev17] - 2026-02-28
+### Fixed
+- User-tracker defaults now resolve with strict persona-scoped identity for `__bst_user__`, preventing collisions with character defaults when persona name matches a character (e.g. `Kuba`).
+- On mobile, array/enum editor rows keep `input + trash` in one row instead of pushing trash buttons under inputs.
+
+### Changed
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev16] - 2026-02-28
 ### Fixed
 - Added spacing under the Edit Tracker modal `Active In This Snapshot` row for clearer separation before stat fields.

@@ -1836,6 +1836,26 @@ function normalizeArrayItems(raw: unknown, maxLength = 200, maxItems = 20): stri
   return out;
 }
 
+function slugifyDefaultsKey(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase()
+    .slice(0, 40) || "user";
+}
+
+function resolveUserDefaultsIdentity(context: STContext | null): { name: string; avatar: string | null } {
+  const personaAvatarId = resolveCurrentPersonaAvatarId(context);
+  if (personaAvatarId) {
+    const scoped = `persona:${personaAvatarId}`;
+    return { name: scoped, avatar: scoped };
+  }
+  const personaName = String(context?.name1 ?? "").trim() || "User";
+  return { name: `persona_name:${slugifyDefaultsKey(personaName)}`, avatar: null };
+}
+
 function getConfiguredCharacterDefaults(
   context: STContext | null,
   settingsInput: BetterSimTrackerSettings,
@@ -1850,6 +1870,71 @@ function getConfiguredCharacterDefaults(
   customStatDefaults?: Record<string, number>;
   customNonNumericStatDefaults?: Record<string, string | boolean | string[]>;
 } {
+  if (name === USER_TRACKER_KEY) {
+    const identity = resolveUserDefaultsIdentity(context);
+    const defaultsFromSettings = resolveCharacterDefaultsEntry(settingsInput, identity);
+    const legacyFallback = Object.keys(defaultsFromSettings).length
+      ? {}
+      : resolveCharacterDefaultsEntry(settingsInput, { name: USER_TRACKER_KEY, avatar: null });
+    const merged = { ...legacyFallback, ...defaultsFromSettings };
+    const affection = parseDefaultNumber(merged.affection);
+    const trust = parseDefaultNumber(merged.trust);
+    const desire = parseDefaultNumber(merged.desire);
+    const connection = parseDefaultNumber(merged.connection);
+    const mood = parseDefaultText(merged.mood);
+    const lastThought = parseDefaultText(merged.lastThought);
+    const customStatDefaultsRaw = merged.customStatDefaults;
+    const customStatDefaults: Record<string, number> = {};
+    if (customStatDefaultsRaw && typeof customStatDefaultsRaw === "object") {
+      for (const [key, value] of Object.entries(customStatDefaultsRaw as Record<string, unknown>)) {
+        const id = String(key ?? "").trim().toLowerCase();
+        if (!id) continue;
+        const parsed = parseDefaultNumber(value);
+        if (parsed == null) continue;
+        customStatDefaults[id] = parsed;
+      }
+    }
+    const customNonNumericStatDefaultsRaw = merged.customNonNumericStatDefaults;
+    const customDefById = new Map(
+      (settingsInput.customStats ?? []).map(def => [String(def.id ?? "").trim().toLowerCase(), def] as const),
+    );
+    const customNonNumericStatDefaults: Record<string, string | boolean | string[]> = {};
+    if (customNonNumericStatDefaultsRaw && typeof customNonNumericStatDefaultsRaw === "object") {
+      for (const [key, value] of Object.entries(customNonNumericStatDefaultsRaw as Record<string, unknown>)) {
+        const id = String(key ?? "").trim().toLowerCase();
+        if (!id) continue;
+        const statDef = customDefById.get(id);
+        const kind = statDef?.kind ?? "text_short";
+        if (kind === "array") {
+          const maxLength = Math.max(20, Math.min(200, Math.round(Number(statDef?.textMaxLength) || 120)));
+          const items = normalizeArrayItems(value, maxLength, 20);
+          if (!items.length) continue;
+          customNonNumericStatDefaults[id] = items;
+          continue;
+        }
+        if (typeof value === "boolean") {
+          customNonNumericStatDefaults[id] = value;
+          continue;
+        }
+        if (typeof value === "string") {
+          const text = value.trim().replace(/\s+/g, " ");
+          if (!text) continue;
+          customNonNumericStatDefaults[id] = text.slice(0, 200);
+        }
+      }
+    }
+    return {
+      ...(affection != null ? { affection } : {}),
+      ...(trust != null ? { trust } : {}),
+      ...(desire != null ? { desire } : {}),
+      ...(connection != null ? { connection } : {}),
+      ...(mood != null ? { mood } : {}),
+      ...(lastThought != null ? { lastThought } : {}),
+      ...(Object.keys(customStatDefaults).length ? { customStatDefaults } : {}),
+      ...(Object.keys(customNonNumericStatDefaults).length ? { customNonNumericStatDefaults } : {}),
+    };
+  }
+
   const character = findCharacterByName(context, name);
   const extFromCharacter = character?.extensions as Record<string, unknown> | undefined;
   const extFromData = character?.data?.extensions as Record<string, unknown> | undefined;
