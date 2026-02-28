@@ -2,6 +2,20 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev15] - 2026-02-28
+### Fixed
+- Edit Tracker modal `Active In This Snapshot` now uses the same checkbox component styling as settings (`bst-check`), matching visuals/behavior across the extension.
+
+### Changed
+- Version bump for latest `dev` fixes.
+
+## [2.2.0.7-dev14] - 2026-02-28
+### Fixed
+- Edit Tracker modal `Active In This Snapshot` checkbox now enforces native checkbox appearance and fixed square dimensions, preventing oval/egg-shaped rendering on themed clients.
+
+### Changed
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev13] - 2026-02-28
 ### Fixed
 - Edit Tracker modal checkbox controls (including `Active In This Snapshot`) no longer inherit full-width text-input styling, preventing stretched toggle rendering.

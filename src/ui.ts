@@ -2931,10 +2931,6 @@ function ensureStyles(): void {
   border-color: rgba(56,189,248,0.9);
   box-shadow: 0 0 0 2px rgba(56,189,248,0.25);
 }
-.bst-edit-modal input[type="checkbox"] {
-  width: auto;
-  align-self: flex-start;
-}
 .bst-edit-modal input::placeholder,
 .bst-edit-modal textarea::placeholder {
   color: rgba(243,245,249,0.6);
@@ -4622,9 +4618,9 @@ function openEditStatsModal(input: {
     <div class="bst-edit-sub">Numeric values are percentages (0-100). Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest tracker snapshot for this character.</div>
     ${!isUserCharacter
       ? `<div class="bst-edit-divider"></div>
-         <label class="bst-edit-field">
-           <span>Active In This Snapshot</span>
+         <label class="bst-edit-field bst-check">
            <input type="checkbox" data-bst-edit-meta="active" ${isCurrentlyActive ? "checked" : ""}>
+           <span>Active In This Snapshot</span>
          </label>`
       : ""}
     ${builtInDefs.length
