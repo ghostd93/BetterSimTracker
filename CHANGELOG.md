@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev13] - 2026-02-28
+### Fixed
+- Edit Tracker modal checkbox controls (including `Active In This Snapshot`) no longer inherit full-width text-input styling, preventing stretched toggle rendering.
+
+### Changed
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev12] - 2026-02-28
 ### Added
 - Settable `Last Thought` defaults in Character Defaults and Persona User Defaults panels.
