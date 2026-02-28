@@ -8,6 +8,8 @@ import {
 import { fetchExpressionSpritePaths } from "./stExpressionSprites";
 import type {
   BetterSimTrackerSettings,
+  CustomStatDefinition,
+  CustomStatKind,
   MoodLabel,
   MoodSource,
   STContext,
@@ -300,6 +302,49 @@ function resolveEffectiveMoodSource(settings: BetterSimTrackerSettings, defaults
   return normalizeMoodSource(String(defaults.moodSource ?? "")) ?? normalizeMoodSource(String(settings.moodSource ?? "")) ?? "bst_images";
 }
 
+function clampStat(value: string): number | null {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return null;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
+function normalizeCustomStatKind(value: unknown): CustomStatKind {
+  if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array") return value;
+  return "numeric";
+}
+
+function normalizeCustomEnumOptions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const text = String(item ?? "").trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
+function normalizeArrayItems(value: unknown, maxLength: number): string[] {
+  const boundedMaxLength = Math.max(20, Math.min(200, Math.round(Number(maxLength) || 120)));
+  const values = Array.isArray(value)
+    ? value.map(item => String(item ?? ""))
+    : (typeof value === "string" ? value.split(/\r?\n|[,;]/g) : []);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of values) {
+    const text = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, boundedMaxLength);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
 export function initPersonaPanel(input: InitInput): void {
   if (initDone) return;
   initDone = true;
@@ -398,6 +443,77 @@ function renderPanel(input: InitInput, force = false): void {
   const moodSourceOverride = normalizeMoodSource(String(defaults.moodSource ?? ""));
   const effectiveMoodSource = resolveEffectiveMoodSource(settings, defaults);
   const showBstMoodImageControls = effectiveMoodSource === "bst_images";
+  const customStatDefinitions = Array.isArray(settings.customStats)
+    ? settings.customStats as CustomStatDefinition[]
+    : [];
+  const customNumericDefaultsRaw = defaults.customStatDefaults && typeof defaults.customStatDefaults === "object"
+    ? defaults.customStatDefaults as Record<string, unknown>
+    : {};
+  const customNonNumericDefaultsRaw = defaults.customNonNumericStatDefaults && typeof defaults.customNonNumericStatDefaults === "object"
+    ? defaults.customNonNumericStatDefaults as Record<string, unknown>
+    : {};
+  const userCustomDefaultFieldsHtml = customStatDefinitions.map(definition => {
+    if (definition.track === false || definition.trackUser === false) return "";
+    const id = String(definition.id ?? "").trim().toLowerCase();
+    const label = String(definition.label ?? "").trim();
+    if (!id || !label) return "";
+    const kind = normalizeCustomStatKind(definition.kind);
+    if (kind === "numeric") {
+      const rawValue = customNumericDefaultsRaw[id];
+      const value = typeof rawValue === "number" && Number.isFinite(rawValue)
+        ? String(Math.max(0, Math.min(100, Math.round(rawValue))))
+        : "";
+      return `
+        <label>${escapeHtml(label)} Default
+          <input type="number" min="0" max="100" step="1" data-bst-persona-custom-default-num="${escapeHtml(id)}" value="${escapeHtml(value)}" placeholder="Use stat default">
+        </label>
+      `;
+    }
+    if (kind === "enum_single") {
+      const options = normalizeCustomEnumOptions(definition.enumOptions);
+      const rawValue = customNonNumericDefaultsRaw[id];
+      const selected = typeof rawValue === "string" && options.includes(rawValue) ? rawValue : "";
+      return `
+        <label>${escapeHtml(label)} Default
+          <select data-bst-persona-custom-default-enum="${escapeHtml(id)}">
+            <option value="">Use stat default</option>
+            ${options.map(option => `<option value="${escapeHtml(option)}" ${selected === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+          </select>
+        </label>
+      `;
+    }
+    if (kind === "boolean") {
+      const rawValue = customNonNumericDefaultsRaw[id];
+      const selected = typeof rawValue === "boolean" ? String(rawValue) : "";
+      const trueLabel = String(definition.booleanTrueLabel ?? "enabled").trim() || "enabled";
+      const falseLabel = String(definition.booleanFalseLabel ?? "disabled").trim() || "disabled";
+      return `
+        <label>${escapeHtml(label)} Default
+          <select data-bst-persona-custom-default-bool="${escapeHtml(id)}">
+            <option value="">Use stat default</option>
+            <option value="true" ${selected === "true" ? "selected" : ""}>${escapeHtml(trueLabel)}</option>
+            <option value="false" ${selected === "false" ? "selected" : ""}>${escapeHtml(falseLabel)}</option>
+          </select>
+        </label>
+      `;
+    }
+    if (kind === "array") {
+      const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
+      const items = normalizeArrayItems(customNonNumericDefaultsRaw[id], maxLength);
+      return `
+        <label>${escapeHtml(label)} Default (one item per line, max 20)
+          <textarea rows="4" data-bst-persona-custom-default-array="${escapeHtml(id)}" data-bst-max-length="${maxLength}" placeholder="Use stat default">${escapeHtml(items.join("\n"))}</textarea>
+        </label>
+      `;
+    }
+    const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
+    const rawValue = String(customNonNumericDefaultsRaw[id] ?? "").trim().replace(/\s+/g, " ");
+    return `
+      <label>${escapeHtml(label)} Default
+        <input type="text" maxlength="${maxLength}" data-bst-persona-custom-default-text="${escapeHtml(id)}" value="${escapeHtml(rawValue)}" placeholder="Use stat default">
+      </label>
+    `;
+  }).filter(Boolean).join("");
 
   const persistSettings = (next: BetterSimTrackerSettings): void => {
     input.setSettings(next);
@@ -423,6 +539,19 @@ function renderPanel(input: InitInput, force = false): void {
     <div class="bst-character-help">
       Effective mood source right now: <strong>${effectiveMoodSource === "st_expressions" ? "ST expressions" : "BST mood images"}</strong>.
     </div>
+    <div class="bst-character-divider">User Defaults (Persona Scoped)</div>
+    <div class="bst-character-help">
+      These defaults apply to the user tracker when this persona is active.
+    </div>
+    <div class="bst-character-grid">
+      <label class="bst-character-wide">Mood Default
+        <input type="text" data-bst-persona-default="mood" value="${escapeHtml(String(defaults.mood ?? ""))}" placeholder="Use stat default" ${settings.userTrackMood ? "" : "disabled"}>
+      </label>
+    </div>
+    ${settings.userTrackMood ? "" : `<div class="bst-character-help">Mood default is unavailable because User Mood tracking is disabled.</div>`}
+    ${userCustomDefaultFieldsHtml
+      ? `<div class="bst-character-grid bst-character-grid-three">${userCustomDefaultFieldsHtml}</div>`
+      : `<div class="bst-character-help">No user-trackable custom stats configured yet.</div>`}
     <div style="display:${showBstMoodImageControls ? "grid" : "none"}; gap:8px;">
       <div class="bst-character-divider">Mood Images</div>
       <div class="bst-character-help">
@@ -511,6 +640,163 @@ function renderPanel(input: InitInput, force = false): void {
     });
     persistSettings(next);
     renderPanel(input, true);
+  });
+
+  panel.querySelectorAll<HTMLInputElement>("[data-bst-persona-default]").forEach(node => {
+    node.addEventListener("change", () => {
+      const key = String(node.dataset.bstPersonaDefault ?? "").trim();
+      if (!key) return;
+      const value = node.value.trim();
+      const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+        const copy = { ...current };
+        if (key === "mood") {
+          if (!settings.userTrackMood || !value) {
+            delete copy.mood;
+          } else {
+            copy.mood = value.slice(0, 80);
+            node.value = String(copy.mood);
+          }
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLInputElement>("[data-bst-persona-custom-default-num]").forEach(node => {
+    node.addEventListener("change", () => {
+      const id = String(node.dataset.bstPersonaCustomDefaultNum ?? "").trim().toLowerCase();
+      if (!id) return;
+      const num = clampStat(node.value);
+      node.value = num == null ? "" : String(num);
+      const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+        const copy = { ...current };
+        const existing = copy.customStatDefaults && typeof copy.customStatDefaults === "object"
+          ? { ...(copy.customStatDefaults as Record<string, unknown>) }
+          : {};
+        if (num == null) {
+          delete existing[id];
+        } else {
+          existing[id] = num;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.customStatDefaults;
+        } else {
+          copy.customStatDefaults = existing;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLSelectElement>("[data-bst-persona-custom-default-enum]").forEach(node => {
+    node.addEventListener("change", () => {
+      const id = String(node.dataset.bstPersonaCustomDefaultEnum ?? "").trim().toLowerCase();
+      if (!id) return;
+      const value = String(node.value ?? "");
+      const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+        const copy = { ...current };
+        const existing = copy.customNonNumericStatDefaults && typeof copy.customNonNumericStatDefaults === "object"
+          ? { ...(copy.customNonNumericStatDefaults as Record<string, unknown>) }
+          : {};
+        if (!value) {
+          delete existing[id];
+        } else {
+          existing[id] = value;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.customNonNumericStatDefaults;
+        } else {
+          copy.customNonNumericStatDefaults = existing;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLSelectElement>("[data-bst-persona-custom-default-bool]").forEach(node => {
+    node.addEventListener("change", () => {
+      const id = String(node.dataset.bstPersonaCustomDefaultBool ?? "").trim().toLowerCase();
+      if (!id) return;
+      const raw = String(node.value ?? "").trim().toLowerCase();
+      const value = raw === "true" ? true : raw === "false" ? false : null;
+      const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+        const copy = { ...current };
+        const existing = copy.customNonNumericStatDefaults && typeof copy.customNonNumericStatDefaults === "object"
+          ? { ...(copy.customNonNumericStatDefaults as Record<string, unknown>) }
+          : {};
+        if (value == null) {
+          delete existing[id];
+        } else {
+          existing[id] = value;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.customNonNumericStatDefaults;
+        } else {
+          copy.customNonNumericStatDefaults = existing;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLInputElement>("[data-bst-persona-custom-default-text]").forEach(node => {
+    node.addEventListener("change", () => {
+      const id = String(node.dataset.bstPersonaCustomDefaultText ?? "").trim().toLowerCase();
+      if (!id) return;
+      const maxLength = Math.max(20, Math.min(200, Math.round(Number(node.maxLength) || 120)));
+      const value = String(node.value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
+      node.value = value;
+      const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+        const copy = { ...current };
+        const existing = copy.customNonNumericStatDefaults && typeof copy.customNonNumericStatDefaults === "object"
+          ? { ...(copy.customNonNumericStatDefaults as Record<string, unknown>) }
+          : {};
+        if (!value) {
+          delete existing[id];
+        } else {
+          existing[id] = value;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.customNonNumericStatDefaults;
+        } else {
+          copy.customNonNumericStatDefaults = existing;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLTextAreaElement>("[data-bst-persona-custom-default-array]").forEach(node => {
+    node.addEventListener("change", () => {
+      const id = String(node.dataset.bstPersonaCustomDefaultArray ?? "").trim().toLowerCase();
+      if (!id) return;
+      const maxLength = Math.max(20, Math.min(200, Math.round(Number(node.dataset.bstMaxLength) || 120)));
+      const items = normalizeArrayItems(node.value, maxLength);
+      node.value = items.join("\n");
+      const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+        const copy = { ...current };
+        const existing = copy.customNonNumericStatDefaults && typeof copy.customNonNumericStatDefaults === "object"
+          ? { ...(copy.customNonNumericStatDefaults as Record<string, unknown>) }
+          : {};
+        if (!items.length) {
+          delete existing[id];
+        } else {
+          existing[id] = items;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.customNonNumericStatDefaults;
+        } else {
+          copy.customNonNumericStatDefaults = existing;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
   });
 
   panel.querySelectorAll<HTMLButtonElement>("[data-action='upload']").forEach(button => {

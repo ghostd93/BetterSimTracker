@@ -1,4 +1,4 @@
-﻿import { CUSTOM_STAT_ID_REGEX, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS, STYLE_ID, USER_TRACKER_KEY } from "./constants";
+import { CUSTOM_STAT_ID_REGEX, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS, STYLE_ID, USER_TRACKER_KEY } from "./constants";
 import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import { generateJson } from "./generator";
 import { logDebug } from "./settings";
@@ -1839,9 +1839,9 @@ function ensureStyles(): void {
 .bst-delta-up { color: #94f7a8; }
 .bst-delta-down { color: #ff9ea8; }
 .bst-delta-flat { color: #d4d9e8; }
-.bst-delta-up::before { content: "â–˛ "; }
-.bst-delta-down::before { content: "â–Ľ "; }
-.bst-delta-flat::before { content: "â€˘ "; }
+.bst-delta-up::before { content: "▲ "; }
+.bst-delta-down::before { content: "▼ "; }
+.bst-delta-flat::before { content: "• "; }
 .bst-thought {
   margin-top: 8px;
   font-size: 11px;
@@ -4569,11 +4569,25 @@ function openEditStatsModal(input: {
     if (def.kind === "array") {
       const items = Array.isArray(currentValue) ? currentValue : normalizeNonNumericArrayItems(currentValue, def.textMaxLength);
       const value = items.join("\n");
+      const rows = (items.length ? items : [""]).slice(0, 20);
+      const safeId = escapeHtml(def.id);
       return `
-        <label class="bst-edit-field">
+        <div class="bst-edit-field bst-array-default-editor" data-bst-edit-array-editor="${safeId}" data-bst-max-length="${def.textMaxLength}">
           <span>${escapeHtml(def.label)}</span>
-          <textarea rows="4" data-bst-edit-non-numeric="${escapeHtml(def.id)}" data-bst-edit-kind="array" placeholder="One item per line, up to 20 items.">${escapeHtml(value)}</textarea>
-        </label>
+          <div class="bst-array-default-list" data-bst-edit-array-list="${safeId}">
+            ${rows.map(item => `
+              <div class="bst-array-default-row">
+                <input type="text" data-bst-edit-array-item="${safeId}" maxlength="${def.textMaxLength}" value="${escapeHtml(item)}" placeholder="Item value">
+                <button type="button" class="bst-btn bst-btn-danger bst-icon-btn" data-action="edit-array-remove" aria-label="Remove item" title="Remove item"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+              </div>
+            `).join("")}
+          </div>
+          <div class="bst-array-default-actions">
+            <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="edit-array-add" data-bst-edit-array-add="${safeId}" aria-label="Add item" title="Add item"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+            <span class="bst-editor-counter" data-bst-edit-array-counter="${safeId}">${items.length}/20 items</span>
+          </div>
+          <textarea rows="1" style="display:none" data-bst-edit-non-numeric="${safeId}" data-bst-edit-kind="array" placeholder="One item per line, up to 20 items.">${escapeHtml(value)}</textarea>
+        </div>
       `;
     }
     const value = typeof currentValue === "string" ? currentValue : "";
@@ -4695,6 +4709,81 @@ function openEditStatsModal(input: {
     document.body.appendChild(backdrop);
   }
   bindTextareaCounters(modal);
+  modal.querySelectorAll<HTMLElement>("[data-bst-edit-array-editor]").forEach(editor => {
+    const id = String(editor.dataset.bstEditArrayEditor ?? "").trim().toLowerCase();
+    if (!id) return;
+    const maxLength = Math.max(20, Math.min(200, Math.round(Number(editor.dataset.bstMaxLength) || 120)));
+    const listNode = editor.querySelector<HTMLElement>(`[data-bst-edit-array-list="${CSS.escape(id)}"]`);
+    const counterNode = editor.querySelector<HTMLElement>(`[data-bst-edit-array-counter="${CSS.escape(id)}"]`);
+    const addBtn = editor.querySelector<HTMLButtonElement>(`[data-bst-edit-array-add="${CSS.escape(id)}"]`);
+    const hiddenNode = editor.querySelector<HTMLTextAreaElement>(`textarea[data-bst-edit-non-numeric="${CSS.escape(id)}"][data-bst-edit-kind="array"]`);
+    if (!listNode || !counterNode || !addBtn || !hiddenNode) return;
+
+    const getItemInputs = (): HTMLInputElement[] =>
+      Array.from(listNode.querySelectorAll<HTMLInputElement>(`input[data-bst-edit-array-item="${CSS.escape(id)}"]`));
+
+    const rowHtml = (value: string): string => `
+      <div class="bst-array-default-row">
+        <input type="text" data-bst-edit-array-item="${escapeHtml(id)}" maxlength="${maxLength}" value="${escapeHtml(value)}" placeholder="Item value">
+        <button type="button" class="bst-btn bst-btn-danger bst-icon-btn" data-action="edit-array-remove" aria-label="Remove item" title="Remove item"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+      </div>
+    `;
+
+    const syncEditor = (): string[] => {
+      const values = getItemInputs().map(inputNode => inputNode.value);
+      const normalized = normalizeNonNumericArrayItems(values, maxLength);
+      hiddenNode.value = normalized.join("\n");
+      counterNode.textContent = `${normalized.length}/20 items`;
+      counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");
+      addBtn.disabled = getItemInputs().length >= 20;
+      return normalized;
+    };
+
+    const ensureRow = (): void => {
+      if (getItemInputs().length > 0) return;
+      listNode.insertAdjacentHTML("beforeend", rowHtml(""));
+    };
+
+    addBtn.addEventListener("click", () => {
+      if (getItemInputs().length >= 20) return;
+      listNode.insertAdjacentHTML("beforeend", rowHtml(""));
+      syncEditor();
+    });
+
+    listNode.addEventListener("click", event => {
+      const target = event.target as HTMLElement | null;
+      const removeBtn = target?.closest<HTMLButtonElement>('[data-action="edit-array-remove"]');
+      if (!removeBtn) return;
+      const row = removeBtn.closest(".bst-array-default-row");
+      if (!row) return;
+      const inputs = getItemInputs();
+      if (inputs.length <= 1) {
+        const onlyInput = inputs[0];
+        if (onlyInput) onlyInput.value = "";
+      } else {
+        row.remove();
+      }
+      ensureRow();
+      syncEditor();
+      hiddenNode.dispatchEvent(new Event("change"));
+    });
+
+    listNode.addEventListener("input", event => {
+      const target = event.target as HTMLInputElement | null;
+      if (!target?.matches(`input[data-bst-edit-array-item="${CSS.escape(id)}"]`)) return;
+      syncEditor();
+    });
+
+    listNode.addEventListener("change", event => {
+      const target = event.target as HTMLInputElement | null;
+      if (!target?.matches(`input[data-bst-edit-array-item="${CSS.escape(id)}"]`)) return;
+      syncEditor();
+      hiddenNode.dispatchEvent(new Event("change"));
+    });
+
+    ensureRow();
+    syncEditor();
+  });
   modal.querySelectorAll<HTMLInputElement>('input[type="number"]').forEach(node => {
     node.addEventListener("blur", () => {
       clampNumberInputToBounds(node);
@@ -4709,6 +4798,17 @@ function openEditStatsModal(input: {
   modal.querySelector('[data-action="cancel"]')?.addEventListener("click", close);
 
   modal.querySelector('[data-action="save"]')?.addEventListener("click", () => {
+    modal.querySelectorAll<HTMLElement>("[data-bst-edit-array-editor]").forEach(editor => {
+      const id = String(editor.dataset.bstEditArrayEditor ?? "").trim().toLowerCase();
+      if (!id) return;
+      const maxLength = Math.max(20, Math.min(200, Math.round(Number(editor.dataset.bstMaxLength) || 120)));
+      const values = Array.from(editor.querySelectorAll<HTMLInputElement>(`input[data-bst-edit-array-item="${CSS.escape(id)}"]`))
+        .map(inputNode => inputNode.value);
+      const normalized = normalizeNonNumericArrayItems(values, maxLength);
+      const hiddenNode = editor.querySelector<HTMLTextAreaElement>(`textarea[data-bst-edit-non-numeric="${CSS.escape(id)}"][data-bst-edit-kind="array"]`);
+      if (hiddenNode) hiddenNode.value = normalized.join("\n");
+    });
+
     const numeric: Record<string, number | null> = {};
     modal.querySelectorAll<HTMLInputElement>("[data-bst-edit-stat]").forEach(node => {
       const key = String(node.dataset.bstEditStat ?? "").trim().toLowerCase();
@@ -5296,13 +5396,13 @@ export function openSettingsModal(input: {
           <div class="bst-help-line">Shown only when Inject Tracker Into Prompt is enabled.</div>
           <div class="bst-help-line">Placeholders you can use:</div>
           <ul class="bst-help-list">
-            <li><code>{{header}}</code> â€” privacy + usage rules header</li>
-            <li><code>{{statSemantics}}</code> â€” enabled stat meanings</li>
-            <li><code>{{behaviorBands}}</code> â€” low/medium/high behavior bands</li>
-            <li><code>{{reactRules}}</code> â€” how-to-react rules</li>
-            <li><code>{{priorityRules}}</code> â€” priority rules block</li>
-            <li><code>{{lines}}</code> â€” per-character state lines</li>
-            <li><code>{{summarizationNote}}</code> â€” optional latest tracker summary note (when enabled)</li>
+            <li><code>{{header}}</code> — privacy + usage rules header</li>
+            <li><code>{{statSemantics}}</code> — enabled stat meanings</li>
+            <li><code>{{behaviorBands}}</code> — low/medium/high behavior bands</li>
+            <li><code>{{reactRules}}</code> — how-to-react rules</li>
+            <li><code>{{priorityRules}}</code> — priority rules block</li>
+            <li><code>{{lines}}</code> — per-character state lines</li>
+            <li><code>{{summarizationNote}}</code> — optional latest tracker summary note (when enabled)</li>
           </ul>
           <div class="bst-prompt-group bst-prompt-inline">
             <div class="bst-prompt-head">
@@ -5409,22 +5509,22 @@ export function openSettingsModal(input: {
         <div class="bst-help-line">Strict/repair prompts are fixed for safety and consistency.</div>
         <div class="bst-help-line">Placeholders you can use:</div>
         <ul class="bst-help-list">
-          <li><code>{{envelope}}</code> â€” prebuilt header with user/characters + recent messages</li>
-          <li><code>{{user}}</code> â€” current user name (<code>{{userName}}</code> alias also works)</li>
-          <li><code>{{char}}</code> â€” tracked message speaker (fallback: first character in scope)</li>
-          <li><code>{{characters}}</code> â€” comma-separated character names</li>
-          <li><code>{{contextText}}</code> â€” raw recent messages text</li>
-          <li><code>{{currentLines}}</code> â€” current tracker state lines</li>
-          <li><code>{{historyLines}}</code> â€” recent tracker snapshot lines</li>
-          <li><code>{{numericStats}}</code> â€” requested numeric stats list</li>
-          <li><code>{{textStats}}</code> â€” requested text stats list</li>
-          <li><code>{{maxDelta}}</code> â€” configured max delta per turn</li>
-          <li><code>{{moodOptions}}</code> â€” allowed mood labels</li>
-          <li><code>{{statId}}</code>/<code>{{statLabel}}</code> â€” custom stat identity (custom per-stat template)</li>
-          <li><code>{{statDescription}}</code>/<code>{{statDefault}}</code> â€” custom stat metadata (custom per-stat template)</li>
-          <li><code>{{statKind}}</code>/<code>{{valueSchema}}</code> â€” non-numeric stat kind + expected value format</li>
-          <li><code>{{allowedValues}}</code>/<code>{{textMaxLen}}</code> â€” enum option list or text-short limit</li>
-          <li><code>{{defaultValueLiteral}}</code>/<code>{{booleanTrueLabel}}</code>/<code>{{booleanFalseLabel}}</code> â€” non-numeric defaults/labels</li>
+          <li><code>{{envelope}}</code> — prebuilt header with user/characters + recent messages</li>
+          <li><code>{{user}}</code> — current user name (<code>{{userName}}</code> alias also works)</li>
+          <li><code>{{char}}</code> — tracked message speaker (fallback: first character in scope)</li>
+          <li><code>{{characters}}</code> — comma-separated character names</li>
+          <li><code>{{contextText}}</code> — raw recent messages text</li>
+          <li><code>{{currentLines}}</code> — current tracker state lines</li>
+          <li><code>{{historyLines}}</code> — recent tracker snapshot lines</li>
+          <li><code>{{numericStats}}</code> — requested numeric stats list</li>
+          <li><code>{{textStats}}</code> — requested text stats list</li>
+          <li><code>{{maxDelta}}</code> — configured max delta per turn</li>
+          <li><code>{{moodOptions}}</code> — allowed mood labels</li>
+          <li><code>{{statId}}</code>/<code>{{statLabel}}</code> — custom stat identity (custom per-stat template)</li>
+          <li><code>{{statDescription}}</code>/<code>{{statDefault}}</code> — custom stat metadata (custom per-stat template)</li>
+          <li><code>{{statKind}}</code>/<code>{{valueSchema}}</code> — non-numeric stat kind + expected value format</li>
+          <li><code>{{allowedValues}}</code>/<code>{{textMaxLen}}</code> — enum option list or text-short limit</li>
+          <li><code>{{defaultValueLiteral}}</code>/<code>{{booleanTrueLabel}}</code>/<code>{{booleanFalseLabel}}</code> — non-numeric defaults/labels</li>
         </ul>
       </details>
       <div class="bst-check-grid">
@@ -5717,7 +5817,7 @@ export function openSettingsModal(input: {
       const parts: string[] = [];
       if (minAttr !== null && minAttr !== "") parts.push(`min ${minAttr}`);
       if (maxAttr !== null && maxAttr !== "") parts.push(`max ${maxAttr}`);
-      span.textContent = parts.join(" Â· ");
+      span.textContent = parts.join(" · ");
       label.appendChild(span);
     });
   };
@@ -5753,7 +5853,7 @@ export function openSettingsModal(input: {
         const parts: string[] = [];
         if (typeof min === "number") parts.push(`min ${min}`);
         if (typeof max === "number") parts.push(`max ${max}`);
-        notice.textContent = `Allowed range: ${parts.join(" Â· ")}. Value adjusted.`;
+        notice.textContent = `Allowed range: ${parts.join(" · ")}. Value adjusted.`;
         notice.style.display = "block";
         if (clearTimer !== null) window.clearTimeout(clearTimer);
         clearTimer = window.setTimeout(() => {
