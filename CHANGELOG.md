@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev8] - 2026-02-28
+### Fixed
+- Persona-scoped User Defaults now use an explicit single-column grid for custom-stat defaults, preventing 50% width compression in narrow persona drawers.
+
+### Changed
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev7] - 2026-02-28
 ### Fixed
 - Array/enum row-editor inputs now stretch to full row width in constrained panels (including Persona Management user defaults), preventing half-width input rendering.

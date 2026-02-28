@@ -3210,6 +3210,9 @@ function ensureStyles(): void {
 .bst-character-grid-three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+.bst-character-grid-single {
+  grid-template-columns: minmax(0, 1fr);
+}
 .bst-character-grid label {
   font-size: 12px;
   display: flex;
