@@ -509,15 +509,15 @@ export function parseCustomValueResponse(
       }
       continue;
     }
+    if (kind === "array") {
+      const items = normalizeArrayItems(candidate);
+      if (items.length > 0) result.value[name] = items;
+      continue;
+    }
     if (typeof candidate !== "string") continue;
     if (kind === "enum_single") {
       const matched = resolveEnumOption(enumOptions, candidate);
       if (matched != null && !hasScriptLikeContent(matched)) result.value[name] = matched;
-      continue;
-    }
-    if (kind === "array") {
-      const items = normalizeArrayItems(candidate);
-      if (items.length > 0) result.value[name] = items;
       continue;
     }
     const cleaned = candidate.trim().replace(/\s+/g, " ");

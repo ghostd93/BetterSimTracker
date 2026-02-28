@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.2] - 2026-02-28
+### Fixed
+- Unified custom `array` parsing now accepts JSON array values returned under `value.<statId>`, so item removals/updates (for example clothing changes) apply correctly instead of being dropped.
+
 ## [2.2.1.1] - 2026-02-28
 ### Changed
 - Persona panel section label renamed from `User Defaults (Persona Scoped)` to `Persona Defaults`.
