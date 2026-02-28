@@ -1,4 +1,4 @@
-{
+﻿{
   "display_name": "BetterSimTracker",
   "loading_order": 100,
   "requires": [],
@@ -6,9 +6,10 @@
   "js": "dist/index.js",
   "auto_update": true,
   "author": "BetterSimTracker",
-    "version": "2.2.0.7-dev3",
+    "version": "2.2.0.7-dev4",
   "homePage": "https://github.com/ghostd93/BetterSimTracker"
 }
+
 
 
 

@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.0.7-dev4] - 2026-02-28
+### Changed
+- Version bump for latest `dev` fixes.
+
 ## [2.2.0.7-dev3] - 2026-02-28
 ### Changed
 - Custom Stat wizard (`array` kind) now uses a structured default-item editor (add/remove item rows with live `items/20` counter) instead of a raw textarea.
