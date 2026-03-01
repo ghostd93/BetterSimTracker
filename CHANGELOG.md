@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev10] - 2026-03-01
+### Changed
+- Drawer header version label is now visually smaller than the extension name.
+
+## [2.2.1.3-dev9] - 2026-03-01
+### Added
+- Extension drawer header now shows dynamic build version (`BetterSimTracker vX.Y.Z...`) sourced from build-time version metadata.
+
 ## [2.2.1.3-dev8] - 2026-03-01
 ### Changed
 - Replaced browser-native `Import JSON` prompt with a BST-styled import modal (textarea + validate/import + inline status).

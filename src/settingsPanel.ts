@@ -1,5 +1,7 @@
 import type { BetterSimTrackerSettings } from "./types";
 
+declare const __BST_VERSION__: string;
+
 const PANEL_ID = "bst-extension-settings-panel";
 
 const selectors = [
@@ -36,7 +38,7 @@ export function upsertSettingsPanel(input: {
   panel.innerHTML = `
     <div class="inline-drawer">
       <div class="inline-drawer-toggle inline-drawer-header">
-        <b>BetterSimTracker</b>
+        <b>BetterSimTracker <small style="font-size:0.8em; opacity:0.8; font-weight:600;">v${String(__BST_VERSION__ || "").trim() || "dev"}</small></b>
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
       </div>
       <div class="inline-drawer-content">
