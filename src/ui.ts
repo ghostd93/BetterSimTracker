@@ -275,8 +275,16 @@ function getNumericRawValue(entry: TrackerData, key: string, name: string, globa
   }
   const byOwner = entry.customStatistics?.[key];
   if (!byOwner) return undefined;
+  const legacyFallback = (): number | undefined => {
+    for (const [owner, value] of Object.entries(byOwner)) {
+      if (owner === GLOBAL_TRACKER_KEY) continue;
+      const parsed = Number(value);
+      if (!Number.isNaN(parsed)) return parsed;
+    }
+    return undefined;
+  };
   const customRaw = globalScope
-    ? byOwner[GLOBAL_TRACKER_KEY]
+    ? (byOwner[GLOBAL_TRACKER_KEY] ?? byOwner[name] ?? legacyFallback())
     : (byOwner[name] ?? byOwner[GLOBAL_TRACKER_KEY]);
   if (customRaw === undefined) return undefined;
   return Number(customRaw);
@@ -290,8 +298,15 @@ function getNonNumericRawValue(
 ): CustomNonNumericValue | undefined {
   const byOwner = entry.customNonNumericStatistics?.[statId];
   if (!byOwner) return undefined;
+  const legacyFallback = (): CustomNonNumericValue | undefined => {
+    for (const [owner, value] of Object.entries(byOwner)) {
+      if (owner === GLOBAL_TRACKER_KEY) continue;
+      if (value !== undefined) return value;
+    }
+    return undefined;
+  };
   return globalScope
-    ? byOwner[GLOBAL_TRACKER_KEY]
+    ? (byOwner[GLOBAL_TRACKER_KEY] ?? byOwner[name] ?? legacyFallback())
     : (byOwner[name] ?? byOwner[GLOBAL_TRACKER_KEY]);
 }
 

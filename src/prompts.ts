@@ -366,9 +366,21 @@ function resolveScopedCustomNumericValue(
 ): number | undefined {
   const byOwner = byStat?.[statId];
   if (!byOwner) return undefined;
+  const legacyFallback = (): number | undefined => {
+    for (const [owner, value] of Object.entries(byOwner)) {
+      if (owner === GLOBAL_TRACKER_KEY) continue;
+      const parsed = Number(value);
+      if (!Number.isNaN(parsed)) return parsed;
+    }
+    return undefined;
+  };
   if (globalScope) {
     const globalValue = byOwner[GLOBAL_TRACKER_KEY];
     if (globalValue !== undefined) return Number(globalValue);
+    const ownerValue = byOwner[ownerName];
+    if (ownerValue !== undefined) return Number(ownerValue);
+    const fallback = legacyFallback();
+    if (fallback !== undefined) return fallback;
   }
   const ownerValue = byOwner[ownerName];
   if (ownerValue !== undefined) return Number(ownerValue);
@@ -387,9 +399,20 @@ function resolveScopedCustomNonNumericValue(
 ): unknown {
   const byOwner = byStat?.[statId];
   if (!byOwner) return undefined;
+  const legacyFallback = (): unknown => {
+    for (const [owner, value] of Object.entries(byOwner)) {
+      if (owner === GLOBAL_TRACKER_KEY) continue;
+      if (value !== undefined) return value;
+    }
+    return undefined;
+  };
   if (globalScope) {
     const globalValue = byOwner[GLOBAL_TRACKER_KEY];
     if (globalValue !== undefined) return globalValue;
+    const ownerValue = byOwner[ownerName];
+    if (ownerValue !== undefined) return ownerValue;
+    const fallback = legacyFallback();
+    if (fallback !== undefined) return fallback;
   }
   const ownerValue = byOwner[ownerName];
   if (ownerValue !== undefined) return ownerValue;

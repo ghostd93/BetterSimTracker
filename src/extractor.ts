@@ -162,6 +162,29 @@ function resolveScopedStatOwnerKey(statDef: CustomStatDefinition, ownerName: str
   return statDef.globalScope ? GLOBAL_TRACKER_KEY : ownerName;
 }
 
+function resolveLegacyNumericFallback(
+  map: Record<string, number> | undefined,
+): number | undefined {
+  if (!map) return undefined;
+  for (const [owner, value] of Object.entries(map)) {
+    if (owner === GLOBAL_TRACKER_KEY) continue;
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function resolveLegacyNonNumericFallback(
+  map: Record<string, CustomNonNumericValue> | undefined,
+): CustomNonNumericValue | undefined {
+  if (!map) return undefined;
+  for (const [owner, value] of Object.entries(map)) {
+    if (owner === GLOBAL_TRACKER_KEY) continue;
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
 export async function extractStatisticsParallel(input: {
   settings: BetterSimTrackerSettings;
   userName: string;
@@ -409,8 +432,13 @@ export async function extractStatisticsParallel(input: {
         const delta = parsedOne.delta[sourceName];
         if (delta === undefined) return;
         const confidence = parsedOne.confidence[sourceName] ?? 0.8;
-        const previousKey = resolveScopedStatOwnerKey(statDef, sourceName);
-        const prevValue = Number(previousCustomStatistics?.[statId]?.[previousKey] ?? statDef.defaultValue);
+        const byOwner = previousCustomStatistics?.[statId];
+        const prevValue = Number(
+          byOwner?.[GLOBAL_TRACKER_KEY]
+          ?? byOwner?.[sourceName]
+          ?? resolveLegacyNumericFallback(byOwner)
+          ?? statDef.defaultValue,
+        );
         const next = applyDelta(prevValue, delta, confidence, statDef.maxDeltaPerTurn);
         parsed.deltas.custom[statId][GLOBAL_TRACKER_KEY] = delta;
         outputCustom[statId][GLOBAL_TRACKER_KEY] = next;
@@ -471,7 +499,13 @@ export async function extractStatisticsParallel(input: {
       if (!outputCustom[statId]) outputCustom[statId] = {};
       if (statDef.globalScope) {
         const seedKey = GLOBAL_TRACKER_KEY;
-        const seedValue = clamp(Number(previousCustomStatistics?.[statId]?.[seedKey] ?? statDef.defaultValue));
+        const byOwner = previousCustomStatistics?.[statId];
+        const seedValue = clamp(Number(
+          byOwner?.[seedKey]
+          ?? byOwner?.[names[0]]
+          ?? resolveLegacyNumericFallback(byOwner)
+          ?? statDef.defaultValue,
+        ));
         outputCustom[statId][seedKey] = seedValue;
         applied.customStatistics[statId][seedKey] = seedValue;
         return;
@@ -495,7 +529,11 @@ export async function extractStatisticsParallel(input: {
       if (statDef.globalScope) {
         const seedKey = GLOBAL_TRACKER_KEY;
         let seedValue: CustomNonNumericValue;
-        const previous = previousCustomNonNumericStatistics?.[statId]?.[seedKey];
+        const byOwner = previousCustomNonNumericStatistics?.[statId];
+        const previous =
+          byOwner?.[seedKey]
+          ?? byOwner?.[names[0]]
+          ?? resolveLegacyNonNumericFallback(byOwner);
         if (previous !== undefined) {
           if (Array.isArray(previous)) {
             const seen = new Set<string>();
@@ -589,9 +627,14 @@ export async function extractStatisticsParallel(input: {
         : (previousCustomNonNumericStatistics?.[statId] ?? {});
       if (statDef?.globalScope) {
         const hasGlobal = rawMap[GLOBAL_TRACKER_KEY] !== undefined;
+        const hasLegacyOwner = Object.entries(rawMap).some(([owner, value]) =>
+          owner !== GLOBAL_TRACKER_KEY && value !== undefined,
+        );
         return hasGlobal
           ? { existing: [...names], firstRunSeedOnly: [] }
-          : { existing: [], firstRunSeedOnly: [...names] };
+          : hasLegacyOwner
+            ? { existing: [...names], firstRunSeedOnly: [] }
+            : { existing: [], firstRunSeedOnly: [...names] };
       }
       const existing: string[] = [];
       const firstRunSeedOnly: string[] = [];
