@@ -25,7 +25,7 @@ Per character card can render:
 Optional Scene card can render:
 
 - global-scoped custom non-numeric stats (`globalScope: true`)
-- configurable placement (`above_tracker_cards` / `below_tracker_cards`)
+- configurable placement (`above_tracker_cards` / `above_message`)
 - configurable layout (`chips` / `rows`)
 - configurable explicit ordering (manual up/down order list)
 - per-stat display editor (visibility, label/color override, layout override, value style, hide-empty behavior, text clamp, array collapse limit)

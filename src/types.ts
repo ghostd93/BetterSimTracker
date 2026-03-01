@@ -23,7 +23,7 @@ export type MoodLabel =
   | "Frustrated"
   | "Neutral";
 export type MoodSource = "bst_images" | "st_expressions";
-export type SceneCardPosition = "above_tracker_cards" | "below_tracker_cards";
+export type SceneCardPosition = "above_tracker_cards" | "above_message";
 export type SceneCardLayout = "chips" | "rows";
 export type SceneStatLayout = "auto" | "chips" | "rows";
 export interface SceneCardStatDisplayOptions {

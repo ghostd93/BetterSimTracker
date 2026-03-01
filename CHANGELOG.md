@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev17] - 2026-03-01
+### Changed
+- Scene Card position now supports two modes only: `Above tracker cards` and `Above message text`.
+- Added dedicated `above_message` rendering path: Scene Card can mount before `.mes_text` while owner tracker cards stay in the regular tracker area.
+- Removed `below_tracker_cards` option from settings and runtime parsing.
+- Updated README and UI docs for the new position options.
+
 ## [2.2.1.3-dev16] - 2026-03-01
 ### Added
 - Scene Stat per-stat editor now supports advanced display controls: `showLabel`, `hideWhenEmpty`, `valueStyle` (`auto/chip/plain`), and per-stat `textMaxLength` clamp.

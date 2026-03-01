@@ -378,7 +378,7 @@ You can disable any metric you do not want extracted. Disabled stats stop updati
 - `Inactive Label`: label text used for inactive cards.
 - `Show Last Thought`: show/hide `lastThought` text on cards.
 - `Enable Scene Card (global stats)`: render a dedicated Scene card from global custom stats and hide global stats on owner cards.
-- `Scene Card Position`: place Scene card above or below owner cards.
+- `Scene Card Position`: place Scene card above tracker cards or above message text.
 - `Scene Card Layout`: render Scene values as chips or rows.
 - `Scene Stat Studio`: per-stat ordering with editor controls (visibility, label, color, layout override, value style, hide-empty, text clamp, array collapse limit).
 - `Scene Card Title`: set custom card header label.

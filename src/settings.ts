@@ -498,7 +498,7 @@ function sanitizeMoodSource(raw: unknown, fallback: MoodSource): MoodSource {
 }
 
 function sanitizeSceneCardPosition(raw: unknown, fallback: SceneCardPosition): SceneCardPosition {
-  if (raw === "above_tracker_cards" || raw === "below_tracker_cards") return raw;
+  if (raw === "above_tracker_cards" || raw === "above_message") return raw;
   return fallback;
 }
 

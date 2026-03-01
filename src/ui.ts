@@ -1324,6 +1324,12 @@ function ensureStyles(): void {
   gap: 8px;
   pointer-events: auto;
 }
+.bst-scene-root {
+  margin: 8px 0 10px;
+  display: grid;
+  gap: 8px;
+  pointer-events: auto;
+}
 .bst-loading {
   border: 1px solid rgba(255,255,255,0.16);
   background: linear-gradient(165deg, color-mix(in srgb, var(--bst-card) 86%, #ffffff 14%), color-mix(in srgb, var(--bst-card) 70%, #000 30%));
@@ -3840,6 +3846,20 @@ function findMessageContainer(messageIndex: number | null): HTMLElement | null {
   return null;
 }
 
+function getPreferredTrackerMount(anchor: HTMLElement): HTMLElement {
+  return (
+    (anchor.querySelector(".mes_block") as HTMLElement | null) ??
+    (anchor.querySelector(".mes_text") as HTMLElement | null) ??
+    anchor
+  );
+}
+
+function getPreferredSceneMount(anchor: HTMLElement): { parent: HTMLElement; before: Element | null } {
+  const mesBlock = (anchor.querySelector(".mes_block") as HTMLElement | null) ?? anchor;
+  const mesText = mesBlock.querySelector(".mes_text");
+  return { parent: mesBlock, before: mesText };
+}
+
 function getRoot(messageIndex: number | null): HTMLDivElement | null {
   const anchor = findMessageContainer(messageIndex);
   if (!anchor) return null;
@@ -3852,15 +3872,31 @@ function getRoot(messageIndex: number | null): HTMLDivElement | null {
     root.dataset.messageIndex = indexKey;
   }
 
-  const preferredMount =
-    (anchor.querySelector(".mes_block") as HTMLElement | null) ??
-    (anchor.querySelector(".mes_text") as HTMLElement | null) ??
-    anchor;
+  const preferredMount = getPreferredTrackerMount(anchor);
 
   if (root.parentElement !== preferredMount) {
     preferredMount.appendChild(root);
   }
   return root;
+}
+
+function getSceneRoot(messageIndex: number | null): HTMLDivElement | null {
+  const anchor = findMessageContainer(messageIndex);
+  if (!anchor) return null;
+  const indexKey = String(messageIndex);
+  let sceneRoot = document.querySelector(`.bst-scene-root[data-message-index="${indexKey}"]`) as HTMLDivElement | null;
+  if (!sceneRoot) {
+    sceneRoot = document.createElement("div");
+    sceneRoot.className = "bst-scene-root";
+    sceneRoot.dataset.messageIndex = indexKey;
+  }
+  const mount = getPreferredSceneMount(anchor);
+  if (sceneRoot.parentElement !== mount.parent) {
+    mount.parent.insertBefore(sceneRoot, mount.before);
+  } else if (mount.before && sceneRoot.nextElementSibling !== mount.before) {
+    mount.parent.insertBefore(sceneRoot, mount.before);
+  }
+  return sceneRoot;
 }
 
 export function renderTracker(
@@ -3961,6 +3997,13 @@ export function renderTracker(
       el.remove();
     }
   });
+  document.querySelectorAll(".bst-scene-root").forEach(node => {
+    const el = node as HTMLElement;
+    const idx = String(el.dataset.messageIndex ?? "");
+    if (!wanted.has(idx)) {
+      el.remove();
+    }
+  });
 
   if (!settings.enabled) {
     return;
@@ -3969,6 +4012,11 @@ export function renderTracker(
   for (const entry of entries) {
     const root = getRoot(entry.messageIndex);
     if (!root) continue;
+    const wantsSceneAboveMessage = settings.sceneCardEnabled && settings.sceneCardPosition === "above_message";
+    const sceneRoot = wantsSceneAboveMessage ? getSceneRoot(entry.messageIndex) : null;
+    if (!wantsSceneAboveMessage) {
+      document.querySelector(`.bst-scene-root[data-message-index="${entry.messageIndex}"]`)?.remove();
+    }
 
     root.style.setProperty("--bst-card", "#1f2028");
     root.style.setProperty("--bst-accent", settings.accentColor);
@@ -3976,6 +4024,14 @@ export function renderTracker(
     root.style.opacity = `${settings.cardOpacity}`;
     root.style.fontSize = `${settings.fontSize}px`;
     root.style.display = "grid";
+    if (sceneRoot) {
+      sceneRoot.style.setProperty("--bst-card", "#1f2028");
+      sceneRoot.style.setProperty("--bst-accent", settings.accentColor);
+      sceneRoot.style.setProperty("--bst-radius", `${settings.borderRadius}px`);
+      sceneRoot.style.opacity = `${settings.cardOpacity}`;
+      sceneRoot.style.fontSize = `${settings.fontSize}px`;
+      sceneRoot.style.display = "grid";
+    }
 
     if (!root.dataset.bstBound) {
       root.dataset.bstBound = "1";
@@ -4117,9 +4173,32 @@ export function renderTracker(
         }
       }, { passive: false });
     }
+    if (sceneRoot && !sceneRoot.dataset.bstBound) {
+      sceneRoot.dataset.bstBound = "1";
+      sceneRoot.addEventListener("click", event => {
+        const target = event.target as HTMLElement | null;
+        const arrayToggle = target?.closest('[data-bst-action="toggle-array-values"]') as HTMLElement | null;
+        if (!arrayToggle) return;
+        const key = String(arrayToggle.getAttribute("data-bst-array-key") ?? "").trim();
+        if (!key) return;
+        if (expandedArrayValueKeys.has(key)) {
+          expandedArrayValueKeys.delete(key);
+        } else {
+          expandedArrayValueKeys.add(key);
+        }
+        root.dataset.bstRenderSignature = "";
+        sceneRoot.dataset.bstRenderSignature = "";
+        onRequestRerender?.();
+      });
+    }
     root.classList.toggle("bst-root-collapsed", collapsedTrackerMessages.has(entry.messageIndex));
 
     if (uiState.phase === "generating" && uiState.messageIndex === entry.messageIndex) {
+      if (sceneRoot) {
+        sceneRoot.dataset.bstRenderPhase = "generating";
+        sceneRoot.dataset.bstRenderSignature = "";
+        sceneRoot.innerHTML = "";
+      }
       root.dataset.bstRenderPhase = "generating";
       root.dataset.bstRenderSignature = "";
       root.innerHTML = "";
@@ -4138,6 +4217,11 @@ export function renderTracker(
     }
 
     if (uiState.phase === "extracting" && uiState.messageIndex === entry.messageIndex) {
+      if (sceneRoot) {
+        sceneRoot.dataset.bstRenderPhase = "extracting";
+        sceneRoot.dataset.bstRenderSignature = "";
+        sceneRoot.innerHTML = "";
+      }
       root.dataset.bstRenderPhase = "extracting";
       root.dataset.bstRenderSignature = "";
       root.innerHTML = "";
@@ -4177,6 +4261,12 @@ export function renderTracker(
 
     const data = entry.data;
     if (!data) {
+      if (sceneRoot) {
+        sceneRoot.style.display = "none";
+        sceneRoot.dataset.bstRenderPhase = "idle";
+        sceneRoot.dataset.bstRenderSignature = "";
+        sceneRoot.innerHTML = "";
+      }
       const recovery = entry.recovery;
       if (!recovery) {
         root.style.display = "none";
@@ -4636,8 +4726,11 @@ export function renderTracker(
     `;
     root.appendChild(actions);
 
-    const appendSceneCard = (): void => {
-      if (!sceneCardVisible) return;
+    const appendSceneCard = (target: HTMLElement): void => {
+      if (!sceneCardVisible) {
+        target.innerHTML = "";
+        return;
+      }
       const card = document.createElement("div");
       card.className = "bst-card bst-scene-card";
       const color = normalizeHexColor(settings.sceneCardColor)
@@ -4652,7 +4745,8 @@ export function renderTracker(
       card.style.setProperty("--bst-action-border-hover", scenePalette.hoverBorder);
       card.style.setProperty("--bst-action-focus", scenePalette.focus);
       card.innerHTML = sceneCardHtml;
-      root.appendChild(card);
+      target.innerHTML = "";
+      target.appendChild(card);
     };
     const appendOwnerCards = (): void => {
       for (const item of cardHtmlByName) {
@@ -4670,18 +4764,30 @@ export function renderTracker(
         root.appendChild(card);
       }
     };
+    if (sceneRoot) {
+      const sceneSignature = `sceneRoot:${sceneCardVisible ? "1" : "0"}:${sceneCardHtml}`;
+      if (sceneRoot.dataset.bstRenderPhase !== "idle" || sceneRoot.dataset.bstRenderSignature !== sceneSignature) {
+        sceneRoot.dataset.bstRenderPhase = "idle";
+        sceneRoot.dataset.bstRenderSignature = sceneSignature;
+        sceneRoot.style.display = sceneCardVisible ? "grid" : "none";
+        appendSceneCard(sceneRoot);
+      }
+    }
     if (sceneCardVisible && settings.sceneCardPosition === "above_tracker_cards") {
-      appendSceneCard();
+      appendSceneCard(root);
       appendOwnerCards();
     } else {
       appendOwnerCards();
-      appendSceneCard();
+      if (sceneCardVisible && !sceneRoot) {
+        appendSceneCard(root);
+      }
     }
   }
 }
 
 export function removeTrackerUI(): void {
   document.querySelectorAll(`.${ROOT_CLASS}`).forEach(el => el.remove());
+  document.querySelectorAll(".bst-scene-root").forEach(el => el.remove());
   document.getElementById(STYLE_ID)?.remove();
   document.querySelector(".bst-settings-backdrop")?.remove();
   document.querySelector(".bst-settings")?.remove();
@@ -5979,7 +6085,7 @@ export function openSettingsModal(input: {
           <label data-bst-row="sceneCardPosition">Position
             <select data-k="sceneCardPosition">
               <option value="above_tracker_cards">Above tracker cards</option>
-              <option value="below_tracker_cards">Below tracker cards</option>
+              <option value="above_message">Above message text</option>
             </select>
           </label>
           <label data-bst-row="sceneCardLayout">Stat Layout
@@ -8964,7 +9070,7 @@ export function openSettingsModal(input: {
       inactiveLabel: read("inactiveLabel") || input.settings.inactiveLabel,
       showLastThought: readBool("showLastThought", input.settings.showLastThought),
       sceneCardEnabled: readBool("sceneCardEnabled", input.settings.sceneCardEnabled),
-      sceneCardPosition: read("sceneCardPosition") === "below_tracker_cards" ? "below_tracker_cards" : "above_tracker_cards",
+      sceneCardPosition: read("sceneCardPosition") === "above_message" ? "above_message" : "above_tracker_cards",
       sceneCardLayout: read("sceneCardLayout") === "rows" ? "rows" : "chips",
       sceneCardTitle: read("sceneCardTitle") || input.settings.sceneCardTitle,
       sceneCardColor: read("sceneCardColor") || "",
@@ -9279,7 +9385,7 @@ export function openSettingsModal(input: {
     inactiveLabel: "Text label shown on cards for inactive characters.",
     showLastThought: "Show extracted last thought text inside tracker cards.",
     sceneCardEnabled: "Render a dedicated Scene card from global custom stats.",
-    sceneCardPosition: "Choose whether the Scene card renders above or below owner cards.",
+    sceneCardPosition: "Choose whether the Scene card renders above tracker cards or above message text.",
     sceneCardLayout: "Choose compact chip layout or one-row-per-stat layout for Scene card values.",
     sceneCardTitle: "Visible title for the Scene card.",
     sceneCardColor: "Optional card color override for Scene card (hex). Empty = automatic color.",
