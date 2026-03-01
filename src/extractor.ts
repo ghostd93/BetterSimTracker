@@ -911,6 +911,7 @@ export async function extractStatisticsParallel(input: {
         : buildSequentialCustomNonNumericPrompt({
           statId,
           statKind: kind,
+          globalScope: statDef.globalScope,
           statLabel: label,
           statDescription: statDef.description,
           statDefault: kind === "boolean"

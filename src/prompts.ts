@@ -1045,6 +1045,7 @@ function customNonNumericProtocol(input: {
 export function buildSequentialCustomNonNumericPrompt(input: {
   statId: string;
   statKind: Exclude<CustomStatKind, "numeric">;
+  globalScope?: boolean;
   statLabel: string;
   statDescription?: string;
   statDefault: string | boolean | string[];
@@ -1099,7 +1100,12 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     const desire = Number(input.current?.desire?.[name] ?? 50);
     const connection = Number(input.current?.connection?.[name] ?? 50);
     const mood = String(input.current?.mood?.[name] ?? "Neutral");
-    const customRaw = resolveScopedCustomNonNumericValue(input.currentCustomNonNumeric ?? undefined, statId, name, false);
+    const customRaw = resolveScopedCustomNonNumericValue(
+      input.currentCustomNonNumeric ?? undefined,
+      statId,
+      name,
+      input.globalScope,
+    );
     const customValue = formatCustomNonNumericValue(statKind, customRaw, defaultValue);
     const customLiteral = customNonNumericLiteral(customValue);
     return `- ${name}: affection=${Math.max(0, Math.min(100, Math.round(affection)))}, trust=${Math.max(0, Math.min(100, Math.round(trust)))}, desire=${Math.max(0, Math.min(100, Math.round(desire)))}, connection=${Math.max(0, Math.min(100, Math.round(connection)))}, mood=${mood}, ${statId}=${customLiteral}`;
@@ -1113,7 +1119,12 @@ export function buildSequentialCustomNonNumericPrompt(input: {
       const desire = Number(entry.statistics.desire?.[name] ?? 50);
       const connection = Number(entry.statistics.connection?.[name] ?? 50);
       const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
-      const customRaw = resolveScopedCustomNonNumericValue(entry.customNonNumericStatistics ?? undefined, statId, name, false);
+      const customRaw = resolveScopedCustomNonNumericValue(
+        entry.customNonNumericStatistics ?? undefined,
+        statId,
+        name,
+        input.globalScope,
+      );
       const customValue = formatCustomNonNumericValue(statKind, customRaw, defaultValue);
       const customLiteral = customNonNumericLiteral(customValue);
       return `  - ${name}: affection=${Math.round(affection)}, trust=${Math.round(trust)}, desire=${Math.round(desire)}, connection=${Math.round(connection)}, mood=${mood}, ${statId}=${customLiteral}`;

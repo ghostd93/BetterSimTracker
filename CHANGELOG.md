@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev2] - 2026-03-01
+### Fixed
+- Sequential custom non-numeric prompts now resolve current/history baseline values with each stat's `globalScope`, so global stats no longer read stale per-character values during retrack.
+
 ## [2.2.1.3-dev1] - 2026-03-01
 ### Added
 - Custom stat scope model now supports `Global stat (shared)` in the wizard, with enforced semantics for shared owner key storage.
