@@ -441,6 +441,7 @@ function normalizeName(value: string): string {
 function pushUniqueCharacterName(target: string[], seen: Set<string>, raw: unknown): void {
   const name = typeof raw === "string" ? raw.trim() : "";
   if (!name) return;
+  if (name === GLOBAL_TRACKER_KEY) return;
   const key = normalizeName(name);
   if (!key || seen.has(key)) return;
   seen.add(key);

@@ -115,7 +115,9 @@ function collectSummaryCharacters(data: TrackerData): string[] {
   const addKeys = (map: Record<string, unknown> | undefined): void => {
     if (!map || typeof map !== "object") return;
     for (const key of Object.keys(map)) {
-      if (key.trim()) names.add(key.trim());
+      const normalized = key.trim();
+      if (!normalized || normalized === GLOBAL_TRACKER_KEY) continue;
+      names.add(normalized);
     }
   };
   addKeys(data.statistics.affection);
