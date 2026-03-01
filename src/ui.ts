@@ -4464,19 +4464,23 @@ export function renderTracker(
         .map(def => ({ def, value: resolveSceneValue(def) }))
         .filter(item => item.value != null)
       : [];
-    const sceneValues = settings.sceneCardSortMode === "label_asc"
-      ? [...baseSceneValues].sort((a, b) => a.def.label.localeCompare(b.def.label))
-      : (() => {
-        const order = new Map((settings.sceneCardStatOrder ?? []).map((id, index) => [String(id ?? "").trim().toLowerCase(), index]));
-        return [...baseSceneValues].sort((a, b) => {
-          const aIdx = order.get(String(a.def.id ?? "").trim().toLowerCase());
-          const bIdx = order.get(String(b.def.id ?? "").trim().toLowerCase());
-          const aRank = aIdx == null ? Number.MAX_SAFE_INTEGER : aIdx;
-          const bRank = bIdx == null ? Number.MAX_SAFE_INTEGER : bIdx;
-          if (aRank !== bRank) return aRank - bRank;
-          return a.def.label.localeCompare(b.def.label);
-        });
-      })();
+    const order = new Map((settings.sceneCardStatOrder ?? []).map((id, index) => [String(id ?? "").trim().toLowerCase(), index]));
+    const sceneDisplayById = settings.sceneCardStatDisplay ?? {};
+    const sceneValues = [...baseSceneValues]
+      .map(item => {
+        const id = String(item.def.id ?? "").trim().toLowerCase();
+        const display = sceneDisplayById[id] ?? null;
+        return { ...item, id, display };
+      })
+      .filter(item => item.display?.visible !== false)
+      .sort((a, b) => {
+        const aIdx = order.get(a.id);
+        const bIdx = order.get(b.id);
+        const aRank = aIdx == null ? Number.MAX_SAFE_INTEGER : aIdx;
+        const bRank = bIdx == null ? Number.MAX_SAFE_INTEGER : bIdx;
+        if (aRank !== bRank) return aRank - bRank;
+        return a.def.label.localeCompare(b.def.label);
+      });
     const sceneCardVisible = settings.sceneCardShowWhenEmpty || sceneValues.length > 0;
     const sceneCardHtml = sceneCardVisible
       ? `
@@ -4490,15 +4494,20 @@ export function renderTracker(
           ${sceneValues.map(item => {
             const def = item.def;
             const resolved = item.value as string | boolean | string[];
-            const color = settings.sceneCardValueColor || def.color || settings.accentColor || "#9bd5ff";
-            if (settings.sceneCardLayout === "rows") {
+            const display = item.display;
+            const color = display?.colorOverride || settings.sceneCardValueColor || def.color || settings.accentColor || "#9bd5ff";
+            const statLabel = display?.labelOverride?.trim() ? display.labelOverride.trim() : def.label;
+            const statLayout = display?.layoutOverride === "chips" || display?.layoutOverride === "rows"
+              ? display.layoutOverride
+              : settings.sceneCardLayout;
+            if (statLayout === "rows") {
               if (def.kind === "array") {
                 const items = Array.isArray(resolved) ? resolved : normalizeNonNumericArrayItems(resolved, def.textMaxLength);
                 const textValue = items.length ? items.join(", ") : "No items";
                 return `
                   <div class="bst-row bst-row-non-numeric">
                     <div class="bst-label">
-                      <span>${escapeHtml(def.label)}</span>
+                      <span>${escapeHtml(statLabel)}</span>
                       <span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(textValue)}">${escapeHtml(textValue)}</span>
                     </div>
                   </div>
@@ -4508,7 +4517,7 @@ export function renderTracker(
               return `
                 <div class="bst-row bst-row-non-numeric">
                   <div class="bst-label">
-                    <span>${escapeHtml(def.label)}</span>
+                    <span>${escapeHtml(statLabel)}</span>
                     <span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</span>
                   </div>
                 </div>
@@ -4516,7 +4525,7 @@ export function renderTracker(
             }
             if (def.kind === "array") {
               const items = Array.isArray(resolved) ? resolved : normalizeNonNumericArrayItems(resolved, def.textMaxLength);
-              const arrayLimit = Math.max(1, Math.min(20, settings.sceneCardArrayCollapsedLimit));
+              const arrayLimit = Math.max(1, Math.min(20, display?.arrayCollapsedLimit ?? settings.sceneCardArrayCollapsedLimit));
               const sceneArrayKey = `arrscene:${entry.messageIndex}:${def.id}`;
               const expanded = expandedArrayValueKeys.has(sceneArrayKey);
               const hasOverflow = items.length > arrayLimit;
@@ -4527,7 +4536,7 @@ export function renderTracker(
               return `
                 <div class="bst-row bst-row-non-numeric">
                   <div class="bst-label">
-                    <span>${escapeHtml(def.label)}</span>
+                    <span>${escapeHtml(statLabel)}</span>
                   </div>
                   <div class="bst-array-items">
                     ${chips}
@@ -4542,7 +4551,7 @@ export function renderTracker(
             return `
               <div class="bst-row bst-row-non-numeric">
                 <div class="bst-label">
-                  <span>${escapeHtml(def.label)}</span>
+                  <span>${escapeHtml(statLabel)}</span>
                   <span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</span>
                 </div>
               </div>
@@ -4552,7 +4561,7 @@ export function renderTracker(
         </div>
       `
       : "";
-    signatureParts.push(`scene:${sceneCardVisible ? "1" : "0"}:${settings.sceneCardEnabled ? "1" : "0"}:${settings.sceneCardPosition}:${settings.sceneCardLayout}:${settings.sceneCardSortMode}:${(settings.sceneCardStatOrder ?? []).join(",")}:${settings.sceneCardTitle}:${settings.sceneCardColor}:${settings.sceneCardValueColor}:${settings.sceneCardShowWhenEmpty ? "1" : "0"}:${settings.sceneCardArrayCollapsedLimit}:${sceneCardHtml}`);
+    signatureParts.push(`scene:${sceneCardVisible ? "1" : "0"}:${settings.sceneCardEnabled ? "1" : "0"}:${settings.sceneCardPosition}:${settings.sceneCardLayout}:${(settings.sceneCardStatOrder ?? []).join(",")}:${JSON.stringify(settings.sceneCardStatDisplay ?? {})}:${settings.sceneCardTitle}:${settings.sceneCardColor}:${settings.sceneCardValueColor}:${settings.sceneCardShowWhenEmpty ? "1" : "0"}:${settings.sceneCardArrayCollapsedLimit}:${sceneCardHtml}`);
     const renderSignature = signatureParts.join("|#|");
     if (root.dataset.bstRenderPhase === "idle" && root.dataset.bstRenderSignature === renderSignature) {
       continue;
@@ -5677,6 +5686,36 @@ export function openSettingsModal(input: {
   let sceneCardStatOrderState: string[] = Array.isArray(input.settings.sceneCardStatOrder)
     ? input.settings.sceneCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
     : [];
+  let sceneCardStatDisplayState: Record<string, {
+    visible: boolean;
+    labelOverride: string;
+    colorOverride: string;
+    layoutOverride: "auto" | "chips" | "rows";
+    arrayCollapsedLimit: number | null;
+  }> = (() => {
+    const raw = input.settings.sceneCardStatDisplay ?? {};
+    const out: Record<string, {
+      visible: boolean;
+      labelOverride: string;
+      colorOverride: string;
+      layoutOverride: "auto" | "chips" | "rows";
+      arrayCollapsedLimit: number | null;
+    }> = {};
+    for (const [id, row] of Object.entries(raw)) {
+      const key = String(id ?? "").trim().toLowerCase();
+      if (!key || !row) continue;
+      out[key] = {
+        visible: Boolean(row.visible ?? true),
+        labelOverride: String(row.labelOverride ?? "").trim().slice(0, 40),
+        colorOverride: normalizeHexColor(row.colorOverride) ?? "",
+        layoutOverride: row.layoutOverride === "chips" || row.layoutOverride === "rows" ? row.layoutOverride : "auto",
+        arrayCollapsedLimit: typeof row.arrayCollapsedLimit === "number" && Number.isFinite(row.arrayCollapsedLimit)
+          ? Math.max(1, Math.min(20, Math.round(row.arrayCollapsedLimit)))
+          : null,
+      };
+    }
+    return out;
+  })();
   let builtInNumericStatUiState: BuiltInNumericStatUiSettings = cloneBuiltInNumericStatUi(input.settings.builtInNumericStatUi);
 
   const modal = document.createElement("div");
@@ -5884,14 +5923,8 @@ export function openSettingsModal(input: {
               <option value="rows">Rows</option>
             </select>
           </label>
-          <label data-bst-row="sceneCardSortMode">Stat Order
-            <select data-k="sceneCardSortMode">
-              <option value="custom_order">Custom stats order</option>
-              <option value="label_asc">Label A-Z</option>
-            </select>
-          </label>
           <div data-bst-row="sceneCardOrderManager">
-            <div class="bst-help-line">Custom Scene order (global stats only).</div>
+            <div class="bst-help-line">Scene Stat Display Manager (order + per-stat display options).</div>
             <div class="bst-scene-order-list" data-bst-row="sceneCardOrderList"></div>
           </div>
           <label data-bst-row="sceneCardArrayCollapsedLimit">Array chips before collapse
@@ -6542,7 +6575,6 @@ export function openSettingsModal(input: {
   set("sceneCardColor", input.settings.sceneCardColor || "");
   set("sceneCardValueColor", input.settings.sceneCardValueColor || "");
   set("sceneCardShowWhenEmpty", String(input.settings.sceneCardShowWhenEmpty));
-  set("sceneCardSortMode", input.settings.sceneCardSortMode);
   set("sceneCardArrayCollapsedLimit", String(input.settings.sceneCardArrayCollapsedLimit));
   set("trackAffection", String(input.settings.trackAffection));
   set("trackTrust", String(input.settings.trackTrust));
@@ -7282,6 +7314,13 @@ export function openSettingsModal(input: {
       if (!next.includes(id)) next.push(id);
     }
     sceneCardStatOrderState = next;
+    const nextDisplay: typeof sceneCardStatDisplayState = {};
+    for (const id of eligibleIds) {
+      if (sceneCardStatDisplayState[id]) {
+        nextDisplay[id] = sceneCardStatDisplayState[id];
+      }
+    }
+    sceneCardStatDisplayState = nextDisplay;
   };
 
   const renderSceneCardOrderList = (): void => {
@@ -7305,6 +7344,7 @@ export function openSettingsModal(input: {
             <span class="bst-scene-order-id">${escapeHtml(stat.id)}</span>
           </div>
           <div class="bst-scene-order-actions">
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-order-edit" data-scene-order-id="${escapeHtml(id)}" title="Edit display options" aria-label="Edit display options"><span class="fa-solid fa-pen" aria-hidden="true"></span></button>
             <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-order-up" data-scene-order-id="${escapeHtml(id)}" ${index === 0 ? "disabled" : ""} title="Move up" aria-label="Move up"><span class="fa-solid fa-arrow-up" aria-hidden="true"></span></button>
             <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-order-down" data-scene-order-id="${escapeHtml(id)}" ${index === orderedIds.length - 1 ? "disabled" : ""} title="Move down" aria-label="Move down"><span class="fa-solid fa-arrow-down" aria-hidden="true"></span></button>
           </div>
@@ -7312,6 +7352,113 @@ export function openSettingsModal(input: {
       `;
     }).join("");
     orderListNode.innerHTML = rows;
+  };
+
+  const openSceneStatDisplayEditor = (statId: string): void => {
+    const targetId = String(statId ?? "").trim().toLowerCase();
+    if (!targetId) return;
+    const stat = getSceneOrderEligibleStats().find(item => String(item.id ?? "").trim().toLowerCase() === targetId);
+    if (!stat) return;
+    const current = sceneCardStatDisplayState[targetId] ?? {
+      visible: true,
+      labelOverride: "",
+      colorOverride: "",
+      layoutOverride: "auto" as const,
+      arrayCollapsedLimit: null,
+    };
+    const backdropNode = document.createElement("div");
+    backdropNode.className = "bst-custom-wizard-backdrop";
+    const wizard = document.createElement("div");
+    wizard.className = "bst-custom-wizard";
+    wizard.innerHTML = `
+      <div class="bst-custom-wizard-head">
+        <div>
+          <div class="bst-custom-wizard-title">Scene Stat Display Options</div>
+          <div class="bst-custom-wizard-step">${escapeHtml(stat.label)} (${escapeHtml(stat.id)})</div>
+        </div>
+        <button type="button" class="bst-btn bst-close-btn" data-action="scene-stat-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="bst-custom-wizard-panel is-active">
+        <div class="bst-settings-grid bst-settings-grid-single">
+          <label class="bst-check"><input type="checkbox" data-scene-opt="visible" ${current.visible ? "checked" : ""}>Visible on Scene Card</label>
+          <label>Label Override <input type="text" data-scene-opt="labelOverride" maxlength="40" value="${escapeHtml(current.labelOverride)}" placeholder="Use default label"></label>
+          <label>Color Override
+            <div class="bst-color-inputs">
+              <input type="color" data-scene-opt-color="colorOverride">
+              <input type="text" data-scene-opt="colorOverride" value="${escapeHtml(current.colorOverride)}" placeholder="Use global/default">
+            </div>
+          </label>
+          <label>Layout Override
+            <select data-scene-opt="layoutOverride">
+              <option value="auto"${current.layoutOverride === "auto" ? " selected" : ""}>Use Scene Card default</option>
+              <option value="chips"${current.layoutOverride === "chips" ? " selected" : ""}>Chips</option>
+              <option value="rows"${current.layoutOverride === "rows" ? " selected" : ""}>Rows</option>
+            </select>
+          </label>
+          <label data-scene-opt-row="arrayLimit">Array Collapse Limit (1-20)
+            <input type="number" min="1" max="20" data-scene-opt="arrayCollapsedLimit" value="${current.arrayCollapsedLimit == null ? "" : String(current.arrayCollapsedLimit)}" placeholder="Use Scene Card default">
+          </label>
+        </div>
+      </div>
+      <div class="bst-custom-wizard-actions">
+        <button type="button" class="bst-btn" data-action="scene-stat-cancel">Cancel</button>
+        <button type="button" class="bst-btn bst-btn-soft" data-action="scene-stat-save">Save</button>
+      </div>
+    `;
+    const close = (): void => {
+      backdropNode.remove();
+      wizard.remove();
+    };
+    const syncColorPicker = (): void => {
+      const textNode = wizard.querySelector('[data-scene-opt="colorOverride"]') as HTMLInputElement | null;
+      const colorNode = wizard.querySelector('[data-scene-opt-color="colorOverride"]') as HTMLInputElement | null;
+      if (!textNode || !colorNode) return;
+      colorNode.value = normalizeHexColor(textNode.value) ?? (normalizeHexColor(input.settings.sceneCardValueColor) ?? "#ff5a6f");
+    };
+    const updateArrayRow = (): void => {
+      const row = wizard.querySelector('[data-scene-opt-row="arrayLimit"]') as HTMLElement | null;
+      const layoutNode = wizard.querySelector('[data-scene-opt="layoutOverride"]') as HTMLSelectElement | null;
+      const effectiveLayout = String(layoutNode?.value ?? "auto");
+      const show = normalizeCustomStatKind(stat.kind) === "array" && (effectiveLayout === "auto" || effectiveLayout === "chips");
+      if (row) row.style.display = show ? "flex" : "none";
+    };
+    syncColorPicker();
+    updateArrayRow();
+    const textColor = wizard.querySelector('[data-scene-opt="colorOverride"]') as HTMLInputElement | null;
+    const colorColor = wizard.querySelector('[data-scene-opt-color="colorOverride"]') as HTMLInputElement | null;
+    textColor?.addEventListener("input", syncColorPicker);
+    colorColor?.addEventListener("input", () => {
+      if (textColor && colorColor) textColor.value = colorColor.value;
+    });
+    wizard.querySelector('[data-scene-opt="layoutOverride"]')?.addEventListener("change", updateArrayRow);
+    wizard.querySelector('[data-action="scene-stat-close"]')?.addEventListener("click", close);
+    wizard.querySelector('[data-action="scene-stat-cancel"]')?.addEventListener("click", close);
+    wizard.querySelector('[data-action="scene-stat-save"]')?.addEventListener("click", () => {
+      const visibleNode = wizard.querySelector('[data-scene-opt="visible"]') as HTMLInputElement | null;
+      const labelNode = wizard.querySelector('[data-scene-opt="labelOverride"]') as HTMLInputElement | null;
+      const colorNode = wizard.querySelector('[data-scene-opt="colorOverride"]') as HTMLInputElement | null;
+      const layoutNode = wizard.querySelector('[data-scene-opt="layoutOverride"]') as HTMLSelectElement | null;
+      const arrayLimitNode = wizard.querySelector('[data-scene-opt="arrayCollapsedLimit"]') as HTMLInputElement | null;
+      const layoutOverride = layoutNode?.value === "chips" || layoutNode?.value === "rows" ? layoutNode.value : "auto";
+      const parsedLimitRaw = Number(arrayLimitNode?.value ?? "");
+      const arrayCollapsedLimit = Number.isFinite(parsedLimitRaw) && !Number.isNaN(parsedLimitRaw)
+        ? Math.max(1, Math.min(20, Math.round(parsedLimitRaw)))
+        : null;
+      sceneCardStatDisplayState[targetId] = {
+        visible: Boolean(visibleNode?.checked ?? true),
+        labelOverride: String(labelNode?.value ?? "").trim().slice(0, 40),
+        colorOverride: normalizeHexColor(String(colorNode?.value ?? "")) ?? "",
+        layoutOverride: layoutOverride as "auto" | "chips" | "rows",
+        arrayCollapsedLimit,
+      };
+      renderSceneCardOrderList();
+      persistLive();
+      close();
+    });
+    backdropNode.addEventListener("click", close);
+    wizard.addEventListener("click", event => event.stopPropagation());
+    document.body.appendChild(backdropNode);
+    document.body.appendChild(wizard);
   };
 
   const closeCustomWizard = (): void => {
@@ -8623,6 +8770,10 @@ export function openSettingsModal(input: {
     const index = sceneCardStatOrderState.indexOf(id);
     if (index < 0) return;
     const action = String(button.getAttribute("data-action") ?? "");
+    if (action === "scene-order-edit") {
+      openSceneStatDisplayEditor(id);
+      return;
+    }
     if (action === "scene-order-up" && index > 0) {
       const next = [...sceneCardStatOrderState];
       [next[index - 1], next[index]] = [next[index], next[index - 1]];
@@ -8712,9 +8863,9 @@ export function openSettingsModal(input: {
       sceneCardColor: read("sceneCardColor") || "",
       sceneCardValueColor: read("sceneCardValueColor") || "",
       sceneCardShowWhenEmpty: readBool("sceneCardShowWhenEmpty", input.settings.sceneCardShowWhenEmpty),
-      sceneCardSortMode: read("sceneCardSortMode") === "label_asc" ? "label_asc" : "custom_order",
       sceneCardArrayCollapsedLimit: readNumber("sceneCardArrayCollapsedLimit", input.settings.sceneCardArrayCollapsedLimit, 1, 20),
       sceneCardStatOrder: [...sceneCardStatOrderState],
+      sceneCardStatDisplay: { ...sceneCardStatDisplayState },
       trackAffection: readBool("trackAffection", input.settings.trackAffection),
       trackTrust: readBool("trackTrust", input.settings.trackTrust),
       trackDesire: readBool("trackDesire", input.settings.trackDesire),
@@ -8784,7 +8935,6 @@ export function openSettingsModal(input: {
     const sceneCardColorRow = modal.querySelector('[data-bst-row="sceneCardColor"]') as HTMLElement | null;
     const sceneCardValueColorRow = modal.querySelector('[data-bst-row="sceneCardValueColor"]') as HTMLElement | null;
     const sceneCardShowWhenEmptyRow = modal.querySelector('[data-bst-row="sceneCardShowWhenEmpty"]') as HTMLElement | null;
-    const sceneCardSortModeRow = modal.querySelector('[data-bst-row="sceneCardSortMode"]') as HTMLElement | null;
     const sceneCardOrderManagerRow = modal.querySelector('[data-bst-row="sceneCardOrderManager"]') as HTMLElement | null;
     const sceneCardArrayCollapsedLimitRow = modal.querySelector('[data-bst-row="sceneCardArrayCollapsedLimit"]') as HTMLElement | null;
     const debugBodyRow = modal.querySelector('[data-bst-row="debugBody"]') as HTMLElement | null;
@@ -8859,13 +9009,8 @@ export function openSettingsModal(input: {
     if (sceneCardShowWhenEmptyRow) {
       sceneCardShowWhenEmptyRow.style.display = current.sceneCardEnabled ? "" : "none";
     }
-    if (sceneCardSortModeRow) {
-      sceneCardSortModeRow.style.display = current.sceneCardEnabled ? "flex" : "none";
-      sceneCardSortModeRow.style.flexDirection = "column";
-      sceneCardSortModeRow.style.gap = "4px";
-    }
     if (sceneCardOrderManagerRow) {
-      sceneCardOrderManagerRow.style.display = current.sceneCardEnabled && current.sceneCardSortMode === "custom_order" ? "block" : "none";
+      sceneCardOrderManagerRow.style.display = current.sceneCardEnabled ? "block" : "none";
     }
     if (sceneCardArrayCollapsedLimitRow) {
       sceneCardArrayCollapsedLimitRow.style.display = current.sceneCardEnabled && current.sceneCardLayout === "chips" ? "flex" : "none";
@@ -8931,6 +9076,9 @@ export function openSettingsModal(input: {
     sceneCardStatOrderState = Array.isArray(next.sceneCardStatOrder)
       ? next.sceneCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
       : [];
+    sceneCardStatDisplayState = next.sceneCardStatDisplay && typeof next.sceneCardStatDisplay === "object"
+      ? { ...next.sceneCardStatDisplay }
+      : {};
     syncSceneCardStatOrderState();
     builtInNumericStatUiState = cloneBuiltInNumericStatUi(next.builtInNumericStatUi);
     next.sceneCardStatOrder = [...sceneCardStatOrderState];
@@ -9030,7 +9178,6 @@ export function openSettingsModal(input: {
     sceneCardColor: "Optional card color override for Scene card (hex). Empty = automatic color.",
     sceneCardValueColor: "Optional scene stat value color override (hex). Empty = per-stat/accent color.",
     sceneCardShowWhenEmpty: "Keep Scene card visible even when no global stat has a resolved value.",
-    sceneCardSortMode: "Sort Scene card stats by custom stat order or alphabetically by label.",
     sceneCardArrayCollapsedLimit: "How many array items are shown before +N more appears in Scene card chips mode.",
     accentColor: "Accent color for fills, highlights, and action emphasis.",
     userCardColor: "Optional hex override for the User tracker card color (leave empty for auto color).",

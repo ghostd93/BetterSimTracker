@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev15] - 2026-03-01
+### Added
+- Scene Card stat manager now includes per-stat display editor (pencil action) with visibility, label override, color override, layout override, and per-stat array-collapse limit.
+
+### Changed
+- Scene Card manager section was renamed to clarify scope (`Scene Stat Display Manager`).
+- Scene Card now always uses explicit manual order (`sceneCardStatOrder`) for global custom stats.
+- Removed redundant global Scene sort-mode setting and replaced it with per-stat display configuration.
+
 ## [2.2.1.3-dev14] - 2026-03-01
 ### Added
 - Scene Card now includes a dedicated stat-order manager for global custom stats, allowing users to reorder stats arbitrarily with per-stat move controls.

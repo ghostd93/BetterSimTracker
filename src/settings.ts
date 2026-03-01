@@ -26,7 +26,7 @@ import type {
   MoodSource,
   SceneCardLayout,
   SceneCardPosition,
-  SceneCardSortMode,
+  SceneCardStatDisplayOptions,
   StExpressionImageOptions,
   STContext,
 } from "./types";
@@ -80,9 +80,9 @@ export const defaultSettings: BetterSimTrackerSettings = {
   sceneCardColor: "",
   sceneCardValueColor: "",
   sceneCardShowWhenEmpty: false,
-  sceneCardSortMode: "custom_order",
   sceneCardArrayCollapsedLimit: 4,
   sceneCardStatOrder: [],
+  sceneCardStatDisplay: {},
   autoDetectActive: true,
   activityLookback: 5,
   trackAffection: true,
@@ -507,11 +507,6 @@ function sanitizeSceneCardLayout(raw: unknown, fallback: SceneCardLayout): Scene
   return fallback;
 }
 
-function sanitizeSceneCardSortMode(raw: unknown, fallback: SceneCardSortMode): SceneCardSortMode {
-  if (raw === "custom_order" || raw === "label_asc") return raw;
-  return fallback;
-}
-
 function sanitizeStExpressionZoom(raw: unknown, fallback: number): number {
   return clampNumber(raw, fallback, 0.5, 3);
 }
@@ -566,13 +561,13 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     sceneCardColor: sanitizeHexColor(input.sceneCardColor) ?? defaultSettings.sceneCardColor,
     sceneCardValueColor: sanitizeHexColor(input.sceneCardValueColor) ?? defaultSettings.sceneCardValueColor,
     sceneCardShowWhenEmpty: asBool(input.sceneCardShowWhenEmpty, defaultSettings.sceneCardShowWhenEmpty),
-    sceneCardSortMode: sanitizeSceneCardSortMode(input.sceneCardSortMode, defaultSettings.sceneCardSortMode),
     sceneCardArrayCollapsedLimit: clampInt(input.sceneCardArrayCollapsedLimit, defaultSettings.sceneCardArrayCollapsedLimit, 1, 20),
     sceneCardStatOrder: Array.isArray(input.sceneCardStatOrder)
       ? input.sceneCardStatOrder
         .map(item => String(item ?? "").trim().toLowerCase())
         .filter(Boolean)
       : [...defaultSettings.sceneCardStatOrder],
+    sceneCardStatDisplay: sanitizeSceneCardStatDisplay(input.sceneCardStatDisplay),
     autoDetectActive: asBool(input.autoDetectActive, defaultSettings.autoDetectActive),
     activityLookback: clampInt(input.activityLookback, defaultSettings.activityLookback, 1, 25),
     trackAffection: asBool(input.trackAffection, defaultSettings.trackAffection),
@@ -723,6 +718,27 @@ function sanitizeBuiltInNumericStatUi(input: unknown): BetterSimTrackerSettings[
     desire: getRow("desire"),
     connection: getRow("connection"),
   };
+}
+
+function sanitizeSceneCardStatDisplay(input: unknown): Record<string, SceneCardStatDisplayOptions> {
+  if (!input || typeof input !== "object") return {};
+  const raw = input as Record<string, unknown>;
+  const output: Record<string, SceneCardStatDisplayOptions> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const id = String(key ?? "").trim().toLowerCase();
+    if (!id || !value || typeof value !== "object") continue;
+    const row = value as Record<string, unknown>;
+    output[id] = {
+      visible: asBool(row.visible, true),
+      labelOverride: asText(row.labelOverride, "").slice(0, 40),
+      colorOverride: sanitizeHexColor(row.colorOverride) ?? "",
+      layoutOverride: row.layoutOverride === "chips" || row.layoutOverride === "rows" ? row.layoutOverride : "auto",
+      arrayCollapsedLimit: row.arrayCollapsedLimit == null
+        ? null
+        : clampInt(row.arrayCollapsedLimit, 4, 1, 20),
+    };
+  }
+  return output;
 }
 
 function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStats"] {

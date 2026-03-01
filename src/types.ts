@@ -25,7 +25,14 @@ export type MoodLabel =
 export type MoodSource = "bst_images" | "st_expressions";
 export type SceneCardPosition = "above_tracker_cards" | "below_tracker_cards";
 export type SceneCardLayout = "chips" | "rows";
-export type SceneCardSortMode = "custom_order" | "label_asc";
+export type SceneStatLayout = "auto" | "chips" | "rows";
+export interface SceneCardStatDisplayOptions {
+  visible: boolean;
+  labelOverride: string;
+  colorOverride: string;
+  layoutOverride: SceneStatLayout;
+  arrayCollapsedLimit: number | null;
+}
 
 export type StatValue = number | string;
 export type CharacterStatMap = Record<string, StatValue>;
@@ -106,9 +113,9 @@ export interface BetterSimTrackerSettings {
   sceneCardColor: string;
   sceneCardValueColor: string;
   sceneCardShowWhenEmpty: boolean;
-  sceneCardSortMode: SceneCardSortMode;
   sceneCardArrayCollapsedLimit: number;
   sceneCardStatOrder: string[];
+  sceneCardStatDisplay: Record<string, SceneCardStatDisplayOptions>;
   autoDetectActive: boolean;
   activityLookback: number;
   trackAffection: boolean;
