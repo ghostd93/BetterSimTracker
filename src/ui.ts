@@ -2062,6 +2062,24 @@ function ensureStyles(): void {
 .bst-check input[type="checkbox"]:active {
   transform: scale(0.94);
 }
+.bst-check-grid .bst-check.bst-check-disabled {
+  opacity: 0.62;
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(9, 13, 22, 0.5);
+}
+.bst-check-grid .bst-check.bst-check-disabled:hover {
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(9, 13, 22, 0.5);
+}
+.bst-check input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.15);
+  opacity: 0.9;
+}
+.bst-check input[type="checkbox"]:disabled:hover {
+  border-color: rgba(188, 212, 242, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 0 rgba(88, 173, 248, 0.0);
+}
 .bst-settings input:not([type="checkbox"]), .bst-settings select, .bst-settings textarea,
 .bst-custom-wizard input:not([type="checkbox"]), .bst-custom-wizard select, .bst-custom-wizard textarea {
   background: #0d1220 !important;
@@ -7277,6 +7295,19 @@ export function openSettingsModal(input: {
       const trackUserNode = getField("trackUser") as HTMLInputElement | null;
       const globalScopeNode = getField("globalScope") as HTMLInputElement | null;
       const privateToOwnerNode = getField("privateToOwner") as HTMLInputElement | null;
+      const setCheckDisabledVisual = (node: HTMLInputElement | null, disabled: boolean): void => {
+        if (!node) return;
+        const wrapper = node.closest(".bst-check") as HTMLElement | null;
+        if (wrapper) {
+          wrapper.classList.toggle("bst-check-disabled", disabled);
+          wrapper.setAttribute("aria-disabled", disabled ? "true" : "false");
+          if (disabled) {
+            wrapper.title = "Locked by Global stat";
+          } else if (wrapper.title === "Locked by Global stat") {
+            wrapper.removeAttribute("title");
+          }
+        }
+      };
       if (draft.globalScope) {
         draft.trackCharacters = true;
         draft.trackUser = true;
@@ -7285,10 +7316,12 @@ export function openSettingsModal(input: {
       if (trackCharactersNode) {
         trackCharactersNode.checked = draft.trackCharacters;
         trackCharactersNode.disabled = draft.globalScope;
+        setCheckDisabledVisual(trackCharactersNode, draft.globalScope);
       }
       if (trackUserNode) {
         trackUserNode.checked = draft.trackUser;
         trackUserNode.disabled = draft.globalScope;
+        setCheckDisabledVisual(trackUserNode, draft.globalScope);
       }
       if (globalScopeNode) {
         globalScopeNode.checked = draft.globalScope;
@@ -7296,6 +7329,7 @@ export function openSettingsModal(input: {
       if (privateToOwnerNode) {
         privateToOwnerNode.checked = draft.privateToOwner;
         privateToOwnerNode.disabled = draft.globalScope;
+        setCheckDisabledVisual(privateToOwnerNode, draft.globalScope);
       }
     };
 
