@@ -5569,7 +5569,6 @@ export function openSettingsModal(input: {
         <div class="bst-custom-stats-actions">
           <button type="button" class="bst-btn bst-btn-soft" data-action="custom-add">Add Custom Stat</button>
           <button type="button" class="bst-btn bst-btn-soft" data-action="custom-import-json">Import JSON</button>
-          <button type="button" class="bst-btn bst-btn-soft" data-action="custom-export-json">Export JSON</button>
         </div>
       </div>
       <div class="bst-help-line bst-custom-stats-status is-info" data-bst-row="customStatsImportStatus" style="display:none;"></div>
@@ -6291,7 +6290,6 @@ export function openSettingsModal(input: {
   const customStatsListNode = modal.querySelector('[data-bst-row="customStatsList"]') as HTMLElement | null;
   const customAddButton = modal.querySelector('[data-action="custom-add"]') as HTMLButtonElement | null;
   const customImportJsonButton = modal.querySelector('[data-action="custom-import-json"]') as HTMLButtonElement | null;
-  const customExportJsonButton = modal.querySelector('[data-action="custom-export-json"]') as HTMLButtonElement | null;
   const customStatsImportStatusNode = modal.querySelector('[data-bst-row="customStatsImportStatus"]') as HTMLElement | null;
   const manageBuiltInsButton = modal.querySelector('[data-action="manage-builtins"]') as HTMLButtonElement | null;
 
@@ -6817,6 +6815,7 @@ export function openSettingsModal(input: {
           <div class="bst-custom-stat-actions">
             <button type="button" class="bst-btn bst-btn-soft" data-action="custom-edit" data-custom-id="${escapeHtml(stat.id)}">Edit</button>
             <button type="button" class="bst-btn bst-btn-soft" data-action="custom-duplicate" data-custom-id="${escapeHtml(stat.id)}">Clone</button>
+            <button type="button" class="bst-btn bst-btn-soft" data-action="custom-export-json" data-custom-id="${escapeHtml(stat.id)}">Export JSON</button>
             <button type="button" class="bst-btn bst-btn-danger" data-action="custom-remove" data-custom-id="${escapeHtml(stat.id)}">Remove</button>
           </div>
         </div>
@@ -8099,19 +8098,6 @@ export function openSettingsModal(input: {
       : "";
     setCustomStatsStatus(`Imported ${parsed.stats.length} custom stat(s).${warningSuffix}`, parsed.warnings.length ? "info" : "success");
   });
-  customExportJsonButton?.addEventListener("click", async () => {
-    const payload = {
-      customStats: customStatsState.map(cloneCustomStatDefinition),
-    };
-    const serialized = JSON.stringify(payload, null, 2);
-    const copied = await copyToClipboard(serialized);
-    if (copied) {
-      setCustomStatsStatus(`Exported ${customStatsState.length} custom stat(s) to clipboard.`, "success");
-      return;
-    }
-    window.prompt("Clipboard unavailable. Copy exported custom stats JSON:", serialized);
-    setCustomStatsStatus("Clipboard unavailable, JSON shown in prompt for manual copy.", "info");
-  });
   manageBuiltInsButton?.addEventListener("click", () => {
     openBuiltInManagerWizard();
   });
@@ -8131,6 +8117,19 @@ export function openSettingsModal(input: {
     }
     if (action === "custom-duplicate") {
       openCustomStatWizard("duplicate", stat);
+      return;
+    }
+    if (action === "custom-export-json") {
+      const payload = [cloneCustomStatDefinition(stat)];
+      const serialized = JSON.stringify(payload, null, 2);
+      void copyToClipboard(serialized).then(copied => {
+        if (copied) {
+          setCustomStatsStatus(`Exported "${stat.label}" JSON to clipboard.`, "success");
+          return;
+        }
+        window.prompt("Clipboard unavailable. Copy exported custom stat JSON:", serialized);
+        setCustomStatsStatus("Clipboard unavailable, JSON shown in prompt for manual copy.", "info");
+      });
       return;
     }
     if (action === "custom-remove") {

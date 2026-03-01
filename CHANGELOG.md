@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev5] - 2026-03-01
+### Changed
+- Custom stat JSON export is now per-stat only (from each stat row) instead of bulk export.
+- Per-stat export output uses a one-item array format that is directly compatible with Import JSON.
+
 ## [2.2.1.3-dev4] - 2026-03-01
 ### Added
 - Custom Stats settings now include `Import JSON` and `Export JSON` actions for stat definitions.
