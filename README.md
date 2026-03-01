@@ -224,6 +224,7 @@ Numeric scaling formula used by runtime:
 - `Prompt Templates`: edit unified + per-stat sequential prompt instructions plus global custom-numeric and custom-non-numeric sequential defaults (protocol blocks are fixed; repair prompts are fixed)
 - `Manage Built-in Stats`: open a wizard to control built-in stat participation in extraction/cards/graph/injection (`lastThought` includes owner-scoped privacy toggle)
 - `Custom Stats`: create and manage additional custom stats (`numeric`, `enum_single`, `boolean`, `text_short`, `array`) via step-by-step wizard in settings, including owner-scoped privacy toggle per stat
+  - includes `Import JSON` / `Export JSON` actions for custom stat definitions
 - `Profile Token Limits`: extraction now respects profile max tokens and truncation length (when available)
 - `Max Tokens Override`: force max tokens for extraction (0 = auto)
 - `Context Size Override`: force truncation length for extraction (0 = auto)
@@ -344,6 +345,7 @@ Behavior notes:
     - `Private` (lastThought only, owner-scoped in prompt injection)
 - `Custom Stats` section:
   - `Add Custom Stat` wizard with kind-aware flow (`numeric`, `enum_single`, `boolean`, `text_short`, `array`)
+  - `Import JSON` / `Export JSON` for custom stat definitions (array or `{ "customStats": [...] }`)
   - `Edit` and `Clone` for faster setup reuse
   - `Remove` uses soft-remove flow (historical payload remains stored, active tracking stops)
   - numeric custom stats use unified `Enabled` toggle (`Track + Card + Graph`) plus `includeInInjection`

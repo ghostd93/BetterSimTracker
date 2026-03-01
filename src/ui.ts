@@ -2590,6 +2590,25 @@ function ensureStyles(): void {
   align-items: center;
   gap: 10px;
 }
+.bst-custom-stats-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.bst-custom-stats-status {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.bst-custom-stats-status.is-success {
+  color: #7bf2b6;
+}
+.bst-custom-stats-status.is-error {
+  color: #ff9ea0;
+}
+.bst-custom-stats-status.is-info {
+  color: #b8cae8;
+}
 .bst-custom-stats-top-centered {
   justify-content: center;
 }
@@ -5547,8 +5566,13 @@ export function openSettingsModal(input: {
       <h4><span class="bst-header-icon fa-solid fa-sliders"></span>Custom Stats</h4>
       <div class="bst-custom-stats-top">
         <div class="bst-help-line">Add custom stats (numeric, enum, boolean, short text, array). Maximum ${MAX_CUSTOM_STATS} custom stats.</div>
-        <button type="button" class="bst-btn bst-btn-soft" data-action="custom-add">Add Custom Stat</button>
+        <div class="bst-custom-stats-actions">
+          <button type="button" class="bst-btn bst-btn-soft" data-action="custom-add">Add Custom Stat</button>
+          <button type="button" class="bst-btn bst-btn-soft" data-action="custom-import-json">Import JSON</button>
+          <button type="button" class="bst-btn bst-btn-soft" data-action="custom-export-json">Export JSON</button>
+        </div>
       </div>
+      <div class="bst-help-line bst-custom-stats-status is-info" data-bst-row="customStatsImportStatus" style="display:none;"></div>
       <div class="bst-custom-stats-list" data-bst-row="customStatsList"></div>
     </div>
     <div class="bst-settings-section">
@@ -6266,6 +6290,9 @@ export function openSettingsModal(input: {
   if (globalFrameButton) globalFrameButton.disabled = false;
   const customStatsListNode = modal.querySelector('[data-bst-row="customStatsList"]') as HTMLElement | null;
   const customAddButton = modal.querySelector('[data-action="custom-add"]') as HTMLButtonElement | null;
+  const customImportJsonButton = modal.querySelector('[data-action="custom-import-json"]') as HTMLButtonElement | null;
+  const customExportJsonButton = modal.querySelector('[data-action="custom-export-json"]') as HTMLButtonElement | null;
+  const customStatsImportStatusNode = modal.querySelector('[data-bst-row="customStatsImportStatus"]') as HTMLElement | null;
   const manageBuiltInsButton = modal.querySelector('[data-action="manage-builtins"]') as HTMLButtonElement | null;
 
   type CustomStatWizardMode = "add" | "edit" | "duplicate";
@@ -6530,6 +6557,193 @@ export function openSettingsModal(input: {
       color: color || undefined,
       promptOverride: template || undefined,
     };
+  };
+
+  let customStatsStatusTimer: number | null = null;
+  const setCustomStatsStatus = (message: string, tone: "success" | "error" | "info" = "info"): void => {
+    if (!customStatsImportStatusNode) return;
+    customStatsImportStatusNode.textContent = message;
+    customStatsImportStatusNode.style.display = message ? "block" : "none";
+    customStatsImportStatusNode.classList.remove("is-success", "is-error", "is-info");
+    customStatsImportStatusNode.classList.add(tone === "success" ? "is-success" : tone === "error" ? "is-error" : "is-info");
+    if (customStatsStatusTimer != null) {
+      window.clearTimeout(customStatsStatusTimer);
+      customStatsStatusTimer = null;
+    }
+    if (message) {
+      customStatsStatusTimer = window.setTimeout(() => {
+        if (!customStatsImportStatusNode) return;
+        customStatsImportStatusNode.style.display = "none";
+        customStatsImportStatusNode.textContent = "";
+        customStatsImportStatusNode.classList.remove("is-success", "is-error", "is-info");
+      }, 9000);
+    }
+  };
+
+  const normalizeImportedCustomStat = (
+    raw: unknown,
+    existingIds: Set<string>,
+    index: number,
+  ): { stat: CustomStatDefinition | null; warning: string | null } => {
+    if (!raw || typeof raw !== "object") {
+      return { stat: null, warning: `Skipped entry #${index + 1}: not an object.` };
+    }
+    const candidate = cloneCustomStatDefinition(raw as CustomStatDefinition);
+    const kind = normalizeCustomStatKind(candidate.kind);
+    const label = String(candidate.label ?? "").trim().slice(0, 40) || `Custom Stat ${index + 1}`;
+    const idInput = String(candidate.id ?? "").trim().toLowerCase().slice(0, 32);
+    let id = idInput;
+    let warning: string | null = null;
+    if (!id || !CUSTOM_STAT_ID_REGEX.test(id) || RESERVED_CUSTOM_STAT_IDS.has(id) || existingIds.has(id)) {
+      id = suggestUniqueCustomStatId(id || label, existingIds);
+      warning = `Adjusted ID for "${label}" to "${id}".`;
+    }
+    existingIds.add(id);
+    const description = String(candidate.description ?? "").trim();
+    const safeDescription = description.length >= 3
+      ? description
+      : `Tracks ${label} state from recent messages.`;
+    const globalScope = Boolean(candidate.globalScope);
+    const trackCharacters = globalScope ? true : Boolean(candidate.trackCharacters ?? candidate.track);
+    const trackUser = globalScope ? true : Boolean(candidate.trackUser ?? candidate.track);
+    const track = trackCharacters || trackUser;
+    const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(candidate.textMaxLength) || 120)));
+    const enumOptions = kind === "enum_single"
+      ? normalizeCustomEnumOptions(candidate.enumOptions).slice(0, 12)
+      : undefined;
+    if (kind === "enum_single" && (!enumOptions || enumOptions.length < 2)) {
+      return { stat: null, warning: `Skipped "${label}": enum requires at least 2 options.` };
+    }
+    const promptOverride = typeof candidate.promptOverride === "string"
+      ? candidate.promptOverride.trim().slice(0, 20_000)
+      : undefined;
+    const behaviorGuidance = typeof candidate.behaviorGuidance === "string"
+      ? candidate.behaviorGuidance.trim().slice(0, 2_000)
+      : undefined;
+    const color = typeof candidate.color === "string"
+      && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(candidate.color.trim())
+      ? candidate.color.trim()
+      : undefined;
+    const base: CustomStatDefinition = {
+      ...candidate,
+      id,
+      kind,
+      label,
+      description: safeDescription,
+      behaviorGuidance: behaviorGuidance || undefined,
+      track,
+      trackCharacters,
+      trackUser,
+      globalScope,
+      privateToOwner: globalScope ? false : Boolean(candidate.privateToOwner),
+      includeInInjection: candidate.includeInInjection !== false,
+      showOnCard: Boolean(candidate.showOnCard ?? track),
+      showInGraph: kind === "numeric" ? Boolean(candidate.showInGraph ?? track) : false,
+      color,
+      promptOverride: promptOverride || undefined,
+    };
+
+    if (kind === "numeric") {
+      base.defaultValue = Math.max(0, Math.min(100, Math.round(Number(candidate.defaultValue) || 50)));
+      const parsedMaxDelta = Number(candidate.maxDeltaPerTurn);
+      base.maxDeltaPerTurn = Number.isFinite(parsedMaxDelta)
+        ? Math.max(1, Math.min(30, Math.round(parsedMaxDelta)))
+        : undefined;
+      base.enumOptions = undefined;
+      base.booleanTrueLabel = undefined;
+      base.booleanFalseLabel = undefined;
+      base.textMaxLength = undefined;
+      return { stat: base, warning };
+    }
+
+    if (kind === "enum_single") {
+      const options = enumOptions ?? [];
+      base.enumOptions = options;
+      base.defaultValue = resolveEnumOption(options, candidate.defaultValue) ?? options[0] ?? "";
+      base.maxDeltaPerTurn = undefined;
+      base.booleanTrueLabel = undefined;
+      base.booleanFalseLabel = undefined;
+      base.textMaxLength = undefined;
+      return { stat: base, warning };
+    }
+
+    if (kind === "boolean") {
+      const trueLabel = String(candidate.booleanTrueLabel ?? "enabled").trim().slice(0, 40) || "enabled";
+      const falseLabel = String(candidate.booleanFalseLabel ?? "disabled").trim().slice(0, 40) || "disabled";
+      base.defaultValue = typeof candidate.defaultValue === "boolean" ? candidate.defaultValue : false;
+      base.booleanTrueLabel = trueLabel;
+      base.booleanFalseLabel = falseLabel;
+      base.maxDeltaPerTurn = undefined;
+      base.enumOptions = undefined;
+      base.textMaxLength = undefined;
+      return { stat: base, warning };
+    }
+
+    if (kind === "array") {
+      base.defaultValue = normalizeNonNumericArrayItems(candidate.defaultValue, textMaxLength);
+      base.textMaxLength = textMaxLength;
+      base.maxDeltaPerTurn = undefined;
+      base.enumOptions = undefined;
+      base.booleanTrueLabel = undefined;
+      base.booleanFalseLabel = undefined;
+      return { stat: base, warning };
+    }
+
+    base.defaultValue = normalizeNonNumericTextValue(candidate.defaultValue, textMaxLength);
+    base.textMaxLength = textMaxLength;
+    base.maxDeltaPerTurn = undefined;
+    base.enumOptions = undefined;
+    base.booleanTrueLabel = undefined;
+    base.booleanFalseLabel = undefined;
+    return { stat: base, warning };
+  };
+
+  const parseCustomStatsImportPayload = (
+    rawText: string,
+  ): { stats: CustomStatDefinition[]; warnings: string[]; error: string | null } => {
+    const text = String(rawText ?? "").trim();
+    if (!text) return { stats: [], warnings: [], error: "Import failed: input is empty." };
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return { stats: [], warnings: [], error: "Import failed: invalid JSON." };
+    }
+    const sourceList = Array.isArray(parsed)
+      ? parsed
+      : (parsed && typeof parsed === "object" && Array.isArray((parsed as { customStats?: unknown }).customStats)
+        ? (parsed as { customStats: unknown[] }).customStats
+        : null);
+    if (!sourceList) {
+      return { stats: [], warnings: [], error: "Import failed: expected array or { \"customStats\": [...] }." };
+    }
+    const warnings: string[] = [];
+    const existingIds = new Set<string>();
+    const imported: CustomStatDefinition[] = [];
+    for (let i = 0; i < sourceList.length; i += 1) {
+      if (imported.length >= MAX_CUSTOM_STATS) {
+        warnings.push(`Only first ${MAX_CUSTOM_STATS} stats were imported (max limit reached).`);
+        break;
+      }
+      const normalized = normalizeImportedCustomStat(sourceList[i], existingIds, i);
+      if (normalized.warning) warnings.push(normalized.warning);
+      if (!normalized.stat) continue;
+      imported.push(normalized.stat);
+    }
+    if (!imported.length) {
+      return { stats: [], warnings, error: "Import failed: no valid custom stats found in JSON." };
+    }
+    return { stats: imported, warnings, error: null };
+  };
+
+  const copyToClipboard = async (text: string): Promise<boolean> => {
+    if (!navigator.clipboard?.writeText) return false;
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const renderCustomStatsList = (): void => {
@@ -7868,6 +8082,35 @@ export function openSettingsModal(input: {
 
   customAddButton?.addEventListener("click", () => {
     openCustomStatWizard("add");
+  });
+  customImportJsonButton?.addEventListener("click", () => {
+    const pasted = window.prompt("Paste custom stats JSON (array or {\"customStats\":[...]}):", "");
+    if (pasted == null) return;
+    const parsed = parseCustomStatsImportPayload(pasted);
+    if (parsed.error) {
+      setCustomStatsStatus(parsed.error, "error");
+      return;
+    }
+    customStatsState = parsed.stats.map(cloneCustomStatDefinition);
+    renderCustomStatsList();
+    persistLive();
+    const warningSuffix = parsed.warnings.length
+      ? ` Warnings: ${parsed.warnings.slice(0, 2).join(" ")}${parsed.warnings.length > 2 ? " ..." : ""}`
+      : "";
+    setCustomStatsStatus(`Imported ${parsed.stats.length} custom stat(s).${warningSuffix}`, parsed.warnings.length ? "info" : "success");
+  });
+  customExportJsonButton?.addEventListener("click", async () => {
+    const payload = {
+      customStats: customStatsState.map(cloneCustomStatDefinition),
+    };
+    const serialized = JSON.stringify(payload, null, 2);
+    const copied = await copyToClipboard(serialized);
+    if (copied) {
+      setCustomStatsStatus(`Exported ${customStatsState.length} custom stat(s) to clipboard.`, "success");
+      return;
+    }
+    window.prompt("Clipboard unavailable. Copy exported custom stats JSON:", serialized);
+    setCustomStatsStatus("Clipboard unavailable, JSON shown in prompt for manual copy.", "info");
   });
   manageBuiltInsButton?.addEventListener("click", () => {
     openBuiltInManagerWizard();

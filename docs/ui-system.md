@@ -75,6 +75,7 @@ Key capabilities:
 - prompt template editing
 - per-stat built-in management wizard
 - custom stat wizard (`Add`, `Edit`, `Clone`, `Remove`)
+- custom stat JSON actions (`Import JSON`, `Export JSON`)
 - AI helper buttons for prompt/description/guidance generation
 
 ## Custom Stat Wizard

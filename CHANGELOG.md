@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev4] - 2026-03-01
+### Added
+- Custom Stats settings now include `Import JSON` and `Export JSON` actions for stat definitions.
+- JSON import accepts both raw array payloads and wrapped `{ "customStats": [...] }` payloads, with in-UI status feedback.
+
+### Changed
+- Imported custom stats are normalized with safe ID collision handling, kind-aware defaults, and hard limits before save.
+- Docs updated for custom stats JSON import/export flow.
+
 ## [2.2.1.3-dev3] - 2026-03-01
 ### Added
 - Debug diagnostics now include `scopeResolution` metadata for custom non-numeric stats, showing per-owner baseline source (`global`, `owner`, `legacy_fallback`, `global_fallback`, `none`) for current state and recent snapshots.
