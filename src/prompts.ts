@@ -1,6 +1,7 @@
 import type { CustomStatDefinition, CustomStatKind, CustomNonNumericStatistics, CustomStatistics, StatKey } from "./types";
 import type { Statistics } from "./types";
 import type { TrackerData } from "./types";
+import { GLOBAL_TRACKER_KEY } from "./constants";
 
 export const moodOptions = [
   "Happy",
@@ -357,6 +358,48 @@ Return JSON object only, keys must be exact character names, values must be plai
   }
 }
 
+function resolveScopedCustomNumericValue(
+  byStat: CustomStatistics | Record<string, Record<string, number>> | null | undefined,
+  statId: string,
+  ownerName: string,
+  globalScope?: boolean,
+): number | undefined {
+  const byOwner = byStat?.[statId];
+  if (!byOwner) return undefined;
+  if (globalScope) {
+    const globalValue = byOwner[GLOBAL_TRACKER_KEY];
+    if (globalValue !== undefined) return Number(globalValue);
+  }
+  const ownerValue = byOwner[ownerName];
+  if (ownerValue !== undefined) return Number(ownerValue);
+  if (!globalScope) {
+    const globalFallback = byOwner[GLOBAL_TRACKER_KEY];
+    if (globalFallback !== undefined) return Number(globalFallback);
+  }
+  return undefined;
+}
+
+function resolveScopedCustomNonNumericValue(
+  byStat: CustomNonNumericStatistics | null | undefined,
+  statId: string,
+  ownerName: string,
+  globalScope?: boolean,
+): unknown {
+  const byOwner = byStat?.[statId];
+  if (!byOwner) return undefined;
+  if (globalScope) {
+    const globalValue = byOwner[GLOBAL_TRACKER_KEY];
+    if (globalValue !== undefined) return globalValue;
+  }
+  const ownerValue = byOwner[ownerName];
+  if (ownerValue !== undefined) return ownerValue;
+  if (!globalScope) {
+    const globalFallback = byOwner[GLOBAL_TRACKER_KEY];
+    if (globalFallback !== undefined) return globalFallback;
+  }
+  return undefined;
+}
+
 export function buildUnifiedPrompt(
   stats: StatKey[],
   userName: string,
@@ -486,7 +529,7 @@ export function buildUnifiedAllStatsPrompt(input: {
     chunks.push(`connection=${Math.max(0, Math.min(100, Math.round(connection)))}`);
     chunks.push(`mood=${mood}`);
     for (const stat of customNumeric) {
-      const customRaw = Number(input.currentCustom?.[stat.id]?.[name] ?? stat.defaultValue);
+      const customRaw = Number(resolveScopedCustomNumericValue(input.currentCustom, stat.id, name, stat.globalScope) ?? stat.defaultValue);
       const customValue = Math.max(0, Math.min(100, Math.round(customRaw)));
       chunks.push(`${stat.id}=${customValue}`);
     }
@@ -497,7 +540,7 @@ export function buildUnifiedAllStatsPrompt(input: {
         : kind === "array"
           ? (Array.isArray(stat.defaultValue) ? stat.defaultValue : [])
           : String(stat.defaultValue ?? "");
-      const customRaw = input.currentCustomNonNumeric?.[stat.id]?.[name];
+      const customRaw = resolveScopedCustomNonNumericValue(input.currentCustomNonNumeric ?? undefined, stat.id, name, stat.globalScope);
       const customValue = formatCustomNonNumericValue(
         kind,
         customRaw,
@@ -525,7 +568,7 @@ export function buildUnifiedAllStatsPrompt(input: {
       chunks.push(`connection=${Math.round(connection)}`);
       chunks.push(`mood=${mood}`);
       for (const stat of customNumeric) {
-        const customRaw = Number(entry.customStatistics?.[stat.id]?.[name] ?? stat.defaultValue);
+        const customRaw = Number(resolveScopedCustomNumericValue(entry.customStatistics ?? undefined, stat.id, name, stat.globalScope) ?? stat.defaultValue);
         const customValue = Math.max(0, Math.min(100, Math.round(customRaw)));
         chunks.push(`${stat.id}=${customValue}`);
       }
@@ -536,7 +579,7 @@ export function buildUnifiedAllStatsPrompt(input: {
           : kind === "array"
             ? (Array.isArray(stat.defaultValue) ? stat.defaultValue : [])
             : String(stat.defaultValue ?? "");
-        const customRaw = entry.customNonNumericStatistics?.[stat.id]?.[name];
+        const customRaw = resolveScopedCustomNonNumericValue(entry.customNonNumericStatistics ?? undefined, stat.id, name, stat.globalScope);
         const customValue = formatCustomNonNumericValue(
           kind,
           customRaw,
@@ -779,7 +822,7 @@ export function buildSequentialCustomNumericPrompt(input: {
     const desire = Number(input.current?.desire?.[name] ?? 50);
     const connection = Number(input.current?.connection?.[name] ?? 50);
     const mood = String(input.current?.mood?.[name] ?? "Neutral");
-    const customValueRaw = Number(input.currentCustom?.[statId]?.[name] ?? defaultValue);
+    const customValueRaw = Number(resolveScopedCustomNumericValue(input.currentCustom, statId, name, false) ?? defaultValue);
     const customValue = Math.max(0, Math.min(100, Math.round(customValueRaw)));
     return `- ${name}: affection=${Math.max(0, Math.min(100, Math.round(affection)))}, trust=${Math.max(0, Math.min(100, Math.round(trust)))}, desire=${Math.max(0, Math.min(100, Math.round(desire)))}, connection=${Math.max(0, Math.min(100, Math.round(connection)))}, mood=${mood}, ${statId}=${customValue}`;
   }).join("\n");
@@ -792,7 +835,7 @@ export function buildSequentialCustomNumericPrompt(input: {
       const desire = Number(entry.statistics.desire?.[name] ?? 50);
       const connection = Number(entry.statistics.connection?.[name] ?? 50);
       const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
-      const customValueRaw = Number(entry.customStatistics?.[statId]?.[name] ?? defaultValue);
+      const customValueRaw = Number(resolveScopedCustomNumericValue(entry.customStatistics ?? undefined, statId, name, false) ?? defaultValue);
       const customValue = Math.max(0, Math.min(100, Math.round(customValueRaw)));
       return `  - ${name}: affection=${Math.round(affection)}, trust=${Math.round(trust)}, desire=${Math.round(desire)}, connection=${Math.round(connection)}, mood=${mood}, ${statId}=${customValue}`;
     }).join("\n");
@@ -1033,7 +1076,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     const desire = Number(input.current?.desire?.[name] ?? 50);
     const connection = Number(input.current?.connection?.[name] ?? 50);
     const mood = String(input.current?.mood?.[name] ?? "Neutral");
-    const customRaw = input.currentCustomNonNumeric?.[statId]?.[name];
+    const customRaw = resolveScopedCustomNonNumericValue(input.currentCustomNonNumeric ?? undefined, statId, name, false);
     const customValue = formatCustomNonNumericValue(statKind, customRaw, defaultValue);
     const customLiteral = customNonNumericLiteral(customValue);
     return `- ${name}: affection=${Math.max(0, Math.min(100, Math.round(affection)))}, trust=${Math.max(0, Math.min(100, Math.round(trust)))}, desire=${Math.max(0, Math.min(100, Math.round(desire)))}, connection=${Math.max(0, Math.min(100, Math.round(connection)))}, mood=${mood}, ${statId}=${customLiteral}`;
@@ -1047,7 +1090,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
       const desire = Number(entry.statistics.desire?.[name] ?? 50);
       const connection = Number(entry.statistics.connection?.[name] ?? 50);
       const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
-      const customRaw = entry.customNonNumericStatistics?.[statId]?.[name];
+      const customRaw = resolveScopedCustomNonNumericValue(entry.customNonNumericStatistics ?? undefined, statId, name, false);
       const customValue = formatCustomNonNumericValue(statKind, customRaw, defaultValue);
       const customLiteral = customNonNumericLiteral(customValue);
       return `  - ${name}: affection=${Math.round(affection)}, trust=${Math.round(trust)}, desire=${Math.round(desire)}, connection=${Math.round(connection)}, mood=${mood}, ${statId}=${customLiteral}`;

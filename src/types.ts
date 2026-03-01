@@ -45,6 +45,7 @@ export interface CustomStatDefinition {
   track: boolean;
   trackCharacters?: boolean;
   trackUser?: boolean;
+  globalScope?: boolean;
   privateToOwner?: boolean;
   showOnCard: boolean;
   showInGraph: boolean;

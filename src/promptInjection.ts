@@ -1,5 +1,5 @@
 import { DEFAULT_INJECTION_PROMPT_TEMPLATE } from "./prompts";
-import { USER_TRACKER_KEY } from "./constants";
+import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
 import type { BetterSimTrackerSettings, STContext, TrackerData } from "./types";
 
 const INJECT_KEY = "bst_relationship_state";
@@ -109,6 +109,48 @@ function customStatTracksAnyScope(
   return customStatTracksScope(stat, "character") || customStatTracksScope(stat, "user");
 }
 
+function resolveScopedCustomNumericValue(
+  data: TrackerData,
+  statId: string,
+  ownerName: string,
+  globalScope?: boolean,
+): number | undefined {
+  const byOwner = data.customStatistics?.[statId];
+  if (!byOwner) return undefined;
+  if (globalScope) {
+    const globalValue = byOwner[GLOBAL_TRACKER_KEY];
+    if (globalValue !== undefined) return Number(globalValue);
+  }
+  const ownerValue = byOwner[ownerName];
+  if (ownerValue !== undefined) return Number(ownerValue);
+  if (!globalScope) {
+    const globalFallback = byOwner[GLOBAL_TRACKER_KEY];
+    if (globalFallback !== undefined) return Number(globalFallback);
+  }
+  return undefined;
+}
+
+function resolveScopedCustomNonNumericValue(
+  data: TrackerData,
+  statId: string,
+  ownerName: string,
+  globalScope?: boolean,
+): unknown {
+  const byOwner = data.customNonNumericStatistics?.[statId];
+  if (!byOwner) return undefined;
+  if (globalScope) {
+    const globalValue = byOwner[GLOBAL_TRACKER_KEY];
+    if (globalValue !== undefined) return globalValue;
+  }
+  const ownerValue = byOwner[ownerName];
+  if (ownerValue !== undefined) return ownerValue;
+  if (!globalScope) {
+    const globalFallback = byOwner[GLOBAL_TRACKER_KEY];
+    if (globalFallback !== undefined) return globalFallback;
+  }
+  return undefined;
+}
+
 function renderTemplate(template: string, values: Record<string, string>): string {
   let output = template;
   for (const [key, value] of Object.entries(values)) {
@@ -175,8 +217,8 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       const hasUserCustom = enabledCustom.some(stat =>
         customStatTracksScope(stat, "user") &&
         ((stat.kind ?? "numeric") === "numeric"
-          ? data.customStatistics?.[stat.id]?.[USER_TRACKER_KEY] !== undefined
-          : data.customNonNumericStatistics?.[stat.id]?.[USER_TRACKER_KEY] !== undefined)
+          ? resolveScopedCustomNumericValue(data, stat.id, USER_TRACKER_KEY, Boolean(stat.globalScope)) !== undefined
+          : resolveScopedCustomNonNumericValue(data, stat.id, USER_TRACKER_KEY, Boolean(stat.globalScope)) !== undefined)
       );
       if ((hasUserMood || hasUserLastThought || hasUserCustom) && !names.includes(USER_TRACKER_KEY)) {
         names.push(USER_TRACKER_KEY);
@@ -243,13 +285,13 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       for (const stat of enabledCustomNumeric) {
         if (stat.privateToOwner && !ownerMatch) continue;
         if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
-        const value = numeric(data.customStatistics?.[stat.id]?.[name] ?? stat.defaultValue) ?? stat.defaultValue;
+        const value = numeric(resolveScopedCustomNumericValue(data, stat.id, name, Boolean(stat.globalScope)) ?? stat.defaultValue) ?? stat.defaultValue;
         parts.push(`${stat.id} ${value}`);
       }
       for (const stat of enabledCustomNonNumeric) {
         if (stat.privateToOwner && !ownerMatch) continue;
         if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
-        const value = renderNonNumericValue(data.customNonNumericStatistics?.[stat.id]?.[name] ?? stat.defaultValue);
+        const value = renderNonNumericValue(resolveScopedCustomNonNumericValue(data, stat.id, name, Boolean(stat.globalScope)) ?? stat.defaultValue);
         if (value != null) {
           parts.push(`${stat.id} ${value}`);
         }

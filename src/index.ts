@@ -4,7 +4,7 @@ import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
 import { isTrackableAiMessage, isTrackableMessage, isTrackableUserMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from "./promptInjection";
-import { USER_TRACKER_KEY } from "./constants";
+import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
 import {
   buildTrackerSummaryGenerationPrompt,
   buildTrackerSummaryLengthenPrompt,
@@ -2585,13 +2585,17 @@ function filterStatisticsToCharacters(
 function filterCustomStatisticsToCharacters(
   customStatistics: CustomStatistics,
   allowedCharacters: string[],
+  globalStatIds?: Set<string>,
 ): CustomStatistics {
   const allowed = new Set(allowedCharacters.map(name => String(name ?? "").trim()).filter(Boolean));
   const out: CustomStatistics = {};
   for (const [statId, byCharacter] of Object.entries(customStatistics ?? {})) {
     const filtered: Record<string, number> = {};
+    const statKey = String(statId ?? "").trim().toLowerCase();
+    const keepGlobal = Boolean(globalStatIds?.has(statKey));
     for (const [name, value] of Object.entries(byCharacter ?? {})) {
-      if (!allowed.has(String(name ?? "").trim())) continue;
+      const ownerKey = String(name ?? "").trim();
+      if (!allowed.has(ownerKey) && !(keepGlobal && ownerKey === GLOBAL_TRACKER_KEY)) continue;
       const num = Number(value);
       if (Number.isNaN(num)) continue;
       filtered[name] = num;
@@ -2604,13 +2608,17 @@ function filterCustomStatisticsToCharacters(
 function filterCustomNonNumericStatisticsToCharacters(
   customStatistics: CustomNonNumericStatistics,
   allowedCharacters: string[],
+  globalStatIds?: Set<string>,
 ): CustomNonNumericStatistics {
   const allowed = new Set(allowedCharacters.map(name => String(name ?? "").trim()).filter(Boolean));
   const out: CustomNonNumericStatistics = {};
   for (const [statId, byCharacter] of Object.entries(customStatistics ?? {})) {
     const filtered: Record<string, string | boolean | string[]> = {};
+    const statKey = String(statId ?? "").trim().toLowerCase();
+    const keepGlobal = Boolean(globalStatIds?.has(statKey));
     for (const [name, value] of Object.entries(byCharacter ?? {})) {
-      if (!allowed.has(String(name ?? "").trim())) continue;
+      const ownerKey = String(name ?? "").trim();
+      if (!allowed.has(ownerKey) && !(keepGlobal && ownerKey === GLOBAL_TRACKER_KEY)) continue;
       if (typeof value === "boolean") {
         filtered[name] = value;
       } else if (Array.isArray(value)) {
@@ -2640,6 +2648,9 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
   if (!isTrackableMessage(message)) return;
   const current = getTrackerDataFromMessage(message);
   if (!current) return;
+  const customStatById = new Map(
+    (settings.customStats ?? []).map(def => [String(def.id ?? "").trim().toLowerCase(), def] as const),
+  );
 
   const stats: Statistics = {
     affection: { ...current.statistics.affection },
@@ -2670,9 +2681,11 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
       }
       continue;
     }
+    const statDef = customStatById.get(statKey);
+    const ownerKey = statDef?.globalScope ? GLOBAL_TRACKER_KEY : character;
     if (rawValue == null) {
       if (custom[statKey]) {
-        delete custom[statKey][character];
+        delete custom[statKey][ownerKey];
         if (Object.keys(custom[statKey]).length === 0) {
           delete custom[statKey];
         }
@@ -2681,15 +2694,17 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
     }
     if (!Number.isFinite(rawValue)) continue;
     if (!custom[statKey]) custom[statKey] = {};
-    custom[statKey][character] = clampEditedNumber(rawValue);
+    custom[statKey][ownerKey] = clampEditedNumber(rawValue);
   }
 
   for (const [rawKey, rawValue] of Object.entries(payload.nonNumeric ?? {})) {
     const statKey = rawKey.trim().toLowerCase();
     if (!statKey) continue;
+    const statDef = customStatById.get(statKey);
+    const ownerKey = statDef?.globalScope ? GLOBAL_TRACKER_KEY : character;
     if (rawValue == null) {
       if (customNonNumeric[statKey]) {
-        delete customNonNumeric[statKey][character];
+        delete customNonNumeric[statKey][ownerKey];
         if (Object.keys(customNonNumeric[statKey]).length === 0) {
           delete customNonNumeric[statKey];
         }
@@ -2698,15 +2713,15 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
     }
     if (!customNonNumeric[statKey]) customNonNumeric[statKey] = {};
     if (typeof rawValue === "boolean") {
-      customNonNumeric[statKey][character] = rawValue;
+      customNonNumeric[statKey][ownerKey] = rawValue;
       continue;
     }
     if (Array.isArray(rawValue)) {
-      customNonNumeric[statKey][character] = normalizeArrayItems(rawValue, 200, 20);
+      customNonNumeric[statKey][ownerKey] = normalizeArrayItems(rawValue, 200, 20);
       continue;
     }
     const text = String(rawValue).trim().replace(/\s+/g, " ");
-    customNonNumeric[statKey][character] = text.slice(0, 200);
+    customNonNumeric[statKey][ownerKey] = text.slice(0, 200);
   }
 
   if (payload.mood !== undefined) {
@@ -3219,9 +3234,21 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       previous?.customNonNumericStatistics ?? null,
     );
     if (userExtraction) {
+      const globalNumericStatIds = new Set(
+        (activeSettings.customStats ?? [])
+          .filter(def => (def.kind ?? "numeric") === "numeric" && Boolean(def.globalScope))
+          .map(def => String(def.id ?? "").trim().toLowerCase())
+          .filter(Boolean),
+      );
+      const globalNonNumericStatIds = new Set(
+        (activeSettings.customStats ?? [])
+          .filter(def => (def.kind ?? "numeric") !== "numeric" && Boolean(def.globalScope))
+          .map(def => String(def.id ?? "").trim().toLowerCase())
+          .filter(Boolean),
+      );
       merged = filterStatisticsToCharacters(merged, [USER_TRACKER_KEY]);
-      mergedCustom = filterCustomStatisticsToCharacters(mergedCustom, [USER_TRACKER_KEY]);
-      mergedCustomNonNumeric = filterCustomNonNumericStatisticsToCharacters(mergedCustomNonNumeric, [USER_TRACKER_KEY]);
+      mergedCustom = filterCustomStatisticsToCharacters(mergedCustom, [USER_TRACKER_KEY], globalNumericStatIds);
+      mergedCustomNonNumeric = filterCustomNonNumericStatisticsToCharacters(mergedCustomNonNumeric, [USER_TRACKER_KEY], globalNonNumericStatIds);
     }
 
     latestData = {

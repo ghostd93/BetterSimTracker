@@ -808,8 +808,10 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
     };
 
     const legacyTrack = asBool(obj.track, true);
-    const trackCharacters = asBool(obj.trackCharacters, legacyTrack);
-    const trackUser = asBool(obj.trackUser, legacyTrack);
+    const globalScope = asBool(obj.globalScope, false);
+    const trackCharacters = globalScope ? true : asBool(obj.trackCharacters, legacyTrack);
+    const trackUser = globalScope ? true : asBool(obj.trackUser, legacyTrack);
+    const privateToOwner = globalScope ? false : asBool(obj.privateToOwner, false);
     const entry = {
       id,
       kind,
@@ -829,7 +831,8 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       track: trackCharacters || trackUser,
       trackCharacters,
       trackUser,
-      privateToOwner: asBool(obj.privateToOwner, false),
+      globalScope,
+      privateToOwner,
       showOnCard: asBool(obj.showOnCard, true),
       showInGraph: kind === "numeric" ? asBool(obj.showInGraph, true) : false,
       includeInInjection: asBool(obj.includeInInjection, true),

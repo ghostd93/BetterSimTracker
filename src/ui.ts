@@ -1,4 +1,4 @@
-import { CUSTOM_STAT_ID_REGEX, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS, STYLE_ID, USER_TRACKER_KEY } from "./constants";
+import { CUSTOM_STAT_ID_REGEX, GLOBAL_TRACKER_KEY, MAX_CUSTOM_STATS, RESERVED_CUSTOM_STAT_IDS, STYLE_ID, USER_TRACKER_KEY } from "./constants";
 import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import { generateJson } from "./generator";
 import { logDebug } from "./settings";
@@ -54,6 +54,7 @@ type UiNumericStatDefinition = {
   defaultValue: number;
   trackCharacters: boolean;
   trackUser: boolean;
+  globalScope: boolean;
   showOnCard: boolean;
   showInGraph: boolean;
 };
@@ -69,6 +70,7 @@ type UiNonNumericStatDefinition = {
   textMaxLength: number;
   trackCharacters: boolean;
   trackUser: boolean;
+  globalScope: boolean;
   showOnCard: boolean;
   includeInInjection: boolean;
   color: string;
@@ -227,6 +229,7 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
         textMaxLength,
         trackCharacters,
         trackUser,
+        globalScope: Boolean(def.globalScope),
         showOnCard: Boolean(def.showOnCard),
         includeInInjection: Boolean(def.includeInInjection),
         color: String(def.color ?? "").trim(),
@@ -240,7 +243,8 @@ function getNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNumeri
     (settings.customStats ?? []).map(def => {
       const trackCharacters = Boolean(def.trackCharacters ?? def.track);
       const trackUser = Boolean(def.trackUser ?? def.track);
-      return [String(def.id ?? "").trim().toLowerCase(), { trackCharacters, trackUser }] as const;
+      const globalScope = Boolean(def.globalScope);
+      return [String(def.id ?? "").trim().toLowerCase(), { trackCharacters, trackUser, globalScope }] as const;
     }),
   );
   return getAllNumericStatDefinitions(settings).map(def => ({
@@ -255,18 +259,25 @@ function getNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNumeri
     trackUser: def.builtIn
       ? false
       : Boolean(customScopeById.get(def.id)?.trackUser ?? def.track),
+    globalScope: def.builtIn
+      ? false
+      : Boolean(customScopeById.get(def.id)?.globalScope ?? false),
     showOnCard: def.showOnCard,
     showInGraph: def.showInGraph,
   }));
 }
 
-function getNumericRawValue(entry: TrackerData, key: string, name: string): number | undefined {
+function getNumericRawValue(entry: TrackerData, key: string, name: string, globalScope = false): number | undefined {
   if (BUILT_IN_NUMERIC_STAT_KEYS.has(key)) {
     const raw = entry.statistics[key as "affection" | "trust" | "desire" | "connection"]?.[name];
     if (raw === undefined) return undefined;
     return Number(raw);
   }
-  const customRaw = entry.customStatistics?.[key]?.[name];
+  const byOwner = entry.customStatistics?.[key];
+  if (!byOwner) return undefined;
+  const customRaw = globalScope
+    ? byOwner[GLOBAL_TRACKER_KEY]
+    : (byOwner[name] ?? byOwner[GLOBAL_TRACKER_KEY]);
   if (customRaw === undefined) return undefined;
   return Number(customRaw);
 }
@@ -275,12 +286,17 @@ function getNonNumericRawValue(
   entry: TrackerData,
   statId: string,
   name: string,
+  globalScope = false,
 ): CustomNonNumericValue | undefined {
-  return entry.customNonNumericStatistics?.[statId]?.[name];
+  const byOwner = entry.customNonNumericStatistics?.[statId];
+  if (!byOwner) return undefined;
+  return globalScope
+    ? byOwner[GLOBAL_TRACKER_KEY]
+    : (byOwner[name] ?? byOwner[GLOBAL_TRACKER_KEY]);
 }
 
-function hasNumericValue(entry: TrackerData, key: string, name: string): boolean {
-  const raw = getNumericRawValue(entry, key, name);
+function hasNumericValue(entry: TrackerData, key: string, name: string, globalScope = false): boolean {
+  const raw = getNumericRawValue(entry, key, name, globalScope);
   return raw !== undefined && !Number.isNaN(raw);
 }
 
@@ -311,7 +327,7 @@ function resolveNonNumericValue(
   def: UiNonNumericStatDefinition,
   characterName: string,
 ): string | boolean | string[] | null {
-  const raw = getNonNumericRawValue(entry, def.id, characterName);
+  const raw = getNonNumericRawValue(entry, def.id, characterName, def.globalScope);
   if (def.kind === "boolean") {
     if (typeof raw === "boolean") return raw;
     return typeof def.defaultValue === "boolean" ? def.defaultValue : false;
@@ -337,7 +353,7 @@ function hasNonNumericValue(
   def: UiNonNumericStatDefinition,
   characterName: string,
 ): boolean {
-  const raw = getNonNumericRawValue(entry, def.id, characterName);
+  const raw = getNonNumericRawValue(entry, def.id, characterName, def.globalScope);
   if (raw === undefined) return false;
   if (def.kind === "boolean") return typeof raw === "boolean";
   if (def.kind === "enum_single") return resolveEnumOption(def.enumOptions, raw) != null;
@@ -810,9 +826,10 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     booleanFalseLabel: kind === "boolean" ? booleanFalseLabel : undefined,
     textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
     track: Boolean(definition.track),
-    trackCharacters: Boolean(definition.trackCharacters ?? definition.track),
-    trackUser: Boolean(definition.trackUser ?? definition.track),
-    privateToOwner: Boolean(definition.privateToOwner),
+    trackCharacters: Boolean(definition.globalScope ? true : (definition.trackCharacters ?? definition.track)),
+    trackUser: Boolean(definition.globalScope ? true : (definition.trackUser ?? definition.track)),
+    globalScope: Boolean(definition.globalScope),
+    privateToOwner: Boolean(definition.globalScope ? false : definition.privateToOwner),
     showOnCard: Boolean(definition.showOnCard),
     showInGraph: kind === "numeric" && Boolean(definition.showInGraph),
     includeInInjection: Boolean(definition.includeInInjection),
@@ -3681,6 +3698,12 @@ export function renderTracker(
     .reverse()
     .find(item => item.data && isUserEntryIndex(item.messageIndex))
     ?.messageIndex ?? null;
+  const numericGlobalScopeById = new Map(
+    (settings.customStats ?? [])
+      .map(def => [String(def.id ?? "").trim().toLowerCase(), Boolean(def.globalScope)] as const),
+  );
+  const isNumericGlobalScope = (key: string): boolean =>
+    Boolean(numericGlobalScopeById.get(String(key ?? "").trim().toLowerCase()));
   const findPreviousDataWithNumericStat = (
     messageIndex: number,
     key: string,
@@ -3689,7 +3712,7 @@ export function renderTracker(
     for (let i = sortedEntries.length - 1; i >= 0; i -= 1) {
       const candidate = sortedEntries[i];
       if (candidate.messageIndex >= messageIndex || !candidate.data) continue;
-      const value = getNumericRawValue(candidate.data, key, name);
+      const value = getNumericRawValue(candidate.data, key, name, isNumericGlobalScope(key));
       if (value === undefined || Number.isNaN(value)) continue;
       return { data: candidate.data, value };
     }
@@ -3997,7 +4020,7 @@ export function renderTracker(
     const allNonNumericDefs = getNonNumericStatDefinitions(settings);
     const cardNonNumericDefs = allNonNumericDefs.filter(def => def.showOnCard);
     const getEffectiveNumericRawValue = (key: string, name: string): number | undefined => {
-      const current = getNumericRawValue(data, key, name);
+      const current = getNumericRawValue(data, key, name, isNumericGlobalScope(key));
       if (current !== undefined && !Number.isNaN(current)) return current;
       const previous = findPreviousDataWithNumericStat(entry.messageIndex, key, name);
       if (previous) return previous.value;
@@ -4159,7 +4182,7 @@ export function renderTracker(
         <div class="bst-body">
         ${enabledNumeric.map(({ key, label, color, defaultValue }) => {
           const defDefault = defaultValue ?? 50;
-          const currentValueRaw = getNumericRawValue(data, key, name);
+          const currentValueRaw = getNumericRawValue(data, key, name, isNumericGlobalScope(key));
           const hasCurrentValue = currentValueRaw !== undefined && !Number.isNaN(currentValueRaw);
           const effectiveValueRaw = getEffectiveNumericRawValue(key, name);
           const value = toPercent(effectiveValueRaw ?? defDefault);
@@ -4515,7 +4538,12 @@ function openEditStatsModal(input: {
     (input.settings.customStats ?? []).map(def => {
       const trackCharacters = Boolean(def.trackCharacters ?? def.track);
       const trackUser = Boolean(def.trackUser ?? def.track);
-      return [String(def.id ?? "").trim().toLowerCase(), { trackCharacters, trackUser }] as const;
+      const globalScope = Boolean(def.globalScope);
+      return [String(def.id ?? "").trim().toLowerCase(), {
+        trackCharacters: globalScope ? true : trackCharacters,
+        trackUser: globalScope ? true : trackUser,
+        globalScope,
+      }] as const;
     }),
   );
   const numericDefs = getAllNumericStatDefinitions(input.settings).filter(def => {
@@ -4539,7 +4567,8 @@ function openEditStatsModal(input: {
     && input.data.activeCharacters.some(name => String(name ?? "").trim() === input.character);
 
   const numericField = (def: { id: string; label: string; defaultValue: number }): string => {
-    const raw = getNumericRawValue(input.data, def.id, input.character);
+    const scope = customScopeById.get(String(def.id ?? "").trim().toLowerCase());
+    const raw = getNumericRawValue(input.data, def.id, input.character, Boolean(scope?.globalScope));
     const value = raw !== undefined && Number.isFinite(raw) ? String(Math.round(raw)) : "";
     const placeholder = String(Math.round(def.defaultValue ?? 50));
     return `
@@ -4912,8 +4941,8 @@ function openEditStatsModal(input: {
   });
 }
 
-function statValue(entry: TrackerData, statKey: string, character: string, fallback: number): number {
-  const raw = getNumericRawValue(entry, statKey, character);
+function statValue(entry: TrackerData, statKey: string, character: string, fallback: number, globalScope = false): number {
+  const raw = getNumericRawValue(entry, statKey, character, globalScope);
   if (raw === undefined || Number.isNaN(raw)) return fallback;
   return Math.max(0, Math.min(100, raw));
 }
@@ -4940,7 +4969,7 @@ function hasCharacterSnapshot(entry: TrackerData, character: string): boolean {
 
 function hasNumericSnapshot(entry: TrackerData, character: string, defs: UiNumericStatDefinition[]): boolean {
   for (const def of defs) {
-    if (hasNumericValue(entry, def.key, character)) return true;
+    if (hasNumericValue(entry, def.key, character, def.globalScope)) return true;
   }
   return false;
 }
@@ -4952,7 +4981,7 @@ function buildStatSeries(
 ): number[] {
   let carry = Math.max(0, Math.min(100, Math.round(def.defaultValue)));
   return timeline.map(item => {
-    carry = statValue(item, def.key, character, carry);
+    carry = statValue(item, def.key, character, carry, def.globalScope);
     return carry;
   });
 }
@@ -6221,6 +6250,7 @@ export function openSettingsModal(input: {
     textMaxLength: string;
     trackCharacters: boolean;
     trackUser: boolean;
+    globalScope: boolean;
     privateToOwner: boolean;
     includeInInjection: boolean;
     color: string;
@@ -6245,6 +6275,7 @@ export function openSettingsModal(input: {
         textMaxLength: "120",
         trackCharacters: true,
         trackUser: true,
+        globalScope: false,
         privateToOwner: false,
         includeInInjection: true,
         color: "",
@@ -6257,8 +6288,9 @@ export function openSettingsModal(input: {
       ? suggestUniqueCustomStatId(`${clone.id}_copy`, new Set(customStatsState.map(item => item.id)))
       : clone.id;
     const kind = normalizeCustomStatKind(clone.kind);
-    const trackCharacters = Boolean(clone.trackCharacters ?? clone.track);
-    const trackUser = Boolean(clone.trackUser ?? clone.track);
+    const globalScope = Boolean(clone.globalScope);
+    const trackCharacters = globalScope ? true : Boolean(clone.trackCharacters ?? clone.track);
+    const trackUser = globalScope ? true : Boolean(clone.trackUser ?? clone.track);
     const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(clone.textMaxLength) || 120)));
     return {
       kind,
@@ -6281,7 +6313,8 @@ export function openSettingsModal(input: {
       textMaxLength: kind === "text_short" || kind === "array" ? String(textMaxLength) : "120",
       trackCharacters,
       trackUser,
-      privateToOwner: Boolean(clone.privateToOwner),
+      globalScope,
+      privateToOwner: globalScope ? false : Boolean(clone.privateToOwner),
       includeInInjection: clone.includeInInjection,
       color: clone.color ?? "",
       promptOverride: clone.promptOverride ?? "",
@@ -6380,6 +6413,9 @@ export function openSettingsModal(input: {
     }
 
     if (step >= 3) {
+      if (draft.globalScope && draft.privateToOwner) {
+        errors.push("Global stats cannot be private.");
+      }
       if (!draft.trackCharacters && !draft.trackUser) {
         errors.push("Enable at least one scope: Track for Characters or Track for User.");
       }
@@ -6417,8 +6453,11 @@ export function openSettingsModal(input: {
     const falseLabel = draft.booleanFalseLabel.trim().slice(0, 40) || "disabled";
     const trackCharacters = Boolean(draft.trackCharacters);
     const trackUser = Boolean(draft.trackUser);
-    const track = trackCharacters || trackUser;
-    const privateToOwner = Boolean(draft.privateToOwner);
+    const globalScope = Boolean(draft.globalScope);
+    const resolvedTrackCharacters = globalScope ? true : trackCharacters;
+    const resolvedTrackUser = globalScope ? true : trackUser;
+    const track = resolvedTrackCharacters || resolvedTrackUser;
+    const privateToOwner = globalScope ? false : Boolean(draft.privateToOwner);
     const resolvedDefault = (() => {
       if (kind === "numeric") return Math.max(0, Math.min(100, Math.round(Number(draft.defaultValue))));
       if (kind === "boolean") return Boolean(draft.defaultBoolean);
@@ -6447,8 +6486,9 @@ export function openSettingsModal(input: {
       booleanFalseLabel: kind === "boolean" ? falseLabel : undefined,
       textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
       track,
-      trackCharacters,
-      trackUser,
+      trackCharacters: resolvedTrackCharacters,
+      trackUser: resolvedTrackUser,
+      globalScope,
       privateToOwner,
       includeInInjection: draft.includeInInjection,
       showOnCard: track,
@@ -6478,12 +6518,13 @@ export function openSettingsModal(input: {
       const kind = normalizeCustomStatKind(stat.kind);
       const trackCharacters = Boolean(stat.trackCharacters ?? stat.track);
       const trackUser = Boolean(stat.trackUser ?? stat.track);
+      const globalScope = Boolean(stat.globalScope);
       const flags = [
         trackCharacters || trackUser ? "enabled" : "disabled",
         `char:${trackCharacters ? "on" : "off"}`,
         `user:${trackUser ? "on" : "off"}`,
         kind,
-        stat.privateToOwner ? "private" : "shared",
+        globalScope ? "global" : (stat.privateToOwner ? "private" : "shared"),
         stat.includeInInjection ? "injection" : "no injection",
       ];
       const description = (stat.description ?? "").trim();
@@ -6875,6 +6916,7 @@ export function openSettingsModal(input: {
         <div class="bst-check-grid bst-toggle-block">
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="trackCharacters" ${draft.trackCharacters ? "checked" : ""}>Track for Characters</label>
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="trackUser" ${draft.trackUser ? "checked" : ""}>Track for User</label>
+          <label class="bst-check"><input type="checkbox" data-bst-custom-field="globalScope" ${draft.globalScope ? "checked" : ""}>Global stat (shared)</label>
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="privateToOwner" ${draft.privateToOwner ? "checked" : ""}>Private (owner-scoped)</label>
           <label class="bst-check"><input type="checkbox" data-bst-custom-field="includeInInjection" ${draft.includeInInjection ? "checked" : ""}>Include in prompt injection</label>
         </div>
@@ -7090,6 +7132,7 @@ export function openSettingsModal(input: {
       const textMaxLengthNode = getField("textMaxLength");
       const trackCharactersNode = getField("trackCharacters") as HTMLInputElement | null;
       const trackUserNode = getField("trackUser") as HTMLInputElement | null;
+      const globalScopeNode = getField("globalScope") as HTMLInputElement | null;
       const privateToOwnerNode = getField("privateToOwner") as HTMLInputElement | null;
       const injectNode = getField("includeInInjection") as HTMLInputElement | null;
       const colorNode = getField("color");
@@ -7118,7 +7161,12 @@ export function openSettingsModal(input: {
       draft.textMaxLength = String(textMaxLengthNode?.value ?? "");
       draft.trackCharacters = Boolean(trackCharactersNode?.checked);
       draft.trackUser = Boolean(trackUserNode?.checked);
-      draft.privateToOwner = Boolean(privateToOwnerNode?.checked);
+      draft.globalScope = Boolean(globalScopeNode?.checked);
+      draft.privateToOwner = draft.globalScope ? false : Boolean(privateToOwnerNode?.checked);
+      if (draft.globalScope) {
+        draft.trackCharacters = true;
+        draft.trackUser = true;
+      }
       draft.includeInInjection = Boolean(injectNode?.checked);
       draft.color = String(colorNode?.value ?? "");
       draft.promptOverride = String(templateNode?.value ?? "");
@@ -7223,6 +7271,31 @@ export function openSettingsModal(input: {
         } else {
           behaviorNode.placeholder = "Optional. Example:\n- interpret {{statId}} as short scene-state text.\n- keep responses aligned with the current text state.\n- increase cues -> evidence to update the text state.\n- decrease cues -> evidence to simplify or reset the text state.";
         }
+      }
+
+      const trackCharactersNode = getField("trackCharacters") as HTMLInputElement | null;
+      const trackUserNode = getField("trackUser") as HTMLInputElement | null;
+      const globalScopeNode = getField("globalScope") as HTMLInputElement | null;
+      const privateToOwnerNode = getField("privateToOwner") as HTMLInputElement | null;
+      if (draft.globalScope) {
+        draft.trackCharacters = true;
+        draft.trackUser = true;
+        draft.privateToOwner = false;
+      }
+      if (trackCharactersNode) {
+        trackCharactersNode.checked = draft.trackCharacters;
+        trackCharactersNode.disabled = draft.globalScope;
+      }
+      if (trackUserNode) {
+        trackUserNode.checked = draft.trackUser;
+        trackUserNode.disabled = draft.globalScope;
+      }
+      if (globalScopeNode) {
+        globalScopeNode.checked = draft.globalScope;
+      }
+      if (privateToOwnerNode) {
+        privateToOwnerNode.checked = draft.privateToOwner;
+        privateToOwnerNode.disabled = draft.globalScope;
       }
     };
 
@@ -7362,6 +7435,14 @@ export function openSettingsModal(input: {
       syncKindUi();
       writeReview();
     });
+    for (const scopeField of ["trackCharacters", "trackUser", "globalScope", "privateToOwner", "includeInInjection"] as const) {
+      const node = getField(scopeField) as HTMLInputElement | null;
+      node?.addEventListener("change", () => {
+        syncDraftFromFields();
+        syncKindUi();
+        writeReview();
+      });
+    }
     arrayDefaultsAddBtn?.addEventListener("click", () => {
       if (!arrayDefaultsListNode) return;
       const maxLen = getArrayEditorItemMaxLength();

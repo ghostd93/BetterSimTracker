@@ -2,6 +2,18 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev1] - 2026-03-01
+### Added
+- Custom stat scope model now supports `Global stat (shared)` in the wizard, with enforced semantics for shared owner key storage.
+
+### Changed
+- Global custom stats now always track both Characters and User and cannot be marked private (enforced in sanitization, wizard UI, and save mapping).
+
+### Fixed
+- Manual tracker edits now correctly read/write global custom stats using the global owner key instead of per-owner keys.
+- User-only extraction filtering now preserves global custom stat values instead of dropping them when owner-scoping to `__bst_user__`.
+- Non-numeric definition mapping now carries `globalScope` consistently to rendering and edit paths.
+
 ## [2.2.1.3] - 2026-02-28
 ### Changed
 - Custom-stat per-stat prompt field is now canonically named `promptOverride` across UI/config semantics.

@@ -2,6 +2,7 @@ export const EXTENSION_KEY = "bettersimtracker";
 export const ROOT_ID = "bst-root";
 export const STYLE_ID = "bst-styles";
 export const USER_TRACKER_KEY = "__bst_user__";
+export const GLOBAL_TRACKER_KEY = "__bst_global__";
 
 export const STAT_KEYS = [
   "affection",

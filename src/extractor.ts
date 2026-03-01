@@ -1,4 +1,4 @@
-import { STAT_KEYS, USER_TRACKER_KEY } from "./constants";
+import { GLOBAL_TRACKER_KEY, STAT_KEYS, USER_TRACKER_KEY } from "./constants";
 import { generateJson } from "./generator";
 import { parseCustomDeltaResponse, parseCustomValueResponse, parseUnifiedDeltaResponse } from "./parse";
 import {
@@ -156,6 +156,10 @@ function normalizeTextForComparison(value: unknown): string {
     .toLowerCase()
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ");
+}
+
+function resolveScopedStatOwnerKey(statDef: CustomStatDefinition, ownerName: string): string {
+  return statDef.globalScope ? GLOBAL_TRACKER_KEY : ownerName;
 }
 
 export async function extractStatisticsParallel(input: {
@@ -399,6 +403,20 @@ export async function extractStatisticsParallel(input: {
       for (const [name, value] of Object.entries(parsedOne.confidence)) {
         parsed.confidence[name] = value;
       }
+      if (statDef.globalScope) {
+        const sourceName = requestCharacters.find(name => parsedOne.delta[name] !== undefined);
+        if (!sourceName) return;
+        const delta = parsedOne.delta[sourceName];
+        if (delta === undefined) return;
+        const confidence = parsedOne.confidence[sourceName] ?? 0.8;
+        const previousKey = resolveScopedStatOwnerKey(statDef, sourceName);
+        const prevValue = Number(previousCustomStatistics?.[statId]?.[previousKey] ?? statDef.defaultValue);
+        const next = applyDelta(prevValue, delta, confidence, statDef.maxDeltaPerTurn);
+        parsed.deltas.custom[statId][GLOBAL_TRACKER_KEY] = delta;
+        outputCustom[statId][GLOBAL_TRACKER_KEY] = next;
+        applied.customStatistics[statId][GLOBAL_TRACKER_KEY] = next;
+        return;
+      }
       for (const name of requestCharacters) {
         const delta = parsedOne.delta[name];
         if (delta === undefined) continue;
@@ -424,6 +442,16 @@ export async function extractStatisticsParallel(input: {
       for (const [name, value] of Object.entries(parsedOne.confidence)) {
         parsed.confidence[name] = value;
       }
+      if (statDef.globalScope) {
+        const sourceName = requestCharacters.find(name => parsedOne.value[name] !== undefined);
+        if (!sourceName) return;
+        const value = parsedOne.value[sourceName];
+        if (value === undefined) return;
+        parsed.deltas.customNonNumeric[statId][GLOBAL_TRACKER_KEY] = value;
+        outputCustomNonNumeric[statId][GLOBAL_TRACKER_KEY] = value;
+        applied.customNonNumericStatistics[statId][GLOBAL_TRACKER_KEY] = value;
+        return;
+      }
       for (const name of requestCharacters) {
         const value = parsedOne.value[name];
         if (value === undefined) continue;
@@ -441,6 +469,13 @@ export async function extractStatisticsParallel(input: {
       const statId = statDef.id;
       if (!applied.customStatistics[statId]) applied.customStatistics[statId] = {};
       if (!outputCustom[statId]) outputCustom[statId] = {};
+      if (statDef.globalScope) {
+        const seedKey = GLOBAL_TRACKER_KEY;
+        const seedValue = clamp(Number(previousCustomStatistics?.[statId]?.[seedKey] ?? statDef.defaultValue));
+        outputCustom[statId][seedKey] = seedValue;
+        applied.customStatistics[statId][seedKey] = seedValue;
+        return;
+      }
       for (const name of names) {
         const seedValue = clamp(Number(previousCustomStatistics?.[statId]?.[name] ?? statDef.defaultValue));
         outputCustom[statId][name] = seedValue;
@@ -457,6 +492,46 @@ export async function extractStatisticsParallel(input: {
       if (!applied.customNonNumericStatistics[statId]) applied.customNonNumericStatistics[statId] = {};
       if (!outputCustomNonNumeric[statId]) outputCustomNonNumeric[statId] = {};
       const kind = statDef.kind ?? "numeric";
+      if (statDef.globalScope) {
+        const seedKey = GLOBAL_TRACKER_KEY;
+        let seedValue: CustomNonNumericValue;
+        const previous = previousCustomNonNumericStatistics?.[statId]?.[seedKey];
+        if (previous !== undefined) {
+          if (Array.isArray(previous)) {
+            const seen = new Set<string>();
+            const normalized: string[] = [];
+            for (const item of previous) {
+              const clean = String(item ?? "").trim();
+              if (!clean || seen.has(clean)) continue;
+              seen.add(clean);
+              normalized.push(clean);
+              if (normalized.length >= 20) break;
+            }
+            seedValue = normalized;
+          } else {
+            seedValue = previous;
+          }
+        } else if (kind === "array") {
+          const defaults = Array.isArray(statDef.defaultValue) ? statDef.defaultValue : [];
+          const seen = new Set<string>();
+          const normalized: string[] = [];
+          for (const item of defaults) {
+            const clean = String(item ?? "").trim();
+            if (!clean || seen.has(clean)) continue;
+            seen.add(clean);
+            normalized.push(clean);
+            if (normalized.length >= 20) break;
+          }
+          seedValue = normalized;
+        } else if (kind === "boolean") {
+          seedValue = typeof statDef.defaultValue === "boolean" ? statDef.defaultValue : false;
+        } else {
+          seedValue = String(statDef.defaultValue ?? "").trim();
+        }
+        outputCustomNonNumeric[statId][seedKey] = seedValue;
+        applied.customNonNumericStatistics[statId][seedKey] = seedValue;
+        return;
+      }
       for (const name of names) {
         let seedValue: CustomNonNumericValue;
         const previous = previousCustomNonNumericStatistics?.[statId]?.[name];
@@ -500,6 +575,7 @@ export async function extractStatisticsParallel(input: {
     const splitCustomCharactersByBaseline = (
       statId: string,
       kind: "numeric" | "non_numeric",
+      statDef?: CustomStatDefinition,
       names: string[] = activeCharacters,
     ): { existing: string[]; firstRunSeedOnly: string[] } => {
       // For user-side extraction, custom stats should be inferred immediately
@@ -511,6 +587,12 @@ export async function extractStatisticsParallel(input: {
       const rawMap = kind === "numeric"
         ? (previousCustomStatisticsRaw?.[statId] ?? {})
         : (previousCustomNonNumericStatistics?.[statId] ?? {});
+      if (statDef?.globalScope) {
+        const hasGlobal = rawMap[GLOBAL_TRACKER_KEY] !== undefined;
+        return hasGlobal
+          ? { existing: [...names], firstRunSeedOnly: [] }
+          : { existing: [], firstRunSeedOnly: [...names] };
+      }
       const existing: string[] = [];
       const firstRunSeedOnly: string[] = [];
       for (const name of names) {
@@ -896,7 +978,7 @@ export async function extractStatisticsParallel(input: {
         };
         const customPlans: UnifiedCustomPlan[] = batchCustomStats.map(statDef => {
           const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
-          const split = splitCustomCharactersByBaseline(statDef.id, kind, requestCharacters);
+          const split = splitCustomCharactersByBaseline(statDef.id, kind, statDef, requestCharacters);
           if (kind === "numeric") {
             seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
           } else {
@@ -1080,7 +1162,7 @@ export async function extractStatisticsParallel(input: {
           const statDef = customQueue.shift();
           if (!statDef) return;
           const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
-          const split = splitCustomCharactersByBaseline(statDef.id, kind);
+          const split = splitCustomCharactersByBaseline(statDef.id, kind, statDef);
           if (kind === "numeric") {
             seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
           } else {
@@ -1121,7 +1203,7 @@ export async function extractStatisticsParallel(input: {
         const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
         for (const owner of activeCharacters) {
           checkCancelled();
-          const split = splitCustomCharactersByBaseline(statDef.id, kind, [owner]);
+          const split = splitCustomCharactersByBaseline(statDef.id, kind, statDef, [owner]);
           if (kind === "numeric") {
             seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
           } else {
