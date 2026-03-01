@@ -353,6 +353,28 @@ export interface DeltaDebugRecord {
     };
     moodFallbackApplied?: string[];
     requests?: Array<GenerateRequestMeta & { statList: string[]; attempt: number; retryType: string }>;
+    scopeResolution?: {
+      current?: Record<string, Record<string, {
+        globalScope: boolean;
+        resolvedFrom: "global" | "owner" | "legacy_fallback" | "global_fallback" | "none";
+        value: unknown;
+        ownerValue?: unknown;
+        globalValue?: unknown;
+        legacyFallbackOwner?: string;
+      }>>;
+      history?: Array<{
+        snapshotIndex: number;
+        messageIndex: number;
+        byStat: Record<string, Record<string, {
+          globalScope: boolean;
+          resolvedFrom: "global" | "owner" | "legacy_fallback" | "global_fallback" | "none";
+          value: unknown;
+          ownerValue?: unknown;
+          globalValue?: unknown;
+          legacyFallbackOwner?: string;
+        }>>;
+      }>;
+    };
   };
   trace?: string[];
 }

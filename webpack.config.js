@@ -1,4 +1,6 @@
 const path = require("path");
+const webpack = require("webpack");
+const pkg = require("./package.json");
 
 module.exports = {
   mode: "production",
@@ -34,5 +36,10 @@ module.exports = {
         exclude: /node_modules/
       }
     ]
-  }
+  },
+  plugins: [
+    new webpack.DefinePlugin({
+      __BST_VERSION__: JSON.stringify(pkg.version),
+    }),
+  ]
 };

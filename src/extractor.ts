@@ -106,6 +106,54 @@ function hasCoverageForAllRequestedBuiltInAndTextStats(
   return true;
 }
 
+type ScopeResolutionDebug = {
+  globalScope: boolean;
+  resolvedFrom: "global" | "owner" | "legacy_fallback" | "global_fallback" | "none";
+  value: unknown;
+  ownerValue?: unknown;
+  globalValue?: unknown;
+  legacyFallbackOwner?: string;
+};
+
+function resolveScopedDebugValue(
+  byOwner: Record<string, unknown> | null | undefined,
+  ownerName: string,
+  globalScope?: boolean,
+): ScopeResolutionDebug {
+  const ownerValue = byOwner?.[ownerName];
+  const globalValue = byOwner?.[GLOBAL_TRACKER_KEY];
+  const legacyEntries = Object.entries(byOwner ?? {}).filter(([owner, value]) => owner !== GLOBAL_TRACKER_KEY && value !== undefined);
+  const legacyFirst = legacyEntries.length ? legacyEntries[0] : null;
+
+  if (globalScope) {
+    if (globalValue !== undefined) {
+      return { globalScope: true, resolvedFrom: "global", value: globalValue, ownerValue, globalValue };
+    }
+    if (ownerValue !== undefined) {
+      return { globalScope: true, resolvedFrom: "owner", value: ownerValue, ownerValue, globalValue };
+    }
+    if (legacyFirst) {
+      return {
+        globalScope: true,
+        resolvedFrom: "legacy_fallback",
+        value: legacyFirst[1],
+        ownerValue,
+        globalValue,
+        legacyFallbackOwner: legacyFirst[0],
+      };
+    }
+    return { globalScope: true, resolvedFrom: "none", value: undefined, ownerValue, globalValue };
+  }
+
+  if (ownerValue !== undefined) {
+    return { globalScope: false, resolvedFrom: "owner", value: ownerValue, ownerValue, globalValue };
+  }
+  if (globalValue !== undefined) {
+    return { globalScope: false, resolvedFrom: "global_fallback", value: globalValue, ownerValue, globalValue };
+  }
+  return { globalScope: false, resolvedFrom: "none", value: undefined, ownerValue, globalValue };
+}
+
 function renderTemplate(template: string, values: Record<string, string>): string {
   let output = template;
   for (const [key, value] of Object.entries(values)) {
@@ -654,7 +702,45 @@ export async function extractStatisticsParallel(input: {
     let firstParseHadValues = true;
     const rawBlocks: Array<{ label: string; raw: string }> = [];
     const promptBlocks: Array<{ label: string; prompt: string }> = [];
-    const requestMetas: Array<GenerateRequestMeta & { statList: string[]; attempt: number; retryType: string }> = [];
+  const requestMetas: Array<GenerateRequestMeta & { statList: string[]; attempt: number; retryType: string }> = [];
+
+  const buildScopeResolutionDebug = () => {
+    const active = [...activeCharacters];
+    const customDefs = customStats.filter(stat => (stat.kind ?? "numeric") !== "numeric");
+    const currentByStat: Record<string, Record<string, ScopeResolutionDebug>> = {};
+    for (const statDef of customDefs) {
+      const statId = statDef.id;
+      const sourceByOwner = previousCustomNonNumericStatistics?.[statId] as Record<string, unknown> | undefined;
+      const byOwner: Record<string, ScopeResolutionDebug> = {};
+      for (const owner of active) {
+        byOwner[owner] = resolveScopedDebugValue(sourceByOwner, owner, Boolean(statDef.globalScope));
+      }
+      currentByStat[statId] = byOwner;
+    }
+
+    const historyRows = history.slice(0, 3).map((entry, idx) => {
+      const byStat: Record<string, Record<string, ScopeResolutionDebug>> = {};
+      for (const statDef of customDefs) {
+        const statId = statDef.id;
+        const sourceByOwner = entry.customNonNumericStatistics?.[statId] as Record<string, unknown> | undefined;
+        const byOwner: Record<string, ScopeResolutionDebug> = {};
+        for (const owner of active) {
+          byOwner[owner] = resolveScopedDebugValue(sourceByOwner, owner, Boolean(statDef.globalScope));
+        }
+        byStat[statId] = byOwner;
+      }
+      return {
+        snapshotIndex: idx,
+        messageIndex: (entry as { messageIndex?: number }).messageIndex ?? -1,
+        byStat,
+      };
+    });
+
+    return {
+      current: currentByStat,
+      history: historyRows,
+    };
+  };
     let progressDone = 0;
     const tickProgress = (label?: string): void => {
       progressDone = Math.min(progressTotal, progressDone + 1);
@@ -1318,7 +1404,8 @@ export async function extractStatisticsParallel(input: {
           customNonNumericByStat: countMapValuesByStat(applied.customNonNumericStatistics ?? {}),
         },
         moodFallbackApplied: Array.from(moodFallbackApplied),
-        requests: requestMetas
+        requests: requestMetas,
+        scopeResolution: buildScopeResolutionDebug(),
       }
     };
   } catch (error) {

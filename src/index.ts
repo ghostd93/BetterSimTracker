@@ -55,6 +55,8 @@ import { initCharacterPanel } from "./characterPanel";
 import { initPersonaPanel } from "./personaPanel";
 import { extractLorebookEntriesFromPayload, readLorebookContext } from "./lorebook";
 
+declare const __BST_VERSION__: string;
+
 let settings: BetterSimTrackerSettings | null = null;
 let isExtracting = false;
 let runSequence = 0;
@@ -3953,6 +3955,7 @@ function openSettings(): void {
         };
       })();
       const report = {
+        extensionVersion: __BST_VERSION__,
         timestamp: new Date().toISOString(),
         scope: activeContext.groupId ? `group:${activeContext.groupId}` : `char:${String(activeContext.characterId ?? "unknown")}`,
         chatLength: activeContext.chat.length,

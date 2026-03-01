@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev3] - 2026-03-01
+### Added
+- Debug diagnostics now include `scopeResolution` metadata for custom non-numeric stats, showing per-owner baseline source (`global`, `owner`, `legacy_fallback`, `global_fallback`, `none`) for current state and recent snapshots.
+- Debug diagnostics dump now includes `extensionVersion`, injected at build-time from `package.json`, so logs always show the exact running build.
+
 ## [2.2.1.3-dev2] - 2026-03-01
 ### Fixed
 - Sequential custom non-numeric prompts now resolve current/history baseline values with each stat's `globalScope`, so global stats no longer read stale per-character values during retrack.
