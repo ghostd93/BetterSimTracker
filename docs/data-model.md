@@ -60,6 +60,7 @@ Key groups:
   - graph settings
   - card style settings
   - optional `userCardColor` override
+  - scene card settings (`sceneCardEnabled`, `sceneCardPosition`, `sceneCardLayout`, `sceneCardDisplayMode`)
   - mood source/mapping/frame settings
 
 Sanitization is centralized in `src/settings.ts`.

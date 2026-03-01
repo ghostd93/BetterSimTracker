@@ -23,6 +23,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Summarize button (AI-generated detailed prose summary, 4-6 sentences, grounded in currently tracked dimensions, no numeric stat values; with settings to make the note AI-visible and/or inject it into prompt guidance)
 - Edit last tracker stats inline (pencil icon on the latest card; numeric clamp + mood picker + last thought editor + kind-aware custom non-numeric editors)
 - `array` custom stat kind (max 20 items) with card-friendly chip rendering and `+N more` expand/collapse for long lists
+- Configurable Scene Card for global custom stats (position/layout/display mode)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
   - raw/smoothed view
@@ -156,7 +157,10 @@ flowchart TD
   T -- Stopped and no prior tracker --> V
   U --> W[Render tracker cards + graph]
   V --> W
-  W --> X[Sync prompt injection with owner-private filtering]
+  W --> Y{Scene card enabled?}
+  Y -- Yes --> Z1[Render global-scoped custom stats in Scene card]
+  Y -- No --> X[Sync prompt injection with owner-private filtering]
+  Z1 --> X
 ```
 
 ### 2) Stat Calculation Flow
@@ -373,6 +377,10 @@ You can disable any metric you do not want extracted. Disabled stats stop updati
 - `Show Inactive`: show cards for inactive/off-scene characters.
 - `Inactive Label`: label text used for inactive cards.
 - `Show Last Thought`: show/hide `lastThought` text on cards.
+- `Enable Scene Card (global stats)`: render a dedicated Scene card from global custom stats.
+- `Scene Card Position`: place Scene card above or below owner cards.
+- `Scene Card Layout`: render Scene values as chips or rows.
+- `Scene Card Display`: show scene+owner cards or hide global stats on owner cards (`scene_only`).
 - `Accent Color`: primary UI accent for bars/buttons/highlights.
 - `User Card Color`: optional hex override for the user tracker card (`#RRGGBB`); leave empty for automatic color.
 - `Card Opacity`: tracker card opacity.

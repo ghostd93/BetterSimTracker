@@ -23,6 +23,9 @@ export type MoodLabel =
   | "Frustrated"
   | "Neutral";
 export type MoodSource = "bst_images" | "st_expressions";
+export type SceneCardPosition = "above_tracker_cards" | "below_tracker_cards";
+export type SceneCardLayout = "chips" | "rows";
+export type SceneCardDisplayMode = "scene_only" | "scene_and_owner_cards";
 
 export type StatValue = number | string;
 export type CharacterStatMap = Record<string, StatValue>;
@@ -96,6 +99,10 @@ export interface BetterSimTrackerSettings {
   showLastThought: boolean;
   showInactive: boolean;
   inactiveLabel: string;
+  sceneCardEnabled: boolean;
+  sceneCardPosition: SceneCardPosition;
+  sceneCardLayout: SceneCardLayout;
+  sceneCardDisplayMode: SceneCardDisplayMode;
   autoDetectActive: boolean;
   activityLookback: number;
   trackAffection: boolean;

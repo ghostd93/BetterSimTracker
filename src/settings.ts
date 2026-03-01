@@ -24,6 +24,9 @@ import type {
   MoodExpressionMap,
   MoodLabel,
   MoodSource,
+  SceneCardDisplayMode,
+  SceneCardLayout,
+  SceneCardPosition,
   StExpressionImageOptions,
   STContext,
 } from "./types";
@@ -70,6 +73,10 @@ export const defaultSettings: BetterSimTrackerSettings = {
   showLastThought: true,
   showInactive: true,
   inactiveLabel: "Off-screen",
+  sceneCardEnabled: false,
+  sceneCardPosition: "above_tracker_cards",
+  sceneCardLayout: "chips",
+  sceneCardDisplayMode: "scene_and_owner_cards",
   autoDetectActive: true,
   activityLookback: 5,
   trackAffection: true,
@@ -484,6 +491,21 @@ function sanitizeMoodSource(raw: unknown, fallback: MoodSource): MoodSource {
   return fallback;
 }
 
+function sanitizeSceneCardPosition(raw: unknown, fallback: SceneCardPosition): SceneCardPosition {
+  if (raw === "above_tracker_cards" || raw === "below_tracker_cards") return raw;
+  return fallback;
+}
+
+function sanitizeSceneCardLayout(raw: unknown, fallback: SceneCardLayout): SceneCardLayout {
+  if (raw === "chips" || raw === "rows") return raw;
+  return fallback;
+}
+
+function sanitizeSceneCardDisplayMode(raw: unknown, fallback: SceneCardDisplayMode): SceneCardDisplayMode {
+  if (raw === "scene_only" || raw === "scene_and_owner_cards") return raw;
+  return fallback;
+}
+
 function sanitizeStExpressionZoom(raw: unknown, fallback: number): number {
   return clampNumber(raw, fallback, 0.5, 3);
 }
@@ -531,6 +553,10 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     showLastThought: asBool(input.showLastThought, defaultSettings.showLastThought),
     showInactive: asBool(input.showInactive, defaultSettings.showInactive),
     inactiveLabel: asText(input.inactiveLabel, defaultSettings.inactiveLabel).slice(0, 40),
+    sceneCardEnabled: asBool(input.sceneCardEnabled, defaultSettings.sceneCardEnabled),
+    sceneCardPosition: sanitizeSceneCardPosition(input.sceneCardPosition, defaultSettings.sceneCardPosition),
+    sceneCardLayout: sanitizeSceneCardLayout(input.sceneCardLayout, defaultSettings.sceneCardLayout),
+    sceneCardDisplayMode: sanitizeSceneCardDisplayMode(input.sceneCardDisplayMode, defaultSettings.sceneCardDisplayMode),
     autoDetectActive: asBool(input.autoDetectActive, defaultSettings.autoDetectActive),
     activityLookback: clampInt(input.activityLookback, defaultSettings.activityLookback, 1, 25),
     trackAffection: asBool(input.trackAffection, defaultSettings.trackAffection),

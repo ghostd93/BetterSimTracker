@@ -22,6 +22,13 @@ Per character card can render:
 - custom numeric values
 - custom non-numeric chips
 
+Optional Scene card can render:
+
+- global-scoped custom non-numeric stats (`globalScope: true`)
+- configurable placement (`above_tracker_cards` / `below_tracker_cards`)
+- configurable layout (`chips` / `rows`)
+- display mode that can hide duplicated global stats from owner cards (`scene_only`)
+
 Ordering/visibility:
 
 - active characters first
@@ -77,6 +84,7 @@ Key capabilities:
 - custom stat wizard (`Add`, `Edit`, `Clone`, `Remove`)
 - custom stat JSON actions (`Import JSON` + per-stat `Export JSON` from stat row)
 - AI helper buttons for prompt/description/guidance generation
+- scene card controls in Display section (enable/position/layout/display mode)
 
 ## Custom Stat Wizard
 

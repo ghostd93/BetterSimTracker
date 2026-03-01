@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev11] - 2026-03-01
+### Added
+- New configurable `Scene Card` display surface for global custom stats, with `position` (`above/below tracker cards`) and `layout` (`chips/rows`) controls.
+
+### Changed
+- Display settings now include a `scene_only` mode that hides global custom stats on owner cards while still rendering them in Scene Card.
+- Documentation updated (`README` flowchart + display reference, `docs/data-model.md`, `docs/ui-system.md`) for Scene Card settings and rendering behavior.
+
 ## [2.2.1.3-dev10] - 2026-03-01
 ### Changed
 - Drawer header version label is now visually smaller than the extension name.

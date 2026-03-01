@@ -4098,6 +4098,10 @@ export function renderTracker(
     const cardNumericDefs = allNumericDefs.filter(def => def.showOnCard);
     const allNonNumericDefs = getNonNumericStatDefinitions(settings);
     const cardNonNumericDefs = allNonNumericDefs.filter(def => def.showOnCard);
+    const sceneCardDefs = cardNonNumericDefs.filter(def => def.globalScope);
+    const ownerCardNonNumericDefs = cardNonNumericDefs.filter(
+      def => !(settings.sceneCardEnabled && settings.sceneCardDisplayMode === "scene_only" && def.globalScope),
+    );
     const getEffectiveNumericRawValue = (key: string, name: string): number | undefined => {
       const current = getNumericRawValue(data, key, name, isNumericGlobalScope(key));
       if (current !== undefined && !Number.isNaN(current)) return current;
@@ -4132,7 +4136,7 @@ export function renderTracker(
     };
     const hasAnyStatFor = (name: string): boolean =>
       cardNumericDefs.some(def => hasEffectiveNumericValue(def.key, name)) ||
-      cardNonNumericDefs.some(def => hasEffectiveNonNumericValue(def, name)) ||
+      ownerCardNonNumericDefs.some(def => hasEffectiveNonNumericValue(def, name)) ||
       getEffectiveMoodText(name) !== "" ||
       getEffectiveLastThoughtText(name) !== "";
     const forceAllInGroup = isGroupChat;
@@ -4200,7 +4204,7 @@ export function renderTracker(
       const moodLookupName = isUserCard ? displayName : name;
       const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
       const enabledNumeric = getNumericStatsForCharacter(data, name, settings);
-      const enabledNonNumeric = cardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
+      const enabledNonNumeric = ownerCardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
       const moodText = getEffectiveMoodText(name);
       const previousMoodData = findPreviousDataWithMood(entry.messageIndex, name);
       const prevMood = previousMoodData?.statistics.mood?.[name] !== undefined
@@ -4342,6 +4346,91 @@ export function renderTracker(
       signatureParts.push(`card:${name}:${isActive ? "1" : "0"}:${moodText}:${moodImage ?? ""}:${lastThoughtText}:${nonNumericSignature}:${cardColor}:${cardHtml}`);
     }
 
+    const hasSceneCard = settings.sceneCardEnabled && sceneCardDefs.length > 0;
+    const hasEffectiveSceneValue = (def: UiNonNumericStatDefinition): boolean =>
+      hasNonNumericValue(data, def, GLOBAL_TRACKER_KEY) ||
+      Boolean(findPreviousDataWithNonNumericStat(entry.messageIndex, def, GLOBAL_TRACKER_KEY));
+    const resolveSceneValue = (def: UiNonNumericStatDefinition): string | boolean | string[] | null => {
+      if (hasNonNumericValue(data, def, GLOBAL_TRACKER_KEY)) {
+        return resolveNonNumericValue(data, def, GLOBAL_TRACKER_KEY);
+      }
+      const previous = findPreviousDataWithNonNumericStat(entry.messageIndex, def, GLOBAL_TRACKER_KEY);
+      if (previous) {
+        return resolveNonNumericValue(previous, def, GLOBAL_TRACKER_KEY);
+      }
+      return resolveNonNumericValue(data, def, GLOBAL_TRACKER_KEY);
+    };
+    const sceneValues = hasSceneCard
+      ? sceneCardDefs
+        .filter(def => hasEffectiveSceneValue(def))
+        .map(def => ({ def, value: resolveSceneValue(def) }))
+        .filter(item => item.value != null)
+      : [];
+    const sceneCardVisible = sceneValues.length > 0;
+    const sceneCardHtml = sceneCardVisible
+      ? `
+        <div class="bst-head">
+          <div class="bst-name" title="Scene">Scene</div>
+          <div class="bst-actions">
+            <div class="bst-state" title="Global scene stats">Global</div>
+          </div>
+        </div>
+        <div class="bst-body">
+          ${sceneValues.map(item => {
+            const def = item.def;
+            const resolved = item.value as string | boolean | string[];
+            const color = def.color || "#9bd5ff";
+            if (settings.sceneCardLayout === "rows") {
+              if (def.kind === "array") {
+                const items = Array.isArray(resolved) ? resolved : normalizeNonNumericArrayItems(resolved, def.textMaxLength);
+                const textValue = items.length ? items.join(", ") : "No items";
+                return `
+                  <div class="bst-row bst-row-non-numeric">
+                    <div class="bst-label">
+                      <span>${escapeHtml(def.label)}</span>
+                      <span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(textValue)}">${escapeHtml(textValue)}</span>
+                    </div>
+                  </div>
+                `;
+              }
+              const displayValue = formatNonNumericForDisplay(def, resolved);
+              return `
+                <div class="bst-row bst-row-non-numeric">
+                  <div class="bst-label">
+                    <span>${escapeHtml(def.label)}</span>
+                    <span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</span>
+                  </div>
+                </div>
+              `;
+            }
+            if (def.kind === "array") {
+              const items = Array.isArray(resolved) ? resolved : normalizeNonNumericArrayItems(resolved, def.textMaxLength);
+              const chips = items.length
+                ? items.map(itemValue => `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(itemValue)}">${escapeHtml(itemValue)}</span>`).join("")
+                : `<span class="bst-array-item-empty">No items</span>`;
+              return `
+                <div class="bst-row bst-row-non-numeric">
+                  <div class="bst-label">
+                    <span>${escapeHtml(def.label)}</span>
+                  </div>
+                  <div class="bst-array-items">${chips}</div>
+                </div>
+              `;
+            }
+            const displayValue = formatNonNumericForDisplay(def, resolved);
+            return `
+              <div class="bst-row bst-row-non-numeric">
+                <div class="bst-label">
+                  <span>${escapeHtml(def.label)}</span>
+                  <span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</span>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `
+      : "";
+    signatureParts.push(`scene:${sceneCardVisible ? "1" : "0"}:${settings.sceneCardEnabled ? "1" : "0"}:${settings.sceneCardPosition}:${settings.sceneCardLayout}:${settings.sceneCardDisplayMode}:${sceneCardHtml}`);
     const renderSignature = signatureParts.join("|#|");
     if (root.dataset.bstRenderPhase === "idle" && root.dataset.bstRenderSignature === renderSignature) {
       continue;
@@ -4350,7 +4439,8 @@ export function renderTracker(
     root.dataset.bstRenderSignature = renderSignature;
     root.innerHTML = "";
 
-    const cardNoun = cardHtmlByName.length === 1 ? "card" : "cards";
+    const totalVisibleCards = cardHtmlByName.length + (sceneCardVisible ? 1 : 0);
+    const cardNoun = totalVisibleCards === 1 ? "card" : "cards";
     const collapseLabel = collapsed ? `Expand ${cardNoun}` : `Collapse ${cardNoun}`;
     const actions = document.createElement("div");
     actions.className = "bst-root-actions";
@@ -4364,19 +4454,44 @@ export function renderTracker(
     `;
     root.appendChild(actions);
 
-    for (const item of cardHtmlByName) {
+    const appendSceneCard = (): void => {
+      if (!sceneCardVisible) return;
       const card = document.createElement("div");
-      card.className = `bst-card${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
-      card.style.setProperty("--bst-card-local", item.cardColor);
-      const palette = buildActionPalette(item.cardColor);
-      card.style.setProperty("--bst-action-bg", palette.bg);
-      card.style.setProperty("--bst-action-border", palette.border);
-      card.style.setProperty("--bst-action-text", palette.text);
-      card.style.setProperty("--bst-action-bg-hover", palette.hoverBg);
-      card.style.setProperty("--bst-action-border-hover", palette.hoverBorder);
-      card.style.setProperty("--bst-action-focus", palette.focus);
-      card.innerHTML = item.html;
+      card.className = "bst-card bst-scene-card";
+      const color = palette[GLOBAL_TRACKER_KEY] ?? getStableAutoCardColor(GLOBAL_TRACKER_KEY);
+      card.style.setProperty("--bst-card-local", color);
+      const scenePalette = buildActionPalette(color);
+      card.style.setProperty("--bst-action-bg", scenePalette.bg);
+      card.style.setProperty("--bst-action-border", scenePalette.border);
+      card.style.setProperty("--bst-action-text", scenePalette.text);
+      card.style.setProperty("--bst-action-bg-hover", scenePalette.hoverBg);
+      card.style.setProperty("--bst-action-border-hover", scenePalette.hoverBorder);
+      card.style.setProperty("--bst-action-focus", scenePalette.focus);
+      card.innerHTML = sceneCardHtml;
       root.appendChild(card);
+    };
+    const appendOwnerCards = (): void => {
+      for (const item of cardHtmlByName) {
+        const card = document.createElement("div");
+        card.className = `bst-card${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
+        card.style.setProperty("--bst-card-local", item.cardColor);
+        const palette = buildActionPalette(item.cardColor);
+        card.style.setProperty("--bst-action-bg", palette.bg);
+        card.style.setProperty("--bst-action-border", palette.border);
+        card.style.setProperty("--bst-action-text", palette.text);
+        card.style.setProperty("--bst-action-bg-hover", palette.hoverBg);
+        card.style.setProperty("--bst-action-border-hover", palette.hoverBorder);
+        card.style.setProperty("--bst-action-focus", palette.focus);
+        card.innerHTML = item.html;
+        root.appendChild(card);
+      }
+    };
+    if (sceneCardVisible && settings.sceneCardPosition === "above_tracker_cards") {
+      appendSceneCard();
+      appendOwnerCards();
+    } else {
+      appendOwnerCards();
+      appendSceneCard();
     }
   }
 }
@@ -5604,6 +5719,25 @@ export function openSettingsModal(input: {
       <h4><span class="bst-header-icon fa-solid fa-eye"></span>Display</h4>
       <div class="bst-settings-grid">
         <label data-bst-row="inactiveLabel">Inactive Label <input data-k="inactiveLabel" type="text"></label>
+        <label class="bst-check" data-bst-row="sceneCardEnabled"><input data-k="sceneCardEnabled" type="checkbox">Enable Scene Card (global stats)</label>
+        <label data-bst-row="sceneCardPosition">Scene Card Position
+          <select data-k="sceneCardPosition">
+            <option value="above_tracker_cards">Above tracker cards</option>
+            <option value="below_tracker_cards">Below tracker cards</option>
+          </select>
+        </label>
+        <label data-bst-row="sceneCardLayout">Scene Card Layout
+          <select data-k="sceneCardLayout">
+            <option value="chips">Chips</option>
+            <option value="rows">Rows</option>
+          </select>
+        </label>
+        <label data-bst-row="sceneCardDisplayMode">Scene Card Display
+          <select data-k="sceneCardDisplayMode">
+            <option value="scene_and_owner_cards">Show scene card + owner cards</option>
+            <option value="scene_only">Scene card only (hide global stats on owner cards)</option>
+          </select>
+        </label>
         <label>Accent Color
           <div class="bst-color-inputs">
             <input data-k-color="accentColor" type="color">
@@ -6214,6 +6348,10 @@ export function openSettingsModal(input: {
   set("showInactive", String(input.settings.showInactive));
   set("inactiveLabel", input.settings.inactiveLabel);
   set("showLastThought", String(input.settings.showLastThought));
+  set("sceneCardEnabled", String(input.settings.sceneCardEnabled));
+  set("sceneCardPosition", input.settings.sceneCardPosition);
+  set("sceneCardLayout", input.settings.sceneCardLayout);
+  set("sceneCardDisplayMode", input.settings.sceneCardDisplayMode);
   set("trackAffection", String(input.settings.trackAffection));
   set("trackTrust", String(input.settings.trackTrust));
   set("trackDesire", String(input.settings.trackDesire));
@@ -8302,6 +8440,10 @@ export function openSettingsModal(input: {
       showInactive: readBool("showInactive", input.settings.showInactive),
       inactiveLabel: read("inactiveLabel") || input.settings.inactiveLabel,
       showLastThought: readBool("showLastThought", input.settings.showLastThought),
+      sceneCardEnabled: readBool("sceneCardEnabled", input.settings.sceneCardEnabled),
+      sceneCardPosition: read("sceneCardPosition") === "below_tracker_cards" ? "below_tracker_cards" : "above_tracker_cards",
+      sceneCardLayout: read("sceneCardLayout") === "rows" ? "rows" : "chips",
+      sceneCardDisplayMode: read("sceneCardDisplayMode") === "scene_only" ? "scene_only" : "scene_and_owner_cards",
       trackAffection: readBool("trackAffection", input.settings.trackAffection),
       trackTrust: readBool("trackTrust", input.settings.trackTrust),
       trackDesire: readBool("trackDesire", input.settings.trackDesire),
@@ -8364,6 +8506,9 @@ export function openSettingsModal(input: {
     const maxRetriesRow = modal.querySelector('[data-bst-row="maxRetriesPerStat"]') as HTMLElement | null;
     const lookbackRow = modal.querySelector('[data-bst-row="activityLookback"]') as HTMLElement | null;
     const inactiveLabelRow = modal.querySelector('[data-bst-row="inactiveLabel"]') as HTMLElement | null;
+    const sceneCardPositionRow = modal.querySelector('[data-bst-row="sceneCardPosition"]') as HTMLElement | null;
+    const sceneCardLayoutRow = modal.querySelector('[data-bst-row="sceneCardLayout"]') as HTMLElement | null;
+    const sceneCardDisplayModeRow = modal.querySelector('[data-bst-row="sceneCardDisplayMode"]') as HTMLElement | null;
     const debugBodyRow = modal.querySelector('[data-bst-row="debugBody"]') as HTMLElement | null;
     const debugFlagsRow = modal.querySelector('[data-bst-row="debugFlags"]') as HTMLElement | null;
     const contextDiagRow = modal.querySelector('[data-bst-row="includeContextInDiagnostics"]') as HTMLElement | null;
@@ -8404,6 +8549,21 @@ export function openSettingsModal(input: {
       inactiveLabelRow.style.display = current.showInactive ? "flex" : "none";
       inactiveLabelRow.style.flexDirection = "column";
       inactiveLabelRow.style.gap = "4px";
+    }
+    if (sceneCardPositionRow) {
+      sceneCardPositionRow.style.display = current.sceneCardEnabled ? "flex" : "none";
+      sceneCardPositionRow.style.flexDirection = "column";
+      sceneCardPositionRow.style.gap = "4px";
+    }
+    if (sceneCardLayoutRow) {
+      sceneCardLayoutRow.style.display = current.sceneCardEnabled ? "flex" : "none";
+      sceneCardLayoutRow.style.flexDirection = "column";
+      sceneCardLayoutRow.style.gap = "4px";
+    }
+    if (sceneCardDisplayModeRow) {
+      sceneCardDisplayModeRow.style.display = current.sceneCardEnabled ? "flex" : "none";
+      sceneCardDisplayModeRow.style.flexDirection = "column";
+      sceneCardDisplayModeRow.style.gap = "4px";
     }
     if (debugBodyRow) {
       debugBodyRow.style.display = current.debug ? "block" : "none";
@@ -8550,6 +8710,10 @@ export function openSettingsModal(input: {
     showInactive: "Show tracker cards for inactive/off-screen characters.",
     inactiveLabel: "Text label shown on cards for inactive characters.",
     showLastThought: "Show extracted last thought text inside tracker cards.",
+    sceneCardEnabled: "Render a dedicated Scene card from global custom stats.",
+    sceneCardPosition: "Choose whether the Scene card renders above or below owner cards.",
+    sceneCardLayout: "Choose compact chip layout or one-row-per-stat layout for Scene card values.",
+    sceneCardDisplayMode: "Show global stats both on scene+owner cards, or only on the scene card.",
     accentColor: "Accent color for fills, highlights, and action emphasis.",
     userCardColor: "Optional hex override for the User tracker card color (leave empty for auto color).",
     cardOpacity: "Overall tracker container opacity.",
