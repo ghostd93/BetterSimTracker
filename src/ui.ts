@@ -4100,7 +4100,7 @@ export function renderTracker(
     const cardNonNumericDefs = allNonNumericDefs.filter(def => def.showOnCard);
     const sceneCardDefs = cardNonNumericDefs.filter(def => def.globalScope);
     const ownerCardNonNumericDefs = cardNonNumericDefs.filter(
-      def => !(settings.sceneCardEnabled && settings.sceneCardDisplayMode === "scene_only" && def.globalScope),
+      def => !(settings.sceneCardEnabled && def.globalScope),
     );
     const getEffectiveNumericRawValue = (key: string, name: string): number | undefined => {
       const current = getNumericRawValue(data, key, name, isNumericGlobalScope(key));
@@ -4360,17 +4360,20 @@ export function renderTracker(
       }
       return resolveNonNumericValue(data, def, GLOBAL_TRACKER_KEY);
     };
-    const sceneValues = hasSceneCard
+    const baseSceneValues = hasSceneCard
       ? sceneCardDefs
         .filter(def => hasEffectiveSceneValue(def))
         .map(def => ({ def, value: resolveSceneValue(def) }))
         .filter(item => item.value != null)
       : [];
-    const sceneCardVisible = sceneValues.length > 0;
+    const sceneValues = settings.sceneCardSortMode === "label_asc"
+      ? [...baseSceneValues].sort((a, b) => a.def.label.localeCompare(b.def.label))
+      : baseSceneValues;
+    const sceneCardVisible = settings.sceneCardShowWhenEmpty || sceneValues.length > 0;
     const sceneCardHtml = sceneCardVisible
       ? `
         <div class="bst-head">
-          <div class="bst-name" title="Scene">Scene</div>
+          <div class="bst-name" title="${escapeHtml(settings.sceneCardTitle)}">${escapeHtml(settings.sceneCardTitle)}</div>
           <div class="bst-actions">
             <div class="bst-state" title="Global scene stats">Global</div>
           </div>
@@ -4379,7 +4382,7 @@ export function renderTracker(
           ${sceneValues.map(item => {
             const def = item.def;
             const resolved = item.value as string | boolean | string[];
-            const color = def.color || "#9bd5ff";
+            const color = settings.sceneCardValueColor || def.color || settings.accentColor || "#9bd5ff";
             if (settings.sceneCardLayout === "rows") {
               if (def.kind === "array") {
                 const items = Array.isArray(resolved) ? resolved : normalizeNonNumericArrayItems(resolved, def.textMaxLength);
@@ -4405,15 +4408,25 @@ export function renderTracker(
             }
             if (def.kind === "array") {
               const items = Array.isArray(resolved) ? resolved : normalizeNonNumericArrayItems(resolved, def.textMaxLength);
-              const chips = items.length
-                ? items.map(itemValue => `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(itemValue)}">${escapeHtml(itemValue)}</span>`).join("")
+              const arrayLimit = Math.max(1, Math.min(20, settings.sceneCardArrayCollapsedLimit));
+              const sceneArrayKey = `arrscene:${entry.messageIndex}:${def.id}`;
+              const expanded = expandedArrayValueKeys.has(sceneArrayKey);
+              const hasOverflow = items.length > arrayLimit;
+              const visibleItems = hasOverflow && !expanded ? items.slice(0, arrayLimit) : items;
+              const chips = visibleItems.length
+                ? visibleItems.map(itemValue => `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(itemValue)}">${escapeHtml(itemValue)}</span>`).join("")
                 : `<span class="bst-array-item-empty">No items</span>`;
               return `
                 <div class="bst-row bst-row-non-numeric">
                   <div class="bst-label">
                     <span>${escapeHtml(def.label)}</span>
                   </div>
-                  <div class="bst-array-items">${chips}</div>
+                  <div class="bst-array-items">
+                    ${chips}
+                    ${hasOverflow
+                      ? `<button type="button" class="bst-array-toggle" data-bst-action="toggle-array-values" data-bst-array-key="${escapeHtml(sceneArrayKey)}" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "Show less" : `+${items.length - arrayLimit} more`}</button>`
+                      : ""}
+                  </div>
                 </div>
               `;
             }
@@ -4427,10 +4440,11 @@ export function renderTracker(
               </div>
             `;
           }).join("")}
+          ${sceneValues.length === 0 ? `<div class="bst-empty">No global stats recorded.</div>` : ""}
         </div>
       `
       : "";
-    signatureParts.push(`scene:${sceneCardVisible ? "1" : "0"}:${settings.sceneCardEnabled ? "1" : "0"}:${settings.sceneCardPosition}:${settings.sceneCardLayout}:${settings.sceneCardDisplayMode}:${sceneCardHtml}`);
+    signatureParts.push(`scene:${sceneCardVisible ? "1" : "0"}:${settings.sceneCardEnabled ? "1" : "0"}:${settings.sceneCardPosition}:${settings.sceneCardLayout}:${settings.sceneCardSortMode}:${settings.sceneCardTitle}:${settings.sceneCardColor}:${settings.sceneCardValueColor}:${settings.sceneCardShowWhenEmpty ? "1" : "0"}:${settings.sceneCardArrayCollapsedLimit}:${sceneCardHtml}`);
     const renderSignature = signatureParts.join("|#|");
     if (root.dataset.bstRenderPhase === "idle" && root.dataset.bstRenderSignature === renderSignature) {
       continue;
@@ -4458,7 +4472,9 @@ export function renderTracker(
       if (!sceneCardVisible) return;
       const card = document.createElement("div");
       card.className = "bst-card bst-scene-card";
-      const color = palette[GLOBAL_TRACKER_KEY] ?? getStableAutoCardColor(GLOBAL_TRACKER_KEY);
+      const color = normalizeHexColor(settings.sceneCardColor)
+        ?? palette[GLOBAL_TRACKER_KEY]
+        ?? getStableAutoCardColor(GLOBAL_TRACKER_KEY);
       card.style.setProperty("--bst-card-local", color);
       const scenePalette = buildActionPalette(color);
       card.style.setProperty("--bst-action-bg", scenePalette.bg);
@@ -5719,25 +5735,6 @@ export function openSettingsModal(input: {
       <h4><span class="bst-header-icon fa-solid fa-eye"></span>Display</h4>
       <div class="bst-settings-grid">
         <label data-bst-row="inactiveLabel">Inactive Label <input data-k="inactiveLabel" type="text"></label>
-        <label class="bst-check" data-bst-row="sceneCardEnabled"><input data-k="sceneCardEnabled" type="checkbox">Enable Scene Card (global stats)</label>
-        <label data-bst-row="sceneCardPosition">Scene Card Position
-          <select data-k="sceneCardPosition">
-            <option value="above_tracker_cards">Above tracker cards</option>
-            <option value="below_tracker_cards">Below tracker cards</option>
-          </select>
-        </label>
-        <label data-bst-row="sceneCardLayout">Scene Card Layout
-          <select data-k="sceneCardLayout">
-            <option value="chips">Chips</option>
-            <option value="rows">Rows</option>
-          </select>
-        </label>
-        <label data-bst-row="sceneCardDisplayMode">Scene Card Display
-          <select data-k="sceneCardDisplayMode">
-            <option value="scene_and_owner_cards">Show scene card + owner cards</option>
-            <option value="scene_only">Scene card only (hide global stats on owner cards)</option>
-          </select>
-        </label>
         <label>Accent Color
           <div class="bst-color-inputs">
             <input data-k-color="accentColor" type="color">
@@ -5760,6 +5757,48 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
         </div>
       </div>
+      <details class="bst-help-details" data-bst-row="sceneCardDrawer">
+        <summary>Scene Card</summary>
+        <div class="bst-settings-grid bst-settings-grid-single">
+          <label class="bst-check" data-bst-row="sceneCardEnabled"><input data-k="sceneCardEnabled" type="checkbox">Enable Scene Card (global stats)</label>
+          <label data-bst-row="sceneCardPosition">Position
+            <select data-k="sceneCardPosition">
+              <option value="above_tracker_cards">Above tracker cards</option>
+              <option value="below_tracker_cards">Below tracker cards</option>
+            </select>
+          </label>
+          <label data-bst-row="sceneCardLayout">Stat Layout
+            <select data-k="sceneCardLayout">
+              <option value="chips">Chips</option>
+              <option value="rows">Rows</option>
+            </select>
+          </label>
+          <label data-bst-row="sceneCardSortMode">Stat Order
+            <select data-k="sceneCardSortMode">
+              <option value="custom_order">Custom stats order</option>
+              <option value="label_asc">Label A-Z</option>
+            </select>
+          </label>
+          <label data-bst-row="sceneCardArrayCollapsedLimit">Array chips before collapse
+            <input data-k="sceneCardArrayCollapsedLimit" type="number" min="1" max="20">
+          </label>
+          <label data-bst-row="sceneCardTitle">Card Title <input data-k="sceneCardTitle" type="text" maxlength="40"></label>
+          <label data-bst-row="sceneCardColor">Card Color
+            <div class="bst-color-inputs">
+              <input data-k-color="sceneCardColor" type="color">
+              <input data-k="sceneCardColor" type="text" placeholder="Auto">
+            </div>
+          </label>
+          <label data-bst-row="sceneCardValueColor">Stat Value Color
+            <div class="bst-color-inputs">
+              <input data-k-color="sceneCardValueColor" type="color">
+              <input data-k="sceneCardValueColor" type="text" placeholder="Per-stat/Accent auto">
+            </div>
+          </label>
+          <label class="bst-check" data-bst-row="sceneCardShowWhenEmpty"><input data-k="sceneCardShowWhenEmpty" type="checkbox">Show Scene card even when empty</label>
+          <div class="bst-help-line">When enabled, global custom stats are shown only in Scene Card (hidden on owner cards).</div>
+        </div>
+      </details>
     </div>
     <div class="bst-settings-section">
       <h4><span class="bst-header-icon fa-solid fa-pen-to-square"></span>Prompts</h4>
@@ -6305,6 +6344,39 @@ export function openSettingsModal(input: {
     });
   };
 
+  const initSceneCardColorPickers = (): void => {
+    const cardColorInput = modal.querySelector('[data-k-color="sceneCardColor"]') as HTMLInputElement | null;
+    const cardTextInput = modal.querySelector('[data-k="sceneCardColor"]') as HTMLInputElement | null;
+    const valueColorInput = modal.querySelector('[data-k-color="sceneCardValueColor"]') as HTMLInputElement | null;
+    const valueTextInput = modal.querySelector('[data-k="sceneCardValueColor"]') as HTMLInputElement | null;
+    if (cardColorInput && cardTextInput) {
+      const fallback = normalizeHexColor(getStableAutoCardColor(GLOBAL_TRACKER_KEY)) ?? "#6f7cff";
+      const syncCardPickerFromText = (): void => {
+        cardColorInput.value = normalizeHexColor(cardTextInput.value) ?? fallback;
+      };
+      cardTextInput.value = normalizeHexColor(cardTextInput.value) ?? "";
+      syncCardPickerFromText();
+      cardColorInput.addEventListener("input", () => {
+        cardTextInput.value = cardColorInput.value;
+        persistLive();
+      });
+      cardTextInput.addEventListener("input", syncCardPickerFromText);
+    }
+    if (valueColorInput && valueTextInput) {
+      const fallback = normalizeHexColor(input.settings.accentColor) ?? "#ff5a6f";
+      const syncValuePickerFromText = (): void => {
+        valueColorInput.value = normalizeHexColor(valueTextInput.value) ?? fallback;
+      };
+      valueTextInput.value = normalizeHexColor(valueTextInput.value) ?? "";
+      syncValuePickerFromText();
+      valueColorInput.addEventListener("input", () => {
+        valueTextInput.value = valueColorInput.value;
+        persistLive();
+      });
+      valueTextInput.addEventListener("input", syncValuePickerFromText);
+    }
+  };
+
   const set = (key: keyof BetterSimTrackerSettings, value: string): void => {
     const node = modal.querySelector(`[data-k="${key}"]`) as HTMLInputElement | HTMLSelectElement | null;
     if (!node) return;
@@ -6351,7 +6423,12 @@ export function openSettingsModal(input: {
   set("sceneCardEnabled", String(input.settings.sceneCardEnabled));
   set("sceneCardPosition", input.settings.sceneCardPosition);
   set("sceneCardLayout", input.settings.sceneCardLayout);
-  set("sceneCardDisplayMode", input.settings.sceneCardDisplayMode);
+  set("sceneCardTitle", input.settings.sceneCardTitle);
+  set("sceneCardColor", input.settings.sceneCardColor || "");
+  set("sceneCardValueColor", input.settings.sceneCardValueColor || "");
+  set("sceneCardShowWhenEmpty", String(input.settings.sceneCardShowWhenEmpty));
+  set("sceneCardSortMode", input.settings.sceneCardSortMode);
+  set("sceneCardArrayCollapsedLimit", String(input.settings.sceneCardArrayCollapsedLimit));
   set("trackAffection", String(input.settings.trackAffection));
   set("trackTrust", String(input.settings.trackTrust));
   set("trackDesire", String(input.settings.trackDesire));
@@ -6370,6 +6447,7 @@ export function openSettingsModal(input: {
   set("userCardColor", input.settings.userCardColor || "");
   initAccentColorPicker();
   initUserCardColorPicker();
+  initSceneCardColorPickers();
   set("cardOpacity", String(input.settings.cardOpacity));
   set("borderRadius", String(input.settings.borderRadius));
   set("fontSize", String(input.settings.fontSize));
@@ -8443,7 +8521,12 @@ export function openSettingsModal(input: {
       sceneCardEnabled: readBool("sceneCardEnabled", input.settings.sceneCardEnabled),
       sceneCardPosition: read("sceneCardPosition") === "below_tracker_cards" ? "below_tracker_cards" : "above_tracker_cards",
       sceneCardLayout: read("sceneCardLayout") === "rows" ? "rows" : "chips",
-      sceneCardDisplayMode: read("sceneCardDisplayMode") === "scene_only" ? "scene_only" : "scene_and_owner_cards",
+      sceneCardTitle: read("sceneCardTitle") || input.settings.sceneCardTitle,
+      sceneCardColor: read("sceneCardColor") || "",
+      sceneCardValueColor: read("sceneCardValueColor") || "",
+      sceneCardShowWhenEmpty: readBool("sceneCardShowWhenEmpty", input.settings.sceneCardShowWhenEmpty),
+      sceneCardSortMode: read("sceneCardSortMode") === "label_asc" ? "label_asc" : "custom_order",
+      sceneCardArrayCollapsedLimit: readNumber("sceneCardArrayCollapsedLimit", input.settings.sceneCardArrayCollapsedLimit, 1, 20),
       trackAffection: readBool("trackAffection", input.settings.trackAffection),
       trackTrust: readBool("trackTrust", input.settings.trackTrust),
       trackDesire: readBool("trackDesire", input.settings.trackDesire),
@@ -8506,9 +8589,15 @@ export function openSettingsModal(input: {
     const maxRetriesRow = modal.querySelector('[data-bst-row="maxRetriesPerStat"]') as HTMLElement | null;
     const lookbackRow = modal.querySelector('[data-bst-row="activityLookback"]') as HTMLElement | null;
     const inactiveLabelRow = modal.querySelector('[data-bst-row="inactiveLabel"]') as HTMLElement | null;
+    const sceneCardDrawer = modal.querySelector('[data-bst-row="sceneCardDrawer"]') as HTMLElement | null;
     const sceneCardPositionRow = modal.querySelector('[data-bst-row="sceneCardPosition"]') as HTMLElement | null;
     const sceneCardLayoutRow = modal.querySelector('[data-bst-row="sceneCardLayout"]') as HTMLElement | null;
-    const sceneCardDisplayModeRow = modal.querySelector('[data-bst-row="sceneCardDisplayMode"]') as HTMLElement | null;
+    const sceneCardTitleRow = modal.querySelector('[data-bst-row="sceneCardTitle"]') as HTMLElement | null;
+    const sceneCardColorRow = modal.querySelector('[data-bst-row="sceneCardColor"]') as HTMLElement | null;
+    const sceneCardValueColorRow = modal.querySelector('[data-bst-row="sceneCardValueColor"]') as HTMLElement | null;
+    const sceneCardShowWhenEmptyRow = modal.querySelector('[data-bst-row="sceneCardShowWhenEmpty"]') as HTMLElement | null;
+    const sceneCardSortModeRow = modal.querySelector('[data-bst-row="sceneCardSortMode"]') as HTMLElement | null;
+    const sceneCardArrayCollapsedLimitRow = modal.querySelector('[data-bst-row="sceneCardArrayCollapsedLimit"]') as HTMLElement | null;
     const debugBodyRow = modal.querySelector('[data-bst-row="debugBody"]') as HTMLElement | null;
     const debugFlagsRow = modal.querySelector('[data-bst-row="debugFlags"]') as HTMLElement | null;
     const contextDiagRow = modal.querySelector('[data-bst-row="includeContextInDiagnostics"]') as HTMLElement | null;
@@ -8550,6 +8639,9 @@ export function openSettingsModal(input: {
       inactiveLabelRow.style.flexDirection = "column";
       inactiveLabelRow.style.gap = "4px";
     }
+    if (sceneCardDrawer) {
+      sceneCardDrawer.style.display = "block";
+    }
     if (sceneCardPositionRow) {
       sceneCardPositionRow.style.display = current.sceneCardEnabled ? "flex" : "none";
       sceneCardPositionRow.style.flexDirection = "column";
@@ -8560,10 +8652,33 @@ export function openSettingsModal(input: {
       sceneCardLayoutRow.style.flexDirection = "column";
       sceneCardLayoutRow.style.gap = "4px";
     }
-    if (sceneCardDisplayModeRow) {
-      sceneCardDisplayModeRow.style.display = current.sceneCardEnabled ? "flex" : "none";
-      sceneCardDisplayModeRow.style.flexDirection = "column";
-      sceneCardDisplayModeRow.style.gap = "4px";
+    if (sceneCardTitleRow) {
+      sceneCardTitleRow.style.display = current.sceneCardEnabled ? "flex" : "none";
+      sceneCardTitleRow.style.flexDirection = "column";
+      sceneCardTitleRow.style.gap = "4px";
+    }
+    if (sceneCardColorRow) {
+      sceneCardColorRow.style.display = current.sceneCardEnabled ? "flex" : "none";
+      sceneCardColorRow.style.flexDirection = "column";
+      sceneCardColorRow.style.gap = "4px";
+    }
+    if (sceneCardValueColorRow) {
+      sceneCardValueColorRow.style.display = current.sceneCardEnabled ? "flex" : "none";
+      sceneCardValueColorRow.style.flexDirection = "column";
+      sceneCardValueColorRow.style.gap = "4px";
+    }
+    if (sceneCardShowWhenEmptyRow) {
+      sceneCardShowWhenEmptyRow.style.display = current.sceneCardEnabled ? "" : "none";
+    }
+    if (sceneCardSortModeRow) {
+      sceneCardSortModeRow.style.display = current.sceneCardEnabled ? "flex" : "none";
+      sceneCardSortModeRow.style.flexDirection = "column";
+      sceneCardSortModeRow.style.gap = "4px";
+    }
+    if (sceneCardArrayCollapsedLimitRow) {
+      sceneCardArrayCollapsedLimitRow.style.display = current.sceneCardEnabled && current.sceneCardLayout === "chips" ? "flex" : "none";
+      sceneCardArrayCollapsedLimitRow.style.flexDirection = "column";
+      sceneCardArrayCollapsedLimitRow.style.gap = "4px";
     }
     if (debugBodyRow) {
       debugBodyRow.style.display = current.debug ? "block" : "none";
@@ -8713,7 +8828,12 @@ export function openSettingsModal(input: {
     sceneCardEnabled: "Render a dedicated Scene card from global custom stats.",
     sceneCardPosition: "Choose whether the Scene card renders above or below owner cards.",
     sceneCardLayout: "Choose compact chip layout or one-row-per-stat layout for Scene card values.",
-    sceneCardDisplayMode: "Show global stats both on scene+owner cards, or only on the scene card.",
+    sceneCardTitle: "Visible title for the Scene card.",
+    sceneCardColor: "Optional card color override for Scene card (hex). Empty = automatic color.",
+    sceneCardValueColor: "Optional scene stat value color override (hex). Empty = per-stat/accent color.",
+    sceneCardShowWhenEmpty: "Keep Scene card visible even when no global stat has a resolved value.",
+    sceneCardSortMode: "Sort Scene card stats by custom stat order or alphabetically by label.",
+    sceneCardArrayCollapsedLimit: "How many array items are shown before +N more appears in Scene card chips mode.",
     accentColor: "Accent color for fills, highlights, and action emphasis.",
     userCardColor: "Optional hex override for the User tracker card color (leave empty for auto color).",
     cardOpacity: "Overall tracker container opacity.",

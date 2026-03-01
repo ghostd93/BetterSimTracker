@@ -23,7 +23,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Summarize button (AI-generated detailed prose summary, 4-6 sentences, grounded in currently tracked dimensions, no numeric stat values; with settings to make the note AI-visible and/or inject it into prompt guidance)
 - Edit last tracker stats inline (pencil icon on the latest card; numeric clamp + mood picker + last thought editor + kind-aware custom non-numeric editors)
 - `array` custom stat kind (max 20 items) with card-friendly chip rendering and `+N more` expand/collapse for long lists
-- Configurable Scene Card for global custom stats (position/layout/display mode)
+- Configurable Scene Card for global custom stats (position/layout/order/title/colors/array handling)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
   - raw/smoothed view
@@ -377,10 +377,15 @@ You can disable any metric you do not want extracted. Disabled stats stop updati
 - `Show Inactive`: show cards for inactive/off-scene characters.
 - `Inactive Label`: label text used for inactive cards.
 - `Show Last Thought`: show/hide `lastThought` text on cards.
-- `Enable Scene Card (global stats)`: render a dedicated Scene card from global custom stats.
+- `Enable Scene Card (global stats)`: render a dedicated Scene card from global custom stats and hide global stats on owner cards.
 - `Scene Card Position`: place Scene card above or below owner cards.
 - `Scene Card Layout`: render Scene values as chips or rows.
-- `Scene Card Display`: show scene+owner cards or hide global stats on owner cards (`scene_only`).
+- `Scene Card Stat Order`: use custom-stats order or alphabetical labels.
+- `Scene Card Title`: set custom card header label.
+- `Scene Card Color`: optional Scene card color override.
+- `Scene Card Stat Value Color`: optional override for Scene stat chips/values.
+- `Show Scene Card When Empty`: keep Scene card visible even with no resolved global stats.
+- `Array Chips Before Collapse`: controls `+N more` threshold for array stats in Scene card chips mode.
 - `Accent Color`: primary UI accent for bars/buttons/highlights.
 - `User Card Color`: optional hex override for the user tracker card (`#RRGGBB`); leave empty for automatic color.
 - `Card Opacity`: tracker card opacity.

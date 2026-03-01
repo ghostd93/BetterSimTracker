@@ -24,9 +24,9 @@ import type {
   MoodExpressionMap,
   MoodLabel,
   MoodSource,
-  SceneCardDisplayMode,
   SceneCardLayout,
   SceneCardPosition,
+  SceneCardSortMode,
   StExpressionImageOptions,
   STContext,
 } from "./types";
@@ -76,7 +76,12 @@ export const defaultSettings: BetterSimTrackerSettings = {
   sceneCardEnabled: false,
   sceneCardPosition: "above_tracker_cards",
   sceneCardLayout: "chips",
-  sceneCardDisplayMode: "scene_and_owner_cards",
+  sceneCardTitle: "Scene",
+  sceneCardColor: "",
+  sceneCardValueColor: "",
+  sceneCardShowWhenEmpty: false,
+  sceneCardSortMode: "custom_order",
+  sceneCardArrayCollapsedLimit: 4,
   autoDetectActive: true,
   activityLookback: 5,
   trackAffection: true,
@@ -501,8 +506,8 @@ function sanitizeSceneCardLayout(raw: unknown, fallback: SceneCardLayout): Scene
   return fallback;
 }
 
-function sanitizeSceneCardDisplayMode(raw: unknown, fallback: SceneCardDisplayMode): SceneCardDisplayMode {
-  if (raw === "scene_only" || raw === "scene_and_owner_cards") return raw;
+function sanitizeSceneCardSortMode(raw: unknown, fallback: SceneCardSortMode): SceneCardSortMode {
+  if (raw === "custom_order" || raw === "label_asc") return raw;
   return fallback;
 }
 
@@ -556,7 +561,12 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     sceneCardEnabled: asBool(input.sceneCardEnabled, defaultSettings.sceneCardEnabled),
     sceneCardPosition: sanitizeSceneCardPosition(input.sceneCardPosition, defaultSettings.sceneCardPosition),
     sceneCardLayout: sanitizeSceneCardLayout(input.sceneCardLayout, defaultSettings.sceneCardLayout),
-    sceneCardDisplayMode: sanitizeSceneCardDisplayMode(input.sceneCardDisplayMode, defaultSettings.sceneCardDisplayMode),
+    sceneCardTitle: asText(input.sceneCardTitle, defaultSettings.sceneCardTitle).slice(0, 40),
+    sceneCardColor: sanitizeHexColor(input.sceneCardColor) ?? defaultSettings.sceneCardColor,
+    sceneCardValueColor: sanitizeHexColor(input.sceneCardValueColor) ?? defaultSettings.sceneCardValueColor,
+    sceneCardShowWhenEmpty: asBool(input.sceneCardShowWhenEmpty, defaultSettings.sceneCardShowWhenEmpty),
+    sceneCardSortMode: sanitizeSceneCardSortMode(input.sceneCardSortMode, defaultSettings.sceneCardSortMode),
+    sceneCardArrayCollapsedLimit: clampInt(input.sceneCardArrayCollapsedLimit, defaultSettings.sceneCardArrayCollapsedLimit, 1, 20),
     autoDetectActive: asBool(input.autoDetectActive, defaultSettings.autoDetectActive),
     activityLookback: clampInt(input.activityLookback, defaultSettings.activityLookback, 1, 25),
     trackAffection: asBool(input.trackAffection, defaultSettings.trackAffection),

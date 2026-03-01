@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev12] - 2026-03-01
+### Changed
+- Scene Card now always owns global custom stat rendering when enabled (global stats are no longer duplicated on owner cards).
+- Scene Card settings moved into a dedicated Display subsection drawer.
+- Scene Card configurability expanded with stat ordering (`custom order`/`A-Z`), custom title, card color override, stat value color override, empty-state visibility toggle, and array chips collapse threshold.
+
 ## [2.2.1.3-dev11] - 2026-03-01
 ### Added
 - New configurable `Scene Card` display surface for global custom stats, with `position` (`above/below tracker cards`) and `layout` (`chips/rows`) controls.
