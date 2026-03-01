@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev14] - 2026-03-01
+### Added
+- Scene Card now includes a dedicated stat-order manager for global custom stats, allowing users to reorder stats arbitrarily with per-stat move controls.
+
+### Changed
+- `Custom stats order` mode for Scene Card now uses a persisted explicit order list (`sceneCardStatOrder`) instead of implicit definition order.
+
 ## [2.2.1.3-dev13] - 2026-03-01
 ### Changed
 - Scene Card subdrawer styling now uses a dedicated neutral/gray nested-drawer style (instead of help-details styling), matching drawer UX expectations.

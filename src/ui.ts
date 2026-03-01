@@ -2394,6 +2394,50 @@ function ensureStyles(): void {
 .bst-subdrawer > .bst-settings-grid {
   padding: 12px;
 }
+.bst-scene-order-list {
+  display: grid;
+  gap: 8px;
+}
+.bst-scene-order-empty {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255,255,255,0.16);
+  font-size: 12px;
+  color: rgba(226, 236, 250, 0.76);
+}
+.bst-scene-order-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  background: rgba(10, 16, 28, 0.62);
+  padding: 8px 10px;
+}
+.bst-scene-order-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.bst-scene-order-name {
+  font-size: 12px;
+  color: rgba(241, 247, 255, 0.96);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bst-scene-order-id {
+  font-size: 11px;
+  color: rgba(208, 223, 244, 0.72);
+  font-family: Consolas, "Courier New", monospace;
+}
+.bst-scene-order-actions {
+  display: inline-flex;
+  gap: 6px;
+}
 .bst-prompts-stack {
   margin-top: 8px;
 }
@@ -4422,7 +4466,17 @@ export function renderTracker(
       : [];
     const sceneValues = settings.sceneCardSortMode === "label_asc"
       ? [...baseSceneValues].sort((a, b) => a.def.label.localeCompare(b.def.label))
-      : baseSceneValues;
+      : (() => {
+        const order = new Map((settings.sceneCardStatOrder ?? []).map((id, index) => [String(id ?? "").trim().toLowerCase(), index]));
+        return [...baseSceneValues].sort((a, b) => {
+          const aIdx = order.get(String(a.def.id ?? "").trim().toLowerCase());
+          const bIdx = order.get(String(b.def.id ?? "").trim().toLowerCase());
+          const aRank = aIdx == null ? Number.MAX_SAFE_INTEGER : aIdx;
+          const bRank = bIdx == null ? Number.MAX_SAFE_INTEGER : bIdx;
+          if (aRank !== bRank) return aRank - bRank;
+          return a.def.label.localeCompare(b.def.label);
+        });
+      })();
     const sceneCardVisible = settings.sceneCardShowWhenEmpty || sceneValues.length > 0;
     const sceneCardHtml = sceneCardVisible
       ? `
@@ -4498,7 +4552,7 @@ export function renderTracker(
         </div>
       `
       : "";
-    signatureParts.push(`scene:${sceneCardVisible ? "1" : "0"}:${settings.sceneCardEnabled ? "1" : "0"}:${settings.sceneCardPosition}:${settings.sceneCardLayout}:${settings.sceneCardSortMode}:${settings.sceneCardTitle}:${settings.sceneCardColor}:${settings.sceneCardValueColor}:${settings.sceneCardShowWhenEmpty ? "1" : "0"}:${settings.sceneCardArrayCollapsedLimit}:${sceneCardHtml}`);
+    signatureParts.push(`scene:${sceneCardVisible ? "1" : "0"}:${settings.sceneCardEnabled ? "1" : "0"}:${settings.sceneCardPosition}:${settings.sceneCardLayout}:${settings.sceneCardSortMode}:${(settings.sceneCardStatOrder ?? []).join(",")}:${settings.sceneCardTitle}:${settings.sceneCardColor}:${settings.sceneCardValueColor}:${settings.sceneCardShowWhenEmpty ? "1" : "0"}:${settings.sceneCardArrayCollapsedLimit}:${sceneCardHtml}`);
     const renderSignature = signatureParts.join("|#|");
     if (root.dataset.bstRenderPhase === "idle" && root.dataset.bstRenderSignature === renderSignature) {
       continue;
@@ -5620,6 +5674,9 @@ export function openSettingsModal(input: {
   let customStatsState: CustomStatDefinition[] = Array.isArray(input.settings.customStats)
     ? input.settings.customStats.map(cloneCustomStatDefinition)
     : [];
+  let sceneCardStatOrderState: string[] = Array.isArray(input.settings.sceneCardStatOrder)
+    ? input.settings.sceneCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
+    : [];
   let builtInNumericStatUiState: BuiltInNumericStatUiSettings = cloneBuiltInNumericStatUi(input.settings.builtInNumericStatUi);
 
   const modal = document.createElement("div");
@@ -5833,6 +5890,10 @@ export function openSettingsModal(input: {
               <option value="label_asc">Label A-Z</option>
             </select>
           </label>
+          <div data-bst-row="sceneCardOrderManager">
+            <div class="bst-help-line">Custom Scene order (global stats only).</div>
+            <div class="bst-scene-order-list" data-bst-row="sceneCardOrderList"></div>
+          </div>
           <label data-bst-row="sceneCardArrayCollapsedLimit">Array chips before collapse
             <input data-k="sceneCardArrayCollapsedLimit" type="number" min="1" max="20">
           </label>
@@ -7207,6 +7268,52 @@ export function openSettingsModal(input: {
     }).join("");
   };
 
+  const getSceneOrderEligibleStats = (): CustomStatDefinition[] =>
+    customStatsState.filter(stat => {
+      const kind = normalizeCustomStatKind(stat.kind);
+      return kind !== "numeric" && Boolean(stat.globalScope) && Boolean(stat.showOnCard);
+    });
+
+  const syncSceneCardStatOrderState = (): void => {
+    const eligibleIds = getSceneOrderEligibleStats().map(stat => String(stat.id ?? "").trim().toLowerCase());
+    const eligibleSet = new Set(eligibleIds);
+    const next = sceneCardStatOrderState.filter(id => eligibleSet.has(id));
+    for (const id of eligibleIds) {
+      if (!next.includes(id)) next.push(id);
+    }
+    sceneCardStatOrderState = next;
+  };
+
+  const renderSceneCardOrderList = (): void => {
+    const orderListNode = modal.querySelector('[data-bst-row="sceneCardOrderList"]') as HTMLElement | null;
+    if (!orderListNode) return;
+    syncSceneCardStatOrderState();
+    const eligible = getSceneOrderEligibleStats();
+    if (!eligible.length) {
+      orderListNode.innerHTML = `<div class="bst-scene-order-empty">No global non-numeric stats available for Scene Card ordering.</div>`;
+      return;
+    }
+    const byId = new Map(eligible.map(stat => [String(stat.id ?? "").trim().toLowerCase(), stat]));
+    const orderedIds = sceneCardStatOrderState.filter(id => byId.has(id));
+    const rows = orderedIds.map((id, index) => {
+      const stat = byId.get(id);
+      if (!stat) return "";
+      return `
+        <div class="bst-scene-order-row" data-bst-scene-order-id="${escapeHtml(id)}">
+          <div class="bst-scene-order-meta">
+            <span class="bst-scene-order-name" title="${escapeHtml(stat.label)}">${escapeHtml(stat.label)}</span>
+            <span class="bst-scene-order-id">${escapeHtml(stat.id)}</span>
+          </div>
+          <div class="bst-scene-order-actions">
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-order-up" data-scene-order-id="${escapeHtml(id)}" ${index === 0 ? "disabled" : ""} title="Move up" aria-label="Move up"><span class="fa-solid fa-arrow-up" aria-hidden="true"></span></button>
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-order-down" data-scene-order-id="${escapeHtml(id)}" ${index === orderedIds.length - 1 ? "disabled" : ""} title="Move down" aria-label="Move down"><span class="fa-solid fa-arrow-down" aria-hidden="true"></span></button>
+          </div>
+        </div>
+      `;
+    }).join("");
+    orderListNode.innerHTML = rows;
+  };
+
   const closeCustomWizard = (): void => {
     document.querySelector(".bst-custom-wizard-backdrop")?.remove();
     document.querySelector(".bst-custom-wizard")?.remove();
@@ -8507,7 +8614,33 @@ export function openSettingsModal(input: {
       openCustomRemoveWizard(stat);
     }
   });
+  modal.addEventListener("click", event => {
+    const target = event.target as HTMLElement | null;
+    const button = target?.closest("button[data-action][data-scene-order-id]") as HTMLButtonElement | null;
+    if (!button) return;
+    const id = String(button.getAttribute("data-scene-order-id") ?? "").trim().toLowerCase();
+    if (!id) return;
+    const index = sceneCardStatOrderState.indexOf(id);
+    if (index < 0) return;
+    const action = String(button.getAttribute("data-action") ?? "");
+    if (action === "scene-order-up" && index > 0) {
+      const next = [...sceneCardStatOrderState];
+      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      sceneCardStatOrderState = next;
+      renderSceneCardOrderList();
+      persistLive();
+      return;
+    }
+    if (action === "scene-order-down" && index < sceneCardStatOrderState.length - 1) {
+      const next = [...sceneCardStatOrderState];
+      [next[index], next[index + 1]] = [next[index + 1], next[index]];
+      sceneCardStatOrderState = next;
+      renderSceneCardOrderList();
+      persistLive();
+    }
+  });
   renderCustomStatsList();
+  renderSceneCardOrderList();
 
   const collectSettings = (): BetterSimTrackerSettings => {
     const read = (k: keyof BetterSimTrackerSettings): string =>
@@ -8581,6 +8714,7 @@ export function openSettingsModal(input: {
       sceneCardShowWhenEmpty: readBool("sceneCardShowWhenEmpty", input.settings.sceneCardShowWhenEmpty),
       sceneCardSortMode: read("sceneCardSortMode") === "label_asc" ? "label_asc" : "custom_order",
       sceneCardArrayCollapsedLimit: readNumber("sceneCardArrayCollapsedLimit", input.settings.sceneCardArrayCollapsedLimit, 1, 20),
+      sceneCardStatOrder: [...sceneCardStatOrderState],
       trackAffection: readBool("trackAffection", input.settings.trackAffection),
       trackTrust: readBool("trackTrust", input.settings.trackTrust),
       trackDesire: readBool("trackDesire", input.settings.trackDesire),
@@ -8651,6 +8785,7 @@ export function openSettingsModal(input: {
     const sceneCardValueColorRow = modal.querySelector('[data-bst-row="sceneCardValueColor"]') as HTMLElement | null;
     const sceneCardShowWhenEmptyRow = modal.querySelector('[data-bst-row="sceneCardShowWhenEmpty"]') as HTMLElement | null;
     const sceneCardSortModeRow = modal.querySelector('[data-bst-row="sceneCardSortMode"]') as HTMLElement | null;
+    const sceneCardOrderManagerRow = modal.querySelector('[data-bst-row="sceneCardOrderManager"]') as HTMLElement | null;
     const sceneCardArrayCollapsedLimitRow = modal.querySelector('[data-bst-row="sceneCardArrayCollapsedLimit"]') as HTMLElement | null;
     const debugBodyRow = modal.querySelector('[data-bst-row="debugBody"]') as HTMLElement | null;
     const debugFlagsRow = modal.querySelector('[data-bst-row="debugFlags"]') as HTMLElement | null;
@@ -8729,6 +8864,9 @@ export function openSettingsModal(input: {
       sceneCardSortModeRow.style.flexDirection = "column";
       sceneCardSortModeRow.style.gap = "4px";
     }
+    if (sceneCardOrderManagerRow) {
+      sceneCardOrderManagerRow.style.display = current.sceneCardEnabled && current.sceneCardSortMode === "custom_order" ? "block" : "none";
+    }
     if (sceneCardArrayCollapsedLimitRow) {
       sceneCardArrayCollapsedLimitRow.style.display = current.sceneCardEnabled && current.sceneCardLayout === "chips" ? "flex" : "none";
       sceneCardArrayCollapsedLimitRow.style.flexDirection = "column";
@@ -8790,10 +8928,16 @@ export function openSettingsModal(input: {
     customStatsState = Array.isArray(next.customStats)
       ? next.customStats.map(cloneCustomStatDefinition)
       : [];
+    sceneCardStatOrderState = Array.isArray(next.sceneCardStatOrder)
+      ? next.sceneCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
+      : [];
+    syncSceneCardStatOrderState();
     builtInNumericStatUiState = cloneBuiltInNumericStatUi(next.builtInNumericStatUi);
+    next.sceneCardStatOrder = [...sceneCardStatOrderState];
     input.settings = next;
     input.onSave(next);
     renderCustomStatsList();
+    renderSceneCardOrderList();
     refreshSettingsTextareaCounters();
     updateGlobalStExpressionSummary();
     syncExtractionVisibility();

@@ -108,6 +108,7 @@ export interface BetterSimTrackerSettings {
   sceneCardShowWhenEmpty: boolean;
   sceneCardSortMode: SceneCardSortMode;
   sceneCardArrayCollapsedLimit: number;
+  sceneCardStatOrder: string[];
   autoDetectActive: boolean;
   activityLookback: number;
   trackAffection: boolean;

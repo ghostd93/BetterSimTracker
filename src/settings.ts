@@ -82,6 +82,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   sceneCardShowWhenEmpty: false,
   sceneCardSortMode: "custom_order",
   sceneCardArrayCollapsedLimit: 4,
+  sceneCardStatOrder: [],
   autoDetectActive: true,
   activityLookback: 5,
   trackAffection: true,
@@ -567,6 +568,11 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     sceneCardShowWhenEmpty: asBool(input.sceneCardShowWhenEmpty, defaultSettings.sceneCardShowWhenEmpty),
     sceneCardSortMode: sanitizeSceneCardSortMode(input.sceneCardSortMode, defaultSettings.sceneCardSortMode),
     sceneCardArrayCollapsedLimit: clampInt(input.sceneCardArrayCollapsedLimit, defaultSettings.sceneCardArrayCollapsedLimit, 1, 20),
+    sceneCardStatOrder: Array.isArray(input.sceneCardStatOrder)
+      ? input.sceneCardStatOrder
+        .map(item => String(item ?? "").trim().toLowerCase())
+        .filter(Boolean)
+      : [...defaultSettings.sceneCardStatOrder],
     autoDetectActive: asBool(input.autoDetectActive, defaultSettings.autoDetectActive),
     activityLookback: clampInt(input.activityLookback, defaultSettings.activityLookback, 1, 25),
     trackAffection: asBool(input.trackAffection, defaultSettings.trackAffection),
