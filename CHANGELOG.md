@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev8] - 2026-03-01
+### Changed
+- Replaced browser-native `Import JSON` prompt with a BST-styled import modal (textarea + validate/import + inline status).
+- Kept non-destructive merge import behavior and existing warning/status reporting.
+
 ## [2.2.1.3-dev7] - 2026-03-01
 ### Changed
 - Removed `Undo Last Import` from Custom Stats settings.

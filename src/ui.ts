@@ -2609,6 +2609,32 @@ function ensureStyles(): void {
 .bst-custom-stats-status.is-info {
   color: #b8cae8;
 }
+.bst-custom-import-box {
+  width: min(860px, 94vw);
+  max-width: 100%;
+  display: grid;
+  gap: 10px;
+}
+.bst-custom-import-textarea {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.bst-custom-import-status {
+  font-size: 12px;
+}
+.bst-custom-import-status.is-success {
+  color: #7bf2b6;
+}
+.bst-custom-import-status.is-error {
+  color: #ff9ea0;
+}
+.bst-custom-import-status.is-info {
+  color: #b8cae8;
+}
 .bst-custom-stats-top-centered {
   justify-content: center;
 }
@@ -6734,6 +6760,23 @@ export function openSettingsModal(input: {
     return { stats: imported, warnings, error: null };
   };
 
+  const applyImportedCustomStats = (parsed: { stats: CustomStatDefinition[]; warnings: string[] }): { added: number; replaced: number } => {
+    const mergedById = new Map(customStatsState.map(stat => [stat.id, cloneCustomStatDefinition(stat)]));
+    let replaced = 0;
+    let added = 0;
+    for (const stat of parsed.stats) {
+      const id = String(stat.id ?? "").trim().toLowerCase();
+      if (!id) continue;
+      if (mergedById.has(id)) replaced += 1;
+      else added += 1;
+      mergedById.set(id, cloneCustomStatDefinition(stat));
+    }
+    customStatsState = Array.from(mergedById.values()).slice(0, MAX_CUSTOM_STATS);
+    renderCustomStatsList();
+    persistLive();
+    return { added, replaced };
+  };
+
   const copyToClipboard = async (text: string): Promise<boolean> => {
     if (!navigator.clipboard?.writeText) return false;
     try {
@@ -6742,6 +6785,77 @@ export function openSettingsModal(input: {
     } catch {
       return false;
     }
+  };
+
+  const openCustomImportWizard = (): void => {
+    closeCustomWizard();
+    const backdropNode = document.createElement("div");
+    backdropNode.className = "bst-custom-wizard-backdrop";
+    const wizard = document.createElement("div");
+    wizard.className = "bst-custom-wizard";
+    wizard.innerHTML = `
+      <div class="bst-custom-wizard-head">
+        <div>
+          <div class="bst-custom-wizard-title">Import Custom Stats JSON</div>
+          <div class="bst-custom-wizard-step">Merge mode: updates existing stats by ID, adds new stats, never replace-all.</div>
+        </div>
+        <button class="bst-btn bst-btn-soft" data-action="custom-close">Close</button>
+      </div>
+      <div class="bst-custom-import-box">
+        <div class="bst-help-line">Paste JSON array or wrapped object: <code>{ "customStats": [...] }</code></div>
+        <textarea class="bst-custom-import-textarea" data-bst-custom-import-text placeholder='[\n  {\n    "id": "clothes",\n    "kind": "array",\n    "label": "Clothes"\n  }\n]'></textarea>
+        <div class="bst-help-line bst-custom-import-status is-info" data-bst-custom-import-status style="display:none;"></div>
+      </div>
+      <div class="bst-custom-wizard-actions">
+        <button type="button" class="bst-btn" data-action="custom-close">Cancel</button>
+        <button type="button" class="bst-btn bst-btn-soft" data-action="custom-validate-import">Validate</button>
+        <button type="button" class="bst-btn bst-btn-soft" data-action="custom-apply-import">Import</button>
+      </div>
+    `;
+
+    const close = (): void => {
+      backdropNode.remove();
+      wizard.remove();
+    };
+    const statusNode = wizard.querySelector("[data-bst-custom-import-status]") as HTMLElement | null;
+    const textarea = wizard.querySelector("[data-bst-custom-import-text]") as HTMLTextAreaElement | null;
+    const setImportStatus = (message: string, tone: "success" | "error" | "info" = "info"): void => {
+      if (!statusNode) return;
+      statusNode.textContent = message;
+      statusNode.style.display = message ? "block" : "none";
+      statusNode.classList.remove("is-success", "is-error", "is-info");
+      statusNode.classList.add(tone === "success" ? "is-success" : tone === "error" ? "is-error" : "is-info");
+    };
+    const runImport = (apply: boolean): void => {
+      const parsed = parseCustomStatsImportPayload(String(textarea?.value ?? ""));
+      if (parsed.error) {
+        setImportStatus(parsed.error, "error");
+        return;
+      }
+      if (!apply) {
+        const warningSuffix = parsed.warnings.length
+          ? ` Warnings: ${parsed.warnings.slice(0, 2).join(" ")}${parsed.warnings.length > 2 ? " ..." : ""}`
+          : "";
+        setImportStatus(`Validation passed for ${parsed.stats.length} stat(s).${warningSuffix}`, parsed.warnings.length ? "info" : "success");
+        return;
+      }
+      const { added, replaced } = applyImportedCustomStats(parsed);
+      const warningSuffix = parsed.warnings.length
+        ? ` Warnings: ${parsed.warnings.slice(0, 2).join(" ")}${parsed.warnings.length > 2 ? " ..." : ""}`
+        : "";
+      setCustomStatsStatus(`Imported ${parsed.stats.length} stat(s): +${added}, replaced ${replaced}.${warningSuffix}`, parsed.warnings.length ? "info" : "success");
+      close();
+    };
+
+    wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
+    wizard.querySelector('[data-action="custom-validate-import"]')?.addEventListener("click", () => runImport(false));
+    wizard.querySelector('[data-action="custom-apply-import"]')?.addEventListener("click", () => runImport(true));
+    backdropNode.addEventListener("click", close);
+    wizard.addEventListener("click", event => event.stopPropagation());
+
+    document.body.appendChild(backdropNode);
+    document.body.appendChild(wizard);
+    textarea?.focus();
   };
 
   const renderCustomStatsList = (): void => {
@@ -8083,30 +8197,7 @@ export function openSettingsModal(input: {
     openCustomStatWizard("add");
   });
   customImportJsonButton?.addEventListener("click", () => {
-    const pasted = window.prompt("Paste custom stats JSON (array or {\"customStats\":[...]}):", "");
-    if (pasted == null) return;
-    const parsed = parseCustomStatsImportPayload(pasted);
-    if (parsed.error) {
-      setCustomStatsStatus(parsed.error, "error");
-      return;
-    }
-    const mergedById = new Map(customStatsState.map(stat => [stat.id, cloneCustomStatDefinition(stat)]));
-    let replaced = 0;
-    let added = 0;
-    for (const stat of parsed.stats) {
-      const id = String(stat.id ?? "").trim().toLowerCase();
-      if (!id) continue;
-      if (mergedById.has(id)) replaced += 1;
-      else added += 1;
-      mergedById.set(id, cloneCustomStatDefinition(stat));
-    }
-    customStatsState = Array.from(mergedById.values()).slice(0, MAX_CUSTOM_STATS);
-    renderCustomStatsList();
-    persistLive();
-    const warningSuffix = parsed.warnings.length
-      ? ` Warnings: ${parsed.warnings.slice(0, 2).join(" ")}${parsed.warnings.length > 2 ? " ..." : ""}`
-      : "";
-    setCustomStatsStatus(`Imported ${parsed.stats.length} stat(s): +${added}, replaced ${replaced}.${warningSuffix}`, parsed.warnings.length ? "info" : "success");
+    openCustomImportWizard();
   });
   manageBuiltInsButton?.addEventListener("click", () => {
     openBuiltInManagerWizard();
