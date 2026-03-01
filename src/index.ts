@@ -835,10 +835,13 @@ function hasTrackedValueForCharacter(
     const statId = String(def.id ?? "").trim().toLowerCase();
     if (!statId) continue;
     const kind = def.kind ?? "numeric";
+    const globalScope = Boolean(def.globalScope);
     if (kind === "numeric") {
+      if (globalScope && data.customStatistics?.[statId]?.[GLOBAL_TRACKER_KEY] !== undefined) return true;
       if (data.customStatistics?.[statId]?.[characterName] !== undefined) return true;
       continue;
     }
+    if (globalScope && data.customNonNumericStatistics?.[statId]?.[GLOBAL_TRACKER_KEY] !== undefined) return true;
     if (data.customNonNumericStatistics?.[statId]?.[characterName] !== undefined) return true;
   }
 
