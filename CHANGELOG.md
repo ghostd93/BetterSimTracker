@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev13] - 2026-03-01
+### Changed
+- Scene Card subdrawer styling now uses a dedicated neutral/gray nested-drawer style (instead of help-details styling), matching drawer UX expectations.
+
 ## [2.2.1.3-dev12] - 2026-03-01
 ### Changed
 - Scene Card now always owns global custom stat rendering when enabled (global stats are no longer duplicated on owner cards).

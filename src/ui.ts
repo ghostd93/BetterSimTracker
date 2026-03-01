@@ -2340,6 +2340,60 @@ function ensureStyles(): void {
   font-size: 12px;
   opacity: 0.85;
 }
+.bst-subdrawer {
+  margin: 8px 0 2px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-left: 3px solid rgba(184, 194, 212, 0.42);
+  border-radius: 12px;
+  background: rgba(8, 13, 23, 0.56);
+  overflow: hidden;
+  transition: border-color .14s ease, box-shadow .14s ease, background-color .14s ease;
+}
+.bst-subdrawer > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  color: rgba(236, 244, 255, 0.95);
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.9), rgba(12, 18, 30, 0.86));
+}
+.bst-subdrawer:hover {
+  border-color: rgba(194, 204, 223, 0.3);
+  border-left-color: rgba(198, 208, 226, 0.58);
+  background: rgba(10, 15, 26, 0.62);
+}
+.bst-subdrawer[open] {
+  border-left-color: rgba(206, 216, 233, 0.74);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.bst-subdrawer > summary::-webkit-details-marker {
+  display: none;
+}
+.bst-subdrawer-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.bst-subdrawer > summary::after {
+  content: "\f13a";
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  opacity: 0.88;
+  transition: transform .14s ease;
+}
+.bst-subdrawer[open] > summary::after {
+  transform: rotate(180deg);
+}
+.bst-subdrawer > .bst-settings-grid {
+  padding: 12px;
+}
 .bst-prompts-stack {
   margin-top: 8px;
 }
@@ -5757,8 +5811,8 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
         </div>
       </div>
-      <details class="bst-help-details" data-bst-row="sceneCardDrawer">
-        <summary>Scene Card</summary>
+      <details class="bst-subdrawer" data-bst-row="sceneCardDrawer">
+        <summary><span class="bst-subdrawer-title"><span class="fa-solid fa-layer-group" aria-hidden="true"></span>Scene Card</span></summary>
         <div class="bst-settings-grid bst-settings-grid-single">
           <label class="bst-check" data-bst-row="sceneCardEnabled"><input data-k="sceneCardEnabled" type="checkbox">Enable Scene Card (global stats)</label>
           <label data-bst-row="sceneCardPosition">Position
