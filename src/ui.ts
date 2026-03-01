@@ -114,7 +114,6 @@ const DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS: StExpressionImageOptions = {
   positionX: 50,
   positionY: 20,
 };
-const CUSTOM_STATS_IMPORT_BACKUP_KEY = "bst_custom_stats_import_backup_v1";
 
 function shortLabelFrom(label: string): string {
   const cleaned = label.trim().toUpperCase();
@@ -5570,7 +5569,6 @@ export function openSettingsModal(input: {
         <div class="bst-custom-stats-actions">
           <button type="button" class="bst-btn bst-btn-soft" data-action="custom-add">Add Custom Stat</button>
           <button type="button" class="bst-btn bst-btn-soft" data-action="custom-import-json">Import JSON</button>
-          <button type="button" class="bst-btn bst-btn-soft" data-action="custom-undo-import">Undo Last Import</button>
         </div>
       </div>
       <div class="bst-help-line bst-custom-stats-status is-info" data-bst-row="customStatsImportStatus" style="display:none;"></div>
@@ -6292,7 +6290,6 @@ export function openSettingsModal(input: {
   const customStatsListNode = modal.querySelector('[data-bst-row="customStatsList"]') as HTMLElement | null;
   const customAddButton = modal.querySelector('[data-action="custom-add"]') as HTMLButtonElement | null;
   const customImportJsonButton = modal.querySelector('[data-action="custom-import-json"]') as HTMLButtonElement | null;
-  const customUndoImportButton = modal.querySelector('[data-action="custom-undo-import"]') as HTMLButtonElement | null;
   const customStatsImportStatusNode = modal.querySelector('[data-bst-row="customStatsImportStatus"]') as HTMLElement | null;
   const manageBuiltInsButton = modal.querySelector('[data-action="manage-builtins"]') as HTMLButtonElement | null;
 
@@ -6744,41 +6741,6 @@ export function openSettingsModal(input: {
       return true;
     } catch {
       return false;
-    }
-  };
-
-  const readImportBackup = (): CustomStatDefinition[] | null => {
-    try {
-      const raw = localStorage.getItem(CUSTOM_STATS_IMPORT_BACKUP_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as { customStats?: unknown } | unknown;
-      const list = Array.isArray(parsed)
-        ? parsed
-        : (parsed && typeof parsed === "object" && Array.isArray((parsed as { customStats?: unknown }).customStats)
-          ? (parsed as { customStats: unknown[] }).customStats
-          : null);
-      if (!list) return null;
-      const existingIds = new Set<string>();
-      const restored: CustomStatDefinition[] = [];
-      for (let i = 0; i < list.length; i += 1) {
-        if (restored.length >= MAX_CUSTOM_STATS) break;
-        const normalized = normalizeImportedCustomStat(list[i], existingIds, i);
-        if (normalized.stat) restored.push(normalized.stat);
-      }
-      return restored.length ? restored : null;
-    } catch {
-      return null;
-    }
-  };
-
-  const writeImportBackup = (stats: CustomStatDefinition[]): void => {
-    try {
-      const payload = {
-        customStats: stats.map(cloneCustomStatDefinition),
-      };
-      localStorage.setItem(CUSTOM_STATS_IMPORT_BACKUP_KEY, JSON.stringify(payload));
-    } catch {
-      // Ignore localStorage failures, import still works.
     }
   };
 
@@ -8128,7 +8090,6 @@ export function openSettingsModal(input: {
       setCustomStatsStatus(parsed.error, "error");
       return;
     }
-    writeImportBackup(customStatsState);
     const mergedById = new Map(customStatsState.map(stat => [stat.id, cloneCustomStatDefinition(stat)]));
     let replaced = 0;
     let added = 0;
@@ -8146,17 +8107,6 @@ export function openSettingsModal(input: {
       ? ` Warnings: ${parsed.warnings.slice(0, 2).join(" ")}${parsed.warnings.length > 2 ? " ..." : ""}`
       : "";
     setCustomStatsStatus(`Imported ${parsed.stats.length} stat(s): +${added}, replaced ${replaced}.${warningSuffix}`, parsed.warnings.length ? "info" : "success");
-  });
-  customUndoImportButton?.addEventListener("click", () => {
-    const backup = readImportBackup();
-    if (!backup) {
-      setCustomStatsStatus("No import backup available to restore.", "error");
-      return;
-    }
-    customStatsState = backup.map(cloneCustomStatDefinition);
-    renderCustomStatsList();
-    persistLive();
-    setCustomStatsStatus(`Restored ${customStatsState.length} custom stat(s) from pre-import backup.`, "success");
   });
   manageBuiltInsButton?.addEventListener("click", () => {
     openBuiltInManagerWizard();

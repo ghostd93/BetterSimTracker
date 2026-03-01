@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev7] - 2026-03-01
+### Changed
+- Removed `Undo Last Import` from Custom Stats settings.
+- Kept non-destructive JSON import merge behavior (import updates/adds by stat id, no replace-all).
+
 ## [2.2.1.3-dev6] - 2026-03-01
 ### Added
 - Custom stats import now creates a pre-import backup and exposes `Undo Last Import` in settings.
