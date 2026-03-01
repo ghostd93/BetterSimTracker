@@ -2,117 +2,25 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.1.3-dev17] - 2026-03-01
+## [2.2.2] - 2026-03-01
+### Added
+- Configurable Scene Card system for global custom stats with dedicated settings drawer and `Scene Stat Studio` manager.
+- Per-stat Scene display controls: visibility, label/color override, layout override, value style, hide-when-empty behavior, per-stat text clamp, and array collapse limit.
+- Manual Scene stat ordering with explicit persisted order and per-stat move controls.
+- Custom stats JSON workflows: styled import modal, per-stat export, and format-compatible import support.
+- Debug dump metadata now includes extension version and custom stat scope-resolution diagnostics.
+
 ### Changed
 - Scene Card position now supports two modes only: `Above tracker cards` and `Above message text`.
-- Added dedicated `above_message` rendering path: Scene Card can mount before `.mes_text` while owner tracker cards stay in the regular tracker area.
-- Removed `below_tracker_cards` option from settings and runtime parsing.
-- Updated README and UI docs for the new position options.
-
-## [2.2.1.3-dev16] - 2026-03-01
-### Added
-- Scene Stat per-stat editor now supports advanced display controls: `showLabel`, `hideWhenEmpty`, `valueStyle` (`auto/chip/plain`), and per-stat `textMaxLength` clamp.
-
-### Changed
-- Redesigned Scene Stat editor modal into grouped sections (`Visibility`, `Presentation`, `Array Handling`) for clearer high-config workflow.
-- Scene rendering now honors the new per-stat controls (including hide-empty and plain-text value mode).
-- Display settings wording updated from `Scene Stat Display Manager` to `Scene Stat Studio`.
-- Docs updated (`README`, `docs/data-model.md`, `docs/ui-system.md`) for Scene Stat Studio schema/behavior.
-
-## [2.2.1.3-dev15] - 2026-03-01
-### Added
-- Scene Card stat manager now includes per-stat display editor (pencil action) with visibility, label override, color override, layout override, and per-stat array-collapse limit.
-
-### Changed
-- Scene Card manager section was renamed to clarify scope (`Scene Stat Display Manager`).
-- Scene Card now always uses explicit manual order (`sceneCardStatOrder`) for global custom stats.
-- Removed redundant global Scene sort-mode setting and replaced it with per-stat display configuration.
-
-## [2.2.1.3-dev14] - 2026-03-01
-### Added
-- Scene Card now includes a dedicated stat-order manager for global custom stats, allowing users to reorder stats arbitrarily with per-stat move controls.
-
-### Changed
-- `Custom stats order` mode for Scene Card now uses a persisted explicit order list (`sceneCardStatOrder`) instead of implicit definition order.
-
-## [2.2.1.3-dev13] - 2026-03-01
-### Changed
-- Scene Card subdrawer styling now uses a dedicated neutral/gray nested-drawer style (instead of help-details styling), matching drawer UX expectations.
-
-## [2.2.1.3-dev12] - 2026-03-01
-### Changed
-- Scene Card now always owns global custom stat rendering when enabled (global stats are no longer duplicated on owner cards).
-- Scene Card settings moved into a dedicated Display subsection drawer.
-- Scene Card configurability expanded with stat ordering (`custom order`/`A-Z`), custom title, card color override, stat value color override, empty-state visibility toggle, and array chips collapse threshold.
-
-## [2.2.1.3-dev11] - 2026-03-01
-### Added
-- New configurable `Scene Card` display surface for global custom stats, with `position` (`above/below tracker cards`) and `layout` (`chips/rows`) controls.
-
-### Changed
-- Display settings now include a `scene_only` mode that hides global custom stats on owner cards while still rendering them in Scene Card.
-- Documentation updated (`README` flowchart + display reference, `docs/data-model.md`, `docs/ui-system.md`) for Scene Card settings and rendering behavior.
-
-## [2.2.1.3-dev10] - 2026-03-01
-### Changed
-- Drawer header version label is now visually smaller than the extension name.
-
-## [2.2.1.3-dev9] - 2026-03-01
-### Added
-- Extension drawer header now shows dynamic build version (`BetterSimTracker vX.Y.Z...`) sourced from build-time version metadata.
-
-## [2.2.1.3-dev8] - 2026-03-01
-### Changed
-- Replaced browser-native `Import JSON` prompt with a BST-styled import modal (textarea + validate/import + inline status).
-- Kept non-destructive merge import behavior and existing warning/status reporting.
-
-## [2.2.1.3-dev7] - 2026-03-01
-### Changed
-- Removed `Undo Last Import` from Custom Stats settings.
-- Kept non-destructive JSON import merge behavior (import updates/adds by stat id, no replace-all).
-
-## [2.2.1.3-dev6] - 2026-03-01
-### Added
-- Custom stats import now creates a pre-import backup and exposes `Undo Last Import` in settings.
+- Scene Card now exclusively owns rendering of global custom stats when enabled (no duplicate owner-card rendering).
+- Scene settings and naming were modernized (`Scene Stat Studio`) and documented across README/docs.
+- Extension drawer header now displays dynamic build version with compact visual style.
+- Import flow remains merge-based and non-destructive (update/add by stat id), with clearer in-UI status feedback.
 
 ### Fixed
-- Custom stats JSON import is now non-destructive (merge by stat id) instead of replace-all.
-- Import status now reports added/replaced counts to make scope of changes explicit.
-
-## [2.2.1.3-dev5] - 2026-03-01
-### Changed
-- Custom stat JSON export is now per-stat only (from each stat row) instead of bulk export.
-- Per-stat export output uses a one-item array format that is directly compatible with Import JSON.
-
-## [2.2.1.3-dev4] - 2026-03-01
-### Added
-- Custom Stats settings now include `Import JSON` and `Export JSON` actions for stat definitions.
-- JSON import accepts both raw array payloads and wrapped `{ "customStats": [...] }` payloads, with in-UI status feedback.
-
-### Changed
-- Imported custom stats are normalized with safe ID collision handling, kind-aware defaults, and hard limits before save.
-- Docs updated for custom stats JSON import/export flow.
-
-## [2.2.1.3-dev3] - 2026-03-01
-### Added
-- Debug diagnostics now include `scopeResolution` metadata for custom non-numeric stats, showing per-owner baseline source (`global`, `owner`, `legacy_fallback`, `global_fallback`, `none`) for current state and recent snapshots.
-- Debug diagnostics dump now includes `extensionVersion`, injected at build-time from `package.json`, so logs always show the exact running build.
-
-## [2.2.1.3-dev2] - 2026-03-01
-### Fixed
-- Sequential custom non-numeric prompts now resolve current/history baseline values with each stat's `globalScope`, so global stats no longer read stale per-character values during retrack.
-
-## [2.2.1.3-dev1] - 2026-03-01
-### Added
-- Custom stat scope model now supports `Global stat (shared)` in the wizard, with enforced semantics for shared owner key storage.
-
-### Changed
-- Global custom stats now always track both Characters and User and cannot be marked private (enforced in sanitization, wizard UI, and save mapping).
-
-### Fixed
-- Manual tracker edits now correctly read/write global custom stats using the global owner key instead of per-owner keys.
-- User-only extraction filtering now preserves global custom stat values instead of dropping them when owner-scoping to `__bst_user__`.
-- Non-numeric definition mapping now carries `globalScope` consistently to rendering and edit paths.
+- Global custom stat scope handling across extraction, retrack, rendering, and manual edit paths now consistently uses the shared global owner key.
+- Sequential non-numeric baseline resolution now respects each stat's global scope, preventing stale per-character carry-over.
+- JSON import safety and normalization hardened (kind-aware defaults, safe id handling, bounded values).
 
 ## [2.2.1.3] - 2026-02-28
 ### Changed
