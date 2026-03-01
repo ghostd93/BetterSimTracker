@@ -23,7 +23,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Summarize button (AI-generated detailed prose summary, 4-6 sentences, grounded in currently tracked dimensions, no numeric stat values; with settings to make the note AI-visible and/or inject it into prompt guidance)
 - Edit last tracker stats inline (pencil icon on the latest card; numeric clamp + mood picker + last thought editor + kind-aware custom non-numeric editors)
 - `array` custom stat kind (max 20 items) with card-friendly chip rendering and `+N more` expand/collapse for long lists
-- Configurable Scene Card for global custom stats (position/layout/order/title/colors/array handling)
+- Configurable Scene Card for global custom stats (position/layout/order/title/colors/array handling + per-stat display controls)
 - Relationship graph modal:
   - history window (`30 / 60 / 120 / all`)
   - raw/smoothed view
@@ -380,7 +380,7 @@ You can disable any metric you do not want extracted. Disabled stats stop updati
 - `Enable Scene Card (global stats)`: render a dedicated Scene card from global custom stats and hide global stats on owner cards.
 - `Scene Card Position`: place Scene card above or below owner cards.
 - `Scene Card Layout`: render Scene values as chips or rows.
-- `Scene Card Stat Order`: use custom-stats order or alphabetical labels.
+- `Scene Stat Studio`: per-stat ordering with editor controls (visibility, label, color, layout override, value style, hide-empty, text clamp, array collapse limit).
 - `Scene Card Title`: set custom card header label.
 - `Scene Card Color`: optional Scene card color override.
 - `Scene Card Stat Value Color`: optional override for Scene stat chips/values.

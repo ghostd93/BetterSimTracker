@@ -730,9 +730,15 @@ function sanitizeSceneCardStatDisplay(input: unknown): Record<string, SceneCardS
     const row = value as Record<string, unknown>;
     output[id] = {
       visible: asBool(row.visible, true),
+      showLabel: asBool(row.showLabel, true),
+      hideWhenEmpty: asBool(row.hideWhenEmpty, true),
       labelOverride: asText(row.labelOverride, "").slice(0, 40),
       colorOverride: sanitizeHexColor(row.colorOverride) ?? "",
       layoutOverride: row.layoutOverride === "chips" || row.layoutOverride === "rows" ? row.layoutOverride : "auto",
+      valueStyle: row.valueStyle === "chip" || row.valueStyle === "plain" ? row.valueStyle : "auto",
+      textMaxLength: row.textMaxLength == null
+        ? null
+        : clampInt(row.textMaxLength, 80, 10, 400),
       arrayCollapsedLimit: row.arrayCollapsedLimit == null
         ? null
         : clampInt(row.arrayCollapsedLimit, 4, 1, 20),

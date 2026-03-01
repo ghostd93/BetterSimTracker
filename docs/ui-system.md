@@ -27,7 +27,8 @@ Optional Scene card can render:
 - global-scoped custom non-numeric stats (`globalScope: true`)
 - configurable placement (`above_tracker_cards` / `below_tracker_cards`)
 - configurable layout (`chips` / `rows`)
-- configurable ordering (`custom_order` / `label_asc`)
+- configurable explicit ordering (manual up/down order list)
+- per-stat display editor (visibility, label/color override, layout override, value style, hide-empty behavior, text clamp, array collapse limit)
 - configurable title and color overrides
 - configurable array chips collapse threshold
 - global stats are hidden from owner cards while Scene card is enabled (no duplicate rendering)
@@ -87,7 +88,7 @@ Key capabilities:
 - custom stat wizard (`Add`, `Edit`, `Clone`, `Remove`)
 - custom stat JSON actions (`Import JSON` + per-stat `Export JSON` from stat row)
 - AI helper buttons for prompt/description/guidance generation
-- scene card controls in Display section drawer (enable/position/layout/order/title/colors/empty-state/array-threshold)
+- scene card controls in Display section drawer (enable/position/layout/title/colors/empty-state + Scene Stat Studio for order/per-stat display)
 
 ## Custom Stat Wizard
 

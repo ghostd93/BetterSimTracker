@@ -396,6 +396,12 @@ function formatNonNumericForDisplay(def: UiNonNumericStatDefinition, value: stri
   return String(value);
 }
 
+function truncateDisplayText(value: string, maxLength: number | null | undefined): string {
+  if (typeof maxLength !== "number" || !Number.isFinite(maxLength) || maxLength < 10) return value;
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 1))}\u2026`;
+}
+
 export type TrackerUiState = {
   phase: "idle" | "generating" | "extracting";
   done: number;
@@ -2438,6 +2444,29 @@ function ensureStyles(): void {
   display: inline-flex;
   gap: 6px;
 }
+.bst-scene-stat-editor-group {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  background: rgba(10, 16, 28, 0.55);
+  padding: 10px;
+}
+.bst-scene-stat-editor-group .bst-check-grid {
+  margin-top: 0;
+}
+.bst-scene-stat-editor-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(236, 244, 255, 0.92);
+  letter-spacing: 0.01em;
+}
+.bst-scene-plain-value {
+  color: var(--bst-stat-color);
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 600;
+}
 .bst-prompts-stack {
   margin-top: 8px;
 }
@@ -4459,10 +4488,16 @@ export function renderTracker(
       return resolveNonNumericValue(data, def, GLOBAL_TRACKER_KEY);
     };
     const baseSceneValues = hasSceneCard
-      ? sceneCardDefs
-        .filter(def => hasEffectiveSceneValue(def))
-        .map(def => ({ def, value: resolveSceneValue(def) }))
-        .filter(item => item.value != null)
+      ? sceneCardDefs.map(def => {
+        const value = resolveSceneValue(def);
+        const hasCurrentValue = hasEffectiveSceneValue(def);
+        const hasResolvedValue = value != null && (def.kind !== "array" || (Array.isArray(value) ? value.length > 0 : normalizeNonNumericArrayItems(value, def.textMaxLength).length > 0));
+        return {
+          def,
+          value,
+          hasValue: hasCurrentValue || hasResolvedValue,
+        };
+      })
       : [];
     const order = new Map((settings.sceneCardStatOrder ?? []).map((id, index) => [String(id ?? "").trim().toLowerCase(), index]));
     const sceneDisplayById = settings.sceneCardStatDisplay ?? {};
@@ -4473,6 +4508,7 @@ export function renderTracker(
         return { ...item, id, display };
       })
       .filter(item => item.display?.visible !== false)
+      .filter(item => item.hasValue || item.display?.hideWhenEmpty === false)
       .sort((a, b) => {
         const aIdx = order.get(a.id);
         const bIdx = order.get(b.id);
@@ -4497,28 +4533,37 @@ export function renderTracker(
             const display = item.display;
             const color = display?.colorOverride || settings.sceneCardValueColor || def.color || settings.accentColor || "#9bd5ff";
             const statLabel = display?.labelOverride?.trim() ? display.labelOverride.trim() : def.label;
+            const showLabel = display?.showLabel !== false;
+            const valueStyle = display?.valueStyle === "chip" || display?.valueStyle === "plain" ? display.valueStyle : "auto";
+            const textMaxLength = display?.textMaxLength ?? null;
             const statLayout = display?.layoutOverride === "chips" || display?.layoutOverride === "rows"
               ? display.layoutOverride
               : settings.sceneCardLayout;
             if (statLayout === "rows") {
               if (def.kind === "array") {
                 const items = Array.isArray(resolved) ? resolved : normalizeNonNumericArrayItems(resolved, def.textMaxLength);
-                const textValue = items.length ? items.join(", ") : "No items";
+                const textValueRaw = items.length ? items.join(", ") : "Not set";
+                const textValue = truncateDisplayText(textValueRaw, textMaxLength);
                 return `
                   <div class="bst-row bst-row-non-numeric">
                     <div class="bst-label">
-                      <span>${escapeHtml(statLabel)}</span>
-                      <span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(textValue)}">${escapeHtml(textValue)}</span>
+                      ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
+                      ${valueStyle === "plain"
+                        ? `<span class="bst-scene-plain-value" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(textValueRaw)}">${escapeHtml(textValue)}</span>`
+                        : `<span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(textValueRaw)}">${escapeHtml(textValue)}</span>`}
                     </div>
                   </div>
                 `;
               }
-              const displayValue = formatNonNumericForDisplay(def, resolved);
+              const displayValueRaw = resolved == null ? "Not set" : formatNonNumericForDisplay(def, resolved);
+              const displayValue = truncateDisplayText(displayValueRaw, textMaxLength);
               return `
                 <div class="bst-row bst-row-non-numeric">
                   <div class="bst-label">
-                    <span>${escapeHtml(statLabel)}</span>
-                    <span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</span>
+                    ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
+                    ${valueStyle === "plain"
+                      ? `<span class="bst-scene-plain-value" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`
+                      : `<span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`}
                   </div>
                 </div>
               `;
@@ -4531,12 +4576,15 @@ export function renderTracker(
               const hasOverflow = items.length > arrayLimit;
               const visibleItems = hasOverflow && !expanded ? items.slice(0, arrayLimit) : items;
               const chips = visibleItems.length
-                ? visibleItems.map(itemValue => `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(itemValue)}">${escapeHtml(itemValue)}</span>`).join("")
-                : `<span class="bst-array-item-empty">No items</span>`;
+                ? visibleItems.map(itemValue => {
+                  const value = truncateDisplayText(itemValue, textMaxLength);
+                  return `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(itemValue)}">${escapeHtml(value)}</span>`;
+                }).join("")
+                : `<span class="bst-array-item-empty">Not set</span>`;
               return `
                 <div class="bst-row bst-row-non-numeric">
                   <div class="bst-label">
-                    <span>${escapeHtml(statLabel)}</span>
+                    ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
                   </div>
                   <div class="bst-array-items">
                     ${chips}
@@ -4547,12 +4595,15 @@ export function renderTracker(
                 </div>
               `;
             }
-            const displayValue = formatNonNumericForDisplay(def, resolved);
+            const displayValueRaw = resolved == null ? "Not set" : formatNonNumericForDisplay(def, resolved);
+            const displayValue = truncateDisplayText(displayValueRaw, textMaxLength);
             return `
               <div class="bst-row bst-row-non-numeric">
                 <div class="bst-label">
-                  <span>${escapeHtml(statLabel)}</span>
-                  <span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</span>
+                  ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
+                  ${valueStyle === "plain"
+                    ? `<span class="bst-scene-plain-value" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`
+                    : `<span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`}
                 </div>
               </div>
             `;
@@ -5688,17 +5739,25 @@ export function openSettingsModal(input: {
     : [];
   let sceneCardStatDisplayState: Record<string, {
     visible: boolean;
+    showLabel: boolean;
+    hideWhenEmpty: boolean;
     labelOverride: string;
     colorOverride: string;
     layoutOverride: "auto" | "chips" | "rows";
+    valueStyle: "auto" | "chip" | "plain";
+    textMaxLength: number | null;
     arrayCollapsedLimit: number | null;
   }> = (() => {
     const raw = input.settings.sceneCardStatDisplay ?? {};
     const out: Record<string, {
       visible: boolean;
+      showLabel: boolean;
+      hideWhenEmpty: boolean;
       labelOverride: string;
       colorOverride: string;
       layoutOverride: "auto" | "chips" | "rows";
+      valueStyle: "auto" | "chip" | "plain";
+      textMaxLength: number | null;
       arrayCollapsedLimit: number | null;
     }> = {};
     for (const [id, row] of Object.entries(raw)) {
@@ -5706,9 +5765,15 @@ export function openSettingsModal(input: {
       if (!key || !row) continue;
       out[key] = {
         visible: Boolean(row.visible ?? true),
+        showLabel: Boolean(row.showLabel ?? true),
+        hideWhenEmpty: Boolean(row.hideWhenEmpty ?? true),
         labelOverride: String(row.labelOverride ?? "").trim().slice(0, 40),
         colorOverride: normalizeHexColor(row.colorOverride) ?? "",
         layoutOverride: row.layoutOverride === "chips" || row.layoutOverride === "rows" ? row.layoutOverride : "auto",
+        valueStyle: row.valueStyle === "chip" || row.valueStyle === "plain" ? row.valueStyle : "auto",
+        textMaxLength: typeof row.textMaxLength === "number" && Number.isFinite(row.textMaxLength)
+          ? Math.max(10, Math.min(400, Math.round(row.textMaxLength)))
+          : null,
         arrayCollapsedLimit: typeof row.arrayCollapsedLimit === "number" && Number.isFinite(row.arrayCollapsedLimit)
           ? Math.max(1, Math.min(20, Math.round(row.arrayCollapsedLimit)))
           : null,
@@ -5924,7 +5989,7 @@ export function openSettingsModal(input: {
             </select>
           </label>
           <div data-bst-row="sceneCardOrderManager">
-            <div class="bst-help-line">Scene Stat Display Manager (order + per-stat display options).</div>
+            <div class="bst-help-line">Scene Stat Studio (order + per-stat style, visibility, and layout).</div>
             <div class="bst-scene-order-list" data-bst-row="sceneCardOrderList"></div>
           </div>
           <label data-bst-row="sceneCardArrayCollapsedLimit">Array chips before collapse
@@ -7361,9 +7426,13 @@ export function openSettingsModal(input: {
     if (!stat) return;
     const current = sceneCardStatDisplayState[targetId] ?? {
       visible: true,
+      showLabel: true,
+      hideWhenEmpty: true,
       labelOverride: "",
       colorOverride: "",
       layoutOverride: "auto" as const,
+      valueStyle: "auto" as const,
+      textMaxLength: null,
       arrayCollapsedLimit: null,
     };
     const backdropNode = document.createElement("div");
@@ -7373,31 +7442,56 @@ export function openSettingsModal(input: {
     wizard.innerHTML = `
       <div class="bst-custom-wizard-head">
         <div>
-          <div class="bst-custom-wizard-title">Scene Stat Display Options</div>
+          <div class="bst-custom-wizard-title">Scene Stat Display</div>
           <div class="bst-custom-wizard-step">${escapeHtml(stat.label)} (${escapeHtml(stat.id)})</div>
         </div>
         <button type="button" class="bst-btn bst-close-btn" data-action="scene-stat-close" aria-label="Close">&times;</button>
       </div>
       <div class="bst-custom-wizard-panel is-active">
         <div class="bst-settings-grid bst-settings-grid-single">
-          <label class="bst-check"><input type="checkbox" data-scene-opt="visible" ${current.visible ? "checked" : ""}>Visible on Scene Card</label>
-          <label>Label Override <input type="text" data-scene-opt="labelOverride" maxlength="40" value="${escapeHtml(current.labelOverride)}" placeholder="Use default label"></label>
-          <label>Color Override
-            <div class="bst-color-inputs">
-              <input type="color" data-scene-opt-color="colorOverride">
-              <input type="text" data-scene-opt="colorOverride" value="${escapeHtml(current.colorOverride)}" placeholder="Use global/default">
+          <div class="bst-scene-stat-editor-group">
+            <div class="bst-scene-stat-editor-group-title">Visibility</div>
+            <div class="bst-check-grid">
+              <label class="bst-check"><input type="checkbox" data-scene-opt="visible" ${current.visible ? "checked" : ""}>Show on Scene Card</label>
+              <label class="bst-check"><input type="checkbox" data-scene-opt="showLabel" ${current.showLabel !== false ? "checked" : ""}>Show label</label>
+              <label class="bst-check"><input type="checkbox" data-scene-opt="hideWhenEmpty" ${current.hideWhenEmpty !== false ? "checked" : ""}>Hide when empty</label>
             </div>
-          </label>
-          <label>Layout Override
-            <select data-scene-opt="layoutOverride">
-              <option value="auto"${current.layoutOverride === "auto" ? " selected" : ""}>Use Scene Card default</option>
-              <option value="chips"${current.layoutOverride === "chips" ? " selected" : ""}>Chips</option>
-              <option value="rows"${current.layoutOverride === "rows" ? " selected" : ""}>Rows</option>
-            </select>
-          </label>
-          <label data-scene-opt-row="arrayLimit">Array Collapse Limit (1-20)
-            <input type="number" min="1" max="20" data-scene-opt="arrayCollapsedLimit" value="${current.arrayCollapsedLimit == null ? "" : String(current.arrayCollapsedLimit)}" placeholder="Use Scene Card default">
-          </label>
+          </div>
+          <div class="bst-scene-stat-editor-group">
+            <div class="bst-scene-stat-editor-group-title">Presentation</div>
+            <label>Label Override
+              <input type="text" data-scene-opt="labelOverride" maxlength="40" value="${escapeHtml(current.labelOverride)}" placeholder="Use default label">
+            </label>
+            <label>Color Override
+              <div class="bst-color-inputs">
+                <input type="color" data-scene-opt-color="colorOverride">
+                <input type="text" data-scene-opt="colorOverride" value="${escapeHtml(current.colorOverride)}" placeholder="Use global/default">
+              </div>
+            </label>
+            <label>Layout Override
+              <select data-scene-opt="layoutOverride">
+                <option value="auto"${current.layoutOverride === "auto" ? " selected" : ""}>Use Scene Card default</option>
+                <option value="chips"${current.layoutOverride === "chips" ? " selected" : ""}>Chips</option>
+                <option value="rows"${current.layoutOverride === "rows" ? " selected" : ""}>Rows</option>
+              </select>
+            </label>
+            <label>Value Style (non-array)
+              <select data-scene-opt="valueStyle">
+                <option value="auto"${current.valueStyle === "auto" ? " selected" : ""}>Auto</option>
+                <option value="chip"${current.valueStyle === "chip" ? " selected" : ""}>Chip</option>
+                <option value="plain"${current.valueStyle === "plain" ? " selected" : ""}>Plain text</option>
+              </select>
+            </label>
+            <label>Text Max Length
+              <input type="number" min="10" max="400" data-scene-opt="textMaxLength" value="${current.textMaxLength == null ? "" : String(current.textMaxLength)}" placeholder="No clamp">
+            </label>
+          </div>
+          <div class="bst-scene-stat-editor-group" data-scene-opt-row="arrayLimit">
+            <div class="bst-scene-stat-editor-group-title">Array Handling</div>
+            <label>Array Collapse Limit (1-20)
+              <input type="number" min="1" max="20" data-scene-opt="arrayCollapsedLimit" value="${current.arrayCollapsedLimit == null ? "" : String(current.arrayCollapsedLimit)}" placeholder="Use Scene Card default">
+            </label>
+          </div>
         </div>
       </div>
       <div class="bst-custom-wizard-actions">
@@ -7420,7 +7514,7 @@ export function openSettingsModal(input: {
       const layoutNode = wizard.querySelector('[data-scene-opt="layoutOverride"]') as HTMLSelectElement | null;
       const effectiveLayout = String(layoutNode?.value ?? "auto");
       const show = normalizeCustomStatKind(stat.kind) === "array" && (effectiveLayout === "auto" || effectiveLayout === "chips");
-      if (row) row.style.display = show ? "flex" : "none";
+      if (row) row.style.display = show ? "block" : "none";
     };
     syncColorPicker();
     updateArrayRow();
@@ -7438,17 +7532,30 @@ export function openSettingsModal(input: {
       const labelNode = wizard.querySelector('[data-scene-opt="labelOverride"]') as HTMLInputElement | null;
       const colorNode = wizard.querySelector('[data-scene-opt="colorOverride"]') as HTMLInputElement | null;
       const layoutNode = wizard.querySelector('[data-scene-opt="layoutOverride"]') as HTMLSelectElement | null;
+      const showLabelNode = wizard.querySelector('[data-scene-opt="showLabel"]') as HTMLInputElement | null;
+      const hideWhenEmptyNode = wizard.querySelector('[data-scene-opt="hideWhenEmpty"]') as HTMLInputElement | null;
+      const valueStyleNode = wizard.querySelector('[data-scene-opt="valueStyle"]') as HTMLSelectElement | null;
+      const textMaxLengthNode = wizard.querySelector('[data-scene-opt="textMaxLength"]') as HTMLInputElement | null;
       const arrayLimitNode = wizard.querySelector('[data-scene-opt="arrayCollapsedLimit"]') as HTMLInputElement | null;
       const layoutOverride = layoutNode?.value === "chips" || layoutNode?.value === "rows" ? layoutNode.value : "auto";
+      const valueStyle = valueStyleNode?.value === "chip" || valueStyleNode?.value === "plain" ? valueStyleNode.value : "auto";
+      const parsedTextMaxRaw = Number(textMaxLengthNode?.value ?? "");
+      const textMaxLength = Number.isFinite(parsedTextMaxRaw) && !Number.isNaN(parsedTextMaxRaw)
+        ? Math.max(10, Math.min(400, Math.round(parsedTextMaxRaw)))
+        : null;
       const parsedLimitRaw = Number(arrayLimitNode?.value ?? "");
       const arrayCollapsedLimit = Number.isFinite(parsedLimitRaw) && !Number.isNaN(parsedLimitRaw)
         ? Math.max(1, Math.min(20, Math.round(parsedLimitRaw)))
         : null;
       sceneCardStatDisplayState[targetId] = {
         visible: Boolean(visibleNode?.checked ?? true),
+        showLabel: Boolean(showLabelNode?.checked ?? true),
+        hideWhenEmpty: Boolean(hideWhenEmptyNode?.checked ?? true),
         labelOverride: String(labelNode?.value ?? "").trim().slice(0, 40),
         colorOverride: normalizeHexColor(String(colorNode?.value ?? "")) ?? "",
         layoutOverride: layoutOverride as "auto" | "chips" | "rows",
+        valueStyle: valueStyle as "auto" | "chip" | "plain",
+        textMaxLength,
         arrayCollapsedLimit,
       };
       renderSceneCardOrderList();

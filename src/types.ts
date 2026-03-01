@@ -28,9 +28,13 @@ export type SceneCardLayout = "chips" | "rows";
 export type SceneStatLayout = "auto" | "chips" | "rows";
 export interface SceneCardStatDisplayOptions {
   visible: boolean;
+  showLabel: boolean;
+  hideWhenEmpty: boolean;
   labelOverride: string;
   colorOverride: string;
   layoutOverride: SceneStatLayout;
+  valueStyle: "auto" | "chip" | "plain";
+  textMaxLength: number | null;
   arrayCollapsedLimit: number | null;
 }
 

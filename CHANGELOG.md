@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.1.3-dev16] - 2026-03-01
+### Added
+- Scene Stat per-stat editor now supports advanced display controls: `showLabel`, `hideWhenEmpty`, `valueStyle` (`auto/chip/plain`), and per-stat `textMaxLength` clamp.
+
+### Changed
+- Redesigned Scene Stat editor modal into grouped sections (`Visibility`, `Presentation`, `Array Handling`) for clearer high-config workflow.
+- Scene rendering now honors the new per-stat controls (including hide-empty and plain-text value mode).
+- Display settings wording updated from `Scene Stat Display Manager` to `Scene Stat Studio`.
+- Docs updated (`README`, `docs/data-model.md`, `docs/ui-system.md`) for Scene Stat Studio schema/behavior.
+
 ## [2.2.1.3-dev15] - 2026-03-01
 ### Added
 - Scene Card stat manager now includes per-stat display editor (pencil action) with visibility, label override, color override, layout override, and per-stat array-collapse limit.
