@@ -882,7 +882,9 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     booleanTrueLabel: kind === "boolean" ? booleanTrueLabel : undefined,
     booleanFalseLabel: kind === "boolean" ? booleanFalseLabel : undefined,
     textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
-    dateTimeMode: kind === "date_time" && definition.dateTimeMode === "structured" ? "structured" : undefined,
+    dateTimeMode: kind === "date_time"
+      ? (definition.dateTimeMode === "structured" ? "structured" : "timestamp")
+      : undefined,
     track: Boolean(definition.track),
     trackCharacters: Boolean(definition.globalScope ? true : (definition.trackCharacters ?? definition.track)),
     trackUser: Boolean(definition.globalScope ? true : (definition.trackUser ?? definition.track)),
@@ -2949,6 +2951,9 @@ function ensureStyles(): void {
   background: rgba(0,0,0,0.55);
   z-index: 2147483250;
 }
+.bst-custom-wizard-backdrop.bst-custom-wizard-backdrop-top {
+  z-index: 2147483350;
+}
 .bst-custom-wizard {
   position: fixed;
   z-index: 2147483251;
@@ -2964,6 +2969,13 @@ function ensureStyles(): void {
   box-shadow: 0 20px 54px rgba(0,0,0,0.5);
   color: #f3f5f9;
   padding: 12px 12px 14px;
+}
+.bst-custom-wizard.bst-custom-wizard-top {
+  z-index: 2147483351;
+}
+.bst-custom-wizard.bst-custom-wizard-muted {
+  pointer-events: none;
+  filter: grayscale(0.2) brightness(0.75);
 }
 .bst-custom-wizard-head {
   display: flex;
@@ -7264,7 +7276,9 @@ export function openSettingsModal(input: {
       booleanTrueLabel: kind === "boolean" ? trueLabel : undefined,
       booleanFalseLabel: kind === "boolean" ? falseLabel : undefined,
       textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
-      dateTimeMode: kind === "date_time" && draft.dateTimeMode === "structured" ? "structured" : undefined,
+      dateTimeMode: kind === "date_time"
+        ? (draft.dateTimeMode === "structured" ? "structured" : "timestamp")
+        : undefined,
       track,
       trackCharacters: resolvedTrackCharacters,
       trackUser: resolvedTrackUser,
@@ -7411,7 +7425,7 @@ export function openSettingsModal(input: {
 
     if (kind === "date_time") {
       base.defaultValue = normalizeDateTimeValue(candidate.defaultValue);
-      base.dateTimeMode = candidate.dateTimeMode === "structured" ? "structured" : undefined;
+      base.dateTimeMode = candidate.dateTimeMode === "structured" ? "structured" : "timestamp";
       base.textMaxLength = undefined;
       base.maxDeltaPerTurn = undefined;
       base.enumOptions = undefined;
@@ -7565,11 +7579,20 @@ export function openSettingsModal(input: {
         return;
       }
       if (conflicts.length > 0) {
+        const setImportWizardBlocked = (blocked: boolean): void => {
+          if (blocked) {
+            wizard.classList.add("bst-custom-wizard-muted");
+            wizard.setAttribute("aria-hidden", "true");
+          } else {
+            wizard.classList.remove("bst-custom-wizard-muted");
+            wizard.removeAttribute("aria-hidden");
+          }
+        };
         const preview = conflicts.slice(0, 5);
         const conflictBackdrop = document.createElement("div");
-        conflictBackdrop.className = "bst-custom-wizard-backdrop";
+        conflictBackdrop.className = "bst-custom-wizard-backdrop bst-custom-wizard-backdrop-top";
         const conflictWizard = document.createElement("div");
-        conflictWizard.className = "bst-custom-wizard";
+        conflictWizard.className = "bst-custom-wizard bst-custom-wizard-top";
         conflictWizard.innerHTML = `
           <div class="bst-custom-wizard-head">
             <div>
@@ -7592,9 +7615,11 @@ export function openSettingsModal(input: {
           </div>
         `;
         const closeConflict = (): void => {
+          setImportWizardBlocked(false);
           conflictBackdrop.remove();
           conflictWizard.remove();
         };
+        setImportWizardBlocked(true);
         conflictWizard.querySelector('[data-action="import-conflict-cancel"]')?.addEventListener("click", () => {
           closeConflict();
           setImportStatus("Import cancelled due to conflicts.", "info");
@@ -8949,6 +8974,7 @@ export function openSettingsModal(input: {
           statLabel: label,
           currentDescription: description,
           statKind,
+          dateTimeMode: draft.dateTimeMode,
           enumOptions,
           textMaxLength,
           booleanTrueLabel: draft.booleanTrueLabel,
@@ -9026,6 +9052,7 @@ export function openSettingsModal(input: {
           statLabel: label,
           statDescription: description,
           statKind,
+          dateTimeMode: draft.dateTimeMode,
           enumOptions,
           textMaxLength,
           booleanTrueLabel: draft.booleanTrueLabel,
@@ -9106,6 +9133,7 @@ export function openSettingsModal(input: {
           statDescription: description,
           currentGuidance: behaviorGuidance,
           statKind,
+          dateTimeMode: draft.dateTimeMode,
           enumOptions,
           textMaxLength,
           booleanTrueLabel: draft.booleanTrueLabel,

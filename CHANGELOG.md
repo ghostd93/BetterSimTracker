@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev4] - 2026-03-03
+### Changed
+- Date/time AI helper generators now include selected date/time mode (`timestamp` vs `structured`) when generating description/override/behavior guidance.
+
+### Fixed
+- Import conflict warning is now truly modal-blocking: base import wizard is dimmed and non-interactive until warning is closed.
+- Date/time mode persistence was hardened so switching between `timestamp` and `structured` reliably affects later extraction/injection flows (including update-existing paths).
+
 ## [2.2.2.1-dev1] - 2026-03-03
 ### Added
 - New `date_time` custom-stat mode selector: `timestamp` (strict) and `structured` (semantic) while keeping one canonical stored format.
