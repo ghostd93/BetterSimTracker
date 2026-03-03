@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev13] - 2026-03-03
+### Added
+- Scene card now exposes the same tracker edit pencil action as owner cards, allowing direct editing of global scene stats on latest tracked snapshots.
+
+## [2.2.2.1-dev12] - 2026-03-03
+### Fixed
+- Disabled custom stats (`track=false`) are no longer re-enabled during extraction scoping.
+- Extraction planning now consistently keeps disabled stats out of both unified and sequential requests.
+
 ## [2.2.2.1-dev11] - 2026-03-03
 ### Changed
 - Date/time part order controls now use arrow-based row ordering in both:

@@ -3053,8 +3053,9 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       return;
     }
     const scopedCustomStats = (activeSettings.customStats ?? []).map(stat => {
-      const trackCharacters = Boolean(stat.trackCharacters ?? stat.track);
-      const trackUser = Boolean(stat.trackUser ?? stat.track);
+      const baseTracked = Boolean(stat.track);
+      const trackCharacters = baseTracked && Boolean(stat.trackCharacters ?? stat.track);
+      const trackUser = baseTracked && Boolean(stat.trackUser ?? stat.track);
       return {
         ...stat,
         trackCharacters,

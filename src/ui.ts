@@ -4880,11 +4880,17 @@ export function renderTracker(
         return a.def.label.localeCompare(b.def.label);
       });
     const sceneCardVisible = settings.sceneCardShowWhenEmpty || sceneValues.length > 0;
+    const canEditSceneCard =
+      (latestTrackedAiMessageIndex != null && entry.messageIndex === latestTrackedAiMessageIndex) ||
+      (latestTrackedUserMessageIndex != null && entry.messageIndex === latestTrackedUserMessageIndex);
     const sceneCardHtml = sceneCardVisible
       ? `
         <div class="bst-head">
           <div class="bst-name" title="${escapeHtml(settings.sceneCardTitle)}">${escapeHtml(settings.sceneCardTitle)}</div>
           <div class="bst-actions">
+            ${canEditSceneCard
+              ? `<button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="edit-stats" data-bst-edit-message="${entry.messageIndex}" data-bst-edit-character="${escapeHtml(GLOBAL_TRACKER_KEY)}" title="Edit latest Scene tracker stats" aria-label="Edit latest Scene tracker stats"><span aria-hidden="true">&#9998;</span></button>`
+              : ""}
             <div class="bst-state" title="Global scene stats">Global</div>
           </div>
         </div>
