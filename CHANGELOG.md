@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev5] - 2026-03-03
+### Fixed
+- Quick enable/disable toggle now correctly hides disabled custom stats from tracker cards by honoring top-level `track=false` in card stat definition filtering.
+
 ## [2.2.2.1-dev4] - 2026-03-03
 ### Changed
 - Date/time AI helper generators now include selected date/time mode (`timestamp` vs `structured`) when generating description/override/behavior guidance.

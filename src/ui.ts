@@ -195,9 +195,10 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
   return defs
     .filter(def => {
       if (normalizeCustomStatKind(def.kind) === "numeric") return false;
+      const track = Boolean(def.track);
       const trackCharacters = Boolean(def.trackCharacters ?? def.track);
       const trackUser = Boolean(def.trackUser ?? def.track);
-      return trackCharacters || trackUser;
+      return track && (trackCharacters || trackUser);
     })
     .map(def => {
       const kind = normalizeCustomStatKind(def.kind) as Exclude<CustomStatKind, "numeric">;
@@ -248,10 +249,11 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
 function getNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNumericStatDefinition[] {
   const customScopeById = new Map(
     (settings.customStats ?? []).map(def => {
+      const track = Boolean(def.track);
       const trackCharacters = Boolean(def.trackCharacters ?? def.track);
       const trackUser = Boolean(def.trackUser ?? def.track);
       const globalScope = Boolean(def.globalScope);
-      return [String(def.id ?? "").trim().toLowerCase(), { trackCharacters, trackUser, globalScope }] as const;
+      return [String(def.id ?? "").trim().toLowerCase(), { track, trackCharacters, trackUser, globalScope }] as const;
     }),
   );
   return getAllNumericStatDefinitions(settings).map(def => ({
@@ -262,10 +264,12 @@ function getNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNumeri
     defaultValue: Math.max(0, Math.min(100, Math.round(Number(def.defaultValue) || 50))),
     trackCharacters: def.builtIn
       ? Boolean(def.track)
-      : Boolean(customScopeById.get(def.id)?.trackCharacters ?? def.track),
+      : (Boolean(customScopeById.get(def.id)?.track ?? def.track)
+        && Boolean(customScopeById.get(def.id)?.trackCharacters ?? def.track)),
     trackUser: def.builtIn
       ? false
-      : Boolean(customScopeById.get(def.id)?.trackUser ?? def.track),
+      : (Boolean(customScopeById.get(def.id)?.track ?? def.track)
+        && Boolean(customScopeById.get(def.id)?.trackUser ?? def.track)),
     globalScope: def.builtIn
       ? false
       : Boolean(customScopeById.get(def.id)?.globalScope ?? false),
