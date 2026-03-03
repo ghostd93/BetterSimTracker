@@ -4436,6 +4436,33 @@ export function renderTracker(
       sceneRoot.dataset.bstBound = "1";
       sceneRoot.addEventListener("click", event => {
         const target = event.target as HTMLElement | null;
+        const preview = target?.closest('[data-bst-action="open-mood-preview"]') as HTMLElement | null;
+        if (preview) {
+          const src = String(preview.getAttribute("data-bst-image-src") ?? "").trim();
+          const alt = String(preview.getAttribute("data-bst-image-alt") ?? "").trim() || "Mood image";
+          const character = String(preview.getAttribute("data-bst-image-character") ?? "").trim();
+          const mood = String(preview.getAttribute("data-bst-image-mood") ?? "").trim();
+          if (src) {
+            openMoodImageModal(src, alt, character, mood);
+          }
+          return;
+        }
+        const edit = target?.closest('[data-bst-action="edit-stats"]') as HTMLElement | null;
+        if (edit) {
+          const idx = Number(edit.getAttribute("data-bst-edit-message") ?? sceneRoot.dataset.messageIndex);
+          const character = String(edit.getAttribute("data-bst-edit-character") ?? "").trim();
+          const data = Number.isNaN(idx) ? null : resolveEntryData?.(idx) ?? null;
+          if (!data || !character) return;
+          openEditStatsModal({
+            messageIndex: idx,
+            character,
+            displayName: resolveDisplayName?.(character),
+            data,
+            settings,
+            onSave: onEditStats,
+          });
+          return;
+        }
         const arrayToggle = target?.closest('[data-bst-action="toggle-array-values"]') as HTMLElement | null;
         if (!arrayToggle) return;
         const key = String(arrayToggle.getAttribute("data-bst-array-key") ?? "").trim();

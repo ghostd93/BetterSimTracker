@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev14] - 2026-03-03
+### Fixed
+- Scene card edit action now works in `above_message` placement by handling `edit-stats` events on `.bst-scene-root` (not only tracker root).
+
 ## [2.2.2.1-dev13] - 2026-03-03
 ### Added
 - Scene card now exposes the same tracker edit pencil action as owner cards, allowing direct editing of global scene stats on latest tracked snapshots.
