@@ -2,7 +2,7 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.2-dev1] - 2026-03-03
+## [2.2.2.1] - 2026-03-03
 ### Fixed
 - Unified first-run custom stat extraction now evaluates model output immediately instead of seed-only defaults, so initial tracker cards no longer stay at `not set` / empty array when the model returned valid custom values.
 
