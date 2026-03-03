@@ -9,6 +9,7 @@ import type {
   CustomNonNumericValue,
   CustomStatKind,
   CustomStatDefinition,
+  DateTimeMode,
   DeltaDebugRecord,
   MoodLabel,
   MoodSource,
@@ -45,6 +46,7 @@ import {
 } from "./stExpressionFrameEditor";
 import { fetchFirstExpressionSprite } from "./stExpressionSprites";
 import { getAllNumericStatDefinitions } from "./statRegistry";
+import { getDateTimeStructuredParts, normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
 
 type UiNumericStatDefinition = {
   key: string;
@@ -68,6 +70,7 @@ type UiNonNumericStatDefinition = {
   booleanTrueLabel: string;
   booleanFalseLabel: string;
   textMaxLength: number;
+  dateTimeMode: DateTimeMode;
   trackCharacters: boolean;
   trackUser: boolean;
   globalScope: boolean;
@@ -127,7 +130,7 @@ function shortLabelFrom(label: string): string {
 }
 
 function normalizeCustomStatKind(value: unknown): CustomStatKind {
-  if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array") return value;
+  if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array" || value === "date_time") return value;
   return "numeric";
 }
 
@@ -209,6 +212,8 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
         defaultValue = typeof def.defaultValue === "boolean" ? def.defaultValue : false;
       } else if (kind === "array") {
         defaultValue = normalizeNonNumericArrayItems(def.defaultValue, textMaxLength);
+      } else if (kind === "date_time") {
+        defaultValue = normalizeDateTimeValue(def.defaultValue);
       } else {
         if (kind === "enum_single" && enumOptions.length > 0) {
           const matched = resolveEnumOption(enumOptions, def.defaultValue);
@@ -218,6 +223,7 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
           defaultValue = text;
         }
       }
+      const dateTimeMode: DateTimeMode = kind === "date_time" && def.dateTimeMode === "structured" ? "structured" : "timestamp";
       return {
         id: String(def.id ?? "").trim().toLowerCase(),
         label: String(def.label ?? "").trim() || String(def.id ?? "").trim(),
@@ -227,6 +233,7 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
         booleanTrueLabel,
         booleanFalseLabel,
         textMaxLength,
+        dateTimeMode,
         trackCharacters,
         trackUser,
         globalScope: Boolean(def.globalScope),
@@ -357,6 +364,9 @@ function resolveNonNumericValue(
     const items = normalizeNonNumericArrayItems(raw ?? def.defaultValue, def.textMaxLength);
     return items;
   }
+  if (def.kind === "date_time") {
+    return normalizeDateTimeValue(raw ?? def.defaultValue) || null;
+  }
   const maxLength = def.textMaxLength;
   const text = normalizeNonNumericTextValue(raw ?? def.defaultValue, maxLength);
   if (!text) return null;
@@ -377,6 +387,9 @@ function hasNonNumericValue(
     if (typeof raw === "string") return normalizeNonNumericArrayItems(raw, def.textMaxLength).length > 0;
     return false;
   }
+  if (def.kind === "date_time") {
+    return Boolean(normalizeDateTimeValue(raw));
+  }
   if (typeof raw !== "string") return false;
   const text = normalizeNonNumericTextValue(raw, def.textMaxLength);
   if (!text) return false;
@@ -393,7 +406,26 @@ function formatNonNumericForDisplay(def: UiNonNumericStatDefinition, value: stri
     if (items.length === 1) return items[0];
     return `${items[0]} +${items.length - 1}`;
   }
+  if (def.kind === "date_time" && def.dateTimeMode === "structured") {
+    const parts = getDateTimeStructuredParts(value);
+    if (!parts) return String(value);
+    return `${parts.dayOfWeek}, ${parts.time} (${parts.phase})`;
+  }
   return String(value);
+}
+
+function renderDateTimeStructuredChips(value: string | boolean | string[], color: string): string {
+  const parts = getDateTimeStructuredParts(value);
+  if (!parts) {
+    const raw = String(value ?? "").trim();
+    return raw
+      ? `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`
+      : `<span class="bst-array-item-empty">Not set</span>`;
+  }
+  const chips = [parts.dayOfWeek, parts.date, parts.time, parts.phase];
+  return chips
+    .map(item => `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(item)}">${escapeHtml(item)}</span>`)
+    .join("");
 }
 
 function truncateDisplayText(value: string, maxLength: number | null | undefined): string {
@@ -829,6 +861,9 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     if (kind === "array") {
       return normalizeNonNumericArrayItems(definition.defaultValue, textMaxLength);
     }
+    if (kind === "date_time") {
+      return normalizeDateTimeValue(definition.defaultValue);
+    }
     const text = normalizeNonNumericTextValue(definition.defaultValue, textMaxLength);
     return text;
   };
@@ -847,6 +882,7 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     booleanTrueLabel: kind === "boolean" ? booleanTrueLabel : undefined,
     booleanFalseLabel: kind === "boolean" ? booleanFalseLabel : undefined,
     textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
+    dateTimeMode: kind === "date_time" && definition.dateTimeMode === "structured" ? "structured" : undefined,
     track: Boolean(definition.track),
     trackCharacters: Boolean(definition.globalScope ? true : (definition.trackCharacters ?? definition.track)),
     trackUser: Boolean(definition.globalScope ? true : (definition.trackUser ?? definition.track)),
@@ -2839,6 +2875,65 @@ function ensureStyles(): void {
   justify-content: flex-end;
   align-content: flex-start;
 }
+.bst-custom-stat-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.24);
+  background: rgba(255,255,255,0.08);
+  color: #d8e6ff;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.bst-custom-stat-toggle:hover {
+  border-color: rgba(170, 214, 255, 0.8);
+}
+.bst-custom-stat-toggle-pill {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.14);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.bst-custom-stat-toggle-pill::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #d7dde8;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.bst-custom-stat-toggle.is-on {
+  border-color: rgba(123, 242, 182, 0.62);
+  background: rgba(26, 68, 50, 0.38);
+  color: #c9ffe6;
+}
+.bst-custom-stat-toggle.is-on .bst-custom-stat-toggle-pill {
+  border-color: rgba(123, 242, 182, 0.7);
+  background: rgba(93, 222, 161, 0.35);
+}
+.bst-custom-stat-toggle.is-on .bst-custom-stat-toggle-pill::after {
+  transform: translateX(16px);
+  background: #d9ffe8;
+}
+.bst-custom-stat-toggle.is-off {
+  border-color: rgba(255, 158, 160, 0.45);
+  background: rgba(64, 24, 30, 0.3);
+  color: #ffd4d5;
+}
+.bst-custom-stat-toggle-label {
+  font-size: 12px;
+  font-weight: 600;
+}
 .bst-custom-stat-empty {
   border: 1px dashed rgba(255,255,255,0.2);
   border-radius: 10px;
@@ -4526,6 +4621,18 @@ export function renderTracker(
               </div>
             `;
           }
+          if (def.kind === "date_time" && def.dateTimeMode === "structured") {
+            return `
+              <div class="bst-row bst-row-non-numeric">
+                <div class="bst-label">
+                  <span>${escapeHtml(def.label)}</span>
+                </div>
+                <div class="bst-array-items">
+                  ${renderDateTimeStructuredChips(resolved ?? "", color)}
+                </div>
+              </div>
+            `;
+          }
           const displayValue = resolved == null ? "not set" : formatNonNumericForDisplay(def, resolved);
           return `
             <div class="bst-row bst-row-non-numeric">
@@ -4630,6 +4737,18 @@ export function renderTracker(
               ? display.layoutOverride
               : settings.sceneCardLayout;
             if (statLayout === "rows") {
+              if (def.kind === "date_time" && def.dateTimeMode === "structured") {
+                return `
+                  <div class="bst-row bst-row-non-numeric">
+                    <div class="bst-label">
+                      ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
+                    </div>
+                    <div class="bst-array-items">
+                      ${renderDateTimeStructuredChips(resolved ?? "", color)}
+                    </div>
+                  </div>
+                `;
+              }
               if (def.kind === "array") {
                 const items = Array.isArray(resolved) ? resolved : normalizeNonNumericArrayItems(resolved, def.textMaxLength);
                 const textValueRaw = items.length ? items.join(", ") : "Not set";
@@ -4654,6 +4773,18 @@ export function renderTracker(
                     ${valueStyle === "plain"
                       ? `<span class="bst-scene-plain-value" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`
                       : `<span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`}
+                  </div>
+                </div>
+              `;
+            }
+            if (def.kind === "date_time" && def.dateTimeMode === "structured") {
+              return `
+                <div class="bst-row bst-row-non-numeric">
+                  <div class="bst-label">
+                    ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
+                  </div>
+                  <div class="bst-array-items">
+                    ${renderDateTimeStructuredChips(resolved ?? "", color)}
                   </div>
                 </div>
               `;
@@ -5118,6 +5249,16 @@ function openEditStatsModal(input: {
         </div>
       `;
     }
+    if (def.kind === "date_time") {
+      const value = typeof currentValue === "string" ? currentValue : "";
+      const inputValue = toDateTimeInputValue(value);
+      return `
+        <label class="bst-edit-field">
+          <span>${escapeHtml(def.label)}</span>
+          <input type="datetime-local" data-bst-edit-non-numeric="${escapeHtml(def.id)}" data-bst-edit-kind="date_time" value="${escapeHtml(inputValue)}" placeholder="YYYY-MM-DD HH:mm">
+        </label>
+      `;
+    }
     const value = typeof currentValue === "string" ? currentValue : "";
     return `
       <label class="bst-edit-field">
@@ -5385,6 +5526,12 @@ function openEditStatsModal(input: {
         const items = normalizeNonNumericArrayItems(String(node.value ?? ""), def.textMaxLength);
         nonNumeric[key] = items.length ? items : null;
         node.value = items.join("\n");
+        return;
+      }
+      if (kind === "date_time") {
+        const normalized = normalizeDateTimeValue(node.value);
+        nonNumeric[key] = normalized || null;
+        node.value = toDateTimeInputValue(normalized);
         return;
       }
       const text = normalizeNonNumericTextValue(raw, def.textMaxLength);
@@ -6867,6 +7014,7 @@ export function openSettingsModal(input: {
     booleanTrueLabel: string;
     booleanFalseLabel: string;
     textMaxLength: string;
+    dateTimeMode: DateTimeMode;
     trackCharacters: boolean;
     trackUser: boolean;
     globalScope: boolean;
@@ -6892,6 +7040,7 @@ export function openSettingsModal(input: {
         booleanTrueLabel: "enabled",
         booleanFalseLabel: "disabled",
         textMaxLength: "120",
+        dateTimeMode: "timestamp",
         trackCharacters: true,
         trackUser: true,
         globalScope: false,
@@ -6921,6 +7070,8 @@ export function openSettingsModal(input: {
         ? String(Number.isFinite(Number(clone.defaultValue)) ? Math.round(Number(clone.defaultValue)) : 50)
         : kind === "boolean"
           ? ""
+          : kind === "date_time"
+            ? normalizeDateTimeValue(clone.defaultValue)
           : kind === "array"
             ? normalizeNonNumericArrayItems(clone.defaultValue, textMaxLength).join("\n")
             : String(clone.defaultValue ?? ""),
@@ -6930,6 +7081,7 @@ export function openSettingsModal(input: {
       booleanTrueLabel: String(clone.booleanTrueLabel ?? "enabled").trim() || "enabled",
       booleanFalseLabel: String(clone.booleanFalseLabel ?? "disabled").trim() || "disabled",
       textMaxLength: kind === "text_short" || kind === "array" ? String(textMaxLength) : "120",
+      dateTimeMode: kind === "date_time" && clone.dateTimeMode === "structured" ? "structured" : "timestamp",
       trackCharacters,
       trackUser,
       globalScope,
@@ -7019,6 +7171,11 @@ export function openSettingsModal(input: {
         if (items.some(item => item.length > bounded)) {
           errors.push("One or more array items exceed max length.");
         }
+      } else if (draft.kind === "date_time") {
+        const normalized = normalizeDateTimeValue(draft.defaultValue);
+        if (draft.defaultValue.trim() && !normalized) {
+          errors.push("Default date/time must be valid (YYYY-MM-DD HH:mm).");
+        }
       } else if (draft.kind === "text_short") {
         const maxLen = Number(draft.textMaxLength);
         if (!Number.isFinite(maxLen) || maxLen < 20 || maxLen > 200) {
@@ -7088,6 +7245,9 @@ export function openSettingsModal(input: {
       if (kind === "array") {
         return normalizeNonNumericArrayItems(draft.defaultValue, textMaxLength);
       }
+      if (kind === "date_time") {
+        return normalizeDateTimeValue(draft.defaultValue);
+      }
       return normalizeNonNumericTextValue(draft.defaultValue, textMaxLength);
     })();
     return {
@@ -7104,6 +7264,7 @@ export function openSettingsModal(input: {
       booleanTrueLabel: kind === "boolean" ? trueLabel : undefined,
       booleanFalseLabel: kind === "boolean" ? falseLabel : undefined,
       textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
+      dateTimeMode: kind === "date_time" && draft.dateTimeMode === "structured" ? "structured" : undefined,
       track,
       trackCharacters: resolvedTrackCharacters,
       trackUser: resolvedTrackUser,
@@ -7199,6 +7360,7 @@ export function openSettingsModal(input: {
       showInGraph: kind === "numeric" ? Boolean(candidate.showInGraph ?? track) : false,
       color,
       promptOverride: promptOverride || undefined,
+      dateTimeMode: undefined,
     };
 
     if (kind === "numeric") {
@@ -7240,6 +7402,17 @@ export function openSettingsModal(input: {
     if (kind === "array") {
       base.defaultValue = normalizeNonNumericArrayItems(candidate.defaultValue, textMaxLength);
       base.textMaxLength = textMaxLength;
+      base.maxDeltaPerTurn = undefined;
+      base.enumOptions = undefined;
+      base.booleanTrueLabel = undefined;
+      base.booleanFalseLabel = undefined;
+      return { stat: base, warning };
+    }
+
+    if (kind === "date_time") {
+      base.defaultValue = normalizeDateTimeValue(candidate.defaultValue);
+      base.dateTimeMode = candidate.dateTimeMode === "structured" ? "structured" : undefined;
+      base.textMaxLength = undefined;
       base.maxDeltaPerTurn = undefined;
       base.enumOptions = undefined;
       base.booleanTrueLabel = undefined;
@@ -7414,7 +7587,7 @@ export function openSettingsModal(input: {
       const trackUser = Boolean(stat.trackUser ?? stat.track);
       const globalScope = Boolean(stat.globalScope);
       const flags = [
-        trackCharacters || trackUser ? "enabled" : "disabled",
+        stat.track ? "enabled" : "disabled",
         `char:${trackCharacters ? "on" : "off"}`,
         `user:${trackUser ? "on" : "off"}`,
         kind,
@@ -7442,9 +7615,14 @@ export function openSettingsModal(input: {
           const suffix = items.length > 2 ? ` +${items.length - 2} more` : "";
           return `Default: ${preview}${suffix} | Items: ${items.length}/20 | Item max: ${limit} | Graph: disabled`;
         }
+        if (kind === "date_time") {
+          const normalized = normalizeDateTimeValue(stat.defaultValue);
+          return `Default: ${normalized || "(empty)"} | Format: YYYY-MM-DD HH:mm | Graph: disabled`;
+        }
         const limit = Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120)));
         return `Default: ${String(stat.defaultValue ?? "").trim() || "(empty)"} | Max length: ${limit} | Graph: disabled`;
       })();
+      const enabled = Boolean(stat.track);
       return `
         <div class="bst-custom-stat-row" data-bst-custom-id="${escapeHtml(stat.id)}">
           <div class="bst-custom-stat-main">
@@ -7461,6 +7639,10 @@ export function openSettingsModal(input: {
             </div>
           </div>
           <div class="bst-custom-stat-actions">
+            <button type="button" class="bst-custom-stat-toggle ${enabled ? "is-on" : "is-off"}" data-action="custom-toggle-enabled" data-custom-id="${escapeHtml(stat.id)}" aria-pressed="${enabled ? "true" : "false"}" title="${enabled ? "Disable this stat quickly" : "Enable this stat quickly"}">
+              <span class="bst-custom-stat-toggle-pill" aria-hidden="true"></span>
+              <span class="bst-custom-stat-toggle-label">${enabled ? "Enabled" : "Disabled"}</span>
+            </button>
             <button type="button" class="bst-btn bst-btn-soft" data-action="custom-edit" data-custom-id="${escapeHtml(stat.id)}">Edit</button>
             <button type="button" class="bst-btn bst-btn-soft" data-action="custom-duplicate" data-custom-id="${escapeHtml(stat.id)}">Clone</button>
             <button type="button" class="bst-btn bst-btn-soft" data-action="custom-export-json" data-custom-id="${escapeHtml(stat.id)}">Export JSON</button>
@@ -7930,6 +8112,7 @@ export function openSettingsModal(input: {
               <option value="boolean" ${draft.kind === "boolean" ? "selected" : ""}>Boolean (true/false)</option>
               <option value="text_short" ${draft.kind === "text_short" ? "selected" : ""}>Short text</option>
               <option value="array" ${draft.kind === "array" ? "selected" : ""}>Array (list)</option>
+              <option value="date_time" ${draft.kind === "date_time" ? "selected" : ""}>Date/Time</option>
             </select>
           </label>
         </div>
@@ -8006,6 +8189,18 @@ export function openSettingsModal(input: {
           <label>Item Max Length (20-200)
             <input type="number" min="20" max="200" data-bst-custom-field="textMaxLength" value="${escapeHtml(draft.textMaxLength)}">
           </label>
+        </div>
+        <div class="bst-custom-wizard-grid bst-custom-wizard-grid-single" data-bst-kind-panel="date_time" style="display:none;">
+          <label>Default Date/Time
+            <input type="datetime-local" data-bst-custom-field="dateTimeDefaultValue" value="${escapeHtml(draft.kind === "date_time" ? toDateTimeInputValue(draft.defaultValue) : "")}">
+          </label>
+          <label>Date/Time Mode
+            <select data-bst-custom-field="dateTimeMode">
+              <option value="timestamp" ${draft.dateTimeMode === "timestamp" ? "selected" : ""}>Timestamp (strict)</option>
+              <option value="structured" ${draft.dateTimeMode === "structured" ? "selected" : ""}>Structured (semantic)</option>
+            </select>
+          </label>
+          <div class="bst-help-line">Stored format: <code>YYYY-MM-DD HH:mm</code>. Empty means no explicit default.</div>
         </div>
         <div class="bst-help-line" data-bst-kind-help="value">Numeric stats use 0-100 with optional max delta. Non-numeric stats store absolute values and do not use delta.</div>
       </div>
@@ -8221,6 +8416,8 @@ export function openSettingsModal(input: {
       const numericDefaultNode = getField("numericDefaultValue");
       const enumDefaultNode = getField("enumDefaultValue");
       const textDefaultNode = getField("textDefaultValue");
+      const dateTimeDefaultNode = getField("dateTimeDefaultValue");
+      const dateTimeModeNode = getField("dateTimeMode") as HTMLSelectElement | null;
       const arrayDefaultNode = getField("arrayDefaultValue");
       const defaultBooleanNode = getField("defaultBoolean") as HTMLSelectElement | null;
       const maxDeltaNode = getField("maxDeltaPerTurn");
@@ -8246,6 +8443,8 @@ export function openSettingsModal(input: {
         draft.defaultValue = String(enumDefaultNode?.value ?? "");
       } else if (draft.kind === "array") {
         draft.defaultValue = syncArrayEditorToHiddenField() || String(arrayDefaultNode?.value ?? "");
+      } else if (draft.kind === "date_time") {
+        draft.defaultValue = normalizeDateTimeValue(String(dateTimeDefaultNode?.value ?? ""));
       } else if (draft.kind === "text_short") {
         draft.defaultValue = String(textDefaultNode?.value ?? "");
       } else {
@@ -8257,6 +8456,7 @@ export function openSettingsModal(input: {
       draft.booleanTrueLabel = String(trueLabelNode?.value ?? "");
       draft.booleanFalseLabel = String(falseLabelNode?.value ?? "");
       draft.textMaxLength = String(textMaxLengthNode?.value ?? "");
+      draft.dateTimeMode = String(dateTimeModeNode?.value ?? "timestamp").toLowerCase() === "structured" ? "structured" : "timestamp";
       draft.trackCharacters = Boolean(trackCharactersNode?.checked);
       draft.trackUser = Boolean(trackUserNode?.checked);
       draft.globalScope = Boolean(globalScopeNode?.checked);
@@ -8337,6 +8537,10 @@ export function openSettingsModal(input: {
           valueHelpNode.textContent = "Boolean stats store true/false (no delta, no graph).";
         } else if (kind === "array") {
           valueHelpNode.textContent = "Array stats store up to 20 short items and should be updated incrementally (add/remove/edit items).";
+        } else if (kind === "date_time") {
+          valueHelpNode.textContent = draft.dateTimeMode === "structured"
+            ? "Structured mode accepts semantic datetime updates and normalizes to YYYY-MM-DD HH:mm (no delta, no graph)."
+            : "Timestamp mode stores one strict timestamp in YYYY-MM-DD HH:mm format (no delta, no graph).";
         } else {
           valueHelpNode.textContent = "Short text stats store concise single-line state text (no delta, no graph).";
         }
@@ -8366,6 +8570,8 @@ export function openSettingsModal(input: {
           behaviorNode.placeholder = "Optional. Example:\n- {{statId}} true -> behavior follows the enabled state.\n- {{statId}} false -> behavior follows the disabled state.\n- increase cues -> evidence that should switch to true.\n- decrease cues -> evidence that should switch to false.";
         } else if (kind === "array") {
           behaviorNode.placeholder = "Optional. Example:\n- interpret {{statId}} as a live list of short state items.\n- keep replies aligned with current items.\n- add cues -> add a specific item.\n- remove cues -> remove obsolete item.\n- edit cues -> update one existing item, avoid rewriting whole list.";
+        } else if (kind === "date_time") {
+          behaviorNode.placeholder = "Optional. Example:\n- interpret {{statId}} as current scene date/time.\n- keep temporal references aligned with that timestamp.\n- increase cues -> clear time progression in scene.\n- decrease cues -> flashback/rewind or explicit earlier-time cues.";
         } else {
           behaviorNode.placeholder = "Optional. Example:\n- interpret {{statId}} as short scene-state text.\n- keep responses aligned with the current text state.\n- increase cues -> evidence to update the text state.\n- decrease cues -> evidence to simplify or reset the text state.";
         }
@@ -8951,6 +9157,24 @@ export function openSettingsModal(input: {
     const action = String(button.getAttribute("data-action") ?? "");
     if (action === "custom-edit") {
       openCustomStatWizard("edit", stat);
+      return;
+    }
+    if (action === "custom-toggle-enabled") {
+      customStatsState = customStatsState.map(item => {
+        if (item.id !== stat.id) return item;
+        const nextEnabled = !Boolean(item.track);
+        const trackCharacters = Boolean(item.trackCharacters ?? item.track);
+        const trackUser = Boolean(item.trackUser ?? item.track);
+        return {
+          ...item,
+          track: nextEnabled,
+          trackCharacters: trackCharacters || trackUser ? trackCharacters : true,
+          trackUser: trackCharacters || trackUser ? trackUser : true,
+        };
+      });
+      renderCustomStatsList();
+      renderSceneCardOrderList();
+      persistLive();
       return;
     }
     if (action === "custom-duplicate") {

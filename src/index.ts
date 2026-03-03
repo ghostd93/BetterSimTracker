@@ -54,6 +54,7 @@ import { registerSlashCommands } from "./slashCommands";
 import { initCharacterPanel } from "./characterPanel";
 import { initPersonaPanel } from "./personaPanel";
 import { extractLorebookEntriesFromPayload, readLorebookContext } from "./lorebook";
+import { normalizeDateTimeWithMode } from "./dateTime";
 
 declare const __BST_VERSION__: string;
 
@@ -1919,6 +1920,12 @@ function getConfiguredCharacterDefaults(
           customNonNumericStatDefaults[id] = items;
           continue;
         }
+        if (kind === "date_time") {
+          const normalized = normalizeDateTimeWithMode(value, statDef?.dateTimeMode ?? "timestamp");
+          if (!normalized) continue;
+          customNonNumericStatDefaults[id] = normalized;
+          continue;
+        }
         if (typeof value === "boolean") {
           customNonNumericStatDefaults[id] = value;
           continue;
@@ -1985,6 +1992,12 @@ function getConfiguredCharacterDefaults(
         const items = normalizeArrayItems(value, maxLength, 20);
         if (!items.length) continue;
         customNonNumericStatDefaults[id] = items;
+        continue;
+      }
+      if (kind === "date_time") {
+        const normalized = normalizeDateTimeWithMode(value, statDef?.dateTimeMode ?? "timestamp");
+        if (!normalized) continue;
+        customNonNumericStatDefaults[id] = normalized;
         continue;
       }
       if (typeof value === "boolean") {
@@ -2143,6 +2156,9 @@ function buildSeededCustomNonNumericStatisticsForActiveCharacters(
         const items = normalizeArrayItems(raw, textMaxLength, 20);
         return items.length ? items : fallback;
       }
+      if (kind === "date_time") {
+        return normalizeDateTimeWithMode(raw, def.dateTimeMode ?? "timestamp", def.defaultValue);
+      }
       const fallback = String(def.defaultValue ?? "").trim().replace(/\s+/g, " ");
       const text = typeof raw === "string"
         ? raw.trim().replace(/\s+/g, " ")
@@ -2274,6 +2290,13 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
           : normalizeArrayItems(configuredCustom, maxLength, 20);
         const fallbackItems = normalizeArrayItems(def.defaultValue, maxLength, 20);
         customNonNumericDefaults[statId] = configuredItems.length ? configuredItems : fallbackItems;
+      } else if (kind === "date_time") {
+        const configuredCustom = defaults.customNonNumericStatDefaults?.[statId];
+        customNonNumericDefaults[statId] = normalizeDateTimeWithMode(
+          configuredCustom,
+          def.dateTimeMode ?? "timestamp",
+          def.defaultValue,
+        );
       } else {
         const configuredCustom = defaults.customNonNumericStatDefaults?.[statId];
         const text = typeof configuredCustom === "string"
@@ -2332,6 +2355,8 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
           ? false
           : kind === "array"
             ? normalizeArrayItems(def.defaultValue, maxLength, 20)
+            : kind === "date_time"
+              ? normalizeDateTimeWithMode(def.defaultValue, def.dateTimeMode ?? "timestamp")
             : String(def.defaultValue ?? "").trim())]),
       );
     }
@@ -2725,6 +2750,12 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
     }
     if (Array.isArray(rawValue)) {
       customNonNumeric[statKey][ownerKey] = normalizeArrayItems(rawValue, 200, 20);
+      continue;
+    }
+    if ((statDef?.kind ?? "text_short") === "date_time") {
+      const normalized = normalizeDateTimeWithMode(rawValue, statDef?.dateTimeMode ?? "timestamp");
+      if (!normalized) continue;
+      customNonNumeric[statKey][ownerKey] = normalized;
       continue;
     }
     const text = String(rawValue).trim().replace(/\s+/g, " ");

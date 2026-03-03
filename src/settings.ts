@@ -30,6 +30,7 @@ import type {
   StExpressionImageOptions,
   STContext,
 } from "./types";
+import { normalizeDateTimeValue } from "./dateTime";
 
 const DEFAULT_MOOD_EXPRESSION_MAP: Record<MoodLabel, string> = {
   "Happy": "joy",
@@ -751,10 +752,12 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
   if (!Array.isArray(raw)) return [];
   const out: BetterSimTrackerSettings["customStats"] = [];
   const seen = new Set<string>();
-  const normalizeKind = (value: unknown): "numeric" | "enum_single" | "boolean" | "text_short" | "array" => {
-    if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array") return value;
+  const normalizeKind = (value: unknown): "numeric" | "enum_single" | "boolean" | "text_short" | "array" | "date_time" => {
+    if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array" || value === "date_time") return value;
     return "numeric";
   };
+  const normalizeDateTimeMode = (value: unknown): "timestamp" | "structured" =>
+    value === "structured" ? "structured" : "timestamp";
   const hasScriptLikeContent = (text: string): boolean =>
     /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
   const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
@@ -836,6 +839,9 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
         ? obj.sequentialPromptTemplate.trim().slice(0, 20000)
         : "");
     const kind = normalizeKind(obj.kind);
+    const dateTimeMode = kind === "date_time"
+      ? normalizeDateTimeMode(obj.dateTimeMode)
+      : undefined;
     const enumOptions = normalizeEnumOptions(obj.enumOptions);
     const textMaxLength = clampInt(obj.textMaxLength, 120, 20, 200);
     const booleanTrueLabel = typeof obj.booleanTrueLabel === "string"
@@ -867,6 +873,9 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       if (kind === "array") {
         return normalizeArrayItems(obj.defaultValue, textMaxLength);
       }
+      if (kind === "date_time") {
+        return normalizeDateTimeValue(obj.defaultValue);
+      }
       const text = typeof obj.defaultValue === "string" ? obj.defaultValue.trim().replace(/\s+/g, " ") : "";
       return text.slice(0, textMaxLength);
     };
@@ -892,6 +901,7 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       booleanTrueLabel: kind === "boolean" ? (booleanTrueLabel || "enabled") : undefined,
       booleanFalseLabel: kind === "boolean" ? (booleanFalseLabel || "disabled") : undefined,
       textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
+      dateTimeMode,
       track: trackCharacters || trackUser,
       trackCharacters,
       trackUser,
@@ -997,6 +1007,11 @@ function sanitizeCustomNonNumericStatDefaults(
         if (items.length >= 20) break;
       }
       if (items.length) out[id] = items;
+      continue;
+    }
+    if (kind === "date_time") {
+      const normalized = normalizeDateTimeValue(value);
+      if (normalized) out[id] = normalized;
       continue;
     }
     const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";

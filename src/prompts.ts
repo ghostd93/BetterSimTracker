@@ -2,6 +2,7 @@ import type { CustomStatDefinition, CustomStatKind, CustomNonNumericStatistics, 
 import type { Statistics } from "./types";
 import type { TrackerData } from "./types";
 import { GLOBAL_TRACKER_KEY } from "./constants";
+import { normalizeDateTimeValue } from "./dateTime";
 
 export const moodOptions = [
   "Happy",
@@ -625,6 +626,7 @@ export function buildUnifiedAllStatsPrompt(input: {
       const kind = stat.kind ?? "text_short";
       if (kind === "boolean") return `        "${stat.id}": false`;
       if (kind === "array") return `        "${stat.id}": []`;
+      if (kind === "date_time") return `        "${stat.id}": "2026-03-03 20:15"`;
       return `        "${stat.id}": ""`;
     }).join(",\n")
     : "";
@@ -645,6 +647,12 @@ export function buildUnifiedAllStatsPrompt(input: {
     if (kind === "array") {
       const textMaxLen = Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120)));
       return `- ${stat.id} (array): JSON array of 0..20 short strings; each item max ${textMaxLen} chars; prefer item-level add/remove/edit over full-list rewrites.`;
+    }
+    if (kind === "date_time") {
+      const mode = stat.dateTimeMode === "structured" ? "structured" : "timestamp";
+      return mode === "structured"
+        ? `- ${stat.id} (date_time, structured): prefer semantic update object (absolute/delta/phase), then normalize to YYYY-MM-DD HH:mm (24h); keep progression conservative and avoid backward jumps unless explicit rewind cues.`
+        : `- ${stat.id} (date_time, timestamp): strict format YYYY-MM-DD HH:mm (24h); keep progression conservative and consistent with recent context.`;
     }
     const textMaxLen = Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120)));
     return `- ${stat.id} (text_short): one concise single-line text, max ${textMaxLen} chars.`;
@@ -964,6 +972,16 @@ function formatCustomNonNumericValue(
     return fallbackItems;
   }
 
+  if (kind === "date_time") {
+    const normalized = normalizeDateTimeValue(value);
+    if (normalized) return normalized;
+    if (typeof fallback === "string") {
+      const fallbackNormalized = normalizeDateTimeValue(fallback);
+      if (fallbackNormalized) return fallbackNormalized;
+    }
+    return "";
+  }
+
   const text = typeof value === "string" ? value.trim() : "";
   if (text) return text;
   return typeof fallback === "string" ? fallback : "";
@@ -975,6 +993,7 @@ function getCustomNonNumericProtocolValues(input: {
   allowedValues: string[];
   textMaxLen: number;
   arrayMaxItems: number;
+  dateTimeMode?: "timestamp" | "structured";
   trueLabel: string;
   falseLabel: string;
 }): { valueSchemaRules: string; valueSchemaSample: string } {
@@ -1009,6 +1028,21 @@ function getCustomNonNumericProtocolValues(input: {
     };
   }
 
+  if (input.kind === "date_time") {
+    const mode = input.dateTimeMode === "structured" ? "structured" : "timestamp";
+    return {
+      valueSchemaRules: [
+        mode === "structured"
+          ? `- Return structured datetime intent for ${input.statId} (absolute and/or delta fields), BST normalizes it to YYYY-MM-DD HH:mm (24h).`
+          : `- Return one datetime string for ${input.statId} in exact format YYYY-MM-DD HH:mm (24h).`,
+        "- Keep progression conservative and scene-consistent; do not jump backward unless context explicitly rewinds time.",
+      ].join("\n"),
+      valueSchemaSample: mode === "structured"
+        ? "{\"absolute\":\"2026-03-03 20:15\",\"delta_minutes\":5,\"ofDay\":\"Evening\"}"
+        : "\"2026-03-03 20:15\"",
+    };
+  }
+
   return {
     valueSchemaRules: [
       `- Return one concise single-line text value for ${input.statId}.`,
@@ -1024,6 +1058,7 @@ function customNonNumericProtocol(input: {
   allowedValues: string[];
   textMaxLen: number;
   arrayMaxItems: number;
+  dateTimeMode?: "timestamp" | "structured";
   trueLabel: string;
   falseLabel: string;
   template?: string;
@@ -1037,6 +1072,7 @@ function customNonNumericProtocol(input: {
     allowedValues: input.allowedValues.join(", "),
     textMaxLen: String(input.textMaxLen),
     arrayMaxItems: String(input.arrayMaxItems),
+    dateTimeMode: input.dateTimeMode === "structured" ? "structured" : "timestamp",
     booleanTrueLabel: input.trueLabel,
     booleanFalseLabel: input.falseLabel,
   });
@@ -1051,6 +1087,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   statDefault: string | boolean | string[];
   enumOptions?: string[];
   textMaxLength?: number;
+  dateTimeMode?: "timestamp" | "structured";
   booleanTrueLabel?: string;
   booleanFalseLabel?: string;
   userName: string;
@@ -1073,6 +1110,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, 12)
     : [];
   const textMaxLen = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
+  const dateTimeMode = input.dateTimeMode === "structured" ? "structured" : "timestamp";
   const trueLabel = String(input.booleanTrueLabel ?? "enabled").trim() || "enabled";
   const falseLabel = String(input.booleanFalseLabel ?? "disabled").trim() || "disabled";
   const envelope = commonEnvelope(input.userName, input.characters, input.contextText);
@@ -1092,7 +1130,9 @@ export function buildSequentialCustomNonNumericPrompt(input: {
       ? "boolean"
       : statKind === "array"
         ? `array<=20(item<=${textMaxLen})`
-        : `text<=${textMaxLen}`;
+        : statKind === "date_time"
+          ? (dateTimeMode === "structured" ? "datetime-structured=>YYYY-MM-DD HH:mm" : "datetime(YYYY-MM-DD HH:mm)")
+          : `text<=${textMaxLen}`;
 
   const currentLines = input.characters.map(name => {
     const affection = Number(input.current?.affection?.[name] ?? 50);
@@ -1152,6 +1192,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     booleanTrueLabel: trueLabel,
     booleanFalseLabel: falseLabel,
     valueSchema,
+    dateTimeMode,
   });
   const instruction = applySourcePriorityRule(
     instructionRendered,
@@ -1178,6 +1219,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
       allowedValues: enumOptions,
       textMaxLen,
       arrayMaxItems: 20,
+      dateTimeMode,
       trueLabel,
       falseLabel,
       template: input.protocolTemplate,
@@ -1253,6 +1295,14 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
         "- Avoid full-list rewrites unless recent context clearly replaces the whole list.",
       ];
     }
+    if (statKind === "date_time") {
+      return [
+        `- Explicitly say to update only ${statId} value and ignore other stats.`,
+        "- Require strict datetime format: YYYY-MM-DD HH:mm (24h).",
+        `- Require conservative progression for ${statId}; do not jump backward unless context explicitly rewinds.`,
+        "- Require small forward increments when only short in-scene time passes.",
+      ];
+    }
     return [
       `- Explicitly say to update only ${statId} value and ignore other stats.`,
       `- Require one concise single-line text value (max ${textMaxLength} chars).`,
@@ -1276,6 +1326,7 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
     `- Description: ${statDescription}`,
     ...(statKind === "enum_single" ? [`- Allowed values: ${enumOptions.join(", ") || "(none provided)"}`] : []),
     ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
+    ...(statKind === "date_time" ? ["- Date/time format: YYYY-MM-DD HH:mm (24h)"] : []),
     ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, "- Max items: 20"] : []),
     ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     "",
@@ -1333,6 +1384,7 @@ export function buildCustomStatDescriptionGenerationPrompt(input: {
     `- Current description: ${currentDescription}`,
     ...(statKind === "enum_single" ? [`- Allowed values: ${enumOptions.join(", ") || "(none provided)"}`] : []),
     ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
+    ...(statKind === "date_time" ? ["- Date/time format: YYYY-MM-DD HH:mm (24h)"] : []),
     ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, "- Max items: 20"] : []),
     ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     "",
@@ -1497,6 +1549,17 @@ export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
         `- Include one line that enforces incremental updates (item-level maintenance) instead of full-list rewrites.`,
       ];
     }
+    if (statKind === "date_time") {
+      return [
+        "Write exactly 5 short bullet lines for this exact stat.",
+        "Requirements:",
+        "- Each line must start with \"- \".",
+        `- Mention ${statId} and ${statLabel} literally at least once across the block.`,
+        `- Treat ${statId} as current scene date/time in strict YYYY-MM-DD HH:mm format.`,
+        `- Include one line for conservative forward progression cues and one for explicit rewind/flashback cues.`,
+        `- Include one line that discourages large time jumps for short scene beats.`,
+      ];
+    }
     return [
       "Write exactly 5 short bullet lines for this exact stat.",
       "Requirements:",
@@ -1524,6 +1587,7 @@ export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
     `- Description: ${statDescription}`,
     ...(statKind === "enum_single" ? [`- Allowed values: ${enumOptions.join(", ") || "(none provided)"}`] : []),
     ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
+    ...(statKind === "date_time" ? ["- Date/time format: YYYY-MM-DD HH:mm (24h)"] : []),
     ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, "- Max items: 20"] : []),
     ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     `- Current guidance: ${currentGuidance || "(empty)"}`,

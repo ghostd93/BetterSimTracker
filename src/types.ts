@@ -4,7 +4,8 @@ export type StatKey = (typeof STAT_KEYS)[number];
 export type NumericStatKey = "affection" | "trust" | "desire" | "connection";
 export type TextStatKey = "mood" | "lastThought";
 export type CustomStatKey = string;
-export type CustomStatKind = "numeric" | "enum_single" | "boolean" | "text_short" | "array";
+export type CustomStatKind = "numeric" | "enum_single" | "boolean" | "text_short" | "array" | "date_time";
+export type DateTimeMode = "timestamp" | "structured";
 export type CustomNonNumericValue = string | boolean | string[];
 export type MoodLabel =
   | "Happy"
@@ -56,6 +57,7 @@ export interface CustomStatDefinition {
   booleanTrueLabel?: string;
   booleanFalseLabel?: string;
   textMaxLength?: number;
+  dateTimeMode?: DateTimeMode;
   track: boolean;
   trackCharacters?: boolean;
   trackUser?: boolean;
