@@ -2,6 +2,17 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev7] - 2026-03-03
+### Changed
+- Structured `date_time` Scene-card rendering now uses fixed English weekday names (no browser-locale weekday output).
+
+### Added
+- Per-stat structured date/time display controls in Scene Stat Display:
+  - show/hide weekday/date/time/phase parts
+  - optional part labels
+  - custom labels for each part
+  - configurable part order (`weekday,date,time,phase`)
+
 ## [2.2.2.1-dev6] - 2026-03-03
 ### Fixed
 - Disabling a custom stat now fully disables it end-to-end (`track=false` is authoritative) instead of being implicitly re-enabled by `trackCharacters`/`trackUser` during settings normalization/import merge paths.

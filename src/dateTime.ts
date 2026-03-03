@@ -67,6 +67,8 @@ function parseNormalizedToDate(value: string): Date | null {
   return date;
 }
 
+const WEEKDAY_NAMES_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
 function parseRelativeMinutes(raw: unknown): number | null {
   if (typeof raw === "number" && Number.isFinite(raw)) {
     return Math.round(raw);
@@ -182,7 +184,7 @@ export function getDateTimeStructuredParts(raw: unknown): {
   const normalized = normalizeDateTimeValue(raw);
   const date = normalized ? parseNormalizedToDate(normalized) : null;
   if (!date) return null;
-  const dayOfWeek = date.toLocaleDateString(undefined, { weekday: "long" });
+  const dayOfWeek = WEEKDAY_NAMES_EN[date.getDay()] ?? "Unknown";
   const hour = date.getHours();
   const phase =
     hour < 12 ? "Morning" :

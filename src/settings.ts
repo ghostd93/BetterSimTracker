@@ -729,6 +729,17 @@ function sanitizeSceneCardStatDisplay(input: unknown): Record<string, SceneCardS
     const id = String(key ?? "").trim().toLowerCase();
     if (!id || !value || typeof value !== "object") continue;
     const row = value as Record<string, unknown>;
+    const rawOrder = Array.isArray(row.dateTimePartOrder) ? row.dateTimePartOrder : [];
+    const normalizedOrder = rawOrder
+      .map(item => String(item ?? "").trim().toLowerCase())
+      .filter((item): item is "weekday" | "date" | "time" | "phase" =>
+        item === "weekday" || item === "date" || item === "time" || item === "phase",
+      );
+    const uniqueOrder = Array.from(new Set(normalizedOrder));
+    const fullOrder = [...uniqueOrder];
+    for (const keyPart of ["weekday", "date", "time", "phase"] as const) {
+      if (!fullOrder.includes(keyPart)) fullOrder.push(keyPart);
+    }
     output[id] = {
       visible: asBool(row.visible, true),
       showLabel: asBool(row.showLabel, true),
@@ -743,6 +754,16 @@ function sanitizeSceneCardStatDisplay(input: unknown): Record<string, SceneCardS
       arrayCollapsedLimit: row.arrayCollapsedLimit == null
         ? null
         : clampInt(row.arrayCollapsedLimit, 4, 1, 20),
+      dateTimeShowWeekday: asBool(row.dateTimeShowWeekday, true),
+      dateTimeShowDate: asBool(row.dateTimeShowDate, true),
+      dateTimeShowTime: asBool(row.dateTimeShowTime, true),
+      dateTimeShowPhase: asBool(row.dateTimeShowPhase, true),
+      dateTimeShowPartLabels: asBool(row.dateTimeShowPartLabels, false),
+      dateTimeLabelWeekday: asText(row.dateTimeLabelWeekday, "Day").slice(0, 20),
+      dateTimeLabelDate: asText(row.dateTimeLabelDate, "Date").slice(0, 20),
+      dateTimeLabelTime: asText(row.dateTimeLabelTime, "Time").slice(0, 20),
+      dateTimeLabelPhase: asText(row.dateTimeLabelPhase, "Phase").slice(0, 20),
+      dateTimePartOrder: fullOrder,
     };
   }
   return output;

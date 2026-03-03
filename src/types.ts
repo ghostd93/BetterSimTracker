@@ -37,6 +37,16 @@ export interface SceneCardStatDisplayOptions {
   valueStyle: "auto" | "chip" | "plain";
   textMaxLength: number | null;
   arrayCollapsedLimit: number | null;
+  dateTimeShowWeekday?: boolean;
+  dateTimeShowDate?: boolean;
+  dateTimeShowTime?: boolean;
+  dateTimeShowPhase?: boolean;
+  dateTimeShowPartLabels?: boolean;
+  dateTimeLabelWeekday?: string;
+  dateTimeLabelDate?: string;
+  dateTimeLabelTime?: string;
+  dateTimeLabelPhase?: string;
+  dateTimePartOrder?: Array<"weekday" | "date" | "time" | "phase">;
 }
 
 export type StatValue = number | string;

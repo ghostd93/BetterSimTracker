@@ -13,6 +13,7 @@ import type {
   DeltaDebugRecord,
   MoodLabel,
   MoodSource,
+  SceneCardStatDisplayOptions,
   StExpressionImageOptions,
   StatValue,
   TrackerData,
@@ -418,7 +419,22 @@ function formatNonNumericForDisplay(def: UiNonNumericStatDefinition, value: stri
   return String(value);
 }
 
-function renderDateTimeStructuredChips(value: string | boolean | string[], color: string): string {
+function renderDateTimeStructuredChips(
+  value: string | boolean | string[],
+  color: string,
+  options?: {
+    showWeekday?: boolean;
+    showDate?: boolean;
+    showTime?: boolean;
+    showPhase?: boolean;
+    showPartLabels?: boolean;
+    labelWeekday?: string;
+    labelDate?: string;
+    labelTime?: string;
+    labelPhase?: string;
+    partOrder?: Array<"weekday" | "date" | "time" | "phase">;
+  },
+): string {
   const parts = getDateTimeStructuredParts(value);
   if (!parts) {
     const raw = String(value ?? "").trim();
@@ -426,10 +442,45 @@ function renderDateTimeStructuredChips(value: string | boolean | string[], color
       ? `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`
       : `<span class="bst-array-item-empty">Not set</span>`;
   }
-  const chips = [parts.dayOfWeek, parts.date, parts.time, parts.phase];
-  return chips
-    .map(item => `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(item)}">${escapeHtml(item)}</span>`)
-    .join("");
+  const showMap = {
+    weekday: options?.showWeekday !== false,
+    date: options?.showDate !== false,
+    time: options?.showTime !== false,
+    phase: options?.showPhase !== false,
+  };
+  const labelMap = {
+    weekday: String(options?.labelWeekday ?? "Day").trim() || "Day",
+    date: String(options?.labelDate ?? "Date").trim() || "Date",
+    time: String(options?.labelTime ?? "Time").trim() || "Time",
+    phase: String(options?.labelPhase ?? "Phase").trim() || "Phase",
+  };
+  const valueMap = {
+    weekday: parts.dayOfWeek,
+    date: parts.date,
+    time: parts.time,
+    phase: parts.phase,
+  };
+  const rawOrder = Array.isArray(options?.partOrder) ? options!.partOrder : ["weekday", "date", "time", "phase"];
+  const order: Array<"weekday" | "date" | "time" | "phase"> = [];
+  for (const key of rawOrder) {
+    if (key === "weekday" || key === "date" || key === "time" || key === "phase") {
+      if (!order.includes(key)) order.push(key);
+    }
+  }
+  for (const key of ["weekday", "date", "time", "phase"] as const) {
+    if (!order.includes(key)) order.push(key);
+  }
+  const showPartLabels = Boolean(options?.showPartLabels);
+  const chips = order
+    .filter(key => showMap[key])
+    .map(key => {
+      const valueText = valueMap[key];
+      const displayText = showPartLabels ? `${labelMap[key]}: ${valueText}` : valueText;
+      return `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayText)}">${escapeHtml(displayText)}</span>`;
+    });
+  return chips.length
+    ? chips.join("")
+    : `<span class="bst-array-item-empty">Not set</span>`;
 }
 
 function truncateDisplayText(value: string, maxLength: number | null | undefined): string {
@@ -4760,7 +4811,18 @@ export function renderTracker(
                       ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
                     </div>
                     <div class="bst-array-items">
-                      ${renderDateTimeStructuredChips(resolved ?? "", color)}
+                      ${renderDateTimeStructuredChips(resolved ?? "", color, {
+                        showWeekday: display?.dateTimeShowWeekday,
+                        showDate: display?.dateTimeShowDate,
+                        showTime: display?.dateTimeShowTime,
+                        showPhase: display?.dateTimeShowPhase,
+                        showPartLabels: display?.dateTimeShowPartLabels,
+                        labelWeekday: display?.dateTimeLabelWeekday,
+                        labelDate: display?.dateTimeLabelDate,
+                        labelTime: display?.dateTimeLabelTime,
+                        labelPhase: display?.dateTimeLabelPhase,
+                        partOrder: display?.dateTimePartOrder,
+                      })}
                     </div>
                   </div>
                 `;
@@ -4800,7 +4862,18 @@ export function renderTracker(
                     ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
                   </div>
                   <div class="bst-array-items">
-                    ${renderDateTimeStructuredChips(resolved ?? "", color)}
+                    ${renderDateTimeStructuredChips(resolved ?? "", color, {
+                      showWeekday: display?.dateTimeShowWeekday,
+                      showDate: display?.dateTimeShowDate,
+                      showTime: display?.dateTimeShowTime,
+                      showPhase: display?.dateTimeShowPhase,
+                      showPartLabels: display?.dateTimeShowPartLabels,
+                      labelWeekday: display?.dateTimeLabelWeekday,
+                      labelDate: display?.dateTimeLabelDate,
+                      labelTime: display?.dateTimeLabelTime,
+                      labelPhase: display?.dateTimeLabelPhase,
+                      partOrder: display?.dateTimePartOrder,
+                    })}
                   </div>
                 </div>
               `;
@@ -6006,32 +6079,23 @@ export function openSettingsModal(input: {
   let sceneCardStatOrderState: string[] = Array.isArray(input.settings.sceneCardStatOrder)
     ? input.settings.sceneCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
     : [];
-  let sceneCardStatDisplayState: Record<string, {
-    visible: boolean;
-    showLabel: boolean;
-    hideWhenEmpty: boolean;
-    labelOverride: string;
-    colorOverride: string;
-    layoutOverride: "auto" | "chips" | "rows";
-    valueStyle: "auto" | "chip" | "plain";
-    textMaxLength: number | null;
-    arrayCollapsedLimit: number | null;
-  }> = (() => {
+  let sceneCardStatDisplayState: Record<string, SceneCardStatDisplayOptions> = (() => {
     const raw = input.settings.sceneCardStatDisplay ?? {};
-    const out: Record<string, {
-      visible: boolean;
-      showLabel: boolean;
-      hideWhenEmpty: boolean;
-      labelOverride: string;
-      colorOverride: string;
-      layoutOverride: "auto" | "chips" | "rows";
-      valueStyle: "auto" | "chip" | "plain";
-      textMaxLength: number | null;
-      arrayCollapsedLimit: number | null;
-    }> = {};
+    const out: Record<string, SceneCardStatDisplayOptions> = {};
     for (const [id, row] of Object.entries(raw)) {
       const key = String(id ?? "").trim().toLowerCase();
       if (!key || !row) continue;
+      const rawOrder = Array.isArray(row.dateTimePartOrder) ? row.dateTimePartOrder : [];
+      const dateTimePartOrder: Array<"weekday" | "date" | "time" | "phase"> = [];
+      for (const entry of rawOrder) {
+        const part = String(entry ?? "").trim().toLowerCase();
+        if (part === "weekday" || part === "date" || part === "time" || part === "phase") {
+          if (!dateTimePartOrder.includes(part)) dateTimePartOrder.push(part);
+        }
+      }
+      for (const part of ["weekday", "date", "time", "phase"] as const) {
+        if (!dateTimePartOrder.includes(part)) dateTimePartOrder.push(part);
+      }
       out[key] = {
         visible: Boolean(row.visible ?? true),
         showLabel: Boolean(row.showLabel ?? true),
@@ -6046,6 +6110,16 @@ export function openSettingsModal(input: {
         arrayCollapsedLimit: typeof row.arrayCollapsedLimit === "number" && Number.isFinite(row.arrayCollapsedLimit)
           ? Math.max(1, Math.min(20, Math.round(row.arrayCollapsedLimit)))
           : null,
+        dateTimeShowWeekday: Boolean(row.dateTimeShowWeekday ?? true),
+        dateTimeShowDate: Boolean(row.dateTimeShowDate ?? true),
+        dateTimeShowTime: Boolean(row.dateTimeShowTime ?? true),
+        dateTimeShowPhase: Boolean(row.dateTimeShowPhase ?? true),
+        dateTimeShowPartLabels: Boolean(row.dateTimeShowPartLabels ?? false),
+        dateTimeLabelWeekday: String(row.dateTimeLabelWeekday ?? "Day").trim().slice(0, 20) || "Day",
+        dateTimeLabelDate: String(row.dateTimeLabelDate ?? "Date").trim().slice(0, 20) || "Date",
+        dateTimeLabelTime: String(row.dateTimeLabelTime ?? "Time").trim().slice(0, 20) || "Time",
+        dateTimeLabelPhase: String(row.dateTimeLabelPhase ?? "Phase").trim().slice(0, 20) || "Phase",
+        dateTimePartOrder,
       };
     }
     return out;
@@ -7820,7 +7894,18 @@ export function openSettingsModal(input: {
       valueStyle: "auto" as const,
       textMaxLength: null,
       arrayCollapsedLimit: null,
+      dateTimeShowWeekday: true,
+      dateTimeShowDate: true,
+      dateTimeShowTime: true,
+      dateTimeShowPhase: true,
+      dateTimeShowPartLabels: false,
+      dateTimeLabelWeekday: "Day",
+      dateTimeLabelDate: "Date",
+      dateTimeLabelTime: "Time",
+      dateTimeLabelPhase: "Phase",
+      dateTimePartOrder: ["weekday", "date", "time", "phase"] as Array<"weekday" | "date" | "time" | "phase">,
     };
+    const isStructuredDateTime = normalizeCustomStatKind(stat.kind) === "date_time" && stat.dateTimeMode === "structured";
     const backdropNode = document.createElement("div");
     backdropNode.className = "bst-custom-wizard-backdrop";
     const wizard = document.createElement("div");
@@ -7878,6 +7963,33 @@ export function openSettingsModal(input: {
               <input type="number" min="1" max="20" data-scene-opt="arrayCollapsedLimit" value="${current.arrayCollapsedLimit == null ? "" : String(current.arrayCollapsedLimit)}" placeholder="Use Scene Card default">
             </label>
           </div>
+          <div class="bst-scene-stat-editor-group" data-scene-opt-row="dateTimeStructured"${isStructuredDateTime ? "" : " style=\"display:none;\""}>
+            <div class="bst-scene-stat-editor-group-title">Structured Date/Time Parts</div>
+            <div class="bst-check-grid">
+              <label class="bst-check"><input type="checkbox" data-scene-opt="dateTimeShowWeekday" ${current.dateTimeShowWeekday !== false ? "checked" : ""}>Show weekday</label>
+              <label class="bst-check"><input type="checkbox" data-scene-opt="dateTimeShowDate" ${current.dateTimeShowDate !== false ? "checked" : ""}>Show date</label>
+              <label class="bst-check"><input type="checkbox" data-scene-opt="dateTimeShowTime" ${current.dateTimeShowTime !== false ? "checked" : ""}>Show time</label>
+              <label class="bst-check"><input type="checkbox" data-scene-opt="dateTimeShowPhase" ${current.dateTimeShowPhase !== false ? "checked" : ""}>Show phase</label>
+              <label class="bst-check"><input type="checkbox" data-scene-opt="dateTimeShowPartLabels" ${current.dateTimeShowPartLabels ? "checked" : ""}>Show part labels</label>
+            </div>
+            <div class="bst-settings-grid">
+              <label>Weekday Label
+                <input type="text" maxlength="20" data-scene-opt="dateTimeLabelWeekday" value="${escapeHtml(current.dateTimeLabelWeekday ?? "Day")}" placeholder="Day">
+              </label>
+              <label>Date Label
+                <input type="text" maxlength="20" data-scene-opt="dateTimeLabelDate" value="${escapeHtml(current.dateTimeLabelDate ?? "Date")}" placeholder="Date">
+              </label>
+              <label>Time Label
+                <input type="text" maxlength="20" data-scene-opt="dateTimeLabelTime" value="${escapeHtml(current.dateTimeLabelTime ?? "Time")}" placeholder="Time">
+              </label>
+              <label>Phase Label
+                <input type="text" maxlength="20" data-scene-opt="dateTimeLabelPhase" value="${escapeHtml(current.dateTimeLabelPhase ?? "Phase")}" placeholder="Phase">
+              </label>
+            </div>
+            <label>Part Order (comma-separated: weekday,date,time,phase)
+              <input type="text" maxlength="64" data-scene-opt="dateTimePartOrder" value="${escapeHtml((current.dateTimePartOrder ?? ["weekday","date","time","phase"]).join(","))}" placeholder="weekday,date,time,phase">
+            </label>
+          </div>
         </div>
       </div>
       <div class="bst-custom-wizard-actions">
@@ -7923,6 +8035,16 @@ export function openSettingsModal(input: {
       const valueStyleNode = wizard.querySelector('[data-scene-opt="valueStyle"]') as HTMLSelectElement | null;
       const textMaxLengthNode = wizard.querySelector('[data-scene-opt="textMaxLength"]') as HTMLInputElement | null;
       const arrayLimitNode = wizard.querySelector('[data-scene-opt="arrayCollapsedLimit"]') as HTMLInputElement | null;
+      const dateTimeShowWeekdayNode = wizard.querySelector('[data-scene-opt="dateTimeShowWeekday"]') as HTMLInputElement | null;
+      const dateTimeShowDateNode = wizard.querySelector('[data-scene-opt="dateTimeShowDate"]') as HTMLInputElement | null;
+      const dateTimeShowTimeNode = wizard.querySelector('[data-scene-opt="dateTimeShowTime"]') as HTMLInputElement | null;
+      const dateTimeShowPhaseNode = wizard.querySelector('[data-scene-opt="dateTimeShowPhase"]') as HTMLInputElement | null;
+      const dateTimeShowPartLabelsNode = wizard.querySelector('[data-scene-opt="dateTimeShowPartLabels"]') as HTMLInputElement | null;
+      const dateTimeLabelWeekdayNode = wizard.querySelector('[data-scene-opt="dateTimeLabelWeekday"]') as HTMLInputElement | null;
+      const dateTimeLabelDateNode = wizard.querySelector('[data-scene-opt="dateTimeLabelDate"]') as HTMLInputElement | null;
+      const dateTimeLabelTimeNode = wizard.querySelector('[data-scene-opt="dateTimeLabelTime"]') as HTMLInputElement | null;
+      const dateTimeLabelPhaseNode = wizard.querySelector('[data-scene-opt="dateTimeLabelPhase"]') as HTMLInputElement | null;
+      const dateTimePartOrderNode = wizard.querySelector('[data-scene-opt="dateTimePartOrder"]') as HTMLInputElement | null;
       const layoutOverride = layoutNode?.value === "chips" || layoutNode?.value === "rows" ? layoutNode.value : "auto";
       const valueStyle = valueStyleNode?.value === "chip" || valueStyleNode?.value === "plain" ? valueStyleNode.value : "auto";
       const parsedTextMaxRaw = Number(textMaxLengthNode?.value ?? "");
@@ -7933,6 +8055,18 @@ export function openSettingsModal(input: {
       const arrayCollapsedLimit = Number.isFinite(parsedLimitRaw) && !Number.isNaN(parsedLimitRaw)
         ? Math.max(1, Math.min(20, Math.round(parsedLimitRaw)))
         : null;
+      const parsedOrder = String(dateTimePartOrderNode?.value ?? "")
+        .split(",")
+        .map(item => item.trim().toLowerCase())
+        .filter(item => item === "weekday" || item === "date" || item === "time" || item === "phase");
+      const dateTimePartOrder: Array<"weekday" | "date" | "time" | "phase"> = [];
+      for (const item of parsedOrder) {
+        const key = item as "weekday" | "date" | "time" | "phase";
+        if (!dateTimePartOrder.includes(key)) dateTimePartOrder.push(key);
+      }
+      for (const key of ["weekday", "date", "time", "phase"] as const) {
+        if (!dateTimePartOrder.includes(key)) dateTimePartOrder.push(key);
+      }
       sceneCardStatDisplayState[targetId] = {
         visible: Boolean(visibleNode?.checked ?? true),
         showLabel: Boolean(showLabelNode?.checked ?? true),
@@ -7943,6 +8077,16 @@ export function openSettingsModal(input: {
         valueStyle: valueStyle as "auto" | "chip" | "plain",
         textMaxLength,
         arrayCollapsedLimit,
+        dateTimeShowWeekday: Boolean(dateTimeShowWeekdayNode?.checked ?? true),
+        dateTimeShowDate: Boolean(dateTimeShowDateNode?.checked ?? true),
+        dateTimeShowTime: Boolean(dateTimeShowTimeNode?.checked ?? true),
+        dateTimeShowPhase: Boolean(dateTimeShowPhaseNode?.checked ?? true),
+        dateTimeShowPartLabels: Boolean(dateTimeShowPartLabelsNode?.checked ?? false),
+        dateTimeLabelWeekday: String(dateTimeLabelWeekdayNode?.value ?? "Day").trim().slice(0, 20) || "Day",
+        dateTimeLabelDate: String(dateTimeLabelDateNode?.value ?? "Date").trim().slice(0, 20) || "Date",
+        dateTimeLabelTime: String(dateTimeLabelTimeNode?.value ?? "Time").trim().slice(0, 20) || "Time",
+        dateTimeLabelPhase: String(dateTimeLabelPhaseNode?.value ?? "Phase").trim().slice(0, 20) || "Phase",
+        dateTimePartOrder,
       };
       renderSceneCardOrderList();
       persistLive();
