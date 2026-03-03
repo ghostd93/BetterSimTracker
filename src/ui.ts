@@ -7467,21 +7467,32 @@ export function openSettingsModal(input: {
     return { stats: imported, warnings, error: null };
   };
 
-  const applyImportedCustomStats = (parsed: { stats: CustomStatDefinition[]; warnings: string[] }): { added: number; replaced: number } => {
+  const applyImportedCustomStats = (
+    parsed: { stats: CustomStatDefinition[]; warnings: string[] },
+    mode: "update_existing" | "skip_conflicts" = "update_existing",
+  ): { added: number; replaced: number; skipped: number } => {
     const mergedById = new Map(customStatsState.map(stat => [stat.id, cloneCustomStatDefinition(stat)]));
     let replaced = 0;
     let added = 0;
+    let skipped = 0;
     for (const stat of parsed.stats) {
       const id = String(stat.id ?? "").trim().toLowerCase();
       if (!id) continue;
-      if (mergedById.has(id)) replaced += 1;
-      else added += 1;
+      if (mergedById.has(id)) {
+        if (mode === "skip_conflicts") {
+          skipped += 1;
+          continue;
+        }
+        replaced += 1;
+      } else {
+        added += 1;
+      }
       mergedById.set(id, cloneCustomStatDefinition(stat));
     }
     customStatsState = Array.from(mergedById.values()).slice(0, MAX_CUSTOM_STATS);
     renderCustomStatsList();
     persistLive();
-    return { added, replaced };
+    return { added, replaced, skipped };
   };
 
   const copyToClipboard = async (text: string): Promise<boolean> => {
@@ -7512,11 +7523,14 @@ export function openSettingsModal(input: {
         <div class="bst-help-line">Paste JSON array or wrapped object: <code>{ "customStats": [...] }</code></div>
         <textarea class="bst-custom-import-textarea" data-bst-custom-import-text placeholder='[\n  {\n    "id": "clothes",\n    "kind": "array",\n    "label": "Clothes"\n  }\n]'></textarea>
         <div class="bst-help-line bst-custom-import-status is-info" data-bst-custom-import-status style="display:none;"></div>
+        <div class="bst-help-line bst-custom-import-status is-info" data-bst-custom-import-conflicts style="display:none;"></div>
       </div>
       <div class="bst-custom-wizard-actions">
         <button type="button" class="bst-btn" data-action="custom-close">Cancel</button>
         <button type="button" class="bst-btn bst-btn-soft" data-action="custom-validate-import">Validate</button>
         <button type="button" class="bst-btn bst-btn-soft" data-action="custom-apply-import">Import</button>
+        <button type="button" class="bst-btn bst-btn-soft" data-action="custom-apply-import-update" style="display:none;">Update existing</button>
+        <button type="button" class="bst-btn bst-btn-soft" data-action="custom-apply-import-skip" style="display:none;">Skip conflicts</button>
       </div>
     `;
 
@@ -7525,7 +7539,24 @@ export function openSettingsModal(input: {
       wizard.remove();
     };
     const statusNode = wizard.querySelector("[data-bst-custom-import-status]") as HTMLElement | null;
+    const conflictsNode = wizard.querySelector("[data-bst-custom-import-conflicts]") as HTMLElement | null;
     const textarea = wizard.querySelector("[data-bst-custom-import-text]") as HTMLTextAreaElement | null;
+    const applyButton = wizard.querySelector('[data-action="custom-apply-import"]') as HTMLButtonElement | null;
+    const applyUpdateButton = wizard.querySelector('[data-action="custom-apply-import-update"]') as HTMLButtonElement | null;
+    const applySkipButton = wizard.querySelector('[data-action="custom-apply-import-skip"]') as HTMLButtonElement | null;
+    let pendingParsed: { stats: CustomStatDefinition[]; warnings: string[] } | null = null;
+
+    const setConflictUi = (message: string): void => {
+      if (!conflictsNode || !applyButton || !applyUpdateButton || !applySkipButton) return;
+      const hasConflict = Boolean(message);
+      conflictsNode.textContent = message;
+      conflictsNode.style.display = hasConflict ? "block" : "none";
+      conflictsNode.classList.remove("is-success", "is-error");
+      conflictsNode.classList.add("is-info");
+      applyButton.style.display = hasConflict ? "none" : "";
+      applyUpdateButton.style.display = hasConflict ? "" : "none";
+      applySkipButton.style.display = hasConflict ? "" : "none";
+    };
     const setImportStatus = (message: string, tone: "success" | "error" | "info" = "info"): void => {
       if (!statusNode) return;
       statusNode.textContent = message;
@@ -7536,27 +7567,70 @@ export function openSettingsModal(input: {
     const runImport = (apply: boolean): void => {
       const parsed = parseCustomStatsImportPayload(String(textarea?.value ?? ""));
       if (parsed.error) {
+        pendingParsed = null;
+        setConflictUi("");
         setImportStatus(parsed.error, "error");
         return;
       }
       if (!apply) {
+        pendingParsed = parsed;
+        const existing = new Set(customStatsState.map(stat => String(stat.id ?? "").trim().toLowerCase()));
+        const conflicts = parsed.stats
+          .map(stat => String(stat.id ?? "").trim().toLowerCase())
+          .filter(id => id && existing.has(id));
+        if (conflicts.length > 0) {
+          const preview = conflicts.slice(0, 3).join(", ");
+          setConflictUi(`${conflicts.length} stat(s) conflict by ID and will update existing entries: ${preview}${conflicts.length > 3 ? ", ..." : ""}`);
+        } else {
+          setConflictUi("");
+        }
         const warningSuffix = parsed.warnings.length
           ? ` Warnings: ${parsed.warnings.slice(0, 2).join(" ")}${parsed.warnings.length > 2 ? " ..." : ""}`
           : "";
         setImportStatus(`Validation passed for ${parsed.stats.length} stat(s).${warningSuffix}`, parsed.warnings.length ? "info" : "success");
         return;
       }
-      const { added, replaced } = applyImportedCustomStats(parsed);
+      const { added, replaced, skipped } = applyImportedCustomStats(parsed, "update_existing");
       const warningSuffix = parsed.warnings.length
         ? ` Warnings: ${parsed.warnings.slice(0, 2).join(" ")}${parsed.warnings.length > 2 ? " ..." : ""}`
         : "";
-      setCustomStatsStatus(`Imported ${parsed.stats.length} stat(s): +${added}, replaced ${replaced}.${warningSuffix}`, parsed.warnings.length ? "info" : "success");
+      setCustomStatsStatus(`Imported ${parsed.stats.length} stat(s): +${added}, updated ${replaced}, skipped ${skipped}.${warningSuffix}`, parsed.warnings.length ? "info" : "success");
       close();
+    };
+
+    const resolveParsedForConflictAction = (): { stats: CustomStatDefinition[]; warnings: string[] } | null => {
+      if (pendingParsed) return pendingParsed;
+      const parsed = parseCustomStatsImportPayload(String(textarea?.value ?? ""));
+      if (parsed.error) {
+        setImportStatus(String(parsed.error), "error");
+        return null;
+      }
+      return { stats: parsed.stats, warnings: parsed.warnings };
     };
 
     wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
     wizard.querySelector('[data-action="custom-validate-import"]')?.addEventListener("click", () => runImport(false));
     wizard.querySelector('[data-action="custom-apply-import"]')?.addEventListener("click", () => runImport(true));
+    wizard.querySelector('[data-action="custom-apply-import-update"]')?.addEventListener("click", () => {
+      const payload = resolveParsedForConflictAction();
+      if (!payload) return;
+      const { added, replaced, skipped } = applyImportedCustomStats(payload, "update_existing");
+      const warningSuffix = payload.warnings.length
+        ? ` Warnings: ${payload.warnings.slice(0, 2).join(" ")}${payload.warnings.length > 2 ? " ..." : ""}`
+        : "";
+      setCustomStatsStatus(`Imported ${payload.stats.length} stat(s): +${added}, updated ${replaced}, skipped ${skipped}.${warningSuffix}`, payload.warnings.length ? "info" : "success");
+      close();
+    });
+    wizard.querySelector('[data-action="custom-apply-import-skip"]')?.addEventListener("click", () => {
+      const payload = resolveParsedForConflictAction();
+      if (!payload) return;
+      const { added, replaced, skipped } = applyImportedCustomStats(payload, "skip_conflicts");
+      const warningSuffix = payload.warnings.length
+        ? ` Warnings: ${payload.warnings.slice(0, 2).join(" ")}${payload.warnings.length > 2 ? " ..." : ""}`
+        : "";
+      setCustomStatsStatus(`Imported ${payload.stats.length} stat(s): +${added}, updated ${replaced}, skipped ${skipped}.${warningSuffix}`, payload.warnings.length ? "info" : "success");
+      close();
+    });
     backdropNode.addEventListener("click", close);
     wizard.addEventListener("click", event => event.stopPropagation());
 
