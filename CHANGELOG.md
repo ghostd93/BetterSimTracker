@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev11] - 2026-03-03
+### Changed
+- Date/time part order controls now use arrow-based row ordering in both:
+  - Scene Stat Display editor
+  - Custom stat wizard (`date_time`)
+
 ## [2.2.2.1-dev10] - 2026-03-03
 ### Changed
 - Date/time phase mapping was refined to the new subphase model:

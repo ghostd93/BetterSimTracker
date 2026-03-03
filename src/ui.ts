@@ -8062,6 +8062,9 @@ export function openSettingsModal(input: {
     };
     const isDateTime = normalizeCustomStatKind(stat.kind) === "date_time";
     const isStructuredDateTime = isDateTime && stat.dateTimeMode === "structured";
+    let dateTimePartOrderDraft = normalizeDateTimePartOrder(
+      (current.dateTimePartOrder ?? ["weekday", "date", "time", "phase"]).map(item => String(item ?? "")),
+    );
     const backdropNode = document.createElement("div");
     backdropNode.className = "bst-custom-wizard-backdrop";
     const wizard = document.createElement("div");
@@ -8155,18 +8158,8 @@ export function openSettingsModal(input: {
                 <input type="text" maxlength="20" data-scene-opt="dateTimeLabelPhase" value="${escapeHtml(current.dateTimeLabelPhase ?? "Phase")}" placeholder="Phase">
               </label>
             </div>
-            <label>Part Order
-              <div class="bst-settings-grid">
-                ${normalizeDateTimePartOrder(current.dateTimePartOrder ?? ["weekday", "date", "time", "phase"])
-                  .map((part, index) => `
-                    <label>Position ${index + 1}
-                      <select data-scene-opt="dateTimePartOrder${index}">
-                        ${DATE_TIME_PART_KEYS.map(option => `<option value="${option}"${part === option ? " selected" : ""}>${option}</option>`).join("")}
-                      </select>
-                    </label>
-                  `).join("")}
-              </div>
-            </label>
+            <div class="bst-scene-stat-editor-group-title">Part Order</div>
+            <div data-scene-opt="dateTimePartOrderRows"></div>
           </div>
         </div>
       </div>
@@ -8194,6 +8187,23 @@ export function openSettingsModal(input: {
     };
     syncColorPicker();
     updateArrayRow();
+    const renderDateTimePartOrderRows = (): void => {
+      const rowsNode = wizard.querySelector('[data-scene-opt="dateTimePartOrderRows"]') as HTMLElement | null;
+      if (!rowsNode) return;
+      rowsNode.innerHTML = dateTimePartOrderDraft.map((part, index) => `
+        <div class="bst-scene-order-row" data-scene-dt-part-row="${index}">
+          <div class="bst-scene-order-meta">
+            <span class="bst-scene-order-name">${escapeHtml(part)}</span>
+            <span class="bst-scene-order-id">Position ${index + 1}</span>
+          </div>
+          <div class="bst-scene-order-actions">
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-dt-part-up" data-scene-dt-part-index="${index}" ${index === 0 ? "disabled" : ""} title="Move up" aria-label="Move up"><span class="fa-solid fa-arrow-up" aria-hidden="true"></span></button>
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-dt-part-down" data-scene-dt-part-index="${index}" ${index === dateTimePartOrderDraft.length - 1 ? "disabled" : ""} title="Move down" aria-label="Move down"><span class="fa-solid fa-arrow-down" aria-hidden="true"></span></button>
+          </div>
+        </div>
+      `).join("");
+    };
+    renderDateTimePartOrderRows();
     const textColor = wizard.querySelector('[data-scene-opt="colorOverride"]') as HTMLInputElement | null;
     const colorColor = wizard.querySelector('[data-scene-opt-color="colorOverride"]') as HTMLInputElement | null;
     textColor?.addEventListener("input", syncColorPicker);
@@ -8201,6 +8211,22 @@ export function openSettingsModal(input: {
       if (textColor && colorColor) textColor.value = colorColor.value;
     });
     wizard.querySelector('[data-scene-opt="layoutOverride"]')?.addEventListener("change", updateArrayRow);
+    wizard.addEventListener("click", event => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest("button[data-action][data-scene-dt-part-index]") as HTMLButtonElement | null;
+      if (!button) return;
+      const index = Number(button.getAttribute("data-scene-dt-part-index"));
+      if (!Number.isInteger(index) || index < 0 || index >= dateTimePartOrderDraft.length) return;
+      if (button.dataset.action === "scene-dt-part-up" && index > 0) {
+        [dateTimePartOrderDraft[index - 1], dateTimePartOrderDraft[index]] = [dateTimePartOrderDraft[index], dateTimePartOrderDraft[index - 1]];
+        renderDateTimePartOrderRows();
+        return;
+      }
+      if (button.dataset.action === "scene-dt-part-down" && index < dateTimePartOrderDraft.length - 1) {
+        [dateTimePartOrderDraft[index + 1], dateTimePartOrderDraft[index]] = [dateTimePartOrderDraft[index], dateTimePartOrderDraft[index + 1]];
+        renderDateTimePartOrderRows();
+      }
+    });
     wizard.querySelector('[data-action="scene-stat-close"]')?.addEventListener("click", close);
     wizard.querySelector('[data-action="scene-stat-cancel"]')?.addEventListener("click", close);
     wizard.querySelector('[data-action="scene-stat-save"]')?.addEventListener("click", () => {
@@ -8223,7 +8249,6 @@ export function openSettingsModal(input: {
       const dateTimeLabelTimeNode = wizard.querySelector('[data-scene-opt="dateTimeLabelTime"]') as HTMLInputElement | null;
       const dateTimeLabelPhaseNode = wizard.querySelector('[data-scene-opt="dateTimeLabelPhase"]') as HTMLInputElement | null;
       const dateTimeDateFormatNode = wizard.querySelector('[data-scene-opt="dateTimeDateFormat"]') as HTMLSelectElement | null;
-      const dateTimePartOrderNodes = Array.from(wizard.querySelectorAll('[data-scene-opt^="dateTimePartOrder"]')) as HTMLSelectElement[];
       const layoutOverride = layoutNode?.value === "chips" || layoutNode?.value === "rows" ? layoutNode.value : "auto";
       const valueStyle = valueStyleNode?.value === "chip" || valueStyleNode?.value === "plain" ? valueStyleNode.value : "auto";
       const parsedTextMaxRaw = Number(textMaxLengthNode?.value ?? "");
@@ -8234,7 +8259,7 @@ export function openSettingsModal(input: {
       const arrayCollapsedLimit = Number.isFinite(parsedLimitRaw) && !Number.isNaN(parsedLimitRaw)
         ? Math.max(1, Math.min(20, Math.round(parsedLimitRaw)))
         : null;
-      const dateTimePartOrder = normalizeDateTimePartOrder(dateTimePartOrderNodes.map(node => String(node.value ?? "")));
+      const dateTimePartOrder = normalizeDateTimePartOrder(dateTimePartOrderDraft);
       sceneCardStatDisplayState[targetId] = {
         visible: Boolean(visibleNode?.checked ?? true),
         showLabel: Boolean(showLabelNode?.checked ?? true),
@@ -8520,6 +8545,7 @@ export function openSettingsModal(input: {
         ? sceneDisplaySeed.dateTimePartOrder.map(item => String(item ?? ""))
         : ["weekday", "date", "time", "phase"],
     );
+    let dateTimePartOrderDraft = [...dateTimePartOrderSeed];
 
     let idTouched = Boolean(draft.id && mode !== "add");
     let step = 1;
@@ -8675,18 +8701,8 @@ export function openSettingsModal(input: {
                 <input type="text" maxlength="20" data-bst-custom-field="dateTimeLabelPhase" value="${escapeHtml(dateTimeLabelPhaseSeed)}" placeholder="Phase">
               </label>
             </div>
-            <label>Part Order
-              <div class="bst-settings-grid">
-                ${dateTimePartOrderSeed
-                  .map((part, index) => `
-                    <label>Position ${index + 1}
-                      <select data-bst-custom-field="dateTimePartOrder${index}">
-                        ${DATE_TIME_PART_KEYS.map(option => `<option value="${option}"${part === option ? " selected" : ""}>${option}</option>`).join("")}
-                      </select>
-                    </label>
-                  `).join("")}
-              </div>
-            </label>
+            <div class="bst-scene-stat-editor-group-title">Part Order</div>
+            <div data-bst-custom-field="dateTimePartOrderRows"></div>
           </div>
           <div class="bst-help-line">Stored format: <code>YYYY-MM-DD HH:mm</code>. Empty means no explicit default.</div>
         </div>
@@ -8874,6 +8890,23 @@ export function openSettingsModal(input: {
       while (rows.length < 2) rows.push("");
       enumOptionsListNode.innerHTML = rows.map(value => enumEditorRowHtml(value)).join("");
       syncEnumEditorToHiddenField();
+    };
+
+    const renderDateTimePartOrderEditorRows = (): void => {
+      const rowsNode = wizard.querySelector('[data-bst-custom-field="dateTimePartOrderRows"]') as HTMLElement | null;
+      if (!rowsNode) return;
+      rowsNode.innerHTML = dateTimePartOrderDraft.map((part, index) => `
+        <div class="bst-scene-order-row" data-bst-custom-dt-part-row="${index}">
+          <div class="bst-scene-order-meta">
+            <span class="bst-scene-order-name">${escapeHtml(part)}</span>
+            <span class="bst-scene-order-id">Position ${index + 1}</span>
+          </div>
+          <div class="bst-scene-order-actions">
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="custom-dt-part-up" data-bst-custom-dt-part-index="${index}" ${index === 0 ? "disabled" : ""} title="Move up" aria-label="Move up"><span class="fa-solid fa-arrow-up" aria-hidden="true"></span></button>
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="custom-dt-part-down" data-bst-custom-dt-part-index="${index}" ${index === dateTimePartOrderDraft.length - 1 ? "disabled" : ""} title="Move down" aria-label="Move down"><span class="fa-solid fa-arrow-down" aria-hidden="true"></span></button>
+          </div>
+        </div>
+      `).join("");
     };
 
     const ensureArrayEditorRowExists = (): void => {
@@ -9283,6 +9316,24 @@ export function openSettingsModal(input: {
     });
     wizard.addEventListener("click", event => {
       const target = event.target as HTMLElement | null;
+      const dtPartButton = target?.closest('button[data-action][data-bst-custom-dt-part-index]') as HTMLButtonElement | null;
+      if (dtPartButton) {
+        const index = Number(dtPartButton.getAttribute("data-bst-custom-dt-part-index"));
+        if (Number.isInteger(index) && index >= 0 && index < dateTimePartOrderDraft.length) {
+          if (dtPartButton.dataset.action === "custom-dt-part-up" && index > 0) {
+            [dateTimePartOrderDraft[index - 1], dateTimePartOrderDraft[index]] = [dateTimePartOrderDraft[index], dateTimePartOrderDraft[index - 1]];
+            renderDateTimePartOrderEditorRows();
+          } else if (dtPartButton.dataset.action === "custom-dt-part-down" && index < dateTimePartOrderDraft.length - 1) {
+            [dateTimePartOrderDraft[index + 1], dateTimePartOrderDraft[index]] = [dateTimePartOrderDraft[index], dateTimePartOrderDraft[index + 1]];
+            renderDateTimePartOrderEditorRows();
+          }
+        }
+        syncDraftFromFields();
+        syncKindUi();
+        writeReview();
+        updateDescriptionCounter();
+        return;
+      }
       const arrayRemoveBtn = target?.closest('[data-action="array-default-remove"]') as HTMLButtonElement | null;
       if (arrayRemoveBtn) {
         const row = arrayRemoveBtn.closest(".bst-array-default-row");
@@ -9334,6 +9385,7 @@ export function openSettingsModal(input: {
     syncColorPickerFromText();
     renderArrayEditorFromDraft();
     renderEnumEditorFromDraft();
+    renderDateTimePartOrderEditorRows();
     setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "idle");
     setGenerateStatus(generateStatusNode, "Uses current connection profile.", "idle");
     setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "idle");
@@ -9605,7 +9657,6 @@ export function openSettingsModal(input: {
       const dateTimeLabelTimeNode = getField("dateTimeLabelTime") as HTMLInputElement | null;
       const dateTimeLabelPhaseNode = getField("dateTimeLabelPhase") as HTMLInputElement | null;
       const dateTimeDateFormatNode = getField("dateTimeDateFormat") as HTMLSelectElement | null;
-      const dateTimePartOrderNodes = Array.from(wizard.querySelectorAll('[data-bst-custom-field^="dateTimePartOrder"]')) as HTMLSelectElement[];
       if (mode === "edit" && source) {
         customStatsState = customStatsState.map(item => item.id === source.id ? nextDef : item);
       } else {
@@ -9613,7 +9664,7 @@ export function openSettingsModal(input: {
       }
       const displayId = String(nextDef.id ?? "").trim().toLowerCase();
       if (nextDef.kind === "date_time" && nextDef.dateTimeMode === "structured" && displayId) {
-        const dateTimePartOrder = normalizeDateTimePartOrder(dateTimePartOrderNodes.map(node => String(node.value ?? "")));
+        const dateTimePartOrder = normalizeDateTimePartOrder(dateTimePartOrderDraft);
         const prev = sceneCardStatDisplayState[displayId] ?? {
           visible: true,
           showLabel: true,
