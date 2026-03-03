@@ -7343,7 +7343,8 @@ export function openSettingsModal(input: {
     const globalScope = Boolean(candidate.globalScope);
     const trackCharacters = globalScope ? true : Boolean(candidate.trackCharacters ?? candidate.track);
     const trackUser = globalScope ? true : Boolean(candidate.trackUser ?? candidate.track);
-    const track = trackCharacters || trackUser;
+    const explicitTrack = typeof candidate.track === "boolean" ? candidate.track : null;
+    const track = explicitTrack == null ? (trackCharacters || trackUser) : explicitTrack;
     const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(candidate.textMaxLength) || 120)));
     const enumOptions = kind === "enum_single"
       ? normalizeCustomEnumOptions(candidate.enumOptions).slice(0, 12)

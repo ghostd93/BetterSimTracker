@@ -884,6 +884,7 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
     const globalScope = asBool(obj.globalScope, false);
     const trackCharacters = globalScope ? true : asBool(obj.trackCharacters, legacyTrack);
     const trackUser = globalScope ? true : asBool(obj.trackUser, legacyTrack);
+    const trackEnabled = asBool(obj.track, trackCharacters || trackUser);
     const privateToOwner = globalScope ? false : asBool(obj.privateToOwner, false);
     const entry = {
       id,
@@ -902,7 +903,7 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       booleanFalseLabel: kind === "boolean" ? (booleanFalseLabel || "disabled") : undefined,
       textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
       dateTimeMode,
-      track: trackCharacters || trackUser,
+      track: trackEnabled,
       trackCharacters,
       trackUser,
       globalScope,
