@@ -113,6 +113,8 @@ const ST_EXPRESSION_CACHE_TTL_MS = 60_000;
 const stExpressionCache = new Map<string, CachedExpressionSprites>();
 const stExpressionFetchInFlight = new Set<string>();
 const CUSTOM_STAT_DESCRIPTION_MAX_LENGTH = 300;
+const DATE_TIME_PART_KEYS = ["weekday", "date", "time", "phase"] as const;
+type DateTimePartKey = (typeof DATE_TIME_PART_KEYS)[number];
 const DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS: StExpressionImageOptions = {
   zoom: 1.2,
   positionX: 50,
@@ -616,6 +618,20 @@ function toPercent(value: StatValue): number {
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function normalizeDateTimePartOrder(parts: string[]): DateTimePartKey[] {
+  const next: DateTimePartKey[] = [];
+  for (const raw of parts) {
+    const key = String(raw ?? "").trim().toLowerCase();
+    if ((key === "weekday" || key === "date" || key === "time" || key === "phase") && !next.includes(key)) {
+      next.push(key);
+    }
+  }
+  for (const key of DATE_TIME_PART_KEYS) {
+    if (!next.includes(key)) next.push(key);
+  }
+  return next;
 }
 
 function toOwnerClassSuffix(value: string): string {
@@ -8139,8 +8155,17 @@ export function openSettingsModal(input: {
                 <input type="text" maxlength="20" data-scene-opt="dateTimeLabelPhase" value="${escapeHtml(current.dateTimeLabelPhase ?? "Phase")}" placeholder="Phase">
               </label>
             </div>
-            <label>Part Order (comma-separated: weekday,date,time,phase)
-              <input type="text" maxlength="64" data-scene-opt="dateTimePartOrder" value="${escapeHtml((current.dateTimePartOrder ?? ["weekday","date","time","phase"]).join(","))}" placeholder="weekday,date,time,phase">
+            <label>Part Order
+              <div class="bst-settings-grid">
+                ${normalizeDateTimePartOrder(current.dateTimePartOrder ?? ["weekday", "date", "time", "phase"])
+                  .map((part, index) => `
+                    <label>Position ${index + 1}
+                      <select data-scene-opt="dateTimePartOrder${index}">
+                        ${DATE_TIME_PART_KEYS.map(option => `<option value="${option}"${part === option ? " selected" : ""}>${option}</option>`).join("")}
+                      </select>
+                    </label>
+                  `).join("")}
+              </div>
             </label>
           </div>
         </div>
@@ -8198,7 +8223,7 @@ export function openSettingsModal(input: {
       const dateTimeLabelTimeNode = wizard.querySelector('[data-scene-opt="dateTimeLabelTime"]') as HTMLInputElement | null;
       const dateTimeLabelPhaseNode = wizard.querySelector('[data-scene-opt="dateTimeLabelPhase"]') as HTMLInputElement | null;
       const dateTimeDateFormatNode = wizard.querySelector('[data-scene-opt="dateTimeDateFormat"]') as HTMLSelectElement | null;
-      const dateTimePartOrderNode = wizard.querySelector('[data-scene-opt="dateTimePartOrder"]') as HTMLInputElement | null;
+      const dateTimePartOrderNodes = Array.from(wizard.querySelectorAll('[data-scene-opt^="dateTimePartOrder"]')) as HTMLSelectElement[];
       const layoutOverride = layoutNode?.value === "chips" || layoutNode?.value === "rows" ? layoutNode.value : "auto";
       const valueStyle = valueStyleNode?.value === "chip" || valueStyleNode?.value === "plain" ? valueStyleNode.value : "auto";
       const parsedTextMaxRaw = Number(textMaxLengthNode?.value ?? "");
@@ -8209,18 +8234,7 @@ export function openSettingsModal(input: {
       const arrayCollapsedLimit = Number.isFinite(parsedLimitRaw) && !Number.isNaN(parsedLimitRaw)
         ? Math.max(1, Math.min(20, Math.round(parsedLimitRaw)))
         : null;
-      const parsedOrder = String(dateTimePartOrderNode?.value ?? "")
-        .split(",")
-        .map(item => item.trim().toLowerCase())
-        .filter(item => item === "weekday" || item === "date" || item === "time" || item === "phase");
-      const dateTimePartOrder: Array<"weekday" | "date" | "time" | "phase"> = [];
-      for (const item of parsedOrder) {
-        const key = item as "weekday" | "date" | "time" | "phase";
-        if (!dateTimePartOrder.includes(key)) dateTimePartOrder.push(key);
-      }
-      for (const key of ["weekday", "date", "time", "phase"] as const) {
-        if (!dateTimePartOrder.includes(key)) dateTimePartOrder.push(key);
-      }
+      const dateTimePartOrder = normalizeDateTimePartOrder(dateTimePartOrderNodes.map(node => String(node.value ?? "")));
       sceneCardStatDisplayState[targetId] = {
         visible: Boolean(visibleNode?.checked ?? true),
         showLabel: Boolean(showLabelNode?.checked ?? true),
@@ -8501,13 +8515,11 @@ export function openSettingsModal(input: {
       sceneDisplaySeed.dateTimeDateFormat === "mmmm_do_yyyy"
         ? sceneDisplaySeed.dateTimeDateFormat
         : "iso";
-    const dateTimePartOrderSeedRaw = Array.isArray(sceneDisplaySeed.dateTimePartOrder) ? sceneDisplaySeed.dateTimePartOrder : ["weekday", "date", "time", "phase"];
-    const dateTimePartOrderSeed = Array.from(new Set(dateTimePartOrderSeedRaw
-      .map(item => String(item ?? "").trim().toLowerCase())
-      .filter(item => item === "weekday" || item === "date" || item === "time" || item === "phase")));
-    for (const part of ["weekday", "date", "time", "phase"] as const) {
-      if (!dateTimePartOrderSeed.includes(part)) dateTimePartOrderSeed.push(part);
-    }
+    const dateTimePartOrderSeed = normalizeDateTimePartOrder(
+      Array.isArray(sceneDisplaySeed.dateTimePartOrder)
+        ? sceneDisplaySeed.dateTimePartOrder.map(item => String(item ?? ""))
+        : ["weekday", "date", "time", "phase"],
+    );
 
     let idTouched = Boolean(draft.id && mode !== "add");
     let step = 1;
@@ -8663,8 +8675,17 @@ export function openSettingsModal(input: {
                 <input type="text" maxlength="20" data-bst-custom-field="dateTimeLabelPhase" value="${escapeHtml(dateTimeLabelPhaseSeed)}" placeholder="Phase">
               </label>
             </div>
-            <label>Part Order (comma-separated)
-              <input type="text" maxlength="64" data-bst-custom-field="dateTimePartOrder" value="${escapeHtml(dateTimePartOrderSeed.join(","))}" placeholder="weekday,date,time,phase">
+            <label>Part Order
+              <div class="bst-settings-grid">
+                ${dateTimePartOrderSeed
+                  .map((part, index) => `
+                    <label>Position ${index + 1}
+                      <select data-bst-custom-field="dateTimePartOrder${index}">
+                        ${DATE_TIME_PART_KEYS.map(option => `<option value="${option}"${part === option ? " selected" : ""}>${option}</option>`).join("")}
+                      </select>
+                    </label>
+                  `).join("")}
+              </div>
             </label>
           </div>
           <div class="bst-help-line">Stored format: <code>YYYY-MM-DD HH:mm</code>. Empty means no explicit default.</div>
@@ -9584,7 +9605,7 @@ export function openSettingsModal(input: {
       const dateTimeLabelTimeNode = getField("dateTimeLabelTime") as HTMLInputElement | null;
       const dateTimeLabelPhaseNode = getField("dateTimeLabelPhase") as HTMLInputElement | null;
       const dateTimeDateFormatNode = getField("dateTimeDateFormat") as HTMLSelectElement | null;
-      const dateTimePartOrderNode = getField("dateTimePartOrder") as HTMLInputElement | null;
+      const dateTimePartOrderNodes = Array.from(wizard.querySelectorAll('[data-bst-custom-field^="dateTimePartOrder"]')) as HTMLSelectElement[];
       if (mode === "edit" && source) {
         customStatsState = customStatsState.map(item => item.id === source.id ? nextDef : item);
       } else {
@@ -9592,18 +9613,7 @@ export function openSettingsModal(input: {
       }
       const displayId = String(nextDef.id ?? "").trim().toLowerCase();
       if (nextDef.kind === "date_time" && nextDef.dateTimeMode === "structured" && displayId) {
-        const parsedOrder = String(dateTimePartOrderNode?.value ?? "")
-          .split(",")
-          .map(item => item.trim().toLowerCase())
-          .filter(item => item === "weekday" || item === "date" || item === "time" || item === "phase");
-        const dateTimePartOrder: Array<"weekday" | "date" | "time" | "phase"> = [];
-        for (const item of parsedOrder) {
-          const key = item as "weekday" | "date" | "time" | "phase";
-          if (!dateTimePartOrder.includes(key)) dateTimePartOrder.push(key);
-        }
-        for (const key of ["weekday", "date", "time", "phase"] as const) {
-          if (!dateTimePartOrder.includes(key)) dateTimePartOrder.push(key);
-        }
+        const dateTimePartOrder = normalizeDateTimePartOrder(dateTimePartOrderNodes.map(node => String(node.value ?? "")));
         const prev = sceneCardStatDisplayState[displayId] ?? {
           visible: true,
           showLabel: true,

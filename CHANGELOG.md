@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev10] - 2026-03-03
+### Changed
+- Date/time phase mapping was refined to the new subphase model:
+  - `Midnight`, `Night`, `Dawn`, `Early Morning`, `Morning`, `Late Morning`,
+  - `Noon`, `Early Afternoon`, `Afternoon`, `Late Afternoon`,
+  - `Early Evening`, `Evening`, `Late Evening`.
+- Date/time part order UI no longer uses comma-separated free text.
+  - Scene Stat Display editor now uses explicit position selectors.
+  - Custom stat wizard (`date_time`) now uses explicit position selectors.
+
 ## [2.2.2.1-dev9] - 2026-03-03
 ### Added
 - Date/time Scene-card display format presets for both `timestamp` and `structured` modes:

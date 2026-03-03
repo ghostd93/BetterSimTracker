@@ -90,12 +90,37 @@ function inferHourFromPhase(raw: unknown): number | null {
   if (typeof raw !== "string") return null;
   const phase = raw.trim().toLowerCase();
   if (!phase) return null;
-  if (phase.includes("morning")) return 9;
+  // Check most-specific phrases first to avoid partial collisions.
+  if (phase.includes("midnight")) return 0;
+  if (phase.includes("late evening")) return 23;
+  if (phase.includes("early evening")) return 19;
+  if (phase.includes("late afternoon")) return 18;
+  if (phase.includes("early afternoon")) return 14;
+  if (phase.includes("late morning")) return 11;
+  if (phase.includes("early morning")) return 8;
+  if (phase.includes("dawn")) return 6;
+  if (phase.includes("night")) return 2;
+  if (phase.includes("morning")) return 10;
   if (phase.includes("noon")) return 12;
-  if (phase.includes("afternoon")) return 15;
-  if (phase.includes("evening")) return 19;
-  if (phase.includes("night")) return 22;
+  if (phase.includes("afternoon")) return 16;
+  if (phase.includes("evening")) return 21;
   return null;
+}
+
+function resolvePhaseByHour(hour: number): string {
+  if (hour === 0) return "Midnight";
+  if (hour >= 1 && hour <= 4) return "Night";
+  if (hour >= 5 && hour <= 6) return "Dawn";
+  if (hour >= 7 && hour <= 8) return "Early Morning";
+  if (hour >= 9 && hour <= 10) return "Morning";
+  if (hour === 11) return "Late Morning";
+  if (hour === 12) return "Noon";
+  if (hour >= 13 && hour <= 14) return "Early Afternoon";
+  if (hour >= 15 && hour <= 16) return "Afternoon";
+  if (hour >= 17 && hour <= 18) return "Late Afternoon";
+  if (hour >= 19 && hour <= 20) return "Early Evening";
+  if (hour === 21) return "Evening";
+  return "Late Evening";
 }
 
 export function normalizeStructuredDateTimeCandidate(raw: unknown, previous?: unknown): string {
@@ -186,11 +211,7 @@ export function getDateTimeStructuredParts(raw: unknown): {
   if (!date) return null;
   const dayOfWeek = WEEKDAY_NAMES_EN[date.getDay()] ?? "Unknown";
   const hour = date.getHours();
-  const phase =
-    hour < 12 ? "Morning" :
-    hour < 14 ? "Noon" :
-    hour < 19 ? "Evening" :
-    "Night";
+  const phase = resolvePhaseByHour(hour);
   return {
     date: normalized.slice(0, 10),
     time: normalized.slice(11),
