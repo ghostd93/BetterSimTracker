@@ -2,6 +2,18 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev1] - 2026-03-03
+### Added
+- New `date_time` custom-stat mode selector: `timestamp` (strict) and `structured` (semantic) while keeping one canonical stored format.
+
+### Changed
+- `date_time` extraction/prompt contracts are now mode-aware in both unified and sequential paths.
+- `date_time` normalization now accepts structured candidates (absolute/delta/parts) and resolves them to canonical `YYYY-MM-DD HH:mm`.
+- Structured `date_time` display now renders semantic chips (weekday/date/time/phase) on tracker and scene cards.
+
+### Fixed
+- Persona defaults date-time save path now resolves settings source correctly.
+
 ## [2.2.2.1] - 2026-03-03
 ### Fixed
 - Unified first-run custom stat extraction now evaluates model output immediately instead of seed-only defaults, so initial tracker cards no longer stay at `not set` / empty array when the model returned valid custom values.
