@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev8] - 2026-03-03
+### Added
+- Structured `date_time` Scene-card display options are now available directly in the custom stat wizard when `Date/Time Mode = structured`.
+
+### Changed
+- Saving `date_time` structured options in wizard now writes Scene-card per-stat display config immediately (no separate Scene Stat Studio pass required).
+
 ## [2.2.2.1-dev7] - 2026-03-03
 ### Changed
 - Structured `date_time` Scene-card rendering now uses fixed English weekday names (no browser-locale weekday output).

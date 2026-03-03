@@ -8321,6 +8321,23 @@ export function openSettingsModal(input: {
     if (mode === "add" && !draft.id) {
       draft.id = suggestUniqueCustomStatId(fallbackBase, existingIds);
     }
+    const sceneDisplaySeed = sceneCardStatDisplayState[String(source?.id ?? draft.id ?? "").trim().toLowerCase()] ?? {};
+    const dateTimeShowWeekdaySeed = sceneDisplaySeed.dateTimeShowWeekday !== false;
+    const dateTimeShowDateSeed = sceneDisplaySeed.dateTimeShowDate !== false;
+    const dateTimeShowTimeSeed = sceneDisplaySeed.dateTimeShowTime !== false;
+    const dateTimeShowPhaseSeed = sceneDisplaySeed.dateTimeShowPhase !== false;
+    const dateTimeShowPartLabelsSeed = Boolean(sceneDisplaySeed.dateTimeShowPartLabels ?? false);
+    const dateTimeLabelWeekdaySeed = String(sceneDisplaySeed.dateTimeLabelWeekday ?? "Day").trim() || "Day";
+    const dateTimeLabelDateSeed = String(sceneDisplaySeed.dateTimeLabelDate ?? "Date").trim() || "Date";
+    const dateTimeLabelTimeSeed = String(sceneDisplaySeed.dateTimeLabelTime ?? "Time").trim() || "Time";
+    const dateTimeLabelPhaseSeed = String(sceneDisplaySeed.dateTimeLabelPhase ?? "Phase").trim() || "Phase";
+    const dateTimePartOrderSeedRaw = Array.isArray(sceneDisplaySeed.dateTimePartOrder) ? sceneDisplaySeed.dateTimePartOrder : ["weekday", "date", "time", "phase"];
+    const dateTimePartOrderSeed = Array.from(new Set(dateTimePartOrderSeedRaw
+      .map(item => String(item ?? "").trim().toLowerCase())
+      .filter(item => item === "weekday" || item === "date" || item === "time" || item === "phase")));
+    for (const part of ["weekday", "date", "time", "phase"] as const) {
+      if (!dateTimePartOrderSeed.includes(part)) dateTimePartOrderSeed.push(part);
+    }
 
     let idTouched = Boolean(draft.id && mode !== "add");
     let step = 1;
@@ -8442,6 +8459,34 @@ export function openSettingsModal(input: {
               <option value="structured" ${draft.dateTimeMode === "structured" ? "selected" : ""}>Structured (semantic)</option>
             </select>
           </label>
+          <div class="bst-scene-stat-editor-group" data-bst-date-time-structured-options style="display:none;">
+            <div class="bst-scene-stat-editor-group-title">Structured Display (Scene Card)</div>
+            <div class="bst-help-line">Visible only when mode is <code>structured</code>.</div>
+            <div class="bst-check-grid">
+              <label class="bst-check"><input type="checkbox" data-bst-custom-field="dateTimeShowWeekday" ${dateTimeShowWeekdaySeed ? "checked" : ""}>Show weekday</label>
+              <label class="bst-check"><input type="checkbox" data-bst-custom-field="dateTimeShowDate" ${dateTimeShowDateSeed ? "checked" : ""}>Show date</label>
+              <label class="bst-check"><input type="checkbox" data-bst-custom-field="dateTimeShowTime" ${dateTimeShowTimeSeed ? "checked" : ""}>Show time</label>
+              <label class="bst-check"><input type="checkbox" data-bst-custom-field="dateTimeShowPhase" ${dateTimeShowPhaseSeed ? "checked" : ""}>Show phase</label>
+              <label class="bst-check"><input type="checkbox" data-bst-custom-field="dateTimeShowPartLabels" ${dateTimeShowPartLabelsSeed ? "checked" : ""}>Show part labels</label>
+            </div>
+            <div class="bst-settings-grid">
+              <label>Weekday Label
+                <input type="text" maxlength="20" data-bst-custom-field="dateTimeLabelWeekday" value="${escapeHtml(dateTimeLabelWeekdaySeed)}" placeholder="Day">
+              </label>
+              <label>Date Label
+                <input type="text" maxlength="20" data-bst-custom-field="dateTimeLabelDate" value="${escapeHtml(dateTimeLabelDateSeed)}" placeholder="Date">
+              </label>
+              <label>Time Label
+                <input type="text" maxlength="20" data-bst-custom-field="dateTimeLabelTime" value="${escapeHtml(dateTimeLabelTimeSeed)}" placeholder="Time">
+              </label>
+              <label>Phase Label
+                <input type="text" maxlength="20" data-bst-custom-field="dateTimeLabelPhase" value="${escapeHtml(dateTimeLabelPhaseSeed)}" placeholder="Phase">
+              </label>
+            </div>
+            <label>Part Order (comma-separated)
+              <input type="text" maxlength="64" data-bst-custom-field="dateTimePartOrder" value="${escapeHtml(dateTimePartOrderSeed.join(","))}" placeholder="weekday,date,time,phase">
+            </label>
+          </div>
           <div class="bst-help-line">Stored format: <code>YYYY-MM-DD HH:mm</code>. Empty means no explicit default.</div>
         </div>
         <div class="bst-help-line" data-bst-kind-help="value">Numeric stats use 0-100 with optional max delta. Non-numeric stats store absolute values and do not use delta.</div>
@@ -8858,6 +8903,11 @@ export function openSettingsModal(input: {
         privateToOwnerNode.checked = draft.privateToOwner;
         privateToOwnerNode.disabled = draft.globalScope;
         setCheckDisabledVisual(privateToOwnerNode, draft.globalScope);
+      }
+      const structuredDisplayNode = wizard.querySelector('[data-bst-date-time-structured-options]') as HTMLElement | null;
+      if (structuredDisplayNode) {
+        const showStructuredOptions = kind === "date_time" && draft.dateTimeMode === "structured";
+        structuredDisplayNode.style.display = showStructuredOptions ? "block" : "none";
       }
     };
 
@@ -9344,13 +9394,63 @@ export function openSettingsModal(input: {
     saveBtn?.addEventListener("click", () => {
       if (!validateAll()) return;
       const nextDef = toCustomStatDefinition(draft);
+      const dateTimeShowWeekdayNode = getField("dateTimeShowWeekday") as HTMLInputElement | null;
+      const dateTimeShowDateNode = getField("dateTimeShowDate") as HTMLInputElement | null;
+      const dateTimeShowTimeNode = getField("dateTimeShowTime") as HTMLInputElement | null;
+      const dateTimeShowPhaseNode = getField("dateTimeShowPhase") as HTMLInputElement | null;
+      const dateTimeShowPartLabelsNode = getField("dateTimeShowPartLabels") as HTMLInputElement | null;
+      const dateTimeLabelWeekdayNode = getField("dateTimeLabelWeekday") as HTMLInputElement | null;
+      const dateTimeLabelDateNode = getField("dateTimeLabelDate") as HTMLInputElement | null;
+      const dateTimeLabelTimeNode = getField("dateTimeLabelTime") as HTMLInputElement | null;
+      const dateTimeLabelPhaseNode = getField("dateTimeLabelPhase") as HTMLInputElement | null;
+      const dateTimePartOrderNode = getField("dateTimePartOrder") as HTMLInputElement | null;
       if (mode === "edit" && source) {
         customStatsState = customStatsState.map(item => item.id === source.id ? nextDef : item);
       } else {
         customStatsState = [...customStatsState, nextDef];
       }
+      const displayId = String(nextDef.id ?? "").trim().toLowerCase();
+      if (nextDef.kind === "date_time" && nextDef.dateTimeMode === "structured" && displayId) {
+        const parsedOrder = String(dateTimePartOrderNode?.value ?? "")
+          .split(",")
+          .map(item => item.trim().toLowerCase())
+          .filter(item => item === "weekday" || item === "date" || item === "time" || item === "phase");
+        const dateTimePartOrder: Array<"weekday" | "date" | "time" | "phase"> = [];
+        for (const item of parsedOrder) {
+          const key = item as "weekday" | "date" | "time" | "phase";
+          if (!dateTimePartOrder.includes(key)) dateTimePartOrder.push(key);
+        }
+        for (const key of ["weekday", "date", "time", "phase"] as const) {
+          if (!dateTimePartOrder.includes(key)) dateTimePartOrder.push(key);
+        }
+        const prev = sceneCardStatDisplayState[displayId] ?? {
+          visible: true,
+          showLabel: true,
+          hideWhenEmpty: true,
+          labelOverride: "",
+          colorOverride: "",
+          layoutOverride: "auto" as const,
+          valueStyle: "auto" as const,
+          textMaxLength: null,
+          arrayCollapsedLimit: null,
+        };
+        sceneCardStatDisplayState[displayId] = {
+          ...prev,
+          dateTimeShowWeekday: Boolean(dateTimeShowWeekdayNode?.checked ?? true),
+          dateTimeShowDate: Boolean(dateTimeShowDateNode?.checked ?? true),
+          dateTimeShowTime: Boolean(dateTimeShowTimeNode?.checked ?? true),
+          dateTimeShowPhase: Boolean(dateTimeShowPhaseNode?.checked ?? true),
+          dateTimeShowPartLabels: Boolean(dateTimeShowPartLabelsNode?.checked ?? false),
+          dateTimeLabelWeekday: String(dateTimeLabelWeekdayNode?.value ?? "Day").trim().slice(0, 20) || "Day",
+          dateTimeLabelDate: String(dateTimeLabelDateNode?.value ?? "Date").trim().slice(0, 20) || "Date",
+          dateTimeLabelTime: String(dateTimeLabelTimeNode?.value ?? "Time").trim().slice(0, 20) || "Time",
+          dateTimeLabelPhase: String(dateTimeLabelPhaseNode?.value ?? "Phase").trim().slice(0, 20) || "Phase",
+          dateTimePartOrder,
+        };
+      }
       customStatsState = customStatsState.slice(0, MAX_CUSTOM_STATS);
       renderCustomStatsList();
+      renderSceneCardOrderList();
       close();
       persistLive();
     });
