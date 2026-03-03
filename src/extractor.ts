@@ -664,12 +664,17 @@ export async function extractStatisticsParallel(input: {
       statDef?: CustomStatDefinition,
       names: string[] = activeCharacters,
     ): { existing: string[]; firstRunSeedOnly: string[] } => {
+      const hasPrior = Boolean(hasPriorTrackerData);
+      // On first tracker in a chat, custom stats must be extracted from current context,
+      // not seed-only from defaults.
+      if (!hasPrior) {
+        return { existing: [...names], firstRunSeedOnly: [] };
+      }
       // For user-side extraction, custom stats should be inferred immediately
       // from the current user turn instead of being seed-only.
       if (names.length === 1 && names[0] === USER_TRACKER_KEY) {
         return { existing: [...names], firstRunSeedOnly: [] };
       }
-      const hasPrior = Boolean(hasPriorTrackerData);
       const rawMap = kind === "numeric"
         ? (previousCustomStatisticsRaw?.[statId] ?? {})
         : (previousCustomNonNumericStatistics?.[statId] ?? {});
