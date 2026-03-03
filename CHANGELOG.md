@@ -2,6 +2,23 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev9] - 2026-03-03
+### Added
+- Date/time Scene-card display format presets for both `timestamp` and `structured` modes:
+  - `YYYY-MM-DD`
+  - `DD-MM-YYYY`
+  - `MM-DD-YYYY`
+  - `DD MMM YYYY`
+  - `MMMM D, YYYY`
+  - `MMMM Do, YYYY` (ordinal day)
+
+### Changed
+- Date/time format controls are now available for all `date_time` stats (including `timestamp`) in:
+  - Scene Stat Display editor
+  - Custom stat wizard (`Date/Time` step)
+- Extension drawer version display now resolves from runtime `manifest.json` (with build-time fallback), preventing stale one-version-behind headers.
+- Tracker cards now include owner-specific CSS classes based on display name (`.bst-owner-<name>`) so per-character/persona styling can be targeted directly.
+
 ## [2.2.2.1-dev8] - 2026-03-03
 ### Added
 - Structured `date_time` Scene-card display options are now available directly in the custom stat wizard when `Date/Time Mode = structured`.

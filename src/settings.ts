@@ -763,6 +763,14 @@ function sanitizeSceneCardStatDisplay(input: unknown): Record<string, SceneCardS
       dateTimeLabelDate: asText(row.dateTimeLabelDate, "Date").slice(0, 20),
       dateTimeLabelTime: asText(row.dateTimeLabelTime, "Time").slice(0, 20),
       dateTimeLabelPhase: asText(row.dateTimeLabelPhase, "Phase").slice(0, 20),
+      dateTimeDateFormat:
+        row.dateTimeDateFormat === "dmy" ||
+        row.dateTimeDateFormat === "mdy" ||
+        row.dateTimeDateFormat === "d_mmm_yyyy" ||
+        row.dateTimeDateFormat === "mmmm_d_yyyy" ||
+        row.dateTimeDateFormat === "mmmm_do_yyyy"
+          ? row.dateTimeDateFormat
+          : "iso",
       dateTimePartOrder: fullOrder,
     };
   }

@@ -46,6 +46,7 @@ export interface SceneCardStatDisplayOptions {
   dateTimeLabelDate?: string;
   dateTimeLabelTime?: string;
   dateTimeLabelPhase?: string;
+  dateTimeDateFormat?: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy";
   dateTimePartOrder?: Array<"weekday" | "date" | "time" | "phase">;
 }
 

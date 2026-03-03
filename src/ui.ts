@@ -416,7 +416,64 @@ function formatNonNumericForDisplay(def: UiNonNumericStatDefinition, value: stri
     if (!parts) return String(value);
     return `${parts.dayOfWeek}, ${parts.time} (${parts.phase})`;
   }
+  if (def.kind === "date_time") {
+    return formatDateTimeTimestampDisplay(value, "iso");
+  }
   return String(value);
+}
+
+const MONTH_NAMES_SHORT_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+const MONTH_NAMES_LONG_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] as const;
+
+function getOrdinalSuffix(day: number): string {
+  const mod100 = day % 100;
+  if (mod100 >= 11 && mod100 <= 13) return "th";
+  const mod10 = day % 10;
+  if (mod10 === 1) return "st";
+  if (mod10 === 2) return "nd";
+  if (mod10 === 3) return "rd";
+  return "th";
+}
+
+function parseNormalizedDateTime(raw: unknown): { year: number; month: number; day: number; hour: number; minute: number } | null {
+  const normalized = normalizeDateTimeValue(raw);
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day) || !Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return { year, month, day, hour, minute };
+}
+
+function formatDateWithPreset(
+  parts: { year: number; month: number; day: number },
+  format: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy",
+): string {
+  const yyyy = String(parts.year).padStart(4, "0");
+  const mm = String(parts.month).padStart(2, "0");
+  const dd = String(parts.day).padStart(2, "0");
+  const monthShort = MONTH_NAMES_SHORT_EN[parts.month - 1] ?? mm;
+  const monthLong = MONTH_NAMES_LONG_EN[parts.month - 1] ?? mm;
+  if (format === "dmy") return `${dd}-${mm}-${yyyy}`;
+  if (format === "mdy") return `${mm}-${dd}-${yyyy}`;
+  if (format === "d_mmm_yyyy") return `${dd} ${monthShort} ${yyyy}`;
+  if (format === "mmmm_d_yyyy") return `${monthLong} ${parts.day}, ${yyyy}`;
+  if (format === "mmmm_do_yyyy") return `${monthLong} ${parts.day}${getOrdinalSuffix(parts.day)}, ${yyyy}`;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDateTimeTimestampDisplay(
+  raw: unknown,
+  format: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy",
+): string {
+  const parsed = parseNormalizedDateTime(raw);
+  if (!parsed) return String(raw ?? "");
+  const datePart = formatDateWithPreset(parsed, format);
+  const timePart = `${String(parsed.hour).padStart(2, "0")}:${String(parsed.minute).padStart(2, "0")}`;
+  return `${datePart} ${timePart}`;
 }
 
 function renderDateTimeStructuredChips(
@@ -432,6 +489,7 @@ function renderDateTimeStructuredChips(
     labelDate?: string;
     labelTime?: string;
     labelPhase?: string;
+    dateFormat?: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy";
     partOrder?: Array<"weekday" | "date" | "time" | "phase">;
   },
 ): string {
@@ -442,6 +500,20 @@ function renderDateTimeStructuredChips(
       ? `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`
       : `<span class="bst-array-item-empty">Not set</span>`;
   }
+  const formatDatePart = (rawDate: string): string => {
+    const match = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return rawDate;
+    const [, y, m, d] = match;
+    const mode =
+      options?.dateFormat === "dmy" ||
+      options?.dateFormat === "mdy" ||
+      options?.dateFormat === "d_mmm_yyyy" ||
+      options?.dateFormat === "mmmm_d_yyyy" ||
+      options?.dateFormat === "mmmm_do_yyyy"
+        ? options.dateFormat
+        : "iso";
+    return formatDateWithPreset({ year: Number(y), month: Number(m), day: Number(d) }, mode);
+  };
   const showMap = {
     weekday: options?.showWeekday !== false,
     date: options?.showDate !== false,
@@ -456,7 +528,7 @@ function renderDateTimeStructuredChips(
   };
   const valueMap = {
     weekday: parts.dayOfWeek,
-    date: parts.date,
+    date: formatDatePart(parts.date),
     time: parts.time,
     phase: parts.phase,
   };
@@ -544,6 +616,15 @@ function toPercent(value: StatValue): number {
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function toOwnerClassSuffix(value: string): string {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "unknown";
 }
 
 function pushUniqueCharacterName(target: string[], seen: Set<string>, raw: unknown): void {
@@ -4560,7 +4641,7 @@ export function renderTracker(
         return a.localeCompare(b);
       });
 
-    const cardHtmlByName: Array<{ name: string; html: string; isActive: boolean; isNew: boolean; cardColor: string }> = [];
+    const cardHtmlByName: Array<{ name: string; displayName: string; ownerClass: string; html: string; isActive: boolean; isNew: boolean; cardColor: string }> = [];
     const signatureParts: string[] = [
       `msg:${entry.messageIndex}`,
       `collapsed:${collapsed ? "1" : "0"}`,
@@ -4727,7 +4808,8 @@ export function renderTracker(
         ${enabledNumeric.length === 0 && enabledNonNumeric.length === 0 && moodText === "" && !(settings.showLastThought && lastThoughtText !== "") ? `<div class="bst-empty">No stats recorded.</div>` : ""}
         </div>
       `;
-      cardHtmlByName.push({ name, html: cardHtml, isActive, isNew, cardColor });
+      const ownerClass = `bst-owner-${toOwnerClassSuffix(displayName)}`;
+      cardHtmlByName.push({ name, displayName, ownerClass, html: cardHtml, isActive, isNew, cardColor });
       const nonNumericSignature = enabledNonNumeric.map(def => {
         const value = resolveEffectiveNonNumericValue(def, name);
         if (value == null) return `${def.id}:not_set`;
@@ -4821,6 +4903,7 @@ export function renderTracker(
                         labelDate: display?.dateTimeLabelDate,
                         labelTime: display?.dateTimeLabelTime,
                         labelPhase: display?.dateTimeLabelPhase,
+                        dateFormat: display?.dateTimeDateFormat,
                         partOrder: display?.dateTimePartOrder,
                       })}
                     </div>
@@ -4838,6 +4921,28 @@ export function renderTracker(
                       ${valueStyle === "plain"
                         ? `<span class="bst-scene-plain-value" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(textValueRaw)}">${escapeHtml(textValue)}</span>`
                         : `<span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(textValueRaw)}">${escapeHtml(textValue)}</span>`}
+                    </div>
+                  </div>
+                `;
+              }
+              if (def.kind === "date_time") {
+                const dateFormat =
+                  display?.dateTimeDateFormat === "dmy" ||
+                  display?.dateTimeDateFormat === "mdy" ||
+                  display?.dateTimeDateFormat === "d_mmm_yyyy" ||
+                  display?.dateTimeDateFormat === "mmmm_d_yyyy" ||
+                  display?.dateTimeDateFormat === "mmmm_do_yyyy"
+                    ? display.dateTimeDateFormat
+                    : "iso";
+                const displayValueRaw = formatDateTimeTimestampDisplay(resolved ?? "", dateFormat);
+                const displayValue = truncateDisplayText(displayValueRaw, textMaxLength);
+                return `
+                  <div class="bst-row bst-row-non-numeric">
+                    <div class="bst-label">
+                      ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
+                      ${valueStyle === "plain"
+                        ? `<span class="bst-scene-plain-value" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`
+                        : `<span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`}
                     </div>
                   </div>
                 `;
@@ -4872,6 +4977,7 @@ export function renderTracker(
                       labelDate: display?.dateTimeLabelDate,
                       labelTime: display?.dateTimeLabelTime,
                       labelPhase: display?.dateTimeLabelPhase,
+                      dateFormat: display?.dateTimeDateFormat,
                       partOrder: display?.dateTimePartOrder,
                     })}
                   </div>
@@ -4901,6 +5007,28 @@ export function renderTracker(
                     ${hasOverflow
                       ? `<button type="button" class="bst-array-toggle" data-bst-action="toggle-array-values" data-bst-array-key="${escapeHtml(sceneArrayKey)}" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "Show less" : `+${items.length - arrayLimit} more`}</button>`
                       : ""}
+                  </div>
+                </div>
+              `;
+            }
+            if (def.kind === "date_time") {
+              const dateFormat =
+                display?.dateTimeDateFormat === "dmy" ||
+                display?.dateTimeDateFormat === "mdy" ||
+                display?.dateTimeDateFormat === "d_mmm_yyyy" ||
+                display?.dateTimeDateFormat === "mmmm_d_yyyy" ||
+                display?.dateTimeDateFormat === "mmmm_do_yyyy"
+                  ? display.dateTimeDateFormat
+                  : "iso";
+              const displayValueRaw = formatDateTimeTimestampDisplay(resolved ?? "", dateFormat);
+              const displayValue = truncateDisplayText(displayValueRaw, textMaxLength);
+              return `
+                <div class="bst-row bst-row-non-numeric">
+                  <div class="bst-label">
+                    ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
+                    ${valueStyle === "plain"
+                      ? `<span class="bst-scene-plain-value" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`
+                      : `<span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`}
                   </div>
                 </div>
               `;
@@ -4971,7 +5099,9 @@ export function renderTracker(
     const appendOwnerCards = (): void => {
       for (const item of cardHtmlByName) {
         const card = document.createElement("div");
-        card.className = `bst-card${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
+        card.className = `bst-card ${item.ownerClass}${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
+        card.dataset.bstOwner = item.displayName;
+        card.dataset.bstOwnerClass = item.ownerClass;
         card.style.setProperty("--bst-card-local", item.cardColor);
         const palette = buildActionPalette(item.cardColor);
         card.style.setProperty("--bst-action-bg", palette.bg);
@@ -6119,6 +6249,14 @@ export function openSettingsModal(input: {
         dateTimeLabelDate: String(row.dateTimeLabelDate ?? "Date").trim().slice(0, 20) || "Date",
         dateTimeLabelTime: String(row.dateTimeLabelTime ?? "Time").trim().slice(0, 20) || "Time",
         dateTimeLabelPhase: String(row.dateTimeLabelPhase ?? "Phase").trim().slice(0, 20) || "Phase",
+        dateTimeDateFormat:
+          row.dateTimeDateFormat === "dmy" ||
+          row.dateTimeDateFormat === "mdy" ||
+          row.dateTimeDateFormat === "d_mmm_yyyy" ||
+          row.dateTimeDateFormat === "mmmm_d_yyyy" ||
+          row.dateTimeDateFormat === "mmmm_do_yyyy"
+            ? row.dateTimeDateFormat
+            : "iso",
         dateTimePartOrder,
       };
     }
@@ -7903,9 +8041,11 @@ export function openSettingsModal(input: {
       dateTimeLabelDate: "Date",
       dateTimeLabelTime: "Time",
       dateTimeLabelPhase: "Phase",
+      dateTimeDateFormat: "iso" as const,
       dateTimePartOrder: ["weekday", "date", "time", "phase"] as Array<"weekday" | "date" | "time" | "phase">,
     };
-    const isStructuredDateTime = normalizeCustomStatKind(stat.kind) === "date_time" && stat.dateTimeMode === "structured";
+    const isDateTime = normalizeCustomStatKind(stat.kind) === "date_time";
+    const isStructuredDateTime = isDateTime && stat.dateTimeMode === "structured";
     const backdropNode = document.createElement("div");
     backdropNode.className = "bst-custom-wizard-backdrop";
     const wizard = document.createElement("div");
@@ -7961,6 +8101,19 @@ export function openSettingsModal(input: {
             <div class="bst-scene-stat-editor-group-title">Array Handling</div>
             <label>Array Collapse Limit (1-20)
               <input type="number" min="1" max="20" data-scene-opt="arrayCollapsedLimit" value="${current.arrayCollapsedLimit == null ? "" : String(current.arrayCollapsedLimit)}" placeholder="Use Scene Card default">
+            </label>
+          </div>
+          <div class="bst-scene-stat-editor-group" data-scene-opt-row="dateTimeFormat"${isDateTime ? "" : " style=\"display:none;\""}>
+            <div class="bst-scene-stat-editor-group-title">Date/Time Format</div>
+            <label>Date Format
+              <select data-scene-opt="dateTimeDateFormat">
+                <option value="iso"${(current.dateTimeDateFormat ?? "iso") === "iso" ? " selected" : ""}>YYYY-MM-DD</option>
+                <option value="dmy"${current.dateTimeDateFormat === "dmy" ? " selected" : ""}>DD-MM-YYYY</option>
+                <option value="mdy"${current.dateTimeDateFormat === "mdy" ? " selected" : ""}>MM-DD-YYYY</option>
+                <option value="d_mmm_yyyy"${current.dateTimeDateFormat === "d_mmm_yyyy" ? " selected" : ""}>DD MMM YYYY</option>
+                <option value="mmmm_d_yyyy"${current.dateTimeDateFormat === "mmmm_d_yyyy" ? " selected" : ""}>MMMM D, YYYY</option>
+                <option value="mmmm_do_yyyy"${current.dateTimeDateFormat === "mmmm_do_yyyy" ? " selected" : ""}>MMMM Do, YYYY</option>
+              </select>
             </label>
           </div>
           <div class="bst-scene-stat-editor-group" data-scene-opt-row="dateTimeStructured"${isStructuredDateTime ? "" : " style=\"display:none;\""}>
@@ -8044,6 +8197,7 @@ export function openSettingsModal(input: {
       const dateTimeLabelDateNode = wizard.querySelector('[data-scene-opt="dateTimeLabelDate"]') as HTMLInputElement | null;
       const dateTimeLabelTimeNode = wizard.querySelector('[data-scene-opt="dateTimeLabelTime"]') as HTMLInputElement | null;
       const dateTimeLabelPhaseNode = wizard.querySelector('[data-scene-opt="dateTimeLabelPhase"]') as HTMLInputElement | null;
+      const dateTimeDateFormatNode = wizard.querySelector('[data-scene-opt="dateTimeDateFormat"]') as HTMLSelectElement | null;
       const dateTimePartOrderNode = wizard.querySelector('[data-scene-opt="dateTimePartOrder"]') as HTMLInputElement | null;
       const layoutOverride = layoutNode?.value === "chips" || layoutNode?.value === "rows" ? layoutNode.value : "auto";
       const valueStyle = valueStyleNode?.value === "chip" || valueStyleNode?.value === "plain" ? valueStyleNode.value : "auto";
@@ -8086,6 +8240,14 @@ export function openSettingsModal(input: {
         dateTimeLabelDate: String(dateTimeLabelDateNode?.value ?? "Date").trim().slice(0, 20) || "Date",
         dateTimeLabelTime: String(dateTimeLabelTimeNode?.value ?? "Time").trim().slice(0, 20) || "Time",
         dateTimeLabelPhase: String(dateTimeLabelPhaseNode?.value ?? "Phase").trim().slice(0, 20) || "Phase",
+        dateTimeDateFormat:
+          dateTimeDateFormatNode?.value === "dmy" ||
+          dateTimeDateFormatNode?.value === "mdy" ||
+          dateTimeDateFormatNode?.value === "d_mmm_yyyy" ||
+          dateTimeDateFormatNode?.value === "mmmm_d_yyyy" ||
+          dateTimeDateFormatNode?.value === "mmmm_do_yyyy"
+            ? dateTimeDateFormatNode.value
+            : "iso",
         dateTimePartOrder,
       };
       renderSceneCardOrderList();
@@ -8331,6 +8493,14 @@ export function openSettingsModal(input: {
     const dateTimeLabelDateSeed = String(sceneDisplaySeed.dateTimeLabelDate ?? "Date").trim() || "Date";
     const dateTimeLabelTimeSeed = String(sceneDisplaySeed.dateTimeLabelTime ?? "Time").trim() || "Time";
     const dateTimeLabelPhaseSeed = String(sceneDisplaySeed.dateTimeLabelPhase ?? "Phase").trim() || "Phase";
+    const dateTimeDateFormatSeed: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy" =
+      sceneDisplaySeed.dateTimeDateFormat === "dmy" ||
+      sceneDisplaySeed.dateTimeDateFormat === "mdy" ||
+      sceneDisplaySeed.dateTimeDateFormat === "d_mmm_yyyy" ||
+      sceneDisplaySeed.dateTimeDateFormat === "mmmm_d_yyyy" ||
+      sceneDisplaySeed.dateTimeDateFormat === "mmmm_do_yyyy"
+        ? sceneDisplaySeed.dateTimeDateFormat
+        : "iso";
     const dateTimePartOrderSeedRaw = Array.isArray(sceneDisplaySeed.dateTimePartOrder) ? sceneDisplaySeed.dateTimePartOrder : ["weekday", "date", "time", "phase"];
     const dateTimePartOrderSeed = Array.from(new Set(dateTimePartOrderSeedRaw
       .map(item => String(item ?? "").trim().toLowerCase())
@@ -8457,6 +8627,16 @@ export function openSettingsModal(input: {
             <select data-bst-custom-field="dateTimeMode">
               <option value="timestamp" ${draft.dateTimeMode === "timestamp" ? "selected" : ""}>Timestamp (strict)</option>
               <option value="structured" ${draft.dateTimeMode === "structured" ? "selected" : ""}>Structured (semantic)</option>
+            </select>
+          </label>
+          <label>Date Format (Scene Card)
+            <select data-bst-custom-field="dateTimeDateFormat">
+              <option value="iso"${dateTimeDateFormatSeed === "iso" ? " selected" : ""}>YYYY-MM-DD</option>
+              <option value="dmy"${dateTimeDateFormatSeed === "dmy" ? " selected" : ""}>DD-MM-YYYY</option>
+              <option value="mdy"${dateTimeDateFormatSeed === "mdy" ? " selected" : ""}>MM-DD-YYYY</option>
+              <option value="d_mmm_yyyy"${dateTimeDateFormatSeed === "d_mmm_yyyy" ? " selected" : ""}>DD MMM YYYY</option>
+              <option value="mmmm_d_yyyy"${dateTimeDateFormatSeed === "mmmm_d_yyyy" ? " selected" : ""}>MMMM D, YYYY</option>
+              <option value="mmmm_do_yyyy"${dateTimeDateFormatSeed === "mmmm_do_yyyy" ? " selected" : ""}>MMMM Do, YYYY</option>
             </select>
           </label>
           <div class="bst-scene-stat-editor-group" data-bst-date-time-structured-options style="display:none;">
@@ -9403,6 +9583,7 @@ export function openSettingsModal(input: {
       const dateTimeLabelDateNode = getField("dateTimeLabelDate") as HTMLInputElement | null;
       const dateTimeLabelTimeNode = getField("dateTimeLabelTime") as HTMLInputElement | null;
       const dateTimeLabelPhaseNode = getField("dateTimeLabelPhase") as HTMLInputElement | null;
+      const dateTimeDateFormatNode = getField("dateTimeDateFormat") as HTMLSelectElement | null;
       const dateTimePartOrderNode = getField("dateTimePartOrder") as HTMLInputElement | null;
       if (mode === "edit" && source) {
         customStatsState = customStatsState.map(item => item.id === source.id ? nextDef : item);
@@ -9445,6 +9626,14 @@ export function openSettingsModal(input: {
           dateTimeLabelDate: String(dateTimeLabelDateNode?.value ?? "Date").trim().slice(0, 20) || "Date",
           dateTimeLabelTime: String(dateTimeLabelTimeNode?.value ?? "Time").trim().slice(0, 20) || "Time",
           dateTimeLabelPhase: String(dateTimeLabelPhaseNode?.value ?? "Phase").trim().slice(0, 20) || "Phase",
+          dateTimeDateFormat:
+            dateTimeDateFormatNode?.value === "dmy" ||
+            dateTimeDateFormatNode?.value === "mdy" ||
+            dateTimeDateFormatNode?.value === "d_mmm_yyyy" ||
+            dateTimeDateFormatNode?.value === "mmmm_d_yyyy" ||
+            dateTimeDateFormatNode?.value === "mmmm_do_yyyy"
+              ? dateTimeDateFormatNode.value
+              : "iso",
           dateTimePartOrder,
         };
       }
