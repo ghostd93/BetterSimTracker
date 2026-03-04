@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.3-dev5] - 2026-03-04
+### Fixed
+- Tracker auto-extraction now skips SillyTavern welcome-page assistant messages, preventing tracker cards from appearing on the default ST welcome screen.
+
 ## [2.2.2.3-dev4] - 2026-03-04
 ### Fixed
 - Edit Tracker modal UX cleanup across desktop/mobile:

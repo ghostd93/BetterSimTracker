@@ -134,6 +134,7 @@ export interface BetterSimTrackerSettings {
   sceneCardStatOrder: string[];
   sceneCardStatDisplay: Record<string, SceneCardStatDisplayOptions>;
   autoDetectActive: boolean;
+  generateOnGreetingMessages: boolean;
   activityLookback: number;
   trackAffection: boolean;
   trackTrust: boolean;

@@ -3122,13 +3122,29 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       previous = buildBaselineData(activeCharacters, runScopedSettings);
       pushTrace("extract.baseline", { runId, forMessageIndex: lastIndex, activeCharacters: activeCharacters.length });
     }
+    const hasPriorUserMessage = hasTrackableUserMessageBeforeIndex(context, lastIndex);
+    const isGreetingAiBootstrap = Boolean(
+      !userExtraction &&
+      isTrackableAiMessage(lastMessage) &&
+      !hasPriorUserMessage,
+    );
+
+    if (isGreetingAiBootstrap && !activeSettings.generateOnGreetingMessages) {
+      pushTrace("extract.skip", {
+        reason: "greeting_generation_disabled",
+        trigger: reason,
+        messageIndex: lastIndex,
+      });
+      clearGeneratingUiIfStale("greeting_generation_disabled");
+      return;
+    }
 
     const shouldSeedDefaultsForGreetingBootstrap = Boolean(
       !userExtraction &&
       reason === "AUTO_BOOTSTRAP_MISSING_TRACKER" &&
       isTrackableAiMessage(lastMessage) &&
       !previousEntry?.data &&
-      !hasTrackableUserMessageBeforeIndex(context, lastIndex),
+      !hasPriorUserMessage,
     );
     if (shouldSeedDefaultsForGreetingBootstrap) {
       latestData = {
@@ -3491,7 +3507,21 @@ function refreshFromStoredData(): void {
     !latestTrackableHasTracker &&
     (latestDataMessageIndex == null || latestDataMessageIndex < lastTrackableIndex),
   );
-  if (shouldBootstrapAiExtraction && lastTrackableIndex != null) {
+  const hasPriorUserForBootstrap = lastTrackableIndex != null
+    ? hasTrackableUserMessageBeforeIndex(context, lastTrackableIndex)
+    : false;
+  const skipGreetingBootstrap = Boolean(
+    shouldBootstrapAiExtraction &&
+    settings.generateOnGreetingMessages === false &&
+    !hasPriorUserForBootstrap,
+  );
+  if (skipGreetingBootstrap && lastTrackableIndex != null) {
+    pushTrace("extract.bootstrap.skip", {
+      reason: "greeting_generation_disabled",
+      targetMessageIndex: lastTrackableIndex,
+    });
+  }
+  if (shouldBootstrapAiExtraction && !skipGreetingBootstrap && lastTrackableIndex != null) {
     const bootstrapKey = `${getDebugScopeKey(context)}|ai:${lastTrackableIndex}`;
     if (autoBootstrapExtractionKey !== bootstrapKey) {
       autoBootstrapExtractionKey = bootstrapKey;
