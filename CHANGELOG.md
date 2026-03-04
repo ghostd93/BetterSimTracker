@@ -15,6 +15,7 @@ All notable changes to BetterSimTracker are documented here.
 - New extraction toggle: `Regenerate Tracker After Message Edit`.
   - When enabled (default), editing an already tracked message re-runs extraction for that message.
   - When disabled, edit events no longer auto-regenerate tracker values.
+- Custom Stats now include a quick `Enable/Disable` toggle directly in the list for fast on/off control per stat.
 - New Display subdrawer: `Character Card Stat Order` (under Scene Card) for manual ordering of character-card stat rows.
 - Scene card edit action (pencil) for latest tracked snapshots.
 - New toggle: `Generate Tracker on Greetings`.
@@ -30,119 +31,6 @@ All notable changes to BetterSimTracker are documented here.
 - Scene card edit modal title/scope fixed to Scene-only global fields.
 - Disabled custom stats are now fully authoritative (`track=false`) in extraction/rendering.
 - Import conflict flow hardened with modal conflict handling and non-destructive update/skip behavior.
-
-## [2.2.2.3-dev5] - 2026-03-04
-### Fixed
-- Tracker auto-extraction now skips SillyTavern welcome-page assistant messages, preventing tracker cards from appearing on the default ST welcome screen.
-
-## [2.2.2.3-dev4] - 2026-03-04
-### Fixed
-- Edit Tracker modal UX cleanup across desktop/mobile:
-  - scene/global modal now uses scene-specific intro text
-  - scene/global modal no longer shows misleading built-in numeric empty-state copy
-  - mobile modal grids now collapse to single-column layout for readability
-  - icon button touch targets increased to 44x44 for better mobile usability
-- Date/time edit behavior now respects stat mode:
-  - `timestamp` mode keeps native `datetime-local` input
-  - `structured` mode uses text input with normalization helper, then saves normalized value
-- Array edit controls now surface normalization feedback (trim/duplicate cleanup/20-item cap) instead of silently normalizing.
-
-## [2.2.2.3-dev2] - 2026-03-04
-### Fixed
-- Scene card edit modal now uses `Scene` title instead of internal key labels.
-- Scene card edit modal now shows only global scene-card stat fields (and respects Scene Stat visibility), instead of generic owner-card fields.
-
-## [2.2.2.1-dev14] - 2026-03-03
-### Fixed
-- Scene card edit action now works in `above_message` placement by handling `edit-stats` events on `.bst-scene-root` (not only tracker root).
-
-## [2.2.2.1-dev13] - 2026-03-03
-### Added
-- Scene card now exposes the same tracker edit pencil action as owner cards, allowing direct editing of global scene stats on latest tracked snapshots.
-
-## [2.2.2.1-dev12] - 2026-03-03
-### Fixed
-- Disabled custom stats (`track=false`) are no longer re-enabled during extraction scoping.
-- Extraction planning now consistently keeps disabled stats out of both unified and sequential requests.
-
-## [2.2.2.1-dev11] - 2026-03-03
-### Changed
-- Date/time part order controls now use arrow-based row ordering in both:
-  - Scene Stat Display editor
-  - Custom stat wizard (`date_time`)
-
-## [2.2.2.1-dev10] - 2026-03-03
-### Changed
-- Date/time phase mapping was refined to the new subphase model:
-  - `Midnight`, `Night`, `Dawn`, `Early Morning`, `Morning`, `Late Morning`,
-  - `Noon`, `Early Afternoon`, `Afternoon`, `Late Afternoon`,
-  - `Early Evening`, `Evening`, `Late Evening`.
-- Date/time part order UI no longer uses comma-separated free text.
-  - Scene Stat Display editor now uses explicit position selectors.
-  - Custom stat wizard (`date_time`) now uses explicit position selectors.
-
-## [2.2.2.1-dev9] - 2026-03-03
-### Added
-- Date/time Scene-card display format presets for both `timestamp` and `structured` modes:
-  - `YYYY-MM-DD`
-  - `DD-MM-YYYY`
-  - `MM-DD-YYYY`
-  - `DD MMM YYYY`
-  - `MMMM D, YYYY`
-  - `MMMM Do, YYYY` (ordinal day)
-
-### Changed
-- Date/time format controls are now available for all `date_time` stats (including `timestamp`) in:
-  - Scene Stat Display editor
-  - Custom stat wizard (`Date/Time` step)
-- Extension drawer version display now resolves from runtime `manifest.json` (with build-time fallback), preventing stale one-version-behind headers.
-- Tracker cards now include owner-specific CSS classes based on display name (`.bst-owner-<name>`) so per-character/persona styling can be targeted directly.
-
-## [2.2.2.1-dev8] - 2026-03-03
-### Added
-- Structured `date_time` Scene-card display options are now available directly in the custom stat wizard when `Date/Time Mode = structured`.
-
-### Changed
-- Saving `date_time` structured options in wizard now writes Scene-card per-stat display config immediately (no separate Scene Stat Studio pass required).
-
-## [2.2.2.1-dev7] - 2026-03-03
-### Changed
-- Structured `date_time` Scene-card rendering now uses fixed English weekday names (no browser-locale weekday output).
-
-### Added
-- Per-stat structured date/time display controls in Scene Stat Display:
-  - show/hide weekday/date/time/phase parts
-  - optional part labels
-  - custom labels for each part
-  - configurable part order (`weekday,date,time,phase`)
-
-## [2.2.2.1-dev6] - 2026-03-03
-### Fixed
-- Disabling a custom stat now fully disables it end-to-end (`track=false` is authoritative) instead of being implicitly re-enabled by `trackCharacters`/`trackUser` during settings normalization/import merge paths.
-
-## [2.2.2.1-dev5] - 2026-03-03
-### Fixed
-- Quick enable/disable toggle now correctly hides disabled custom stats from tracker cards by honoring top-level `track=false` in card stat definition filtering.
-
-## [2.2.2.1-dev4] - 2026-03-03
-### Changed
-- Date/time AI helper generators now include selected date/time mode (`timestamp` vs `structured`) when generating description/override/behavior guidance.
-
-### Fixed
-- Import conflict warning is now truly modal-blocking: base import wizard is dimmed and non-interactive until warning is closed.
-- Date/time mode persistence was hardened so switching between `timestamp` and `structured` reliably affects later extraction/injection flows (including update-existing paths).
-
-## [2.2.2.1-dev1] - 2026-03-03
-### Added
-- New `date_time` custom-stat mode selector: `timestamp` (strict) and `structured` (semantic) while keeping one canonical stored format.
-
-### Changed
-- `date_time` extraction/prompt contracts are now mode-aware in both unified and sequential paths.
-- `date_time` normalization now accepts structured candidates (absolute/delta/parts) and resolves them to canonical `YYYY-MM-DD HH:mm`.
-- Structured `date_time` display now renders semantic chips (weekday/date/time/phase) on tracker and scene cards.
-
-### Fixed
-- Persona defaults date-time save path now resolves settings source correctly.
 
 ## [2.2.2.1] - 2026-03-03
 ### Fixed
@@ -770,7 +658,7 @@ And more...
 
 ## [1.0.3.4] - 2026-02-18
 
-- When a connection profile is selected in the extension, the generator now skips ST’s quiet pipeline so the chosen profile is always used.
+- When a connection profile is selected in the extension, the generator now skips STâ€™s quiet pipeline so the chosen profile is always used.
 
 ## [1.0.3.3] - 2026-02-18
 
@@ -788,7 +676,7 @@ And more...
 ## [1.0.3] - 2026-02-18
 
 - Connection profiles now always come from the extension settings by skipping the quiet-generation path when a profile is configured.
-- Retrack now loads the previous AI message’s tracker state before applying new deltas so values don’t stack on themselves.
+- Retrack now loads the previous AI messageâ€™s tracker state before applying new deltas so values donâ€™t stack on themselves.
 - Parser delta clamping obeys `maxDeltaPerTurn`, and the README/workflow notes were refreshed to describe the exact behavior.
 
 ## [1.0.2] - 2026-02-18
