@@ -46,6 +46,7 @@ Two distinct UI states:
 
 - post-generation waiting state (scheduled extraction delay)
 - active extraction state (progress + stop button)
+- optional edit-trigger regeneration (gated by `Regenerate Tracker After Message Edit` setting)
 
 Stop action cancels active extraction run and in-flight generation handles.
 

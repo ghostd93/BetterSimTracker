@@ -3877,6 +3877,14 @@ function registerEvents(context: STContext): void {
         });
         return;
       }
+      if (settings && settings.regenerateOnMessageEdit === false) {
+        pushTrace("extract.skip", {
+          reason: "edited_regeneration_disabled",
+          trigger: "MESSAGE_EDITED",
+          messageIndex,
+        });
+        return;
+      }
       if (!getTrackerDataFromMessage(editedMessage)) {
         pushTrace("extract.skip", {
           reason: "edited_message_has_no_tracker_data",

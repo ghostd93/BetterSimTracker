@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3] - 2026-03-04
+### Added
+- New extraction toggle: `Regenerate Tracker After Message Edit`.
+  - When enabled (default), editing an already tracked message re-runs extraction for that message.
+  - When disabled, edit events no longer auto-regenerate tracker values.
+
+### Fixed
+- Message-edit regeneration control is now explicit instead of always-on behavior.
+
 ## [2.2.2.3] - 2026-03-04
 ### Changed
 - Prompt injection block is now explicitly wrapped in `<bst_inject_block>...</bst_inject_block>` tags.

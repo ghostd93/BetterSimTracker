@@ -5951,6 +5951,7 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
           <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
+          <label class="bst-check"><input data-k="regenerateOnMessageEdit" type="checkbox">Regenerate Tracker After Message Edit</label>
         </div>
 
         <div class="bst-section-divider">User Tracking</div>
@@ -6741,6 +6742,7 @@ export function openSettingsModal(input: {
   set("summarizationNoteVisibleForAI", String(input.settings.summarizationNoteVisibleForAI));
   set("injectSummarizationNote", String(input.settings.injectSummarizationNote));
   set("autoDetectActive", String(input.settings.autoDetectActive));
+  set("regenerateOnMessageEdit", String(input.settings.regenerateOnMessageEdit));
   set("activityLookback", String(input.settings.activityLookback));
   set("showInactive", String(input.settings.showInactive));
   set("inactiveLabel", input.settings.inactiveLabel);
@@ -9071,6 +9073,7 @@ export function openSettingsModal(input: {
       summarizationNoteVisibleForAI: readBool("summarizationNoteVisibleForAI", input.settings.summarizationNoteVisibleForAI),
       injectSummarizationNote: readBool("injectSummarizationNote", input.settings.injectSummarizationNote),
       autoDetectActive: readBool("autoDetectActive", input.settings.autoDetectActive),
+      regenerateOnMessageEdit: readBool("regenerateOnMessageEdit", input.settings.regenerateOnMessageEdit),
       activityLookback: readNumber("activityLookback", input.settings.activityLookback, 1, 25),
       showInactive: readBool("showInactive", input.settings.showInactive),
       inactiveLabel: read("inactiveLabel") || input.settings.inactiveLabel,
@@ -9372,6 +9375,7 @@ export function openSettingsModal(input: {
     summarizationNoteVisibleForAI: "Controls visibility mode for newly generated Summarize notes (prose summaries of current tracked stats). Existing notes are unchanged for safety.",
     injectSummarizationNote: "Include the latest Summarize note (prose summary of current tracked stats) in hidden tracker prompt injection guidance only (no chat-message edits).",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",
+    regenerateOnMessageEdit: "When enabled, editing an already-tracked message triggers tracker regeneration for that message.",
     activityLookback: "Primary recent-speaker window. Characters stay active longer via persistence unless departure cues remove them.",
     trackAffection: "Enable Affection stat extraction and updates.",
     trackTrust: "Enable Trust stat extraction and updates.",

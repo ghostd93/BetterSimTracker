@@ -218,6 +218,7 @@ Numeric scaling formula used by runtime:
 - `Sequential Extraction`: one request per stat (more robust, slower)
 - `Unified Extraction`: unified batch extraction (public stats in shared batch, private stats in owner-scoped batches)
 - `Max Concurrent Requests`: parallelism in sequential mode
+- `Regenerate Tracker After Message Edit`: controls whether editing an already tracked message auto-runs extraction again for that message
 - `Strict JSON Repair`: retries if model output is invalid
 - `Auto Detect Active`: scene-based active character detection
 - `Inject Tracker Into Prompt`: uses current relationship state as hidden guidance
