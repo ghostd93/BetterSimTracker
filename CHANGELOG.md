@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.3-dev2] - 2026-03-04
+### Fixed
+- Scene card edit modal now uses `Scene` title instead of internal key labels.
+- Scene card edit modal now shows only global scene-card stat fields (and respects Scene Stat visibility), instead of generic owner-card fields.
+
 ## [2.2.2.1-dev14] - 2026-03-03
 ### Fixed
 - Scene card edit action now works in `above_message` placement by handling `edit-stats` events on `.bst-scene-root` (not only tracker root).

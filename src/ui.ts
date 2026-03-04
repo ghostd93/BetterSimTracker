@@ -5417,10 +5417,15 @@ function openEditStatsModal(input: {
 }): void {
   ensureStyles();
   closeEditStatsModal();
+  const isGlobalCharacter = input.character === GLOBAL_TRACKER_KEY;
+  const rawDisplayName = String(input.displayName ?? "").trim();
+  const displayName = isGlobalCharacter && (!rawDisplayName || rawDisplayName === GLOBAL_TRACKER_KEY)
+    ? "Scene"
+    : rawDisplayName;
   const characterLabel = String(
-    input.displayName
-      ?? (input.character === USER_TRACKER_KEY ? "User" : input.character),
-  ).trim() || (input.character === USER_TRACKER_KEY ? "User" : input.character);
+    displayName
+      || (isGlobalCharacter ? "Scene" : (input.character === USER_TRACKER_KEY ? "User" : input.character)),
+  ).trim() || (isGlobalCharacter ? "Scene" : (input.character === USER_TRACKER_KEY ? "User" : input.character));
 
   const isUserCharacter = input.character === USER_TRACKER_KEY;
   const customScopeById = new Map(
@@ -5435,7 +5440,9 @@ function openEditStatsModal(input: {
       }] as const;
     }),
   );
-  const numericDefs = getAllNumericStatDefinitions(input.settings).filter(def => {
+  const numericDefs = isGlobalCharacter
+    ? []
+    : getAllNumericStatDefinitions(input.settings).filter(def => {
     if (!def.track) return false;
     if (def.builtIn) return !isUserCharacter;
     const scope = customScopeById.get(String(def.id ?? "").trim().toLowerCase());
@@ -5444,9 +5451,14 @@ function openEditStatsModal(input: {
   });
   const builtInDefs = numericDefs.filter(def => def.builtIn);
   const customDefs = numericDefs.filter(def => !def.builtIn);
-  const nonNumericDefs = getNonNumericStatDefinitions(input.settings).filter(def =>
-    isUserCharacter ? def.trackUser : def.trackCharacters,
-  );
+  const nonNumericDefs = getNonNumericStatDefinitions(input.settings).filter(def => {
+    if (isGlobalCharacter) {
+      if (!def.globalScope) return false;
+      const visibility = input.settings.sceneCardStatDisplay?.[def.id]?.visible;
+      return visibility !== false;
+    }
+    return isUserCharacter ? def.trackUser : def.trackCharacters;
+  });
   const nonNumericDefById = new Map(nonNumericDefs.map(def => [def.id, def]));
   const currentMood = input.data.statistics.mood?.[input.character];
   const normalizedMood = currentMood ? normalizeMoodLabel(String(currentMood)) : null;
@@ -5568,7 +5580,7 @@ function openEditStatsModal(input: {
       ? `<div class="bst-edit-divider"></div>
          <div class="bst-edit-grid bst-edit-grid-two">${nonNumericDefs.map(nonNumericField).join("")}</div>`
       : ""}
-    ${input.settings.trackMood
+    ${!isGlobalCharacter && input.settings.trackMood
       ? `<div class="bst-edit-divider"></div>
          <label class="bst-edit-field">
            <span>Mood</span>
@@ -5582,7 +5594,7 @@ function openEditStatsModal(input: {
            </select>
          </label>`
       : ""}
-    ${input.settings.trackLastThought
+    ${!isGlobalCharacter && input.settings.trackLastThought
       ? `<div class="bst-edit-divider"></div>
          <label class="bst-edit-field">
            <span>Last Thought</span>
