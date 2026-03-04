@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev6] - 2026-03-04
+### Fixed
+- Scene card per-stat display now defaults to showing empty/missing values unless `Hide when empty` is explicitly enabled, reducing chips-vs-rows mismatches where stats appeared missing only in chips layout.
+- Thought expander labels were changed to `More thought` / `Less thought` to avoid confusion with array chip overflow `+N more` controls.
+
 ## [2.2.2.1-dev5] - 2026-03-04
 ### Fixed
 - Scene card rendering in `above_tracker_cards` mode no longer clears the tracker root container, so root actions (collapse/refresh/retrack) stay visible.
