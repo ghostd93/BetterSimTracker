@@ -4,18 +4,25 @@ All notable changes to BetterSimTracker are documented here.
 
 ## [2.2.3] - 2026-03-04
 ### Added
+- New custom stat type: `date_time` with two modes:
+  - `timestamp` (canonical datetime value)
+  - `structured` (semantic updates normalized to canonical datetime)
+- Structured Date/Time display controls:
+  - part visibility (`weekday/date/time/phase`)
+  - part labels
+  - part order
+  - date format presets
 - New extraction toggle: `Regenerate Tracker After Message Edit`.
   - When enabled (default), editing an already tracked message re-runs extraction for that message.
   - When disabled, edit events no longer auto-regenerate tracker values.
 - New Display subdrawer: `Character Card Stat Order` (under Scene Card) for manual ordering of character-card stat rows.
 - Scene card edit action (pencil) for latest tracked snapshots.
-- Structured Date/Time wizard controls and Scene-card display controls (part visibility, labels, ordering).
-- Date/Time display format presets for timestamp/structured rendering.
+- New toggle: `Generate Tracker on Greetings`.
 
 ### Changed
 - Character-card rendering now applies configurable stat order for non-user cards across built-in numeric + custom non-global non-numeric stats, with backward-compatible fallback to previous order when no custom order is defined.
 - Date/time phase mapping refined to subphases (`Midnight` through `Late Evening`) and part-order UI moved to explicit controls.
-- Date/time mode handling improved across wizard/edit paths (`timestamp` and `structured`).
+- Date/time mode handling improved across wizard/edit paths (`timestamp` and `structured`) with mode-aware prompt/extraction behavior.
 
 ### Fixed
 - Message-edit regeneration control is now explicit instead of always-on behavior.
