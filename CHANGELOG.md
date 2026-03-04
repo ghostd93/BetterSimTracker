@@ -2,33 +2,20 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.2.1-dev7] - 2026-03-04
+## [2.2.2.3] - 2026-03-04
 ### Changed
 - Prompt injection block is now explicitly wrapped in `<bst_inject_block>...</bst_inject_block>` tags.
 - Injection privacy guidance was strengthened to explicitly forbid copying/paraphrasing/transforming hidden block content into visible assistant output.
-
-## [2.2.2.1-dev6] - 2026-03-04
-### Fixed
-- Scene card per-stat display now defaults to showing empty/missing values unless `Hide when empty` is explicitly enabled, reducing chips-vs-rows mismatches where stats appeared missing only in chips layout.
 - Thought expander labels were changed to `More thought` / `Less thought` to avoid confusion with array chip overflow `+N more` controls.
 
-## [2.2.2.1-dev5] - 2026-03-04
-### Fixed
-- Scene card rendering in `above_tracker_cards` mode no longer clears the tracker root container, so root actions (collapse/refresh/retrack) stay visible.
-
-## [2.2.2.1-dev4] - 2026-03-04
-### Fixed
-- Auto-retry now also covers retryable transport/API failures (for example `API request failed`, network/fetch issues, HTTP 5xx), not only empty-output cases.
-- Bootstrap continue failures now fall back to a single safe manual-refresh retry path to avoid first-message cards remaining default-only after transient API failures.
-
-## [2.2.2.1-dev3] - 2026-03-04
-### Fixed
-- Diagnostics dump `extensionVersion` now prefers runtime `manifest.json` version (with build-version fallback), eliminating stale/mismatched version labels in `debug.txt`.
-
-## [2.2.2.1-dev2] - 2026-03-04
 ### Fixed
 - Extraction retry now recognizes both empty-output error variants (`Generator returned empty output` and `Active runtime request returned empty output`) so manual-refresh retries trigger consistently.
+- Auto-retry now also covers retryable transport/API failures (for example `API request failed`, network/fetch issues, HTTP 5xx), not only empty-output cases.
 - Greeting/bootstrap path now seeds defaults and immediately schedules a follow-up extraction pass, reducing first-message custom stats sticking at defaults until manual retry.
+- Bootstrap continue failures now fall back to a single safe manual-refresh retry path to avoid first-message cards remaining default-only after transient API failures.
+- Diagnostics dump `extensionVersion` now prefers runtime `manifest.json` version (with build-version fallback), eliminating stale/mismatched version labels in `debug.txt`.
+- Scene card rendering in `above_tracker_cards` mode no longer clears the tracker root container, so root actions (collapse/refresh/retrack) stay visible.
+- Scene card per-stat display now defaults to showing empty/missing values unless `Hide when empty` is explicitly enabled, reducing chips-vs-rows mismatches where stats appeared missing only in chips layout.
 
 ## [2.2.2.1] - 2026-03-03
 ### Fixed
