@@ -70,6 +70,7 @@ let extractionTimer: number | null = null;
 let swipeExtractionTimer: number | null = null;
 let pendingSwipeExtraction: { reason: string; messageIndex?: number; waitForGenerationEnd?: boolean } | null = null;
 let lastDebugRecord: DeltaDebugRecord | null = null;
+let runtimeManifestVersion: string | null = null;
 let refreshTimer: number | null = null;
 let lastPromptSyncSignature = "";
 let debugTrace: string[] = [];
@@ -1793,6 +1794,29 @@ function getErrorMessage(error: unknown): string {
   if (messages.length) return messages[0];
   const fallback = String(error ?? "").trim();
   return fallback && fallback !== "[object Object]" ? fallback : "Unknown extraction error.";
+}
+
+function getReportedExtensionVersion(): string {
+  const runtime = String(runtimeManifestVersion ?? "").trim();
+  if (runtime) return runtime;
+  const build = String(__BST_VERSION__ ?? "").trim();
+  return build || "dev";
+}
+
+async function hydrateRuntimeManifestVersion(): Promise<void> {
+  try {
+    const script = Array.from(document.querySelectorAll<HTMLScriptElement>("script[src]"))
+      .find(node => /\/scripts\/extensions\/third-party\/BetterSimTracker\/dist\/index\.js(?:\?|$)/i.test(String(node.src ?? "")));
+    if (!script?.src) return;
+    const manifestUrl = script.src.replace(/\/dist\/index\.js(?:\?.*)?$/i, "/manifest.json");
+    const response = await fetch(manifestUrl, { cache: "no-store" });
+    if (!response.ok) return;
+    const payload = await response.json() as { version?: unknown };
+    const version = String(payload?.version ?? "").trim();
+    if (version) runtimeManifestVersion = version;
+  } catch {
+    // best-effort runtime metadata hydration
+  }
 }
 
 function setTrackerRecovery(
@@ -3964,7 +3988,7 @@ function openSettings(): void {
         };
       })();
       const report = {
-        extensionVersion: __BST_VERSION__,
+        extensionVersion: getReportedExtensionVersion(),
         timestamp: new Date().toISOString(),
         scope: activeContext.groupId ? `group:${activeContext.groupId}` : `char:${String(activeContext.characterId ?? "unknown")}`,
         chatLength: activeContext.chat.length,
@@ -4154,6 +4178,7 @@ async function init(): Promise<void> {
     console.warn("[BetterSimTracker] SillyTavern context not available.");
     return;
   }
+  void hydrateRuntimeManifestVersion();
 
   settings = loadSettings(context);
   if (settings.debug) {
