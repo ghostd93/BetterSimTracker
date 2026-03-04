@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev2] - 2026-03-04
+### Fixed
+- Extraction retry now recognizes both empty-output error variants (`Generator returned empty output` and `Active runtime request returned empty output`) so manual-refresh retries trigger consistently.
+- Greeting/bootstrap path now seeds defaults and immediately schedules a follow-up extraction pass, reducing first-message custom stats sticking at defaults until manual retry.
+
 ## [2.2.2.1] - 2026-03-03
 ### Fixed
 - Unified first-run custom stat extraction now evaluates model output immediately instead of seed-only defaults, so initial tracker cards no longer stay at `not set` / empty array when the model returned valid custom values.

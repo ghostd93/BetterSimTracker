@@ -84,6 +84,7 @@ let pendingLateRenderExtraction = false;
 let pendingLateRenderStartLastAiIndex: number | null = null;
 let lateRenderPollTimer: number | null = null;
 let autoBootstrapExtractionKey: string | null = null;
+const BOOTSTRAP_CONTINUE_REASON = "AUTO_BOOTSTRAP_MISSING_TRACKER_CONTINUE";
 type CapturedGenerationIntent = {
   type: string;
   options: Record<string, unknown>;
@@ -2969,8 +2970,10 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   const hadTrackerAtStart = Boolean(getTrackerDataFromMessage(lastMessage));
   clearTrackerRecovery(lastIndex);
   const isManualRefreshReason = reason === "manual_refresh" || reason === "manual_refresh_retry";
+  const isBootstrapContinueReason = reason === BOOTSTRAP_CONTINUE_REASON;
   const forceRetrack =
     isManualRefreshReason ||
+    isBootstrapContinueReason ||
     reason === "SWIPE_GENERATION_ENDED" ||
     reason === "USER_MESSAGE_RENDERED" ||
     reason === "USER_MESSAGE_EDITED" ||
@@ -3091,6 +3094,9 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
         savedMessageIndex: lastIndex,
         activeCharacters: activeCharacters.length,
       });
+      // Keep default-first greeting behavior, then immediately run one real extraction pass
+      // so first message custom stats do not stay at defaults until manual retry.
+      scheduleExtraction(BOOTSTRAP_CONTINUE_REASON, lastIndex, 120);
       logDebug(activeSettings, "extraction", `Bootstrap defaults seeded (${reason})`);
       return;
     }
@@ -3297,17 +3303,20 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     }
     const message = getErrorMessage(error);
     let retryScheduled = false;
+    const isEmptyOutputError = /(?:^|\s)(?:Generator|Active runtime request) returned empty output/i.test(message);
+    const canAutoRetryReason = isManualRefreshReason || reason === "AUTO_BOOTSTRAP_MISSING_TRACKER";
     if (
-      isManualRefreshReason &&
+      canAutoRetryReason &&
       reason !== "manual_refresh_retry" &&
-      /Generator returned empty output/i.test(message)
+      isEmptyOutputError
     ) {
+      const retryReason = isManualRefreshReason ? "manual_refresh_retry" : BOOTSTRAP_CONTINUE_REASON;
       pushTrace("extract.retry", {
         reason,
         retryReason: "empty_generator_output",
         targetMessageIndex: targetMessageIndex ?? null,
       });
-      scheduleExtraction("manual_refresh_retry", targetMessageIndex, 180);
+      scheduleExtraction(retryReason, targetMessageIndex, 180);
       retryScheduled = true;
     }
     pushTrace("extract.error", {
