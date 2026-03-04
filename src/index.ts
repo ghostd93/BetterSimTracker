@@ -3328,16 +3328,26 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     const message = getErrorMessage(error);
     let retryScheduled = false;
     const isEmptyOutputError = /(?:^|\s)(?:Generator|Active runtime request) returned empty output/i.test(message);
-    const canAutoRetryReason = isManualRefreshReason || reason === "AUTO_BOOTSTRAP_MISSING_TRACKER";
+    const isRetryableApiFailure = /(api request failed|failed to fetch|network\s+error|timeout|http\s+5\d\d|status\s*code\s*5\d\d)/i.test(message);
+    const shouldRetryFailure = isEmptyOutputError || isRetryableApiFailure;
+    const canAutoRetryReason =
+      isManualRefreshReason ||
+      reason === "AUTO_BOOTSTRAP_MISSING_TRACKER" ||
+      reason === BOOTSTRAP_CONTINUE_REASON;
     if (
       canAutoRetryReason &&
       reason !== "manual_refresh_retry" &&
-      isEmptyOutputError
+      shouldRetryFailure
     ) {
-      const retryReason = isManualRefreshReason ? "manual_refresh_retry" : BOOTSTRAP_CONTINUE_REASON;
+      const retryReason =
+        reason === "manual_refresh"
+          ? "manual_refresh_retry"
+          : reason === "AUTO_BOOTSTRAP_MISSING_TRACKER"
+            ? BOOTSTRAP_CONTINUE_REASON
+            : "manual_refresh_retry";
       pushTrace("extract.retry", {
         reason,
-        retryReason: "empty_generator_output",
+        retryReason: isEmptyOutputError ? "empty_generator_output" : "retryable_api_failure",
         targetMessageIndex: targetMessageIndex ?? null,
       });
       scheduleExtraction(retryReason, targetMessageIndex, 180);

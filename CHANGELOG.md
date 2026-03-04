@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev4] - 2026-03-04
+### Fixed
+- Auto-retry now also covers retryable transport/API failures (for example `API request failed`, network/fetch issues, HTTP 5xx), not only empty-output cases.
+- Bootstrap continue failures now fall back to a single safe manual-refresh retry path to avoid first-message cards remaining default-only after transient API failures.
+
 ## [2.2.2.1-dev3] - 2026-03-04
 ### Fixed
 - Diagnostics dump `extensionVersion` now prefers runtime `manifest.json` version (with build-version fallback), eliminating stale/mismatched version labels in `debug.txt`.
