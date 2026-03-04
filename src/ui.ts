@@ -4774,12 +4774,18 @@ export function renderTracker(
       }
     }
     if (sceneCardVisible && settings.sceneCardPosition === "above_tracker_cards") {
-      appendSceneCard(root);
+      const inlineSceneHost = document.createElement("div");
+      inlineSceneHost.className = "bst-inline-scene-host";
+      root.appendChild(inlineSceneHost);
+      appendSceneCard(inlineSceneHost);
       appendOwnerCards();
     } else {
       appendOwnerCards();
       if (sceneCardVisible && !sceneRoot) {
-        appendSceneCard(root);
+        const inlineSceneHost = document.createElement("div");
+        inlineSceneHost.className = "bst-inline-scene-host";
+        root.appendChild(inlineSceneHost);
+        appendSceneCard(inlineSceneHost);
       }
     }
   }

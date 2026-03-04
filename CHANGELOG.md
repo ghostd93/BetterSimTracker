@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev5] - 2026-03-04
+### Fixed
+- Scene card rendering in `above_tracker_cards` mode no longer clears the tracker root container, so root actions (collapse/refresh/retrack) stay visible.
+
 ## [2.2.2.1-dev4] - 2026-03-04
 ### Fixed
 - Auto-retry now also covers retryable transport/API failures (for example `API request failed`, network/fetch issues, HTTP 5xx), not only empty-output cases.
