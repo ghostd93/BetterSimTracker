@@ -22,6 +22,7 @@ import type {
   StExpressionImageOptions,
   STContext,
 } from "./types";
+import { normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
 
 const PANEL_ID = "bst-character-panel";
 const NAME_INPUT_SELECTORS = ["#character_name_pole", "#character_name", "input[name='name']"];
@@ -257,7 +258,7 @@ function clampStat(value: string): number | null {
 }
 
 function normalizeCustomStatKind(value: unknown): CustomStatKind {
-  if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array") return value;
+  if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array" || value === "date_time") return value;
   return "numeric";
 }
 
@@ -698,6 +699,14 @@ function renderPanel(input: InitInput, force = false): void {
         </div>
       `;
     }
+    if (kind === "date_time") {
+      const value = toDateTimeInputValue(customNonNumericDefaultsRaw[id]);
+      return `
+        <label>${escapeHtml(label)} Default
+          <input type="datetime-local" data-bst-custom-default-datetime="${escapeHtml(id)}" value="${escapeHtml(value)}" placeholder="Use stat default">
+        </label>
+      `;
+    }
     const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
     const rawValue = String(customNonNumericDefaultsRaw[id] ?? "").trim().replace(/\s+/g, " ");
     return `
@@ -1033,6 +1042,33 @@ function renderPanel(input: InitInput, force = false): void {
           delete existing[id];
         } else {
           existing[id] = value;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.customNonNumericStatDefaults;
+        } else {
+          copy.customNonNumericStatDefaults = existing;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLInputElement>("[data-bst-custom-default-datetime]").forEach(node => {
+    node.addEventListener("change", () => {
+      const id = String(node.dataset.bstCustomDefaultDatetime ?? "").trim().toLowerCase();
+      if (!id) return;
+      const normalized = normalizeDateTimeValue(node.value);
+      node.value = toDateTimeInputValue(normalized);
+      const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
+        const copy = { ...current };
+        const existing = copy.customNonNumericStatDefaults && typeof copy.customNonNumericStatDefaults === "object"
+          ? { ...(copy.customNonNumericStatDefaults as Record<string, unknown>) }
+          : {};
+        if (!normalized) {
+          delete existing[id];
+        } else {
+          existing[id] = normalized;
         }
         if (Object.keys(existing).length === 0) {
           delete copy.customNonNumericStatDefaults;

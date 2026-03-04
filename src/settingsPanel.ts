@@ -3,6 +3,9 @@ import type { BetterSimTrackerSettings } from "./types";
 declare const __BST_VERSION__: string;
 
 const PANEL_ID = "bst-extension-settings-panel";
+const VERSION_NODE_SELECTOR = "[data-bst-version]";
+const MANIFEST_URL = "/scripts/extensions/third-party/BetterSimTracker/manifest.json";
+let runtimeVersionPromise: Promise<string | null> | null = null;
 
 const selectors = [
   "#extensions_settings2",
@@ -17,6 +20,32 @@ function findContainer(): HTMLElement | null {
     if (found instanceof HTMLElement) return found;
   }
   return null;
+}
+
+function getFallbackVersion(): string {
+  return String(__BST_VERSION__ || "").trim() || "dev";
+}
+
+function getRuntimeVersion(): Promise<string | null> {
+  if (runtimeVersionPromise) return runtimeVersionPromise;
+  runtimeVersionPromise = (async () => {
+    try {
+      const response = await fetch(`${MANIFEST_URL}?t=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) return null;
+      const payload = await response.json() as { version?: unknown };
+      const version = typeof payload?.version === "string" ? payload.version.trim() : "";
+      return version || null;
+    } catch {
+      return null;
+    }
+  })();
+  return runtimeVersionPromise;
+}
+
+function updateVersionNode(panel: HTMLElement, version: string): void {
+  const node = panel.querySelector(VERSION_NODE_SELECTOR);
+  if (!(node instanceof HTMLElement)) return;
+  node.textContent = `v${version}`;
 }
 
 export function upsertSettingsPanel(input: {
@@ -38,7 +67,7 @@ export function upsertSettingsPanel(input: {
   panel.innerHTML = `
     <div class="inline-drawer">
       <div class="inline-drawer-toggle inline-drawer-header">
-        <b>BetterSimTracker <small style="font-size:0.8em; opacity:0.8; font-weight:600;">v${String(__BST_VERSION__ || "").trim() || "dev"}</small></b>
+        <b>BetterSimTracker <small data-bst-version style="font-size:0.8em; opacity:0.8; font-weight:600;">v${getFallbackVersion()}</small></b>
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
       </div>
       <div class="inline-drawer-content">
@@ -65,6 +94,11 @@ export function upsertSettingsPanel(input: {
     event.preventDefault();
     event.stopPropagation();
     input.onOpenModal();
+  });
+
+  void getRuntimeVersion().then(version => {
+    if (!panel || !panel.isConnected || !version) return;
+    updateVersionNode(panel, version);
   });
 }
 

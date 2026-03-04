@@ -15,6 +15,7 @@ import {
   buildUnifiedPrompt,
   moodOptions
 } from "./prompts";
+import { normalizeDateTimeWithMode } from "./dateTime";
 import type {
   BetterSimTrackerSettings,
   CustomNonNumericValue,
@@ -837,7 +838,34 @@ export async function extractStatisticsParallel(input: {
       requestCharacters: string[],
       parsedOne: ReturnType<typeof parseCustomValueResponse>,
     ): ReturnType<typeof parseCustomValueResponse> => {
-      if (settings.sequentialExtraction || (statDef.kind ?? "numeric") !== "text_short") return parsedOne;
+      const kind = statDef.kind ?? "numeric";
+      if (kind === "date_time") {
+        const next = {
+          confidence: { ...(parsedOne.confidence ?? {}) },
+          value: { ...(parsedOne.value ?? {}) },
+        };
+        const mode = statDef.dateTimeMode === "structured" ? "structured" : "timestamp";
+        for (const name of requestCharacters) {
+          const candidate = next.value[name];
+          const previousByOwner = previousCustomNonNumericStatistics?.[statDef.id];
+          const previous = statDef.globalScope
+            ? (previousByOwner?.[GLOBAL_TRACKER_KEY] ?? previousByOwner?.[name])
+            : previousByOwner?.[name];
+          const normalized = normalizeDateTimeWithMode(candidate, mode, previous);
+          if (!normalized) {
+            delete next.value[name];
+            continue;
+          }
+          const previousNormalized = normalizeDateTimeWithMode(previous, mode);
+          if (mode === "structured" && previousNormalized && normalized < previousNormalized) {
+            next.value[name] = previousNormalized;
+            continue;
+          }
+          next.value[name] = normalized;
+        }
+        return next;
+      }
+      if (settings.sequentialExtraction || kind !== "text_short") return parsedOne;
       const next = {
         confidence: { ...(parsedOne.confidence ?? {}) },
         value: { ...(parsedOne.value ?? {}) },
@@ -1012,6 +1040,7 @@ export async function extractStatisticsParallel(input: {
               : String(statDef.defaultValue ?? ""),
           enumOptions: statDef.enumOptions,
           textMaxLength: statDef.textMaxLength,
+          dateTimeMode: statDef.dateTimeMode === "structured" ? "structured" : "timestamp",
           booleanTrueLabel: statDef.booleanTrueLabel,
           booleanFalseLabel: statDef.booleanFalseLabel,
           userName,
@@ -1158,7 +1187,7 @@ export async function extractStatisticsParallel(input: {
               raw,
               plan.existing,
               plan.statDef.id,
-              plan.statDef.kind === "enum_single" || plan.statDef.kind === "boolean" || plan.statDef.kind === "text_short" || plan.statDef.kind === "array"
+              plan.statDef.kind === "enum_single" || plan.statDef.kind === "boolean" || plan.statDef.kind === "text_short" || plan.statDef.kind === "array" || plan.statDef.kind === "date_time"
                 ? plan.statDef.kind
                 : "text_short",
               {

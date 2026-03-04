@@ -90,6 +90,7 @@ Key capabilities:
 - custom stat JSON actions (`Import JSON` + per-stat `Export JSON` from stat row)
 - AI helper buttons for prompt/description/guidance generation
 - scene card controls in Display section drawer (enable/position/layout/title/colors/empty-state + Scene Stat Studio for order/per-stat display)
+- character card stat order controls in Display section drawer (manual up/down ordering for built-in + custom non-global stat rows)
 
 ## Custom Stat Wizard
 

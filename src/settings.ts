@@ -30,6 +30,7 @@ import type {
   StExpressionImageOptions,
   STContext,
 } from "./types";
+import { normalizeDateTimeValue } from "./dateTime";
 
 const DEFAULT_MOOD_EXPRESSION_MAP: Record<MoodLabel, string> = {
   "Happy": "joy",
@@ -83,8 +84,10 @@ export const defaultSettings: BetterSimTrackerSettings = {
   sceneCardArrayCollapsedLimit: 4,
   sceneCardStatOrder: [],
   sceneCardStatDisplay: {},
+  characterCardStatOrder: [],
   autoDetectActive: true,
   regenerateOnMessageEdit: true,
+  generateOnGreetingMessages: true,
   activityLookback: 5,
   trackAffection: true,
   trackTrust: true,
@@ -569,8 +572,14 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
         .filter(Boolean)
       : [...defaultSettings.sceneCardStatOrder],
     sceneCardStatDisplay: sanitizeSceneCardStatDisplay(input.sceneCardStatDisplay),
+    characterCardStatOrder: Array.isArray(input.characterCardStatOrder)
+      ? input.characterCardStatOrder
+        .map(item => String(item ?? "").trim().toLowerCase())
+        .filter(Boolean)
+      : [...defaultSettings.characterCardStatOrder],
     autoDetectActive: asBool(input.autoDetectActive, defaultSettings.autoDetectActive),
     regenerateOnMessageEdit: asBool(input.regenerateOnMessageEdit, defaultSettings.regenerateOnMessageEdit),
+    generateOnGreetingMessages: asBool(input.generateOnGreetingMessages, defaultSettings.generateOnGreetingMessages),
     activityLookback: clampInt(input.activityLookback, defaultSettings.activityLookback, 1, 25),
     trackAffection: asBool(input.trackAffection, defaultSettings.trackAffection),
     trackTrust: asBool(input.trackTrust, defaultSettings.trackTrust),
@@ -730,6 +739,17 @@ function sanitizeSceneCardStatDisplay(input: unknown): Record<string, SceneCardS
     const id = String(key ?? "").trim().toLowerCase();
     if (!id || !value || typeof value !== "object") continue;
     const row = value as Record<string, unknown>;
+    const rawOrder = Array.isArray(row.dateTimePartOrder) ? row.dateTimePartOrder : [];
+    const normalizedOrder = rawOrder
+      .map(item => String(item ?? "").trim().toLowerCase())
+      .filter((item): item is "weekday" | "date" | "time" | "phase" =>
+        item === "weekday" || item === "date" || item === "time" || item === "phase",
+      );
+    const uniqueOrder = Array.from(new Set(normalizedOrder));
+    const fullOrder = [...uniqueOrder];
+    for (const keyPart of ["weekday", "date", "time", "phase"] as const) {
+      if (!fullOrder.includes(keyPart)) fullOrder.push(keyPart);
+    }
     output[id] = {
       visible: asBool(row.visible, true),
       showLabel: asBool(row.showLabel, true),
@@ -744,6 +764,24 @@ function sanitizeSceneCardStatDisplay(input: unknown): Record<string, SceneCardS
       arrayCollapsedLimit: row.arrayCollapsedLimit == null
         ? null
         : clampInt(row.arrayCollapsedLimit, 4, 1, 20),
+      dateTimeShowWeekday: asBool(row.dateTimeShowWeekday, true),
+      dateTimeShowDate: asBool(row.dateTimeShowDate, true),
+      dateTimeShowTime: asBool(row.dateTimeShowTime, true),
+      dateTimeShowPhase: asBool(row.dateTimeShowPhase, true),
+      dateTimeShowPartLabels: asBool(row.dateTimeShowPartLabels, false),
+      dateTimeLabelWeekday: asText(row.dateTimeLabelWeekday, "Day").slice(0, 20),
+      dateTimeLabelDate: asText(row.dateTimeLabelDate, "Date").slice(0, 20),
+      dateTimeLabelTime: asText(row.dateTimeLabelTime, "Time").slice(0, 20),
+      dateTimeLabelPhase: asText(row.dateTimeLabelPhase, "Phase").slice(0, 20),
+      dateTimeDateFormat:
+        row.dateTimeDateFormat === "dmy" ||
+        row.dateTimeDateFormat === "mdy" ||
+        row.dateTimeDateFormat === "d_mmm_yyyy" ||
+        row.dateTimeDateFormat === "mmmm_d_yyyy" ||
+        row.dateTimeDateFormat === "mmmm_do_yyyy"
+          ? row.dateTimeDateFormat
+          : "iso",
+      dateTimePartOrder: fullOrder,
     };
   }
   return output;
@@ -753,10 +791,12 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
   if (!Array.isArray(raw)) return [];
   const out: BetterSimTrackerSettings["customStats"] = [];
   const seen = new Set<string>();
-  const normalizeKind = (value: unknown): "numeric" | "enum_single" | "boolean" | "text_short" | "array" => {
-    if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array") return value;
+  const normalizeKind = (value: unknown): "numeric" | "enum_single" | "boolean" | "text_short" | "array" | "date_time" => {
+    if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array" || value === "date_time") return value;
     return "numeric";
   };
+  const normalizeDateTimeMode = (value: unknown): "timestamp" | "structured" =>
+    value === "structured" ? "structured" : "timestamp";
   const hasScriptLikeContent = (text: string): boolean =>
     /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
   const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
@@ -838,6 +878,9 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
         ? obj.sequentialPromptTemplate.trim().slice(0, 20000)
         : "");
     const kind = normalizeKind(obj.kind);
+    const dateTimeMode = kind === "date_time"
+      ? normalizeDateTimeMode(obj.dateTimeMode)
+      : undefined;
     const enumOptions = normalizeEnumOptions(obj.enumOptions);
     const textMaxLength = clampInt(obj.textMaxLength, 120, 20, 200);
     const booleanTrueLabel = typeof obj.booleanTrueLabel === "string"
@@ -869,6 +912,9 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       if (kind === "array") {
         return normalizeArrayItems(obj.defaultValue, textMaxLength);
       }
+      if (kind === "date_time") {
+        return normalizeDateTimeValue(obj.defaultValue);
+      }
       const text = typeof obj.defaultValue === "string" ? obj.defaultValue.trim().replace(/\s+/g, " ") : "";
       return text.slice(0, textMaxLength);
     };
@@ -877,6 +923,7 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
     const globalScope = asBool(obj.globalScope, false);
     const trackCharacters = globalScope ? true : asBool(obj.trackCharacters, legacyTrack);
     const trackUser = globalScope ? true : asBool(obj.trackUser, legacyTrack);
+    const trackEnabled = asBool(obj.track, trackCharacters || trackUser);
     const privateToOwner = globalScope ? false : asBool(obj.privateToOwner, false);
     const entry = {
       id,
@@ -894,7 +941,8 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       booleanTrueLabel: kind === "boolean" ? (booleanTrueLabel || "enabled") : undefined,
       booleanFalseLabel: kind === "boolean" ? (booleanFalseLabel || "disabled") : undefined,
       textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
-      track: trackCharacters || trackUser,
+      dateTimeMode,
+      track: trackEnabled,
       trackCharacters,
       trackUser,
       globalScope,
@@ -999,6 +1047,11 @@ function sanitizeCustomNonNumericStatDefaults(
         if (items.length >= 20) break;
       }
       if (items.length) out[id] = items;
+      continue;
+    }
+    if (kind === "date_time") {
+      const normalized = normalizeDateTimeValue(value);
+      if (normalized) out[id] = normalized;
       continue;
     }
     const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";

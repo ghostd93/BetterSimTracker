@@ -18,6 +18,7 @@ Defined in `src/types.ts`.
 - `boolean`
 - `text_short`
 - `array`
+- `date_time`
 
 ### Tracker Payload (`TrackerData`)
 
@@ -61,6 +62,7 @@ Key groups:
   - card style settings
   - optional `userCardColor` override
   - scene card settings (`sceneCardEnabled`, `sceneCardPosition`, `sceneCardLayout`, `sceneCardTitle`, `sceneCardColor`, `sceneCardValueColor`, `sceneCardShowWhenEmpty`, `sceneCardArrayCollapsedLimit`, `sceneCardStatOrder`, `sceneCardStatDisplay`)
+  - character card stat row ordering (`characterCardStatOrder`)
   - mood source/mapping/frame settings
 
 Sanitization is centralized in `src/settings.ts`.
@@ -91,6 +93,7 @@ Kind-specific fields:
 - `boolean`: `defaultValue`, `booleanTrueLabel`, `booleanFalseLabel`
 - `text_short`: `defaultValue`, `textMaxLength`
 - `array`: `defaultValue` (`string[]`), `textMaxLength` (per-item limit), max `20` items
+- `date_time`: `defaultValue` (timestamp string), `dateTimeMode` (`timestamp`/`structured`)
 
 ## Persistence Surfaces
 

@@ -1,6 +1,7 @@
 import { moodOptions } from "./prompts";
 import type { CustomNonNumericValue, CustomStatKind, NumericStatKey, StatKey, StatValue } from "./types";
 import type { Statistics } from "./types";
+import { normalizeDateTimeWithMode } from "./dateTime";
 
 type CharacterNameAliases = Record<string, string>;
 
@@ -512,6 +513,11 @@ export function parseCustomValueResponse(
     if (kind === "array") {
       const items = normalizeArrayItems(candidate);
       if (items.length > 0) result.value[name] = items;
+      continue;
+    }
+    if (kind === "date_time") {
+      const normalized = normalizeDateTimeWithMode(candidate, "structured");
+      if (normalized) result.value[name] = normalized;
       continue;
     }
     if (typeof candidate !== "string") continue;

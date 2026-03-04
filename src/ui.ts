@@ -9,9 +9,11 @@ import type {
   CustomNonNumericValue,
   CustomStatKind,
   CustomStatDefinition,
+  DateTimeMode,
   DeltaDebugRecord,
   MoodLabel,
   MoodSource,
+  SceneCardStatDisplayOptions,
   StExpressionImageOptions,
   StatValue,
   TrackerData,
@@ -45,6 +47,7 @@ import {
 } from "./stExpressionFrameEditor";
 import { fetchFirstExpressionSprite } from "./stExpressionSprites";
 import { getAllNumericStatDefinitions } from "./statRegistry";
+import { getDateTimeStructuredParts, normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
 
 type UiNumericStatDefinition = {
   key: string;
@@ -68,6 +71,7 @@ type UiNonNumericStatDefinition = {
   booleanTrueLabel: string;
   booleanFalseLabel: string;
   textMaxLength: number;
+  dateTimeMode: DateTimeMode;
   trackCharacters: boolean;
   trackUser: boolean;
   globalScope: boolean;
@@ -109,6 +113,8 @@ const ST_EXPRESSION_CACHE_TTL_MS = 60_000;
 const stExpressionCache = new Map<string, CachedExpressionSprites>();
 const stExpressionFetchInFlight = new Set<string>();
 const CUSTOM_STAT_DESCRIPTION_MAX_LENGTH = 300;
+const DATE_TIME_PART_KEYS = ["weekday", "date", "time", "phase"] as const;
+type DateTimePartKey = (typeof DATE_TIME_PART_KEYS)[number];
 const DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS: StExpressionImageOptions = {
   zoom: 1.2,
   positionX: 50,
@@ -127,7 +133,7 @@ function shortLabelFrom(label: string): string {
 }
 
 function normalizeCustomStatKind(value: unknown): CustomStatKind {
-  if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array") return value;
+  if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array" || value === "date_time") return value;
   return "numeric";
 }
 
@@ -192,9 +198,10 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
   return defs
     .filter(def => {
       if (normalizeCustomStatKind(def.kind) === "numeric") return false;
+      const track = Boolean(def.track);
       const trackCharacters = Boolean(def.trackCharacters ?? def.track);
       const trackUser = Boolean(def.trackUser ?? def.track);
-      return trackCharacters || trackUser;
+      return track && (trackCharacters || trackUser);
     })
     .map(def => {
       const kind = normalizeCustomStatKind(def.kind) as Exclude<CustomStatKind, "numeric">;
@@ -209,6 +216,8 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
         defaultValue = typeof def.defaultValue === "boolean" ? def.defaultValue : false;
       } else if (kind === "array") {
         defaultValue = normalizeNonNumericArrayItems(def.defaultValue, textMaxLength);
+      } else if (kind === "date_time") {
+        defaultValue = normalizeDateTimeValue(def.defaultValue);
       } else {
         if (kind === "enum_single" && enumOptions.length > 0) {
           const matched = resolveEnumOption(enumOptions, def.defaultValue);
@@ -218,6 +227,7 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
           defaultValue = text;
         }
       }
+      const dateTimeMode: DateTimeMode = kind === "date_time" && def.dateTimeMode === "structured" ? "structured" : "timestamp";
       return {
         id: String(def.id ?? "").trim().toLowerCase(),
         label: String(def.label ?? "").trim() || String(def.id ?? "").trim(),
@@ -227,6 +237,7 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
         booleanTrueLabel,
         booleanFalseLabel,
         textMaxLength,
+        dateTimeMode,
         trackCharacters,
         trackUser,
         globalScope: Boolean(def.globalScope),
@@ -241,10 +252,11 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
 function getNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNumericStatDefinition[] {
   const customScopeById = new Map(
     (settings.customStats ?? []).map(def => {
+      const track = Boolean(def.track);
       const trackCharacters = Boolean(def.trackCharacters ?? def.track);
       const trackUser = Boolean(def.trackUser ?? def.track);
       const globalScope = Boolean(def.globalScope);
-      return [String(def.id ?? "").trim().toLowerCase(), { trackCharacters, trackUser, globalScope }] as const;
+      return [String(def.id ?? "").trim().toLowerCase(), { track, trackCharacters, trackUser, globalScope }] as const;
     }),
   );
   return getAllNumericStatDefinitions(settings).map(def => ({
@@ -255,10 +267,12 @@ function getNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNumeri
     defaultValue: Math.max(0, Math.min(100, Math.round(Number(def.defaultValue) || 50))),
     trackCharacters: def.builtIn
       ? Boolean(def.track)
-      : Boolean(customScopeById.get(def.id)?.trackCharacters ?? def.track),
+      : (Boolean(customScopeById.get(def.id)?.track ?? def.track)
+        && Boolean(customScopeById.get(def.id)?.trackCharacters ?? def.track)),
     trackUser: def.builtIn
       ? false
-      : Boolean(customScopeById.get(def.id)?.trackUser ?? def.track),
+      : (Boolean(customScopeById.get(def.id)?.track ?? def.track)
+        && Boolean(customScopeById.get(def.id)?.trackUser ?? def.track)),
     globalScope: def.builtIn
       ? false
       : Boolean(customScopeById.get(def.id)?.globalScope ?? false),
@@ -357,6 +371,9 @@ function resolveNonNumericValue(
     const items = normalizeNonNumericArrayItems(raw ?? def.defaultValue, def.textMaxLength);
     return items;
   }
+  if (def.kind === "date_time") {
+    return normalizeDateTimeValue(raw ?? def.defaultValue) || null;
+  }
   const maxLength = def.textMaxLength;
   const text = normalizeNonNumericTextValue(raw ?? def.defaultValue, maxLength);
   if (!text) return null;
@@ -377,6 +394,9 @@ function hasNonNumericValue(
     if (typeof raw === "string") return normalizeNonNumericArrayItems(raw, def.textMaxLength).length > 0;
     return false;
   }
+  if (def.kind === "date_time") {
+    return Boolean(normalizeDateTimeValue(raw));
+  }
   if (typeof raw !== "string") return false;
   const text = normalizeNonNumericTextValue(raw, def.textMaxLength);
   if (!text) return false;
@@ -393,7 +413,148 @@ function formatNonNumericForDisplay(def: UiNonNumericStatDefinition, value: stri
     if (items.length === 1) return items[0];
     return `${items[0]} +${items.length - 1}`;
   }
+  if (def.kind === "date_time" && def.dateTimeMode === "structured") {
+    const parts = getDateTimeStructuredParts(value);
+    if (!parts) return String(value);
+    return `${parts.dayOfWeek}, ${parts.time} (${parts.phase})`;
+  }
+  if (def.kind === "date_time") {
+    return formatDateTimeTimestampDisplay(value, "iso");
+  }
   return String(value);
+}
+
+const MONTH_NAMES_SHORT_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+const MONTH_NAMES_LONG_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] as const;
+
+function getOrdinalSuffix(day: number): string {
+  const mod100 = day % 100;
+  if (mod100 >= 11 && mod100 <= 13) return "th";
+  const mod10 = day % 10;
+  if (mod10 === 1) return "st";
+  if (mod10 === 2) return "nd";
+  if (mod10 === 3) return "rd";
+  return "th";
+}
+
+function parseNormalizedDateTime(raw: unknown): { year: number; month: number; day: number; hour: number; minute: number } | null {
+  const normalized = normalizeDateTimeValue(raw);
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day) || !Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return { year, month, day, hour, minute };
+}
+
+function formatDateWithPreset(
+  parts: { year: number; month: number; day: number },
+  format: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy",
+): string {
+  const yyyy = String(parts.year).padStart(4, "0");
+  const mm = String(parts.month).padStart(2, "0");
+  const dd = String(parts.day).padStart(2, "0");
+  const monthShort = MONTH_NAMES_SHORT_EN[parts.month - 1] ?? mm;
+  const monthLong = MONTH_NAMES_LONG_EN[parts.month - 1] ?? mm;
+  if (format === "dmy") return `${dd}-${mm}-${yyyy}`;
+  if (format === "mdy") return `${mm}-${dd}-${yyyy}`;
+  if (format === "d_mmm_yyyy") return `${dd} ${monthShort} ${yyyy}`;
+  if (format === "mmmm_d_yyyy") return `${monthLong} ${parts.day}, ${yyyy}`;
+  if (format === "mmmm_do_yyyy") return `${monthLong} ${parts.day}${getOrdinalSuffix(parts.day)}, ${yyyy}`;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDateTimeTimestampDisplay(
+  raw: unknown,
+  format: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy",
+): string {
+  const parsed = parseNormalizedDateTime(raw);
+  if (!parsed) return String(raw ?? "");
+  const datePart = formatDateWithPreset(parsed, format);
+  const timePart = `${String(parsed.hour).padStart(2, "0")}:${String(parsed.minute).padStart(2, "0")}`;
+  return `${datePart} ${timePart}`;
+}
+
+function renderDateTimeStructuredChips(
+  value: string | boolean | string[],
+  color: string,
+  options?: {
+    showWeekday?: boolean;
+    showDate?: boolean;
+    showTime?: boolean;
+    showPhase?: boolean;
+    showPartLabels?: boolean;
+    labelWeekday?: string;
+    labelDate?: string;
+    labelTime?: string;
+    labelPhase?: string;
+    dateFormat?: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy";
+    partOrder?: Array<"weekday" | "date" | "time" | "phase">;
+  },
+): string {
+  const parts = getDateTimeStructuredParts(value);
+  if (!parts) {
+    const raw = String(value ?? "").trim();
+    return raw
+      ? `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`
+      : `<span class="bst-array-item-empty">Not set</span>`;
+  }
+  const formatDatePart = (rawDate: string): string => {
+    const match = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return rawDate;
+    const [, y, m, d] = match;
+    const mode =
+      options?.dateFormat === "dmy" ||
+      options?.dateFormat === "mdy" ||
+      options?.dateFormat === "d_mmm_yyyy" ||
+      options?.dateFormat === "mmmm_d_yyyy" ||
+      options?.dateFormat === "mmmm_do_yyyy"
+        ? options.dateFormat
+        : "iso";
+    return formatDateWithPreset({ year: Number(y), month: Number(m), day: Number(d) }, mode);
+  };
+  const showMap = {
+    weekday: options?.showWeekday !== false,
+    date: options?.showDate !== false,
+    time: options?.showTime !== false,
+    phase: options?.showPhase !== false,
+  };
+  const labelMap = {
+    weekday: String(options?.labelWeekday ?? "Day").trim() || "Day",
+    date: String(options?.labelDate ?? "Date").trim() || "Date",
+    time: String(options?.labelTime ?? "Time").trim() || "Time",
+    phase: String(options?.labelPhase ?? "Phase").trim() || "Phase",
+  };
+  const valueMap = {
+    weekday: parts.dayOfWeek,
+    date: formatDatePart(parts.date),
+    time: parts.time,
+    phase: parts.phase,
+  };
+  const rawOrder = Array.isArray(options?.partOrder) ? options!.partOrder : ["weekday", "date", "time", "phase"];
+  const order: Array<"weekday" | "date" | "time" | "phase"> = [];
+  for (const key of rawOrder) {
+    if (key === "weekday" || key === "date" || key === "time" || key === "phase") {
+      if (!order.includes(key)) order.push(key);
+    }
+  }
+  for (const key of ["weekday", "date", "time", "phase"] as const) {
+    if (!order.includes(key)) order.push(key);
+  }
+  const showPartLabels = Boolean(options?.showPartLabels);
+  const chips = order
+    .filter(key => showMap[key])
+    .map(key => {
+      const valueText = valueMap[key];
+      const displayText = showPartLabels ? `${labelMap[key]}: ${valueText}` : valueText;
+      return `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayText)}">${escapeHtml(displayText)}</span>`;
+    });
+  return chips.length
+    ? chips.join("")
+    : `<span class="bst-array-item-empty">Not set</span>`;
 }
 
 function truncateDisplayText(value: string, maxLength: number | null | undefined): string {
@@ -457,6 +618,29 @@ function toPercent(value: StatValue): number {
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function normalizeDateTimePartOrder(parts: string[]): DateTimePartKey[] {
+  const next: DateTimePartKey[] = [];
+  for (const raw of parts) {
+    const key = String(raw ?? "").trim().toLowerCase();
+    if ((key === "weekday" || key === "date" || key === "time" || key === "phase") && !next.includes(key)) {
+      next.push(key);
+    }
+  }
+  for (const key of DATE_TIME_PART_KEYS) {
+    if (!next.includes(key)) next.push(key);
+  }
+  return next;
+}
+
+function toOwnerClassSuffix(value: string): string {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "unknown";
 }
 
 function pushUniqueCharacterName(target: string[], seen: Set<string>, raw: unknown): void {
@@ -829,6 +1013,9 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     if (kind === "array") {
       return normalizeNonNumericArrayItems(definition.defaultValue, textMaxLength);
     }
+    if (kind === "date_time") {
+      return normalizeDateTimeValue(definition.defaultValue);
+    }
     const text = normalizeNonNumericTextValue(definition.defaultValue, textMaxLength);
     return text;
   };
@@ -847,6 +1034,9 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     booleanTrueLabel: kind === "boolean" ? booleanTrueLabel : undefined,
     booleanFalseLabel: kind === "boolean" ? booleanFalseLabel : undefined,
     textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
+    dateTimeMode: kind === "date_time"
+      ? (definition.dateTimeMode === "structured" ? "structured" : "timestamp")
+      : undefined,
     track: Boolean(definition.track),
     trackCharacters: Boolean(definition.globalScope ? true : (definition.trackCharacters ?? definition.track)),
     trackUser: Boolean(definition.globalScope ? true : (definition.trackUser ?? definition.track)),
@@ -2839,6 +3029,65 @@ function ensureStyles(): void {
   justify-content: flex-end;
   align-content: flex-start;
 }
+.bst-custom-stat-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.24);
+  background: rgba(255,255,255,0.08);
+  color: #d8e6ff;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.bst-custom-stat-toggle:hover {
+  border-color: rgba(170, 214, 255, 0.8);
+}
+.bst-custom-stat-toggle-pill {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.14);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.bst-custom-stat-toggle-pill::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #d7dde8;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.bst-custom-stat-toggle.is-on {
+  border-color: rgba(123, 242, 182, 0.62);
+  background: rgba(26, 68, 50, 0.38);
+  color: #c9ffe6;
+}
+.bst-custom-stat-toggle.is-on .bst-custom-stat-toggle-pill {
+  border-color: rgba(123, 242, 182, 0.7);
+  background: rgba(93, 222, 161, 0.35);
+}
+.bst-custom-stat-toggle.is-on .bst-custom-stat-toggle-pill::after {
+  transform: translateX(16px);
+  background: #d9ffe8;
+}
+.bst-custom-stat-toggle.is-off {
+  border-color: rgba(255, 158, 160, 0.45);
+  background: rgba(64, 24, 30, 0.3);
+  color: #ffd4d5;
+}
+.bst-custom-stat-toggle-label {
+  font-size: 12px;
+  font-weight: 600;
+}
 .bst-custom-stat-empty {
   border: 1px dashed rgba(255,255,255,0.2);
   border-radius: 10px;
@@ -2853,6 +3102,9 @@ function ensureStyles(): void {
   inset: 0;
   background: rgba(0,0,0,0.55);
   z-index: 2147483250;
+}
+.bst-custom-wizard-backdrop.bst-custom-wizard-backdrop-top {
+  z-index: 2147483350;
 }
 .bst-custom-wizard {
   position: fixed;
@@ -2869,6 +3121,13 @@ function ensureStyles(): void {
   box-shadow: 0 20px 54px rgba(0,0,0,0.5);
   color: #f3f5f9;
   padding: 12px 12px 14px;
+}
+.bst-custom-wizard.bst-custom-wizard-top {
+  z-index: 2147483351;
+}
+.bst-custom-wizard.bst-custom-wizard-muted {
+  pointer-events: none;
+  filter: grayscale(0.2) brightness(0.75);
 }
 .bst-custom-wizard-head {
   display: flex;
@@ -2927,9 +3186,9 @@ function ensureStyles(): void {
   min-width: 96px;
 }
 .bst-icon-btn {
-  width: 34px;
-  height: 34px;
-  min-width: 34px !important;
+  width: 44px;
+  height: 44px;
+  min-width: 44px !important;
   padding: 0 !important;
   display: inline-flex;
   align-items: center;
@@ -3179,6 +3438,11 @@ function ensureStyles(): void {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+.bst-edit-array-status {
+  font-size: 11px;
+  color: rgba(255, 222, 160, 0.92);
+  min-height: 14px;
 }
 .bst-graph-backdrop {
   position: fixed;
@@ -3661,6 +3925,9 @@ function ensureStyles(): void {
     max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px);
     margin: 0;
     border-radius: 12px;
+  }
+  .bst-edit-grid.bst-edit-grid-two {
+    grid-template-columns: minmax(0, 1fr);
   }
   .bst-settings {
     left: 0;
@@ -4177,6 +4444,33 @@ export function renderTracker(
       sceneRoot.dataset.bstBound = "1";
       sceneRoot.addEventListener("click", event => {
         const target = event.target as HTMLElement | null;
+        const preview = target?.closest('[data-bst-action="open-mood-preview"]') as HTMLElement | null;
+        if (preview) {
+          const src = String(preview.getAttribute("data-bst-image-src") ?? "").trim();
+          const alt = String(preview.getAttribute("data-bst-image-alt") ?? "").trim() || "Mood image";
+          const character = String(preview.getAttribute("data-bst-image-character") ?? "").trim();
+          const mood = String(preview.getAttribute("data-bst-image-mood") ?? "").trim();
+          if (src) {
+            openMoodImageModal(src, alt, character, mood);
+          }
+          return;
+        }
+        const edit = target?.closest('[data-bst-action="edit-stats"]') as HTMLElement | null;
+        if (edit) {
+          const idx = Number(edit.getAttribute("data-bst-edit-message") ?? sceneRoot.dataset.messageIndex);
+          const character = String(edit.getAttribute("data-bst-edit-character") ?? "").trim();
+          const data = Number.isNaN(idx) ? null : resolveEntryData?.(idx) ?? null;
+          if (!data || !character) return;
+          openEditStatsModal({
+            messageIndex: idx,
+            character,
+            displayName: resolveDisplayName?.(character),
+            data,
+            settings,
+            onSave: onEditStats,
+          });
+          return;
+        }
         const arrayToggle = target?.closest('[data-bst-action="toggle-array-values"]') as HTMLElement | null;
         if (!arrayToggle) return;
         const key = String(arrayToggle.getAttribute("data-bst-array-key") ?? "").trim();
@@ -4398,7 +4692,7 @@ export function renderTracker(
         return a.localeCompare(b);
       });
 
-    const cardHtmlByName: Array<{ name: string; html: string; isActive: boolean; isNew: boolean; cardColor: string }> = [];
+    const cardHtmlByName: Array<{ name: string; displayName: string; ownerClass: string; html: string; isActive: boolean; isNew: boolean; cardColor: string }> = [];
     const signatureParts: string[] = [
       `msg:${entry.messageIndex}`,
       `collapsed:${collapsed ? "1" : "0"}`,
@@ -4420,8 +4714,35 @@ export function renderTracker(
       const isUserCard = name === USER_TRACKER_KEY;
       const moodLookupName = isUserCard ? displayName : name;
       const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
-      const enabledNumeric = getNumericStatsForCharacter(data, name, settings);
-      const enabledNonNumeric = ownerCardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
+      const baseEnabledNumeric = getNumericStatsForCharacter(data, name, settings);
+      const baseEnabledNonNumeric = ownerCardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
+      const statOrderMap = new Map((settings.characterCardStatOrder ?? []).map((id, index) => [String(id ?? "").trim().toLowerCase(), index]));
+      const numericFallbackOrder = new Map(baseEnabledNumeric.map((def, index) => [String(def.key).trim().toLowerCase(), index]));
+      const nonNumericFallbackOrder = new Map(baseEnabledNonNumeric.map((def, index) => [String(def.id).trim().toLowerCase(), index]));
+      const enabledNumeric = isUserCard
+        ? baseEnabledNumeric
+        : [...baseEnabledNumeric].sort((a, b) => {
+          const aId = String(a.key).trim().toLowerCase();
+          const bId = String(b.key).trim().toLowerCase();
+          const aOrder = statOrderMap.get(aId);
+          const bOrder = statOrderMap.get(bId);
+          if (aOrder != null && bOrder != null && aOrder !== bOrder) return aOrder - bOrder;
+          if (aOrder != null && bOrder == null) return -1;
+          if (aOrder == null && bOrder != null) return 1;
+          return (numericFallbackOrder.get(aId) ?? 0) - (numericFallbackOrder.get(bId) ?? 0);
+        });
+      const enabledNonNumeric = isUserCard
+        ? baseEnabledNonNumeric
+        : [...baseEnabledNonNumeric].sort((a, b) => {
+          const aId = String(a.id).trim().toLowerCase();
+          const bId = String(b.id).trim().toLowerCase();
+          const aOrder = statOrderMap.get(aId);
+          const bOrder = statOrderMap.get(bId);
+          if (aOrder != null && bOrder != null && aOrder !== bOrder) return aOrder - bOrder;
+          if (aOrder != null && bOrder == null) return -1;
+          if (aOrder == null && bOrder != null) return 1;
+          return (nonNumericFallbackOrder.get(aId) ?? 0) - (nonNumericFallbackOrder.get(bId) ?? 0);
+        });
       const moodText = getEffectiveMoodText(name);
       const previousMoodData = findPreviousDataWithMood(entry.messageIndex, name);
       const prevMood = previousMoodData?.statistics.mood?.[name] !== undefined
@@ -4526,6 +4847,18 @@ export function renderTracker(
               </div>
             `;
           }
+          if (def.kind === "date_time" && def.dateTimeMode === "structured") {
+            return `
+              <div class="bst-row bst-row-non-numeric">
+                <div class="bst-label">
+                  <span>${escapeHtml(def.label)}</span>
+                </div>
+                <div class="bst-array-items">
+                  ${renderDateTimeStructuredChips(resolved ?? "", color)}
+                </div>
+              </div>
+            `;
+          }
           const displayValue = resolved == null ? "not set" : formatNonNumericForDisplay(def, resolved);
           return `
             <div class="bst-row bst-row-non-numeric">
@@ -4553,7 +4886,8 @@ export function renderTracker(
         ${enabledNumeric.length === 0 && enabledNonNumeric.length === 0 && moodText === "" && !(settings.showLastThought && lastThoughtText !== "") ? `<div class="bst-empty">No stats recorded.</div>` : ""}
         </div>
       `;
-      cardHtmlByName.push({ name, html: cardHtml, isActive, isNew, cardColor });
+      const ownerClass = `bst-owner-${toOwnerClassSuffix(displayName)}`;
+      cardHtmlByName.push({ name, displayName, ownerClass, html: cardHtml, isActive, isNew, cardColor });
       const nonNumericSignature = enabledNonNumeric.map(def => {
         const value = resolveEffectiveNonNumericValue(def, name);
         if (value == null) return `${def.id}:not_set`;
@@ -4608,11 +4942,17 @@ export function renderTracker(
         return a.def.label.localeCompare(b.def.label);
       });
     const sceneCardVisible = settings.sceneCardShowWhenEmpty || sceneValues.length > 0;
+    const canEditSceneCard =
+      (latestTrackedAiMessageIndex != null && entry.messageIndex === latestTrackedAiMessageIndex) ||
+      (latestTrackedUserMessageIndex != null && entry.messageIndex === latestTrackedUserMessageIndex);
     const sceneCardHtml = sceneCardVisible
       ? `
         <div class="bst-head">
           <div class="bst-name" title="${escapeHtml(settings.sceneCardTitle)}">${escapeHtml(settings.sceneCardTitle)}</div>
           <div class="bst-actions">
+            ${canEditSceneCard
+              ? `<button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="edit-stats" data-bst-edit-message="${entry.messageIndex}" data-bst-edit-character="${escapeHtml(GLOBAL_TRACKER_KEY)}" title="Edit latest Scene tracker stats" aria-label="Edit latest Scene tracker stats"><span aria-hidden="true">&#9998;</span></button>`
+              : ""}
             <div class="bst-state" title="Global scene stats">Global</div>
           </div>
         </div>
@@ -4630,6 +4970,30 @@ export function renderTracker(
               ? display.layoutOverride
               : settings.sceneCardLayout;
             if (statLayout === "rows") {
+              if (def.kind === "date_time" && def.dateTimeMode === "structured") {
+                return `
+                  <div class="bst-row bst-row-non-numeric">
+                    <div class="bst-label">
+                      ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
+                    </div>
+                    <div class="bst-array-items">
+                      ${renderDateTimeStructuredChips(resolved ?? "", color, {
+                        showWeekday: display?.dateTimeShowWeekday,
+                        showDate: display?.dateTimeShowDate,
+                        showTime: display?.dateTimeShowTime,
+                        showPhase: display?.dateTimeShowPhase,
+                        showPartLabels: display?.dateTimeShowPartLabels,
+                        labelWeekday: display?.dateTimeLabelWeekday,
+                        labelDate: display?.dateTimeLabelDate,
+                        labelTime: display?.dateTimeLabelTime,
+                        labelPhase: display?.dateTimeLabelPhase,
+                        dateFormat: display?.dateTimeDateFormat,
+                        partOrder: display?.dateTimePartOrder,
+                      })}
+                    </div>
+                  </div>
+                `;
+              }
               if (def.kind === "array") {
                 const items = Array.isArray(resolved) ? resolved : normalizeNonNumericArrayItems(resolved, def.textMaxLength);
                 const textValueRaw = items.length ? items.join(", ") : "Not set";
@@ -4645,6 +5009,28 @@ export function renderTracker(
                   </div>
                 `;
               }
+              if (def.kind === "date_time") {
+                const dateFormat =
+                  display?.dateTimeDateFormat === "dmy" ||
+                  display?.dateTimeDateFormat === "mdy" ||
+                  display?.dateTimeDateFormat === "d_mmm_yyyy" ||
+                  display?.dateTimeDateFormat === "mmmm_d_yyyy" ||
+                  display?.dateTimeDateFormat === "mmmm_do_yyyy"
+                    ? display.dateTimeDateFormat
+                    : "iso";
+                const displayValueRaw = formatDateTimeTimestampDisplay(resolved ?? "", dateFormat);
+                const displayValue = truncateDisplayText(displayValueRaw, textMaxLength);
+                return `
+                  <div class="bst-row bst-row-non-numeric">
+                    <div class="bst-label">
+                      ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
+                      ${valueStyle === "plain"
+                        ? `<span class="bst-scene-plain-value" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`
+                        : `<span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`}
+                    </div>
+                  </div>
+                `;
+              }
               const displayValueRaw = resolved == null ? "Not set" : formatNonNumericForDisplay(def, resolved);
               const displayValue = truncateDisplayText(displayValueRaw, textMaxLength);
               return `
@@ -4654,6 +5040,30 @@ export function renderTracker(
                     ${valueStyle === "plain"
                       ? `<span class="bst-scene-plain-value" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`
                       : `<span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`}
+                  </div>
+                </div>
+              `;
+            }
+            if (def.kind === "date_time" && def.dateTimeMode === "structured") {
+              return `
+                <div class="bst-row bst-row-non-numeric">
+                  <div class="bst-label">
+                    ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
+                  </div>
+                  <div class="bst-array-items">
+                    ${renderDateTimeStructuredChips(resolved ?? "", color, {
+                      showWeekday: display?.dateTimeShowWeekday,
+                      showDate: display?.dateTimeShowDate,
+                      showTime: display?.dateTimeShowTime,
+                      showPhase: display?.dateTimeShowPhase,
+                      showPartLabels: display?.dateTimeShowPartLabels,
+                      labelWeekday: display?.dateTimeLabelWeekday,
+                      labelDate: display?.dateTimeLabelDate,
+                      labelTime: display?.dateTimeLabelTime,
+                      labelPhase: display?.dateTimeLabelPhase,
+                      dateFormat: display?.dateTimeDateFormat,
+                      partOrder: display?.dateTimePartOrder,
+                    })}
                   </div>
                 </div>
               `;
@@ -4681,6 +5091,28 @@ export function renderTracker(
                     ${hasOverflow
                       ? `<button type="button" class="bst-array-toggle" data-bst-action="toggle-array-values" data-bst-array-key="${escapeHtml(sceneArrayKey)}" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "Show less" : `+${items.length - arrayLimit} more`}</button>`
                       : ""}
+                  </div>
+                </div>
+              `;
+            }
+            if (def.kind === "date_time") {
+              const dateFormat =
+                display?.dateTimeDateFormat === "dmy" ||
+                display?.dateTimeDateFormat === "mdy" ||
+                display?.dateTimeDateFormat === "d_mmm_yyyy" ||
+                display?.dateTimeDateFormat === "mmmm_d_yyyy" ||
+                display?.dateTimeDateFormat === "mmmm_do_yyyy"
+                  ? display.dateTimeDateFormat
+                  : "iso";
+              const displayValueRaw = formatDateTimeTimestampDisplay(resolved ?? "", dateFormat);
+              const displayValue = truncateDisplayText(displayValueRaw, textMaxLength);
+              return `
+                <div class="bst-row bst-row-non-numeric">
+                  <div class="bst-label">
+                    ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
+                    ${valueStyle === "plain"
+                      ? `<span class="bst-scene-plain-value" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`
+                      : `<span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValueRaw)}">${escapeHtml(displayValue)}</span>`}
                   </div>
                 </div>
               `;
@@ -4751,7 +5183,9 @@ export function renderTracker(
     const appendOwnerCards = (): void => {
       for (const item of cardHtmlByName) {
         const card = document.createElement("div");
-        card.className = `bst-card${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
+        card.className = `bst-card ${item.ownerClass}${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
+        card.dataset.bstOwner = item.displayName;
+        card.dataset.bstOwnerClass = item.ownerClass;
         card.style.setProperty("--bst-card-local", item.cardColor);
         const palette = buildActionPalette(item.cardColor);
         card.style.setProperty("--bst-action-bg", palette.bg);
@@ -5018,10 +5452,15 @@ function openEditStatsModal(input: {
 }): void {
   ensureStyles();
   closeEditStatsModal();
+  const isGlobalCharacter = input.character === GLOBAL_TRACKER_KEY;
+  const rawDisplayName = String(input.displayName ?? "").trim();
+  const displayName = isGlobalCharacter && (!rawDisplayName || rawDisplayName === GLOBAL_TRACKER_KEY)
+    ? "Scene"
+    : rawDisplayName;
   const characterLabel = String(
-    input.displayName
-      ?? (input.character === USER_TRACKER_KEY ? "User" : input.character),
-  ).trim() || (input.character === USER_TRACKER_KEY ? "User" : input.character);
+    displayName
+      || (isGlobalCharacter ? "Scene" : (input.character === USER_TRACKER_KEY ? "User" : input.character)),
+  ).trim() || (isGlobalCharacter ? "Scene" : (input.character === USER_TRACKER_KEY ? "User" : input.character));
 
   const isUserCharacter = input.character === USER_TRACKER_KEY;
   const customScopeById = new Map(
@@ -5036,7 +5475,9 @@ function openEditStatsModal(input: {
       }] as const;
     }),
   );
-  const numericDefs = getAllNumericStatDefinitions(input.settings).filter(def => {
+  const numericDefs = isGlobalCharacter
+    ? []
+    : getAllNumericStatDefinitions(input.settings).filter(def => {
     if (!def.track) return false;
     if (def.builtIn) return !isUserCharacter;
     const scope = customScopeById.get(String(def.id ?? "").trim().toLowerCase());
@@ -5045,9 +5486,16 @@ function openEditStatsModal(input: {
   });
   const builtInDefs = numericDefs.filter(def => def.builtIn);
   const customDefs = numericDefs.filter(def => !def.builtIn);
-  const nonNumericDefs = getNonNumericStatDefinitions(input.settings).filter(def =>
-    isUserCharacter ? def.trackUser : def.trackCharacters,
-  );
+  const nonNumericDefs = getNonNumericStatDefinitions(input.settings).filter(def => {
+    if (isGlobalCharacter) {
+      if (!def.globalScope) return false;
+      const visibility = input.settings.sceneCardStatDisplay?.[def.id]?.visible;
+      return visibility !== false;
+    }
+    // Global stats are edited only via Scene card modal.
+    if (def.globalScope) return false;
+    return isUserCharacter ? def.trackUser : def.trackCharacters;
+  });
   const nonNumericDefById = new Map(nonNumericDefs.map(def => [def.id, def]));
   const currentMood = input.data.statistics.mood?.[input.character];
   const normalizedMood = currentMood ? normalizeMoodLabel(String(currentMood)) : null;
@@ -5120,8 +5568,21 @@ function openEditStatsModal(input: {
             <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="edit-array-add" data-bst-edit-array-add="${safeId}" aria-label="Add item" title="Add item"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
             <span class="bst-editor-counter" data-bst-edit-array-counter="${safeId}">${items.length}/20 items</span>
           </div>
+          <div class="bst-edit-array-status" data-bst-edit-array-status="${safeId}" style="display:none;"></div>
           <textarea rows="1" style="display:none" data-bst-edit-non-numeric="${safeId}" data-bst-edit-kind="array" placeholder="One item per line, up to 20 items.">${escapeHtml(value)}</textarea>
         </div>
+      `;
+    }
+    if (def.kind === "date_time") {
+      const value = typeof currentValue === "string" ? currentValue : "";
+      const isStructuredDateTime = def.dateTimeMode === "structured";
+      const inputValue = isStructuredDateTime ? value : toDateTimeInputValue(value);
+      return `
+        <label class="bst-edit-field">
+          <span>${escapeHtml(def.label)}</span>
+          <input type="${isStructuredDateTime ? "text" : "datetime-local"}" data-bst-edit-non-numeric="${escapeHtml(def.id)}" data-bst-edit-kind="${isStructuredDateTime ? "date_time_structured" : "date_time"}" value="${escapeHtml(inputValue)}" placeholder="YYYY-MM-DD HH:mm">
+          ${isStructuredDateTime ? `<div class="bst-help-line">Structured mode accepts semantic updates, but saves normalized value as <code>YYYY-MM-DD HH:mm</code>.</div>` : ""}
+        </label>
       `;
     }
     const value = typeof currentValue === "string" ? currentValue : "";
@@ -5135,13 +5596,16 @@ function openEditStatsModal(input: {
 
   const modal = document.createElement("div");
   modal.className = EDIT_STATS_MODAL_CLASS;
+  const modalIntro = isGlobalCharacter
+    ? "Scene/global stats only. Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest scene tracker snapshot."
+    : "Numeric values are percentages (0-100). Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest tracker snapshot for this character.";
   modal.innerHTML = `
     <div class="bst-edit-head">
       <div class="bst-edit-title">Edit Tracker Stats - ${escapeHtml(characterLabel)}</div>
       <button class="bst-btn bst-close-btn" data-action="close" aria-label="Close edit dialog">&times;</button>
     </div>
-    <div class="bst-edit-sub">Numeric values are percentages (0-100). Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest tracker snapshot for this character.</div>
-    ${!isUserCharacter
+    <div class="bst-edit-sub">${escapeHtml(modalIntro)}</div>
+    ${(!isUserCharacter && !isGlobalCharacter)
       ? `<div class="bst-edit-divider"></div>
          <label class="bst-edit-field bst-check">
            <input type="checkbox" data-bst-edit-meta="active" ${isCurrentlyActive ? "checked" : ""}>
@@ -5150,7 +5614,7 @@ function openEditStatsModal(input: {
       : ""}
     ${builtInDefs.length
       ? `<div class="bst-edit-grid bst-edit-grid-two">${builtInDefs.map(numericField).join("")}</div>`
-      : `<div class="bst-edit-sub">No built-in numeric stats are currently tracked.</div>`}
+      : (!isGlobalCharacter ? `<div class="bst-edit-sub">No built-in numeric stats are currently tracked.</div>` : "")}
     ${customDefs.length
       ? `<div class="bst-edit-divider"></div>
          <div class="bst-edit-grid bst-edit-grid-two">${customDefs.map(numericField).join("")}</div>`
@@ -5159,7 +5623,7 @@ function openEditStatsModal(input: {
       ? `<div class="bst-edit-divider"></div>
          <div class="bst-edit-grid bst-edit-grid-two">${nonNumericDefs.map(nonNumericField).join("")}</div>`
       : ""}
-    ${input.settings.trackMood
+    ${!isGlobalCharacter && input.settings.trackMood
       ? `<div class="bst-edit-divider"></div>
          <label class="bst-edit-field">
            <span>Mood</span>
@@ -5173,7 +5637,7 @@ function openEditStatsModal(input: {
            </select>
          </label>`
       : ""}
-    ${input.settings.trackLastThought
+    ${!isGlobalCharacter && input.settings.trackLastThought
       ? `<div class="bst-edit-divider"></div>
          <label class="bst-edit-field">
            <span>Last Thought</span>
@@ -5249,6 +5713,7 @@ function openEditStatsModal(input: {
     const maxLength = Math.max(20, Math.min(200, Math.round(Number(editor.dataset.bstMaxLength) || 120)));
     const listNode = editor.querySelector<HTMLElement>(`[data-bst-edit-array-list="${CSS.escape(id)}"]`);
     const counterNode = editor.querySelector<HTMLElement>(`[data-bst-edit-array-counter="${CSS.escape(id)}"]`);
+    const statusNode = editor.querySelector<HTMLElement>(`[data-bst-edit-array-status="${CSS.escape(id)}"]`);
     const addBtn = editor.querySelector<HTMLButtonElement>(`[data-bst-edit-array-add="${CSS.escape(id)}"]`);
     const hiddenNode = editor.querySelector<HTMLTextAreaElement>(`textarea[data-bst-edit-non-numeric="${CSS.escape(id)}"][data-bst-edit-kind="array"]`);
     if (!listNode || !counterNode || !addBtn || !hiddenNode) return;
@@ -5266,10 +5731,23 @@ function openEditStatsModal(input: {
     const syncEditor = (): string[] => {
       const values = getItemInputs().map(inputNode => inputNode.value);
       const normalized = normalizeNonNumericArrayItems(values, maxLength);
+      const rawTrimmed = values.map(value => String(value ?? "").trim());
+      const rawNonEmpty = rawTrimmed.filter(value => value.length > 0);
+      const uniqueRawNonEmpty = new Set(rawNonEmpty).size;
+      const hadTooLong = rawNonEmpty.some(value => value.length > maxLength);
+      const hitLimit = rawNonEmpty.length > 20;
       hiddenNode.value = normalized.join("\n");
       counterNode.textContent = `${normalized.length}/20 items`;
       counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");
       addBtn.disabled = getItemInputs().length >= 20;
+      if (statusNode) {
+        const messages: string[] = [];
+        if (hadTooLong) messages.push(`Items longer than ${maxLength} chars were trimmed.`);
+        if (uniqueRawNonEmpty > normalized.length) messages.push("Duplicate/empty items were normalized.");
+        if (hitLimit) messages.push("Only first 20 items are kept.");
+        statusNode.textContent = messages.join(" ");
+        statusNode.style.display = messages.length ? "block" : "none";
+      }
       return normalized;
     };
 
@@ -5391,6 +5869,12 @@ function openEditStatsModal(input: {
         const items = normalizeNonNumericArrayItems(String(node.value ?? ""), def.textMaxLength);
         nonNumeric[key] = items.length ? items : null;
         node.value = items.join("\n");
+        return;
+      }
+      if (kind === "date_time" || kind === "date_time_structured") {
+        const normalized = normalizeDateTimeValue(node.value);
+        nonNumeric[key] = normalized || null;
+        node.value = kind === "date_time_structured" ? (normalized || "") : toDateTimeInputValue(normalized);
         return;
       }
       const text = normalizeNonNumericTextValue(raw, def.textMaxLength);
@@ -5849,32 +6333,26 @@ export function openSettingsModal(input: {
   let sceneCardStatOrderState: string[] = Array.isArray(input.settings.sceneCardStatOrder)
     ? input.settings.sceneCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
     : [];
-  let sceneCardStatDisplayState: Record<string, {
-    visible: boolean;
-    showLabel: boolean;
-    hideWhenEmpty: boolean;
-    labelOverride: string;
-    colorOverride: string;
-    layoutOverride: "auto" | "chips" | "rows";
-    valueStyle: "auto" | "chip" | "plain";
-    textMaxLength: number | null;
-    arrayCollapsedLimit: number | null;
-  }> = (() => {
+  let characterCardStatOrderState: string[] = Array.isArray(input.settings.characterCardStatOrder)
+    ? input.settings.characterCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
+    : [];
+  let sceneCardStatDisplayState: Record<string, SceneCardStatDisplayOptions> = (() => {
     const raw = input.settings.sceneCardStatDisplay ?? {};
-    const out: Record<string, {
-      visible: boolean;
-      showLabel: boolean;
-      hideWhenEmpty: boolean;
-      labelOverride: string;
-      colorOverride: string;
-      layoutOverride: "auto" | "chips" | "rows";
-      valueStyle: "auto" | "chip" | "plain";
-      textMaxLength: number | null;
-      arrayCollapsedLimit: number | null;
-    }> = {};
+    const out: Record<string, SceneCardStatDisplayOptions> = {};
     for (const [id, row] of Object.entries(raw)) {
       const key = String(id ?? "").trim().toLowerCase();
       if (!key || !row) continue;
+      const rawOrder = Array.isArray(row.dateTimePartOrder) ? row.dateTimePartOrder : [];
+      const dateTimePartOrder: Array<"weekday" | "date" | "time" | "phase"> = [];
+      for (const entry of rawOrder) {
+        const part = String(entry ?? "").trim().toLowerCase();
+        if (part === "weekday" || part === "date" || part === "time" || part === "phase") {
+          if (!dateTimePartOrder.includes(part)) dateTimePartOrder.push(part);
+        }
+      }
+      for (const part of ["weekday", "date", "time", "phase"] as const) {
+        if (!dateTimePartOrder.includes(part)) dateTimePartOrder.push(part);
+      }
       out[key] = {
         visible: Boolean(row.visible ?? true),
         showLabel: Boolean(row.showLabel ?? true),
@@ -5889,6 +6367,24 @@ export function openSettingsModal(input: {
         arrayCollapsedLimit: typeof row.arrayCollapsedLimit === "number" && Number.isFinite(row.arrayCollapsedLimit)
           ? Math.max(1, Math.min(20, Math.round(row.arrayCollapsedLimit)))
           : null,
+        dateTimeShowWeekday: Boolean(row.dateTimeShowWeekday ?? true),
+        dateTimeShowDate: Boolean(row.dateTimeShowDate ?? true),
+        dateTimeShowTime: Boolean(row.dateTimeShowTime ?? true),
+        dateTimeShowPhase: Boolean(row.dateTimeShowPhase ?? true),
+        dateTimeShowPartLabels: Boolean(row.dateTimeShowPartLabels ?? false),
+        dateTimeLabelWeekday: String(row.dateTimeLabelWeekday ?? "Day").trim().slice(0, 20) || "Day",
+        dateTimeLabelDate: String(row.dateTimeLabelDate ?? "Date").trim().slice(0, 20) || "Date",
+        dateTimeLabelTime: String(row.dateTimeLabelTime ?? "Time").trim().slice(0, 20) || "Time",
+        dateTimeLabelPhase: String(row.dateTimeLabelPhase ?? "Phase").trim().slice(0, 20) || "Phase",
+        dateTimeDateFormat:
+          row.dateTimeDateFormat === "dmy" ||
+          row.dateTimeDateFormat === "mdy" ||
+          row.dateTimeDateFormat === "d_mmm_yyyy" ||
+          row.dateTimeDateFormat === "mmmm_d_yyyy" ||
+          row.dateTimeDateFormat === "mmmm_do_yyyy"
+            ? row.dateTimeDateFormat
+            : "iso",
+        dateTimePartOrder,
       };
     }
     return out;
@@ -5952,6 +6448,7 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
           <label class="bst-check"><input data-k="regenerateOnMessageEdit" type="checkbox">Regenerate Tracker After Message Edit</label>
+          <label class="bst-check"><input data-k="generateOnGreetingMessages" type="checkbox">Generate Tracker on Greetings</label>
         </div>
 
         <div class="bst-section-divider">User Tracking</div>
@@ -6123,6 +6620,13 @@ export function openSettingsModal(input: {
           </label>
           <label class="bst-check" data-bst-row="sceneCardShowWhenEmpty"><input data-k="sceneCardShowWhenEmpty" type="checkbox">Show Scene card even when empty</label>
           <div class="bst-help-line">When enabled, global custom stats are shown only in Scene Card (hidden on owner cards).</div>
+        </div>
+      </details>
+      <details class="bst-subdrawer" data-bst-row="characterCardOrderDrawer">
+        <summary><span class="bst-subdrawer-title"><span class="fa-solid fa-list-ol" aria-hidden="true"></span>Character Card Stat Order</span></summary>
+        <div class="bst-settings-grid bst-settings-grid-single">
+          <div class="bst-help-line">Order controls for stat rows shown on character cards (built-in + custom, non-global).</div>
+          <div class="bst-scene-order-list" data-bst-row="characterCardOrderList"></div>
         </div>
       </details>
     </div>
@@ -6743,6 +7247,7 @@ export function openSettingsModal(input: {
   set("injectSummarizationNote", String(input.settings.injectSummarizationNote));
   set("autoDetectActive", String(input.settings.autoDetectActive));
   set("regenerateOnMessageEdit", String(input.settings.regenerateOnMessageEdit));
+  set("generateOnGreetingMessages", String(input.settings.generateOnGreetingMessages));
   set("activityLookback", String(input.settings.activityLookback));
   set("showInactive", String(input.settings.showInactive));
   set("inactiveLabel", input.settings.inactiveLabel);
@@ -6875,6 +7380,7 @@ export function openSettingsModal(input: {
     booleanTrueLabel: string;
     booleanFalseLabel: string;
     textMaxLength: string;
+    dateTimeMode: DateTimeMode;
     trackCharacters: boolean;
     trackUser: boolean;
     globalScope: boolean;
@@ -6900,6 +7406,7 @@ export function openSettingsModal(input: {
         booleanTrueLabel: "enabled",
         booleanFalseLabel: "disabled",
         textMaxLength: "120",
+        dateTimeMode: "timestamp",
         trackCharacters: true,
         trackUser: true,
         globalScope: false,
@@ -6929,6 +7436,8 @@ export function openSettingsModal(input: {
         ? String(Number.isFinite(Number(clone.defaultValue)) ? Math.round(Number(clone.defaultValue)) : 50)
         : kind === "boolean"
           ? ""
+          : kind === "date_time"
+            ? normalizeDateTimeValue(clone.defaultValue)
           : kind === "array"
             ? normalizeNonNumericArrayItems(clone.defaultValue, textMaxLength).join("\n")
             : String(clone.defaultValue ?? ""),
@@ -6938,6 +7447,7 @@ export function openSettingsModal(input: {
       booleanTrueLabel: String(clone.booleanTrueLabel ?? "enabled").trim() || "enabled",
       booleanFalseLabel: String(clone.booleanFalseLabel ?? "disabled").trim() || "disabled",
       textMaxLength: kind === "text_short" || kind === "array" ? String(textMaxLength) : "120",
+      dateTimeMode: kind === "date_time" && clone.dateTimeMode === "structured" ? "structured" : "timestamp",
       trackCharacters,
       trackUser,
       globalScope,
@@ -7027,6 +7537,11 @@ export function openSettingsModal(input: {
         if (items.some(item => item.length > bounded)) {
           errors.push("One or more array items exceed max length.");
         }
+      } else if (draft.kind === "date_time") {
+        const normalized = normalizeDateTimeValue(draft.defaultValue);
+        if (draft.defaultValue.trim() && !normalized) {
+          errors.push("Default date/time must be valid (YYYY-MM-DD HH:mm).");
+        }
       } else if (draft.kind === "text_short") {
         const maxLen = Number(draft.textMaxLength);
         if (!Number.isFinite(maxLen) || maxLen < 20 || maxLen > 200) {
@@ -7096,6 +7611,9 @@ export function openSettingsModal(input: {
       if (kind === "array") {
         return normalizeNonNumericArrayItems(draft.defaultValue, textMaxLength);
       }
+      if (kind === "date_time") {
+        return normalizeDateTimeValue(draft.defaultValue);
+      }
       return normalizeNonNumericTextValue(draft.defaultValue, textMaxLength);
     })();
     return {
@@ -7112,6 +7630,9 @@ export function openSettingsModal(input: {
       booleanTrueLabel: kind === "boolean" ? trueLabel : undefined,
       booleanFalseLabel: kind === "boolean" ? falseLabel : undefined,
       textMaxLength: kind === "text_short" || kind === "array" ? textMaxLength : undefined,
+      dateTimeMode: kind === "date_time"
+        ? (draft.dateTimeMode === "structured" ? "structured" : "timestamp")
+        : undefined,
       track,
       trackCharacters: resolvedTrackCharacters,
       trackUser: resolvedTrackUser,
@@ -7172,7 +7693,8 @@ export function openSettingsModal(input: {
     const globalScope = Boolean(candidate.globalScope);
     const trackCharacters = globalScope ? true : Boolean(candidate.trackCharacters ?? candidate.track);
     const trackUser = globalScope ? true : Boolean(candidate.trackUser ?? candidate.track);
-    const track = trackCharacters || trackUser;
+    const explicitTrack = typeof candidate.track === "boolean" ? candidate.track : null;
+    const track = explicitTrack == null ? (trackCharacters || trackUser) : explicitTrack;
     const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(candidate.textMaxLength) || 120)));
     const enumOptions = kind === "enum_single"
       ? normalizeCustomEnumOptions(candidate.enumOptions).slice(0, 12)
@@ -7207,6 +7729,7 @@ export function openSettingsModal(input: {
       showInGraph: kind === "numeric" ? Boolean(candidate.showInGraph ?? track) : false,
       color,
       promptOverride: promptOverride || undefined,
+      dateTimeMode: undefined,
     };
 
     if (kind === "numeric") {
@@ -7248,6 +7771,17 @@ export function openSettingsModal(input: {
     if (kind === "array") {
       base.defaultValue = normalizeNonNumericArrayItems(candidate.defaultValue, textMaxLength);
       base.textMaxLength = textMaxLength;
+      base.maxDeltaPerTurn = undefined;
+      base.enumOptions = undefined;
+      base.booleanTrueLabel = undefined;
+      base.booleanFalseLabel = undefined;
+      return { stat: base, warning };
+    }
+
+    if (kind === "date_time") {
+      base.defaultValue = normalizeDateTimeValue(candidate.defaultValue);
+      base.dateTimeMode = candidate.dateTimeMode === "structured" ? "structured" : "timestamp";
+      base.textMaxLength = undefined;
       base.maxDeltaPerTurn = undefined;
       base.enumOptions = undefined;
       base.booleanTrueLabel = undefined;
@@ -7302,21 +7836,32 @@ export function openSettingsModal(input: {
     return { stats: imported, warnings, error: null };
   };
 
-  const applyImportedCustomStats = (parsed: { stats: CustomStatDefinition[]; warnings: string[] }): { added: number; replaced: number } => {
+  const applyImportedCustomStats = (
+    parsed: { stats: CustomStatDefinition[]; warnings: string[] },
+    mode: "update_existing" | "skip_conflicts" = "update_existing",
+  ): { added: number; replaced: number; skipped: number } => {
     const mergedById = new Map(customStatsState.map(stat => [stat.id, cloneCustomStatDefinition(stat)]));
     let replaced = 0;
     let added = 0;
+    let skipped = 0;
     for (const stat of parsed.stats) {
       const id = String(stat.id ?? "").trim().toLowerCase();
       if (!id) continue;
-      if (mergedById.has(id)) replaced += 1;
-      else added += 1;
+      if (mergedById.has(id)) {
+        if (mode === "skip_conflicts") {
+          skipped += 1;
+          continue;
+        }
+        replaced += 1;
+      } else {
+        added += 1;
+      }
       mergedById.set(id, cloneCustomStatDefinition(stat));
     }
     customStatsState = Array.from(mergedById.values()).slice(0, MAX_CUSTOM_STATS);
     renderCustomStatsList();
     persistLive();
-    return { added, replaced };
+    return { added, replaced, skipped };
   };
 
   const copyToClipboard = async (text: string): Promise<boolean> => {
@@ -7327,6 +7872,45 @@ export function openSettingsModal(input: {
     } catch {
       return false;
     }
+  };
+
+  const openClipboardFallbackWizard = (title: string, text: string): void => {
+    closeCustomWizard();
+    const backdropNode = document.createElement("div");
+    backdropNode.className = "bst-custom-wizard-backdrop";
+    const wizard = document.createElement("div");
+    wizard.className = "bst-custom-wizard";
+    wizard.innerHTML = `
+      <div class="bst-custom-wizard-head">
+        <div>
+          <div class="bst-custom-wizard-title">${escapeHtml(title)}</div>
+          <div class="bst-custom-wizard-step">Clipboard unavailable. Copy manually from the box below.</div>
+        </div>
+        <button class="bst-btn bst-btn-soft" data-action="custom-close">Close</button>
+      </div>
+      <div class="bst-custom-import-box">
+        <textarea class="bst-custom-import-textarea" data-bst-manual-copy readonly></textarea>
+      </div>
+      <div class="bst-custom-wizard-actions">
+        <button type="button" class="bst-btn" data-action="custom-close">Close</button>
+      </div>
+    `;
+
+    const close = (): void => {
+      backdropNode.remove();
+      wizard.remove();
+    };
+    wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
+    backdropNode.addEventListener("click", close);
+    wizard.addEventListener("click", event => event.stopPropagation());
+    const textarea = wizard.querySelector("[data-bst-manual-copy]") as HTMLTextAreaElement | null;
+    if (textarea) {
+      textarea.value = text;
+      textarea.focus();
+      textarea.select();
+    }
+    document.body.appendChild(backdropNode);
+    document.body.appendChild(wizard);
   };
 
   const openCustomImportWizard = (): void => {
@@ -7374,18 +7958,86 @@ export function openSettingsModal(input: {
         setImportStatus(parsed.error, "error");
         return;
       }
-      if (!apply) {
-        const warningSuffix = parsed.warnings.length
-          ? ` Warnings: ${parsed.warnings.slice(0, 2).join(" ")}${parsed.warnings.length > 2 ? " ..." : ""}`
-          : "";
-        setImportStatus(`Validation passed for ${parsed.stats.length} stat(s).${warningSuffix}`, parsed.warnings.length ? "info" : "success");
-        return;
-      }
-      const { added, replaced } = applyImportedCustomStats(parsed);
+      const existing = new Set(customStatsState.map(stat => String(stat.id ?? "").trim().toLowerCase()));
+      const conflicts = parsed.stats
+        .map(stat => String(stat.id ?? "").trim().toLowerCase())
+        .filter(id => id && existing.has(id));
       const warningSuffix = parsed.warnings.length
         ? ` Warnings: ${parsed.warnings.slice(0, 2).join(" ")}${parsed.warnings.length > 2 ? " ..." : ""}`
         : "";
-      setCustomStatsStatus(`Imported ${parsed.stats.length} stat(s): +${added}, replaced ${replaced}.${warningSuffix}`, parsed.warnings.length ? "info" : "success");
+      if (!apply) {
+        const conflictSuffix = conflicts.length
+          ? ` Conflicts: ${conflicts.length} (will require confirmation on import).`
+          : "";
+        setImportStatus(`Validation passed for ${parsed.stats.length} stat(s).${conflictSuffix}${warningSuffix}`, parsed.warnings.length || conflicts.length ? "info" : "success");
+        return;
+      }
+      if (conflicts.length > 0) {
+        const setImportWizardBlocked = (blocked: boolean): void => {
+          if (blocked) {
+            wizard.classList.add("bst-custom-wizard-muted");
+            wizard.setAttribute("aria-hidden", "true");
+          } else {
+            wizard.classList.remove("bst-custom-wizard-muted");
+            wizard.removeAttribute("aria-hidden");
+          }
+        };
+        const preview = conflicts.slice(0, 5);
+        const conflictBackdrop = document.createElement("div");
+        conflictBackdrop.className = "bst-custom-wizard-backdrop bst-custom-wizard-backdrop-top";
+        const conflictWizard = document.createElement("div");
+        conflictWizard.className = "bst-custom-wizard bst-custom-wizard-top";
+        conflictWizard.innerHTML = `
+          <div class="bst-custom-wizard-head">
+            <div>
+              <div class="bst-custom-wizard-title">Import Conflict Warning</div>
+              <div class="bst-custom-wizard-step">${conflicts.length} existing stat ID conflict(s)</div>
+            </div>
+          </div>
+          <div class="bst-custom-wizard-panel is-active">
+            <div class="bst-help-line">
+              Conflicting IDs: <code>${escapeHtml(preview.join(", "))}${conflicts.length > preview.length ? ", ..." : ""}</code>
+            </div>
+            <div class="bst-help-line">
+              Choose whether to update existing stats with imported definitions or skip conflicting items.
+            </div>
+          </div>
+          <div class="bst-custom-wizard-actions">
+            <button type="button" class="bst-btn" data-action="import-conflict-cancel">Cancel</button>
+            <button type="button" class="bst-btn bst-btn-soft" data-action="import-conflict-skip">Skip conflicts</button>
+            <button type="button" class="bst-btn bst-btn-soft" data-action="import-conflict-update">Update existing</button>
+          </div>
+        `;
+        const closeConflict = (): void => {
+          setImportWizardBlocked(false);
+          conflictBackdrop.remove();
+          conflictWizard.remove();
+        };
+        setImportWizardBlocked(true);
+        conflictWizard.querySelector('[data-action="import-conflict-cancel"]')?.addEventListener("click", () => {
+          closeConflict();
+          setImportStatus("Import cancelled due to conflicts.", "info");
+        });
+        conflictWizard.querySelector('[data-action="import-conflict-skip"]')?.addEventListener("click", () => {
+          const { added, replaced, skipped } = applyImportedCustomStats(parsed, "skip_conflicts");
+          setCustomStatsStatus(`Imported ${parsed.stats.length} stat(s): +${added}, updated ${replaced}, skipped ${skipped}.${warningSuffix}`, parsed.warnings.length ? "info" : "success");
+          closeConflict();
+          close();
+        });
+        conflictWizard.querySelector('[data-action="import-conflict-update"]')?.addEventListener("click", () => {
+          const { added, replaced, skipped } = applyImportedCustomStats(parsed, "update_existing");
+          setCustomStatsStatus(`Imported ${parsed.stats.length} stat(s): +${added}, updated ${replaced}, skipped ${skipped}.${warningSuffix}`, parsed.warnings.length ? "info" : "success");
+          closeConflict();
+          close();
+        });
+        conflictBackdrop.addEventListener("click", closeConflict);
+        conflictWizard.addEventListener("click", event => event.stopPropagation());
+        document.body.appendChild(conflictBackdrop);
+        document.body.appendChild(conflictWizard);
+        return;
+      }
+      const { added, replaced, skipped } = applyImportedCustomStats(parsed, "update_existing");
+      setCustomStatsStatus(`Imported ${parsed.stats.length} stat(s): +${added}, updated ${replaced}, skipped ${skipped}.${warningSuffix}`, parsed.warnings.length ? "info" : "success");
       close();
     };
 
@@ -7422,7 +8074,7 @@ export function openSettingsModal(input: {
       const trackUser = Boolean(stat.trackUser ?? stat.track);
       const globalScope = Boolean(stat.globalScope);
       const flags = [
-        trackCharacters || trackUser ? "enabled" : "disabled",
+        stat.track ? "enabled" : "disabled",
         `char:${trackCharacters ? "on" : "off"}`,
         `user:${trackUser ? "on" : "off"}`,
         kind,
@@ -7450,9 +8102,14 @@ export function openSettingsModal(input: {
           const suffix = items.length > 2 ? ` +${items.length - 2} more` : "";
           return `Default: ${preview}${suffix} | Items: ${items.length}/20 | Item max: ${limit} | Graph: disabled`;
         }
+        if (kind === "date_time") {
+          const normalized = normalizeDateTimeValue(stat.defaultValue);
+          return `Default: ${normalized || "(empty)"} | Format: YYYY-MM-DD HH:mm | Graph: disabled`;
+        }
         const limit = Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120)));
         return `Default: ${String(stat.defaultValue ?? "").trim() || "(empty)"} | Max length: ${limit} | Graph: disabled`;
       })();
+      const enabled = Boolean(stat.track);
       return `
         <div class="bst-custom-stat-row" data-bst-custom-id="${escapeHtml(stat.id)}">
           <div class="bst-custom-stat-main">
@@ -7469,6 +8126,10 @@ export function openSettingsModal(input: {
             </div>
           </div>
           <div class="bst-custom-stat-actions">
+            <button type="button" class="bst-custom-stat-toggle ${enabled ? "is-on" : "is-off"}" data-action="custom-toggle-enabled" data-custom-id="${escapeHtml(stat.id)}" aria-pressed="${enabled ? "true" : "false"}" title="${enabled ? "Disable this stat quickly" : "Enable this stat quickly"}">
+              <span class="bst-custom-stat-toggle-pill" aria-hidden="true"></span>
+              <span class="bst-custom-stat-toggle-label">${enabled ? "Enabled" : "Disabled"}</span>
+            </button>
             <button type="button" class="bst-btn bst-btn-soft" data-action="custom-edit" data-custom-id="${escapeHtml(stat.id)}">Edit</button>
             <button type="button" class="bst-btn bst-btn-soft" data-action="custom-duplicate" data-custom-id="${escapeHtml(stat.id)}">Clone</button>
             <button type="button" class="bst-btn bst-btn-soft" data-action="custom-export-json" data-custom-id="${escapeHtml(stat.id)}">Export JSON</button>
@@ -7485,6 +8146,24 @@ export function openSettingsModal(input: {
       return kind !== "numeric" && Boolean(stat.globalScope) && Boolean(stat.showOnCard);
     });
 
+  const getCharacterOrderEligibleStats = (): Array<{ id: string; label: string; source: "built_in" | "custom" }> => {
+    const numeric = getNumericStatDefinitions(input.settings)
+      .filter(def => def.showOnCard && def.trackCharacters && !def.globalScope)
+      .map(def => ({ id: String(def.key).trim().toLowerCase(), label: def.label, source: "built_in" as const }));
+    const custom = customStatsState
+      .filter(stat => {
+        const kind = normalizeCustomStatKind(stat.kind);
+        return kind !== "numeric" && Boolean(stat.showOnCard) && Boolean(stat.trackCharacters) && !Boolean(stat.globalScope);
+      })
+      .map(stat => ({
+        id: String(stat.id ?? "").trim().toLowerCase(),
+        label: String(stat.label ?? "").trim() || String(stat.id ?? "").trim(),
+        source: "custom" as const,
+      }))
+      .filter(stat => stat.id.length > 0);
+    return [...numeric, ...custom];
+  };
+
   const syncSceneCardStatOrderState = (): void => {
     const eligibleIds = getSceneOrderEligibleStats().map(stat => String(stat.id ?? "").trim().toLowerCase());
     const eligibleSet = new Set(eligibleIds);
@@ -7500,6 +8179,16 @@ export function openSettingsModal(input: {
       }
     }
     sceneCardStatDisplayState = nextDisplay;
+  };
+
+  const syncCharacterCardStatOrderState = (): void => {
+    const eligibleIds = getCharacterOrderEligibleStats().map(stat => stat.id);
+    const eligibleSet = new Set(eligibleIds);
+    const next = characterCardStatOrderState.filter(id => eligibleSet.has(id));
+    for (const id of eligibleIds) {
+      if (!next.includes(id)) next.push(id);
+    }
+    characterCardStatOrderState = next;
   };
 
   const renderSceneCardOrderList = (): void => {
@@ -7533,6 +8222,36 @@ export function openSettingsModal(input: {
     orderListNode.innerHTML = rows;
   };
 
+  const renderCharacterCardOrderList = (): void => {
+    const orderListNode = modal.querySelector('[data-bst-row="characterCardOrderList"]') as HTMLElement | null;
+    if (!orderListNode) return;
+    syncCharacterCardStatOrderState();
+    const eligible = getCharacterOrderEligibleStats();
+    if (!eligible.length) {
+      orderListNode.innerHTML = `<div class="bst-scene-order-empty">No character-card stats available for ordering.</div>`;
+      return;
+    }
+    const byId = new Map(eligible.map(stat => [stat.id, stat]));
+    const orderedIds = characterCardStatOrderState.filter(id => byId.has(id));
+    const rows = orderedIds.map((id, index) => {
+      const stat = byId.get(id);
+      if (!stat) return "";
+      return `
+        <div class="bst-scene-order-row" data-bst-char-order-id="${escapeHtml(id)}">
+          <div class="bst-scene-order-meta">
+            <span class="bst-scene-order-name" title="${escapeHtml(stat.label)}">${escapeHtml(stat.label)}</span>
+            <span class="bst-scene-order-id">${escapeHtml(id)}${stat.source === "built_in" ? " · built-in" : ""}</span>
+          </div>
+          <div class="bst-scene-order-actions">
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="char-order-up" data-char-order-id="${escapeHtml(id)}" ${index === 0 ? "disabled" : ""} title="Move up" aria-label="Move up"><span class="fa-solid fa-arrow-up" aria-hidden="true"></span></button>
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="char-order-down" data-char-order-id="${escapeHtml(id)}" ${index === orderedIds.length - 1 ? "disabled" : ""} title="Move down" aria-label="Move down"><span class="fa-solid fa-arrow-down" aria-hidden="true"></span></button>
+          </div>
+        </div>
+      `;
+    }).join("");
+    orderListNode.innerHTML = rows;
+  };
+
   const openSceneStatDisplayEditor = (statId: string): void => {
     const targetId = String(statId ?? "").trim().toLowerCase();
     if (!targetId) return;
@@ -7548,7 +8267,23 @@ export function openSettingsModal(input: {
       valueStyle: "auto" as const,
       textMaxLength: null,
       arrayCollapsedLimit: null,
+      dateTimeShowWeekday: true,
+      dateTimeShowDate: true,
+      dateTimeShowTime: true,
+      dateTimeShowPhase: true,
+      dateTimeShowPartLabels: false,
+      dateTimeLabelWeekday: "Day",
+      dateTimeLabelDate: "Date",
+      dateTimeLabelTime: "Time",
+      dateTimeLabelPhase: "Phase",
+      dateTimeDateFormat: "iso" as const,
+      dateTimePartOrder: ["weekday", "date", "time", "phase"] as Array<"weekday" | "date" | "time" | "phase">,
     };
+    const isDateTime = normalizeCustomStatKind(stat.kind) === "date_time";
+    const isStructuredDateTime = isDateTime && stat.dateTimeMode === "structured";
+    let dateTimePartOrderDraft = normalizeDateTimePartOrder(
+      (current.dateTimePartOrder ?? ["weekday", "date", "time", "phase"]).map(item => String(item ?? "")),
+    );
     const backdropNode = document.createElement("div");
     backdropNode.className = "bst-custom-wizard-backdrop";
     const wizard = document.createElement("div");
@@ -7606,6 +8341,45 @@ export function openSettingsModal(input: {
               <input type="number" min="1" max="20" data-scene-opt="arrayCollapsedLimit" value="${current.arrayCollapsedLimit == null ? "" : String(current.arrayCollapsedLimit)}" placeholder="Use Scene Card default">
             </label>
           </div>
+          <div class="bst-scene-stat-editor-group" data-scene-opt-row="dateTimeFormat"${isDateTime ? "" : " style=\"display:none;\""}>
+            <div class="bst-scene-stat-editor-group-title">Date/Time Format</div>
+            <label>Date Format
+              <select data-scene-opt="dateTimeDateFormat">
+                <option value="iso"${(current.dateTimeDateFormat ?? "iso") === "iso" ? " selected" : ""}>YYYY-MM-DD</option>
+                <option value="dmy"${current.dateTimeDateFormat === "dmy" ? " selected" : ""}>DD-MM-YYYY</option>
+                <option value="mdy"${current.dateTimeDateFormat === "mdy" ? " selected" : ""}>MM-DD-YYYY</option>
+                <option value="d_mmm_yyyy"${current.dateTimeDateFormat === "d_mmm_yyyy" ? " selected" : ""}>DD MMM YYYY</option>
+                <option value="mmmm_d_yyyy"${current.dateTimeDateFormat === "mmmm_d_yyyy" ? " selected" : ""}>MMMM D, YYYY</option>
+                <option value="mmmm_do_yyyy"${current.dateTimeDateFormat === "mmmm_do_yyyy" ? " selected" : ""}>MMMM Do, YYYY</option>
+              </select>
+            </label>
+          </div>
+          <div class="bst-scene-stat-editor-group" data-scene-opt-row="dateTimeStructured"${isStructuredDateTime ? "" : " style=\"display:none;\""}>
+            <div class="bst-scene-stat-editor-group-title">Structured Date/Time Parts</div>
+            <div class="bst-check-grid">
+              <label class="bst-check"><input type="checkbox" data-scene-opt="dateTimeShowWeekday" ${current.dateTimeShowWeekday !== false ? "checked" : ""}>Show weekday</label>
+              <label class="bst-check"><input type="checkbox" data-scene-opt="dateTimeShowDate" ${current.dateTimeShowDate !== false ? "checked" : ""}>Show date</label>
+              <label class="bst-check"><input type="checkbox" data-scene-opt="dateTimeShowTime" ${current.dateTimeShowTime !== false ? "checked" : ""}>Show time</label>
+              <label class="bst-check"><input type="checkbox" data-scene-opt="dateTimeShowPhase" ${current.dateTimeShowPhase !== false ? "checked" : ""}>Show phase</label>
+              <label class="bst-check"><input type="checkbox" data-scene-opt="dateTimeShowPartLabels" ${current.dateTimeShowPartLabels ? "checked" : ""}>Show part labels</label>
+            </div>
+            <div class="bst-settings-grid">
+              <label>Weekday Label
+                <input type="text" maxlength="20" data-scene-opt="dateTimeLabelWeekday" value="${escapeHtml(current.dateTimeLabelWeekday ?? "Day")}" placeholder="Day">
+              </label>
+              <label>Date Label
+                <input type="text" maxlength="20" data-scene-opt="dateTimeLabelDate" value="${escapeHtml(current.dateTimeLabelDate ?? "Date")}" placeholder="Date">
+              </label>
+              <label>Time Label
+                <input type="text" maxlength="20" data-scene-opt="dateTimeLabelTime" value="${escapeHtml(current.dateTimeLabelTime ?? "Time")}" placeholder="Time">
+              </label>
+              <label>Phase Label
+                <input type="text" maxlength="20" data-scene-opt="dateTimeLabelPhase" value="${escapeHtml(current.dateTimeLabelPhase ?? "Phase")}" placeholder="Phase">
+              </label>
+            </div>
+            <div class="bst-scene-stat-editor-group-title">Part Order</div>
+            <div data-scene-opt="dateTimePartOrderRows"></div>
+          </div>
         </div>
       </div>
       <div class="bst-custom-wizard-actions">
@@ -7632,6 +8406,23 @@ export function openSettingsModal(input: {
     };
     syncColorPicker();
     updateArrayRow();
+    const renderDateTimePartOrderRows = (): void => {
+      const rowsNode = wizard.querySelector('[data-scene-opt="dateTimePartOrderRows"]') as HTMLElement | null;
+      if (!rowsNode) return;
+      rowsNode.innerHTML = dateTimePartOrderDraft.map((part, index) => `
+        <div class="bst-scene-order-row" data-scene-dt-part-row="${index}">
+          <div class="bst-scene-order-meta">
+            <span class="bst-scene-order-name">${escapeHtml(part)}</span>
+            <span class="bst-scene-order-id">Position ${index + 1}</span>
+          </div>
+          <div class="bst-scene-order-actions">
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-dt-part-up" data-scene-dt-part-index="${index}" ${index === 0 ? "disabled" : ""} title="Move up" aria-label="Move up"><span class="fa-solid fa-arrow-up" aria-hidden="true"></span></button>
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-dt-part-down" data-scene-dt-part-index="${index}" ${index === dateTimePartOrderDraft.length - 1 ? "disabled" : ""} title="Move down" aria-label="Move down"><span class="fa-solid fa-arrow-down" aria-hidden="true"></span></button>
+          </div>
+        </div>
+      `).join("");
+    };
+    renderDateTimePartOrderRows();
     const textColor = wizard.querySelector('[data-scene-opt="colorOverride"]') as HTMLInputElement | null;
     const colorColor = wizard.querySelector('[data-scene-opt-color="colorOverride"]') as HTMLInputElement | null;
     textColor?.addEventListener("input", syncColorPicker);
@@ -7639,6 +8430,22 @@ export function openSettingsModal(input: {
       if (textColor && colorColor) textColor.value = colorColor.value;
     });
     wizard.querySelector('[data-scene-opt="layoutOverride"]')?.addEventListener("change", updateArrayRow);
+    wizard.addEventListener("click", event => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest("button[data-action][data-scene-dt-part-index]") as HTMLButtonElement | null;
+      if (!button) return;
+      const index = Number(button.getAttribute("data-scene-dt-part-index"));
+      if (!Number.isInteger(index) || index < 0 || index >= dateTimePartOrderDraft.length) return;
+      if (button.dataset.action === "scene-dt-part-up" && index > 0) {
+        [dateTimePartOrderDraft[index - 1], dateTimePartOrderDraft[index]] = [dateTimePartOrderDraft[index], dateTimePartOrderDraft[index - 1]];
+        renderDateTimePartOrderRows();
+        return;
+      }
+      if (button.dataset.action === "scene-dt-part-down" && index < dateTimePartOrderDraft.length - 1) {
+        [dateTimePartOrderDraft[index + 1], dateTimePartOrderDraft[index]] = [dateTimePartOrderDraft[index], dateTimePartOrderDraft[index + 1]];
+        renderDateTimePartOrderRows();
+      }
+    });
     wizard.querySelector('[data-action="scene-stat-close"]')?.addEventListener("click", close);
     wizard.querySelector('[data-action="scene-stat-cancel"]')?.addEventListener("click", close);
     wizard.querySelector('[data-action="scene-stat-save"]')?.addEventListener("click", () => {
@@ -7651,6 +8458,16 @@ export function openSettingsModal(input: {
       const valueStyleNode = wizard.querySelector('[data-scene-opt="valueStyle"]') as HTMLSelectElement | null;
       const textMaxLengthNode = wizard.querySelector('[data-scene-opt="textMaxLength"]') as HTMLInputElement | null;
       const arrayLimitNode = wizard.querySelector('[data-scene-opt="arrayCollapsedLimit"]') as HTMLInputElement | null;
+      const dateTimeShowWeekdayNode = wizard.querySelector('[data-scene-opt="dateTimeShowWeekday"]') as HTMLInputElement | null;
+      const dateTimeShowDateNode = wizard.querySelector('[data-scene-opt="dateTimeShowDate"]') as HTMLInputElement | null;
+      const dateTimeShowTimeNode = wizard.querySelector('[data-scene-opt="dateTimeShowTime"]') as HTMLInputElement | null;
+      const dateTimeShowPhaseNode = wizard.querySelector('[data-scene-opt="dateTimeShowPhase"]') as HTMLInputElement | null;
+      const dateTimeShowPartLabelsNode = wizard.querySelector('[data-scene-opt="dateTimeShowPartLabels"]') as HTMLInputElement | null;
+      const dateTimeLabelWeekdayNode = wizard.querySelector('[data-scene-opt="dateTimeLabelWeekday"]') as HTMLInputElement | null;
+      const dateTimeLabelDateNode = wizard.querySelector('[data-scene-opt="dateTimeLabelDate"]') as HTMLInputElement | null;
+      const dateTimeLabelTimeNode = wizard.querySelector('[data-scene-opt="dateTimeLabelTime"]') as HTMLInputElement | null;
+      const dateTimeLabelPhaseNode = wizard.querySelector('[data-scene-opt="dateTimeLabelPhase"]') as HTMLInputElement | null;
+      const dateTimeDateFormatNode = wizard.querySelector('[data-scene-opt="dateTimeDateFormat"]') as HTMLSelectElement | null;
       const layoutOverride = layoutNode?.value === "chips" || layoutNode?.value === "rows" ? layoutNode.value : "auto";
       const valueStyle = valueStyleNode?.value === "chip" || valueStyleNode?.value === "plain" ? valueStyleNode.value : "auto";
       const parsedTextMaxRaw = Number(textMaxLengthNode?.value ?? "");
@@ -7661,6 +8478,7 @@ export function openSettingsModal(input: {
       const arrayCollapsedLimit = Number.isFinite(parsedLimitRaw) && !Number.isNaN(parsedLimitRaw)
         ? Math.max(1, Math.min(20, Math.round(parsedLimitRaw)))
         : null;
+      const dateTimePartOrder = normalizeDateTimePartOrder(dateTimePartOrderDraft);
       sceneCardStatDisplayState[targetId] = {
         visible: Boolean(visibleNode?.checked ?? true),
         showLabel: Boolean(showLabelNode?.checked ?? true),
@@ -7671,8 +8489,27 @@ export function openSettingsModal(input: {
         valueStyle: valueStyle as "auto" | "chip" | "plain",
         textMaxLength,
         arrayCollapsedLimit,
+        dateTimeShowWeekday: Boolean(dateTimeShowWeekdayNode?.checked ?? true),
+        dateTimeShowDate: Boolean(dateTimeShowDateNode?.checked ?? true),
+        dateTimeShowTime: Boolean(dateTimeShowTimeNode?.checked ?? true),
+        dateTimeShowPhase: Boolean(dateTimeShowPhaseNode?.checked ?? true),
+        dateTimeShowPartLabels: Boolean(dateTimeShowPartLabelsNode?.checked ?? false),
+        dateTimeLabelWeekday: String(dateTimeLabelWeekdayNode?.value ?? "Day").trim().slice(0, 20) || "Day",
+        dateTimeLabelDate: String(dateTimeLabelDateNode?.value ?? "Date").trim().slice(0, 20) || "Date",
+        dateTimeLabelTime: String(dateTimeLabelTimeNode?.value ?? "Time").trim().slice(0, 20) || "Time",
+        dateTimeLabelPhase: String(dateTimeLabelPhaseNode?.value ?? "Phase").trim().slice(0, 20) || "Phase",
+        dateTimeDateFormat:
+          dateTimeDateFormatNode?.value === "dmy" ||
+          dateTimeDateFormatNode?.value === "mdy" ||
+          dateTimeDateFormatNode?.value === "d_mmm_yyyy" ||
+          dateTimeDateFormatNode?.value === "mmmm_d_yyyy" ||
+          dateTimeDateFormatNode?.value === "mmmm_do_yyyy"
+            ? dateTimeDateFormatNode.value
+            : "iso",
+        dateTimePartOrder,
       };
       renderSceneCardOrderList();
+      renderCharacterCardOrderList();
       persistLive();
       close();
     });
@@ -7905,6 +8742,30 @@ export function openSettingsModal(input: {
     if (mode === "add" && !draft.id) {
       draft.id = suggestUniqueCustomStatId(fallbackBase, existingIds);
     }
+    const sceneDisplaySeed = sceneCardStatDisplayState[String(source?.id ?? draft.id ?? "").trim().toLowerCase()] ?? {};
+    const dateTimeShowWeekdaySeed = sceneDisplaySeed.dateTimeShowWeekday !== false;
+    const dateTimeShowDateSeed = sceneDisplaySeed.dateTimeShowDate !== false;
+    const dateTimeShowTimeSeed = sceneDisplaySeed.dateTimeShowTime !== false;
+    const dateTimeShowPhaseSeed = sceneDisplaySeed.dateTimeShowPhase !== false;
+    const dateTimeShowPartLabelsSeed = Boolean(sceneDisplaySeed.dateTimeShowPartLabels ?? false);
+    const dateTimeLabelWeekdaySeed = String(sceneDisplaySeed.dateTimeLabelWeekday ?? "Day").trim() || "Day";
+    const dateTimeLabelDateSeed = String(sceneDisplaySeed.dateTimeLabelDate ?? "Date").trim() || "Date";
+    const dateTimeLabelTimeSeed = String(sceneDisplaySeed.dateTimeLabelTime ?? "Time").trim() || "Time";
+    const dateTimeLabelPhaseSeed = String(sceneDisplaySeed.dateTimeLabelPhase ?? "Phase").trim() || "Phase";
+    const dateTimeDateFormatSeed: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy" =
+      sceneDisplaySeed.dateTimeDateFormat === "dmy" ||
+      sceneDisplaySeed.dateTimeDateFormat === "mdy" ||
+      sceneDisplaySeed.dateTimeDateFormat === "d_mmm_yyyy" ||
+      sceneDisplaySeed.dateTimeDateFormat === "mmmm_d_yyyy" ||
+      sceneDisplaySeed.dateTimeDateFormat === "mmmm_do_yyyy"
+        ? sceneDisplaySeed.dateTimeDateFormat
+        : "iso";
+    const dateTimePartOrderSeed = normalizeDateTimePartOrder(
+      Array.isArray(sceneDisplaySeed.dateTimePartOrder)
+        ? sceneDisplaySeed.dateTimePartOrder.map(item => String(item ?? ""))
+        : ["weekday", "date", "time", "phase"],
+    );
+    let dateTimePartOrderDraft = [...dateTimePartOrderSeed];
 
     let idTouched = Boolean(draft.id && mode !== "add");
     let step = 1;
@@ -7938,6 +8799,7 @@ export function openSettingsModal(input: {
               <option value="boolean" ${draft.kind === "boolean" ? "selected" : ""}>Boolean (true/false)</option>
               <option value="text_short" ${draft.kind === "text_short" ? "selected" : ""}>Short text</option>
               <option value="array" ${draft.kind === "array" ? "selected" : ""}>Array (list)</option>
+              <option value="date_time" ${draft.kind === "date_time" ? "selected" : ""}>Date/Time</option>
             </select>
           </label>
         </div>
@@ -8014,6 +8876,55 @@ export function openSettingsModal(input: {
           <label>Item Max Length (20-200)
             <input type="number" min="20" max="200" data-bst-custom-field="textMaxLength" value="${escapeHtml(draft.textMaxLength)}">
           </label>
+        </div>
+        <div class="bst-custom-wizard-grid bst-custom-wizard-grid-single" data-bst-kind-panel="date_time" style="display:none;">
+          <label>Default Date/Time
+            <input type="datetime-local" data-bst-custom-field="dateTimeDefaultValue" value="${escapeHtml(draft.kind === "date_time" ? toDateTimeInputValue(draft.defaultValue) : "")}">
+          </label>
+          <label>Date/Time Mode
+            <select data-bst-custom-field="dateTimeMode">
+              <option value="timestamp" ${draft.dateTimeMode === "timestamp" ? "selected" : ""}>Timestamp (strict)</option>
+              <option value="structured" ${draft.dateTimeMode === "structured" ? "selected" : ""}>Structured (semantic)</option>
+            </select>
+          </label>
+          <label>Date Format (Scene Card)
+            <select data-bst-custom-field="dateTimeDateFormat">
+              <option value="iso"${dateTimeDateFormatSeed === "iso" ? " selected" : ""}>YYYY-MM-DD</option>
+              <option value="dmy"${dateTimeDateFormatSeed === "dmy" ? " selected" : ""}>DD-MM-YYYY</option>
+              <option value="mdy"${dateTimeDateFormatSeed === "mdy" ? " selected" : ""}>MM-DD-YYYY</option>
+              <option value="d_mmm_yyyy"${dateTimeDateFormatSeed === "d_mmm_yyyy" ? " selected" : ""}>DD MMM YYYY</option>
+              <option value="mmmm_d_yyyy"${dateTimeDateFormatSeed === "mmmm_d_yyyy" ? " selected" : ""}>MMMM D, YYYY</option>
+              <option value="mmmm_do_yyyy"${dateTimeDateFormatSeed === "mmmm_do_yyyy" ? " selected" : ""}>MMMM Do, YYYY</option>
+            </select>
+          </label>
+          <div class="bst-scene-stat-editor-group" data-bst-date-time-structured-options style="display:none;">
+            <div class="bst-scene-stat-editor-group-title">Structured Display (Scene Card)</div>
+            <div class="bst-help-line">Visible only when mode is <code>structured</code>.</div>
+            <div class="bst-check-grid">
+              <label class="bst-check"><input type="checkbox" data-bst-custom-field="dateTimeShowWeekday" ${dateTimeShowWeekdaySeed ? "checked" : ""}>Show weekday</label>
+              <label class="bst-check"><input type="checkbox" data-bst-custom-field="dateTimeShowDate" ${dateTimeShowDateSeed ? "checked" : ""}>Show date</label>
+              <label class="bst-check"><input type="checkbox" data-bst-custom-field="dateTimeShowTime" ${dateTimeShowTimeSeed ? "checked" : ""}>Show time</label>
+              <label class="bst-check"><input type="checkbox" data-bst-custom-field="dateTimeShowPhase" ${dateTimeShowPhaseSeed ? "checked" : ""}>Show phase</label>
+              <label class="bst-check"><input type="checkbox" data-bst-custom-field="dateTimeShowPartLabels" ${dateTimeShowPartLabelsSeed ? "checked" : ""}>Show part labels</label>
+            </div>
+            <div class="bst-settings-grid">
+              <label>Weekday Label
+                <input type="text" maxlength="20" data-bst-custom-field="dateTimeLabelWeekday" value="${escapeHtml(dateTimeLabelWeekdaySeed)}" placeholder="Day">
+              </label>
+              <label>Date Label
+                <input type="text" maxlength="20" data-bst-custom-field="dateTimeLabelDate" value="${escapeHtml(dateTimeLabelDateSeed)}" placeholder="Date">
+              </label>
+              <label>Time Label
+                <input type="text" maxlength="20" data-bst-custom-field="dateTimeLabelTime" value="${escapeHtml(dateTimeLabelTimeSeed)}" placeholder="Time">
+              </label>
+              <label>Phase Label
+                <input type="text" maxlength="20" data-bst-custom-field="dateTimeLabelPhase" value="${escapeHtml(dateTimeLabelPhaseSeed)}" placeholder="Phase">
+              </label>
+            </div>
+            <div class="bst-scene-stat-editor-group-title">Part Order</div>
+            <div data-bst-custom-field="dateTimePartOrderRows"></div>
+          </div>
+          <div class="bst-help-line">Stored format: <code>YYYY-MM-DD HH:mm</code>. Empty means no explicit default.</div>
         </div>
         <div class="bst-help-line" data-bst-kind-help="value">Numeric stats use 0-100 with optional max delta. Non-numeric stats store absolute values and do not use delta.</div>
       </div>
@@ -8201,6 +9112,23 @@ export function openSettingsModal(input: {
       syncEnumEditorToHiddenField();
     };
 
+    const renderDateTimePartOrderEditorRows = (): void => {
+      const rowsNode = wizard.querySelector('[data-bst-custom-field="dateTimePartOrderRows"]') as HTMLElement | null;
+      if (!rowsNode) return;
+      rowsNode.innerHTML = dateTimePartOrderDraft.map((part, index) => `
+        <div class="bst-scene-order-row" data-bst-custom-dt-part-row="${index}">
+          <div class="bst-scene-order-meta">
+            <span class="bst-scene-order-name">${escapeHtml(part)}</span>
+            <span class="bst-scene-order-id">Position ${index + 1}</span>
+          </div>
+          <div class="bst-scene-order-actions">
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="custom-dt-part-up" data-bst-custom-dt-part-index="${index}" ${index === 0 ? "disabled" : ""} title="Move up" aria-label="Move up"><span class="fa-solid fa-arrow-up" aria-hidden="true"></span></button>
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="custom-dt-part-down" data-bst-custom-dt-part-index="${index}" ${index === dateTimePartOrderDraft.length - 1 ? "disabled" : ""} title="Move down" aria-label="Move down"><span class="fa-solid fa-arrow-down" aria-hidden="true"></span></button>
+          </div>
+        </div>
+      `).join("");
+    };
+
     const ensureArrayEditorRowExists = (): void => {
       if (!arrayDefaultsListNode) return;
       if (getArrayEditorItemInputs().length === 0) {
@@ -8229,6 +9157,8 @@ export function openSettingsModal(input: {
       const numericDefaultNode = getField("numericDefaultValue");
       const enumDefaultNode = getField("enumDefaultValue");
       const textDefaultNode = getField("textDefaultValue");
+      const dateTimeDefaultNode = getField("dateTimeDefaultValue");
+      const dateTimeModeNode = getField("dateTimeMode") as HTMLSelectElement | null;
       const arrayDefaultNode = getField("arrayDefaultValue");
       const defaultBooleanNode = getField("defaultBoolean") as HTMLSelectElement | null;
       const maxDeltaNode = getField("maxDeltaPerTurn");
@@ -8254,6 +9184,8 @@ export function openSettingsModal(input: {
         draft.defaultValue = String(enumDefaultNode?.value ?? "");
       } else if (draft.kind === "array") {
         draft.defaultValue = syncArrayEditorToHiddenField() || String(arrayDefaultNode?.value ?? "");
+      } else if (draft.kind === "date_time") {
+        draft.defaultValue = normalizeDateTimeValue(String(dateTimeDefaultNode?.value ?? ""));
       } else if (draft.kind === "text_short") {
         draft.defaultValue = String(textDefaultNode?.value ?? "");
       } else {
@@ -8265,6 +9197,7 @@ export function openSettingsModal(input: {
       draft.booleanTrueLabel = String(trueLabelNode?.value ?? "");
       draft.booleanFalseLabel = String(falseLabelNode?.value ?? "");
       draft.textMaxLength = String(textMaxLengthNode?.value ?? "");
+      draft.dateTimeMode = String(dateTimeModeNode?.value ?? "timestamp").toLowerCase() === "structured" ? "structured" : "timestamp";
       draft.trackCharacters = Boolean(trackCharactersNode?.checked);
       draft.trackUser = Boolean(trackUserNode?.checked);
       draft.globalScope = Boolean(globalScopeNode?.checked);
@@ -8345,6 +9278,10 @@ export function openSettingsModal(input: {
           valueHelpNode.textContent = "Boolean stats store true/false (no delta, no graph).";
         } else if (kind === "array") {
           valueHelpNode.textContent = "Array stats store up to 20 short items and should be updated incrementally (add/remove/edit items).";
+        } else if (kind === "date_time") {
+          valueHelpNode.textContent = draft.dateTimeMode === "structured"
+            ? "Structured mode accepts semantic datetime updates and normalizes to YYYY-MM-DD HH:mm (no delta, no graph)."
+            : "Timestamp mode stores one strict timestamp in YYYY-MM-DD HH:mm format (no delta, no graph).";
         } else {
           valueHelpNode.textContent = "Short text stats store concise single-line state text (no delta, no graph).";
         }
@@ -8374,6 +9311,8 @@ export function openSettingsModal(input: {
           behaviorNode.placeholder = "Optional. Example:\n- {{statId}} true -> behavior follows the enabled state.\n- {{statId}} false -> behavior follows the disabled state.\n- increase cues -> evidence that should switch to true.\n- decrease cues -> evidence that should switch to false.";
         } else if (kind === "array") {
           behaviorNode.placeholder = "Optional. Example:\n- interpret {{statId}} as a live list of short state items.\n- keep replies aligned with current items.\n- add cues -> add a specific item.\n- remove cues -> remove obsolete item.\n- edit cues -> update one existing item, avoid rewriting whole list.";
+        } else if (kind === "date_time") {
+          behaviorNode.placeholder = "Optional. Example:\n- interpret {{statId}} as current scene date/time.\n- keep temporal references aligned with that timestamp.\n- increase cues -> clear time progression in scene.\n- decrease cues -> flashback/rewind or explicit earlier-time cues.";
         } else {
           behaviorNode.placeholder = "Optional. Example:\n- interpret {{statId}} as short scene-state text.\n- keep responses aligned with the current text state.\n- increase cues -> evidence to update the text state.\n- decrease cues -> evidence to simplify or reset the text state.";
         }
@@ -8418,6 +9357,11 @@ export function openSettingsModal(input: {
         privateToOwnerNode.checked = draft.privateToOwner;
         privateToOwnerNode.disabled = draft.globalScope;
         setCheckDisabledVisual(privateToOwnerNode, draft.globalScope);
+      }
+      const structuredDisplayNode = wizard.querySelector('[data-bst-date-time-structured-options]') as HTMLElement | null;
+      if (structuredDisplayNode) {
+        const showStructuredOptions = kind === "date_time" && draft.dateTimeMode === "structured";
+        structuredDisplayNode.style.display = showStructuredOptions ? "block" : "none";
       }
     };
 
@@ -8592,6 +9536,24 @@ export function openSettingsModal(input: {
     });
     wizard.addEventListener("click", event => {
       const target = event.target as HTMLElement | null;
+      const dtPartButton = target?.closest('button[data-action][data-bst-custom-dt-part-index]') as HTMLButtonElement | null;
+      if (dtPartButton) {
+        const index = Number(dtPartButton.getAttribute("data-bst-custom-dt-part-index"));
+        if (Number.isInteger(index) && index >= 0 && index < dateTimePartOrderDraft.length) {
+          if (dtPartButton.dataset.action === "custom-dt-part-up" && index > 0) {
+            [dateTimePartOrderDraft[index - 1], dateTimePartOrderDraft[index]] = [dateTimePartOrderDraft[index], dateTimePartOrderDraft[index - 1]];
+            renderDateTimePartOrderEditorRows();
+          } else if (dtPartButton.dataset.action === "custom-dt-part-down" && index < dateTimePartOrderDraft.length - 1) {
+            [dateTimePartOrderDraft[index + 1], dateTimePartOrderDraft[index]] = [dateTimePartOrderDraft[index], dateTimePartOrderDraft[index + 1]];
+            renderDateTimePartOrderEditorRows();
+          }
+        }
+        syncDraftFromFields();
+        syncKindUi();
+        writeReview();
+        updateDescriptionCounter();
+        return;
+      }
       const arrayRemoveBtn = target?.closest('[data-action="array-default-remove"]') as HTMLButtonElement | null;
       if (arrayRemoveBtn) {
         const row = arrayRemoveBtn.closest(".bst-array-default-row");
@@ -8643,6 +9605,7 @@ export function openSettingsModal(input: {
     syncColorPickerFromText();
     renderArrayEditorFromDraft();
     renderEnumEditorFromDraft();
+    renderDateTimePartOrderEditorRows();
     setGenerateStatus(improveDescriptionStatusNode, "Uses current connection profile.", "idle");
     setGenerateStatus(generateStatusNode, "Uses current connection profile.", "idle");
     setGenerateStatus(generateBehaviorStatusNode, "Uses current connection profile.", "idle");
@@ -8683,6 +9646,7 @@ export function openSettingsModal(input: {
           statLabel: label,
           currentDescription: description,
           statKind,
+          dateTimeMode: draft.dateTimeMode,
           enumOptions,
           textMaxLength,
           booleanTrueLabel: draft.booleanTrueLabel,
@@ -8760,6 +9724,7 @@ export function openSettingsModal(input: {
           statLabel: label,
           statDescription: description,
           statKind,
+          dateTimeMode: draft.dateTimeMode,
           enumOptions,
           textMaxLength,
           booleanTrueLabel: draft.booleanTrueLabel,
@@ -8840,6 +9805,7 @@ export function openSettingsModal(input: {
           statDescription: description,
           currentGuidance: behaviorGuidance,
           statKind,
+          dateTimeMode: draft.dateTimeMode,
           enumOptions,
           textMaxLength,
           booleanTrueLabel: draft.booleanTrueLabel,
@@ -8901,13 +9867,61 @@ export function openSettingsModal(input: {
     saveBtn?.addEventListener("click", () => {
       if (!validateAll()) return;
       const nextDef = toCustomStatDefinition(draft);
+      const dateTimeShowWeekdayNode = getField("dateTimeShowWeekday") as HTMLInputElement | null;
+      const dateTimeShowDateNode = getField("dateTimeShowDate") as HTMLInputElement | null;
+      const dateTimeShowTimeNode = getField("dateTimeShowTime") as HTMLInputElement | null;
+      const dateTimeShowPhaseNode = getField("dateTimeShowPhase") as HTMLInputElement | null;
+      const dateTimeShowPartLabelsNode = getField("dateTimeShowPartLabels") as HTMLInputElement | null;
+      const dateTimeLabelWeekdayNode = getField("dateTimeLabelWeekday") as HTMLInputElement | null;
+      const dateTimeLabelDateNode = getField("dateTimeLabelDate") as HTMLInputElement | null;
+      const dateTimeLabelTimeNode = getField("dateTimeLabelTime") as HTMLInputElement | null;
+      const dateTimeLabelPhaseNode = getField("dateTimeLabelPhase") as HTMLInputElement | null;
+      const dateTimeDateFormatNode = getField("dateTimeDateFormat") as HTMLSelectElement | null;
       if (mode === "edit" && source) {
         customStatsState = customStatsState.map(item => item.id === source.id ? nextDef : item);
       } else {
         customStatsState = [...customStatsState, nextDef];
       }
+      const displayId = String(nextDef.id ?? "").trim().toLowerCase();
+      if (nextDef.kind === "date_time" && nextDef.dateTimeMode === "structured" && displayId) {
+        const dateTimePartOrder = normalizeDateTimePartOrder(dateTimePartOrderDraft);
+        const prev = sceneCardStatDisplayState[displayId] ?? {
+          visible: true,
+          showLabel: true,
+          hideWhenEmpty: true,
+          labelOverride: "",
+          colorOverride: "",
+          layoutOverride: "auto" as const,
+          valueStyle: "auto" as const,
+          textMaxLength: null,
+          arrayCollapsedLimit: null,
+        };
+        sceneCardStatDisplayState[displayId] = {
+          ...prev,
+          dateTimeShowWeekday: Boolean(dateTimeShowWeekdayNode?.checked ?? true),
+          dateTimeShowDate: Boolean(dateTimeShowDateNode?.checked ?? true),
+          dateTimeShowTime: Boolean(dateTimeShowTimeNode?.checked ?? true),
+          dateTimeShowPhase: Boolean(dateTimeShowPhaseNode?.checked ?? true),
+          dateTimeShowPartLabels: Boolean(dateTimeShowPartLabelsNode?.checked ?? false),
+          dateTimeLabelWeekday: String(dateTimeLabelWeekdayNode?.value ?? "Day").trim().slice(0, 20) || "Day",
+          dateTimeLabelDate: String(dateTimeLabelDateNode?.value ?? "Date").trim().slice(0, 20) || "Date",
+          dateTimeLabelTime: String(dateTimeLabelTimeNode?.value ?? "Time").trim().slice(0, 20) || "Time",
+          dateTimeLabelPhase: String(dateTimeLabelPhaseNode?.value ?? "Phase").trim().slice(0, 20) || "Phase",
+          dateTimeDateFormat:
+            dateTimeDateFormatNode?.value === "dmy" ||
+            dateTimeDateFormatNode?.value === "mdy" ||
+            dateTimeDateFormatNode?.value === "d_mmm_yyyy" ||
+            dateTimeDateFormatNode?.value === "mmmm_d_yyyy" ||
+            dateTimeDateFormatNode?.value === "mmmm_do_yyyy"
+              ? dateTimeDateFormatNode.value
+              : "iso",
+          dateTimePartOrder,
+        };
+      }
       customStatsState = customStatsState.slice(0, MAX_CUSTOM_STATS);
       renderCustomStatsList();
+      renderSceneCardOrderList();
+      renderCharacterCardOrderList();
       close();
       persistLive();
     });
@@ -8961,6 +9975,25 @@ export function openSettingsModal(input: {
       openCustomStatWizard("edit", stat);
       return;
     }
+    if (action === "custom-toggle-enabled") {
+      customStatsState = customStatsState.map(item => {
+        if (item.id !== stat.id) return item;
+        const nextEnabled = !Boolean(item.track);
+        const trackCharacters = Boolean(item.trackCharacters ?? item.track);
+        const trackUser = Boolean(item.trackUser ?? item.track);
+        return {
+          ...item,
+          track: nextEnabled,
+          trackCharacters: trackCharacters || trackUser ? trackCharacters : true,
+          trackUser: trackCharacters || trackUser ? trackUser : true,
+        };
+      });
+      renderCustomStatsList();
+      renderSceneCardOrderList();
+      renderCharacterCardOrderList();
+      persistLive();
+      return;
+    }
     if (action === "custom-duplicate") {
       openCustomStatWizard("duplicate", stat);
       return;
@@ -8973,8 +10006,8 @@ export function openSettingsModal(input: {
           setCustomStatsStatus(`Exported "${stat.label}" JSON to clipboard.`, "success");
           return;
         }
-        window.prompt("Clipboard unavailable. Copy exported custom stat JSON:", serialized);
-        setCustomStatsStatus("Clipboard unavailable, JSON shown in prompt for manual copy.", "info");
+        openClipboardFallbackWizard(`Export "${stat.label}" JSON`, serialized);
+        setCustomStatsStatus("Clipboard unavailable, opened manual copy modal.", "info");
       });
       return;
     }
@@ -9000,6 +10033,7 @@ export function openSettingsModal(input: {
       [next[index - 1], next[index]] = [next[index], next[index - 1]];
       sceneCardStatOrderState = next;
       renderSceneCardOrderList();
+      renderCharacterCardOrderList();
       persistLive();
       return;
     }
@@ -9008,11 +10042,38 @@ export function openSettingsModal(input: {
       [next[index], next[index + 1]] = [next[index + 1], next[index]];
       sceneCardStatOrderState = next;
       renderSceneCardOrderList();
+      renderCharacterCardOrderList();
+      persistLive();
+    }
+  });
+  modal.addEventListener("click", event => {
+    const target = event.target as HTMLElement | null;
+    const button = target?.closest("button[data-action][data-char-order-id]") as HTMLButtonElement | null;
+    if (!button) return;
+    const id = String(button.getAttribute("data-char-order-id") ?? "").trim().toLowerCase();
+    if (!id) return;
+    const index = characterCardStatOrderState.indexOf(id);
+    if (index < 0) return;
+    const action = String(button.getAttribute("data-action") ?? "");
+    if (action === "char-order-up" && index > 0) {
+      const next = [...characterCardStatOrderState];
+      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      characterCardStatOrderState = next;
+      renderCharacterCardOrderList();
+      persistLive();
+      return;
+    }
+    if (action === "char-order-down" && index < characterCardStatOrderState.length - 1) {
+      const next = [...characterCardStatOrderState];
+      [next[index], next[index + 1]] = [next[index + 1], next[index]];
+      characterCardStatOrderState = next;
+      renderCharacterCardOrderList();
       persistLive();
     }
   });
   renderCustomStatsList();
   renderSceneCardOrderList();
+  renderCharacterCardOrderList();
 
   const collectSettings = (): BetterSimTrackerSettings => {
     const read = (k: keyof BetterSimTrackerSettings): string =>
@@ -9074,6 +10135,7 @@ export function openSettingsModal(input: {
       injectSummarizationNote: readBool("injectSummarizationNote", input.settings.injectSummarizationNote),
       autoDetectActive: readBool("autoDetectActive", input.settings.autoDetectActive),
       regenerateOnMessageEdit: readBool("regenerateOnMessageEdit", input.settings.regenerateOnMessageEdit),
+      generateOnGreetingMessages: readBool("generateOnGreetingMessages", input.settings.generateOnGreetingMessages),
       activityLookback: readNumber("activityLookback", input.settings.activityLookback, 1, 25),
       showInactive: readBool("showInactive", input.settings.showInactive),
       inactiveLabel: read("inactiveLabel") || input.settings.inactiveLabel,
@@ -9088,6 +10150,7 @@ export function openSettingsModal(input: {
       sceneCardArrayCollapsedLimit: readNumber("sceneCardArrayCollapsedLimit", input.settings.sceneCardArrayCollapsedLimit, 1, 20),
       sceneCardStatOrder: [...sceneCardStatOrderState],
       sceneCardStatDisplay: { ...sceneCardStatDisplayState },
+      characterCardStatOrder: [...characterCardStatOrderState],
       trackAffection: readBool("trackAffection", input.settings.trackAffection),
       trackTrust: readBool("trackTrust", input.settings.trackTrust),
       trackDesire: readBool("trackDesire", input.settings.trackDesire),
@@ -9298,16 +10361,22 @@ export function openSettingsModal(input: {
     sceneCardStatOrderState = Array.isArray(next.sceneCardStatOrder)
       ? next.sceneCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
       : [];
+    characterCardStatOrderState = Array.isArray(next.characterCardStatOrder)
+      ? next.characterCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
+      : [];
     sceneCardStatDisplayState = next.sceneCardStatDisplay && typeof next.sceneCardStatDisplay === "object"
       ? { ...next.sceneCardStatDisplay }
       : {};
     syncSceneCardStatOrderState();
+    syncCharacterCardStatOrderState();
     builtInNumericStatUiState = cloneBuiltInNumericStatUi(next.builtInNumericStatUi);
     next.sceneCardStatOrder = [...sceneCardStatOrderState];
+    next.characterCardStatOrder = [...characterCardStatOrderState];
     input.settings = next;
     input.onSave(next);
     renderCustomStatsList();
     renderSceneCardOrderList();
+    renderCharacterCardOrderList();
     refreshSettingsTextareaCounters();
     updateGlobalStExpressionSummary();
     syncExtractionVisibility();
@@ -9376,6 +10445,7 @@ export function openSettingsModal(input: {
     injectSummarizationNote: "Include the latest Summarize note (prose summary of current tracked stats) in hidden tracker prompt injection guidance only (no chat-message edits).",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",
     regenerateOnMessageEdit: "When enabled, editing an already-tracked message triggers tracker regeneration for that message.",
+    generateOnGreetingMessages: "When disabled, skips tracker extraction for first-message greetings (no prior user message in chat).",
     activityLookback: "Primary recent-speaker window. Characters stay active longer via persistence unless departure cues remove them.",
     trackAffection: "Enable Affection stat extraction and updates.",
     trackTrust: "Enable Trust stat extraction and updates.",

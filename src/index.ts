@@ -54,6 +54,7 @@ import { registerSlashCommands } from "./slashCommands";
 import { initCharacterPanel } from "./characterPanel";
 import { initPersonaPanel } from "./personaPanel";
 import { extractLorebookEntriesFromPayload, readLorebookContext } from "./lorebook";
+import { normalizeDateTimeWithMode } from "./dateTime";
 
 declare const __BST_VERSION__: string;
 
@@ -1944,6 +1945,12 @@ function getConfiguredCharacterDefaults(
           customNonNumericStatDefaults[id] = items;
           continue;
         }
+        if (kind === "date_time") {
+          const normalized = normalizeDateTimeWithMode(value, statDef?.dateTimeMode ?? "timestamp");
+          if (!normalized) continue;
+          customNonNumericStatDefaults[id] = normalized;
+          continue;
+        }
         if (typeof value === "boolean") {
           customNonNumericStatDefaults[id] = value;
           continue;
@@ -2010,6 +2017,12 @@ function getConfiguredCharacterDefaults(
         const items = normalizeArrayItems(value, maxLength, 20);
         if (!items.length) continue;
         customNonNumericStatDefaults[id] = items;
+        continue;
+      }
+      if (kind === "date_time") {
+        const normalized = normalizeDateTimeWithMode(value, statDef?.dateTimeMode ?? "timestamp");
+        if (!normalized) continue;
+        customNonNumericStatDefaults[id] = normalized;
         continue;
       }
       if (typeof value === "boolean") {
@@ -2168,6 +2181,9 @@ function buildSeededCustomNonNumericStatisticsForActiveCharacters(
         const items = normalizeArrayItems(raw, textMaxLength, 20);
         return items.length ? items : fallback;
       }
+      if (kind === "date_time") {
+        return normalizeDateTimeWithMode(raw, def.dateTimeMode ?? "timestamp", def.defaultValue);
+      }
       const fallback = String(def.defaultValue ?? "").trim().replace(/\s+/g, " ");
       const text = typeof raw === "string"
         ? raw.trim().replace(/\s+/g, " ")
@@ -2299,6 +2315,13 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
           : normalizeArrayItems(configuredCustom, maxLength, 20);
         const fallbackItems = normalizeArrayItems(def.defaultValue, maxLength, 20);
         customNonNumericDefaults[statId] = configuredItems.length ? configuredItems : fallbackItems;
+      } else if (kind === "date_time") {
+        const configuredCustom = defaults.customNonNumericStatDefaults?.[statId];
+        customNonNumericDefaults[statId] = normalizeDateTimeWithMode(
+          configuredCustom,
+          def.dateTimeMode ?? "timestamp",
+          def.defaultValue,
+        );
       } else {
         const configuredCustom = defaults.customNonNumericStatDefaults?.[statId];
         const text = typeof configuredCustom === "string"
@@ -2357,6 +2380,8 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
           ? false
           : kind === "array"
             ? normalizeArrayItems(def.defaultValue, maxLength, 20)
+            : kind === "date_time"
+              ? normalizeDateTimeWithMode(def.defaultValue, def.dateTimeMode ?? "timestamp")
             : String(def.defaultValue ?? "").trim())]),
       );
     }
@@ -2752,6 +2777,12 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
       customNonNumeric[statKey][ownerKey] = normalizeArrayItems(rawValue, 200, 20);
       continue;
     }
+    if ((statDef?.kind ?? "text_short") === "date_time") {
+      const normalized = normalizeDateTimeWithMode(rawValue, statDef?.dateTimeMode ?? "timestamp");
+      if (!normalized) continue;
+      customNonNumeric[statKey][ownerKey] = normalized;
+      continue;
+    }
     const text = String(rawValue).trim().replace(/\s+/g, " ");
     customNonNumeric[statKey][ownerKey] = text.slice(0, 200);
   }
@@ -3049,8 +3080,9 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       return;
     }
     const scopedCustomStats = (activeSettings.customStats ?? []).map(stat => {
-      const trackCharacters = Boolean(stat.trackCharacters ?? stat.track);
-      const trackUser = Boolean(stat.trackUser ?? stat.track);
+      const baseTracked = Boolean(stat.track);
+      const trackCharacters = baseTracked && Boolean(stat.trackCharacters ?? stat.track);
+      const trackUser = baseTracked && Boolean(stat.trackUser ?? stat.track);
       return {
         ...stat,
         trackCharacters,
@@ -3090,13 +3122,29 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       previous = buildBaselineData(activeCharacters, runScopedSettings);
       pushTrace("extract.baseline", { runId, forMessageIndex: lastIndex, activeCharacters: activeCharacters.length });
     }
+    const hasPriorUserMessage = hasTrackableUserMessageBeforeIndex(context, lastIndex);
+    const isGreetingAiBootstrap = Boolean(
+      !userExtraction &&
+      isTrackableAiMessage(lastMessage) &&
+      !hasPriorUserMessage,
+    );
+
+    if (isGreetingAiBootstrap && !activeSettings.generateOnGreetingMessages) {
+      pushTrace("extract.skip", {
+        reason: "greeting_generation_disabled",
+        trigger: reason,
+        messageIndex: lastIndex,
+      });
+      clearGeneratingUiIfStale("greeting_generation_disabled");
+      return;
+    }
 
     const shouldSeedDefaultsForGreetingBootstrap = Boolean(
       !userExtraction &&
       reason === "AUTO_BOOTSTRAP_MISSING_TRACKER" &&
       isTrackableAiMessage(lastMessage) &&
       !previousEntry?.data &&
-      !hasTrackableUserMessageBeforeIndex(context, lastIndex),
+      !hasPriorUserMessage,
     );
     if (shouldSeedDefaultsForGreetingBootstrap) {
       latestData = {
@@ -3459,7 +3507,21 @@ function refreshFromStoredData(): void {
     !latestTrackableHasTracker &&
     (latestDataMessageIndex == null || latestDataMessageIndex < lastTrackableIndex),
   );
-  if (shouldBootstrapAiExtraction && lastTrackableIndex != null) {
+  const hasPriorUserForBootstrap = lastTrackableIndex != null
+    ? hasTrackableUserMessageBeforeIndex(context, lastTrackableIndex)
+    : false;
+  const skipGreetingBootstrap = Boolean(
+    shouldBootstrapAiExtraction &&
+    settings.generateOnGreetingMessages === false &&
+    !hasPriorUserForBootstrap,
+  );
+  if (skipGreetingBootstrap && lastTrackableIndex != null) {
+    pushTrace("extract.bootstrap.skip", {
+      reason: "greeting_generation_disabled",
+      targetMessageIndex: lastTrackableIndex,
+    });
+  }
+  if (shouldBootstrapAiExtraction && !skipGreetingBootstrap && lastTrackableIndex != null) {
     const bootstrapKey = `${getDebugScopeKey(context)}|ai:${lastTrackableIndex}`;
     if (autoBootstrapExtractionKey !== bootstrapKey) {
       autoBootstrapExtractionKey = bootstrapKey;
