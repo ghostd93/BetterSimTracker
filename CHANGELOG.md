@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.1-dev7] - 2026-03-04
+### Changed
+- Prompt injection block is now explicitly wrapped in `<bst_inject_block>...</bst_inject_block>` tags.
+- Injection privacy guidance was strengthened to explicitly forbid copying/paraphrasing/transforming hidden block content into visible assistant output.
+
 ## [2.2.2.1-dev6] - 2026-03-04
 ### Fixed
 - Scene card per-stat display now defaults to showing empty/missing values unless `Hide when empty` is explicitly enabled, reducing chips-vs-rows mismatches where stats appeared missing only in chips layout.
