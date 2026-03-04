@@ -5562,7 +5562,7 @@ function openEditStatsModal(input: {
       <button class="bst-btn bst-close-btn" data-action="close" aria-label="Close edit dialog">&times;</button>
     </div>
     <div class="bst-edit-sub">Numeric values are percentages (0-100). Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest tracker snapshot for this character.</div>
-    ${!isUserCharacter
+    ${(!isUserCharacter && !isGlobalCharacter)
       ? `<div class="bst-edit-divider"></div>
          <label class="bst-edit-field bst-check">
            <input type="checkbox" data-bst-edit-meta="active" ${isCurrentlyActive ? "checked" : ""}>
