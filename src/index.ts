@@ -71,6 +71,7 @@ let extractionTimer: number | null = null;
 let swipeExtractionTimer: number | null = null;
 let pendingSwipeExtraction: { reason: string; messageIndex?: number; waitForGenerationEnd?: boolean } | null = null;
 let lastDebugRecord: DeltaDebugRecord | null = null;
+let runtimeManifestVersion: string | null = null;
 let refreshTimer: number | null = null;
 let lastPromptSyncSignature = "";
 let debugTrace: string[] = [];
@@ -85,6 +86,7 @@ let pendingLateRenderExtraction = false;
 let pendingLateRenderStartLastAiIndex: number | null = null;
 let lateRenderPollTimer: number | null = null;
 let autoBootstrapExtractionKey: string | null = null;
+const BOOTSTRAP_CONTINUE_REASON = "AUTO_BOOTSTRAP_MISSING_TRACKER_CONTINUE";
 type CapturedGenerationIntent = {
   type: string;
   options: Record<string, unknown>;
@@ -1795,6 +1797,29 @@ function getErrorMessage(error: unknown): string {
   return fallback && fallback !== "[object Object]" ? fallback : "Unknown extraction error.";
 }
 
+function getReportedExtensionVersion(): string {
+  const runtime = String(runtimeManifestVersion ?? "").trim();
+  if (runtime) return runtime;
+  const build = String(__BST_VERSION__ ?? "").trim();
+  return build || "dev";
+}
+
+async function hydrateRuntimeManifestVersion(): Promise<void> {
+  try {
+    const script = Array.from(document.querySelectorAll<HTMLScriptElement>("script[src]"))
+      .find(node => /\/scripts\/extensions\/third-party\/BetterSimTracker\/dist\/index\.js(?:\?|$)/i.test(String(node.src ?? "")));
+    if (!script?.src) return;
+    const manifestUrl = script.src.replace(/\/dist\/index\.js(?:\?.*)?$/i, "/manifest.json");
+    const response = await fetch(manifestUrl, { cache: "no-store" });
+    if (!response.ok) return;
+    const payload = await response.json() as { version?: unknown };
+    const version = String(payload?.version ?? "").trim();
+    if (version) runtimeManifestVersion = version;
+  } catch {
+    // best-effort runtime metadata hydration
+  }
+}
+
 function setTrackerRecovery(
   messageIndex: number,
   entry: TrackerRecoveryEntry,
@@ -3000,8 +3025,10 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   const hadTrackerAtStart = Boolean(getTrackerDataFromMessage(lastMessage));
   clearTrackerRecovery(lastIndex);
   const isManualRefreshReason = reason === "manual_refresh" || reason === "manual_refresh_retry";
+  const isBootstrapContinueReason = reason === BOOTSTRAP_CONTINUE_REASON;
   const forceRetrack =
     isManualRefreshReason ||
+    isBootstrapContinueReason ||
     reason === "SWIPE_GENERATION_ENDED" ||
     reason === "USER_MESSAGE_RENDERED" ||
     reason === "USER_MESSAGE_EDITED" ||
@@ -3123,6 +3150,9 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
         savedMessageIndex: lastIndex,
         activeCharacters: activeCharacters.length,
       });
+      // Keep default-first greeting behavior, then immediately run one real extraction pass
+      // so first message custom stats do not stay at defaults until manual retry.
+      scheduleExtraction(BOOTSTRAP_CONTINUE_REASON, lastIndex, 120);
       logDebug(activeSettings, "extraction", `Bootstrap defaults seeded (${reason})`);
       return;
     }
@@ -3329,17 +3359,30 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     }
     const message = getErrorMessage(error);
     let retryScheduled = false;
+    const isEmptyOutputError = /(?:^|\s)(?:Generator|Active runtime request) returned empty output/i.test(message);
+    const isRetryableApiFailure = /(api request failed|failed to fetch|network\s+error|timeout|http\s+5\d\d|status\s*code\s*5\d\d)/i.test(message);
+    const shouldRetryFailure = isEmptyOutputError || isRetryableApiFailure;
+    const canAutoRetryReason =
+      isManualRefreshReason ||
+      reason === "AUTO_BOOTSTRAP_MISSING_TRACKER" ||
+      reason === BOOTSTRAP_CONTINUE_REASON;
     if (
-      isManualRefreshReason &&
+      canAutoRetryReason &&
       reason !== "manual_refresh_retry" &&
-      /Generator returned empty output/i.test(message)
+      shouldRetryFailure
     ) {
+      const retryReason =
+        reason === "manual_refresh"
+          ? "manual_refresh_retry"
+          : reason === "AUTO_BOOTSTRAP_MISSING_TRACKER"
+            ? BOOTSTRAP_CONTINUE_REASON
+            : "manual_refresh_retry";
       pushTrace("extract.retry", {
         reason,
-        retryReason: "empty_generator_output",
+        retryReason: isEmptyOutputError ? "empty_generator_output" : "retryable_api_failure",
         targetMessageIndex: targetMessageIndex ?? null,
       });
-      scheduleExtraction("manual_refresh_retry", targetMessageIndex, 180);
+      scheduleExtraction(retryReason, targetMessageIndex, 180);
       retryScheduled = true;
     }
     pushTrace("extract.error", {
@@ -3987,7 +4030,7 @@ function openSettings(): void {
         };
       })();
       const report = {
-        extensionVersion: __BST_VERSION__,
+        extensionVersion: getReportedExtensionVersion(),
         timestamp: new Date().toISOString(),
         scope: activeContext.groupId ? `group:${activeContext.groupId}` : `char:${String(activeContext.characterId ?? "unknown")}`,
         chatLength: activeContext.chat.length,
@@ -4177,6 +4220,7 @@ async function init(): Promise<void> {
     console.warn("[BetterSimTracker] SillyTavern context not available.");
     return;
   }
+  void hydrateRuntimeManifestVersion();
 
   settings = loadSettings(context);
   if (settings.debug) {

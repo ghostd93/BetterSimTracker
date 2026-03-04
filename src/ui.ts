@@ -939,7 +939,7 @@ function renderThoughtMarkup(text: string, key: string, variant: "bubble" | "pan
   return `
     <div class="${containerClass}${expanded ? " bst-thought-expanded" : ""}" data-bst-thought-container="1" data-bst-thought-key="${escapeHtml(key)}">
       <span class="${textClass}">${escapeHtml(text)}</span>
-      ${expandable ? `<button class="bst-thought-toggle" data-bst-action="toggle-thought" data-bst-thought-key="${escapeHtml(key)}" aria-expanded="${String(expanded)}">${expanded ? "Less" : "More"}</button>` : ""}
+      ${expandable ? `<button class="bst-thought-toggle" data-bst-action="toggle-thought" data-bst-thought-key="${escapeHtml(key)}" aria-expanded="${String(expanded)}">${expanded ? "Less thought" : "More thought"}</button>` : ""}
     </div>
   `;
 }
@@ -4331,7 +4331,7 @@ export function renderTracker(
               container.classList.toggle("bst-thought-expanded", !expanded);
             }
             thoughtToggle.setAttribute("aria-expanded", String(!expanded));
-            thoughtToggle.textContent = expanded ? "More" : "Less";
+            thoughtToggle.textContent = expanded ? "More thought" : "Less thought";
           }
           return;
         }
@@ -4897,7 +4897,7 @@ export function renderTracker(
         return { ...item, id, display };
       })
       .filter(item => item.display?.visible !== false)
-      .filter(item => item.hasValue || item.display?.hideWhenEmpty === false)
+      .filter(item => item.hasValue || item.display?.hideWhenEmpty !== true)
       .sort((a, b) => {
         const aIdx = order.get(a.id);
         const bIdx = order.get(b.id);
@@ -5173,12 +5173,18 @@ export function renderTracker(
       }
     }
     if (sceneCardVisible && settings.sceneCardPosition === "above_tracker_cards") {
-      appendSceneCard(root);
+      const inlineSceneHost = document.createElement("div");
+      inlineSceneHost.className = "bst-inline-scene-host";
+      root.appendChild(inlineSceneHost);
+      appendSceneCard(inlineSceneHost);
       appendOwnerCards();
     } else {
       appendOwnerCards();
       if (sceneCardVisible && !sceneRoot) {
-        appendSceneCard(root);
+        const inlineSceneHost = document.createElement("div");
+        inlineSceneHost.className = "bst-inline-scene-host";
+        root.appendChild(inlineSceneHost);
+        appendSceneCard(inlineSceneHost);
       }
     }
   }
@@ -6278,7 +6284,7 @@ export function openSettingsModal(input: {
       out[key] = {
         visible: Boolean(row.visible ?? true),
         showLabel: Boolean(row.showLabel ?? true),
-        hideWhenEmpty: Boolean(row.hideWhenEmpty ?? true),
+        hideWhenEmpty: Boolean(row.hideWhenEmpty ?? false),
         labelOverride: String(row.labelOverride ?? "").trim().slice(0, 40),
         colorOverride: normalizeHexColor(row.colorOverride) ?? "",
         layoutOverride: row.layoutOverride === "chips" || row.layoutOverride === "rows" ? row.layoutOverride : "auto",
@@ -8074,7 +8080,7 @@ export function openSettingsModal(input: {
     const current = sceneCardStatDisplayState[targetId] ?? {
       visible: true,
       showLabel: true,
-      hideWhenEmpty: true,
+      hideWhenEmpty: false,
       labelOverride: "",
       colorOverride: "",
       layoutOverride: "auto" as const,
