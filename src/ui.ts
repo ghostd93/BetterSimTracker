@@ -7833,6 +7833,45 @@ export function openSettingsModal(input: {
     }
   };
 
+  const openClipboardFallbackWizard = (title: string, text: string): void => {
+    closeCustomWizard();
+    const backdropNode = document.createElement("div");
+    backdropNode.className = "bst-custom-wizard-backdrop";
+    const wizard = document.createElement("div");
+    wizard.className = "bst-custom-wizard";
+    wizard.innerHTML = `
+      <div class="bst-custom-wizard-head">
+        <div>
+          <div class="bst-custom-wizard-title">${escapeHtml(title)}</div>
+          <div class="bst-custom-wizard-step">Clipboard unavailable. Copy manually from the box below.</div>
+        </div>
+        <button class="bst-btn bst-btn-soft" data-action="custom-close">Close</button>
+      </div>
+      <div class="bst-custom-import-box">
+        <textarea class="bst-custom-import-textarea" data-bst-manual-copy readonly></textarea>
+      </div>
+      <div class="bst-custom-wizard-actions">
+        <button type="button" class="bst-btn" data-action="custom-close">Close</button>
+      </div>
+    `;
+
+    const close = (): void => {
+      backdropNode.remove();
+      wizard.remove();
+    };
+    wizard.querySelector('[data-action="custom-close"]')?.addEventListener("click", close);
+    backdropNode.addEventListener("click", close);
+    wizard.addEventListener("click", event => event.stopPropagation());
+    const textarea = wizard.querySelector("[data-bst-manual-copy]") as HTMLTextAreaElement | null;
+    if (textarea) {
+      textarea.value = text;
+      textarea.focus();
+      textarea.select();
+    }
+    document.body.appendChild(backdropNode);
+    document.body.appendChild(wizard);
+  };
+
   const openCustomImportWizard = (): void => {
     closeCustomWizard();
     const backdropNode = document.createElement("div");
@@ -9865,8 +9904,8 @@ export function openSettingsModal(input: {
           setCustomStatsStatus(`Exported "${stat.label}" JSON to clipboard.`, "success");
           return;
         }
-        window.prompt("Clipboard unavailable. Copy exported custom stat JSON:", serialized);
-        setCustomStatsStatus("Clipboard unavailable, JSON shown in prompt for manual copy.", "info");
+        openClipboardFallbackWizard(`Export "${stat.label}" JSON`, serialized);
+        setCustomStatsStatus("Clipboard unavailable, opened manual copy modal.", "info");
       });
       return;
     }
