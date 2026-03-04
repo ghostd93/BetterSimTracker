@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.3-dev6] - 2026-03-04
+### Added
+- New Display subdrawer: `Character Card Stat Order` (under Scene Card) for manual ordering of character-card stat rows.
+
+### Changed
+- Character-card rendering now applies configurable stat order for non-user cards across built-in numeric + custom non-global non-numeric stats, with backward-compatible fallback to previous order when no custom order is defined.
+
 ## [2.2.2.3-dev5] - 2026-03-04
 ### Fixed
 - Tracker auto-extraction now skips SillyTavern welcome-page assistant messages, preventing tracker cards from appearing on the default ST welcome screen.

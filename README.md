@@ -381,6 +381,7 @@ You can disable any metric you do not want extracted. Disabled stats stop updati
 - `Scene Card Position`: place Scene card above tracker cards or above message text.
 - `Scene Card Layout`: render Scene values as chips or rows.
 - `Scene Stat Studio`: per-stat ordering with editor controls (visibility, label, color, layout override, value style, hide-empty, text clamp, array collapse limit).
+- `Character Card Stat Order`: reorder built-in and custom non-global stat rows on character cards.
 - `Scene Card Title`: set custom card header label.
 - `Scene Card Color`: optional Scene card color override.
 - `Scene Card Stat Value Color`: optional override for Scene stat chips/values.

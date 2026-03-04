@@ -84,6 +84,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   sceneCardArrayCollapsedLimit: 4,
   sceneCardStatOrder: [],
   sceneCardStatDisplay: {},
+  characterCardStatOrder: [],
   autoDetectActive: true,
   generateOnGreetingMessages: true,
   activityLookback: 5,
@@ -570,6 +571,11 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
         .filter(Boolean)
       : [...defaultSettings.sceneCardStatOrder],
     sceneCardStatDisplay: sanitizeSceneCardStatDisplay(input.sceneCardStatDisplay),
+    characterCardStatOrder: Array.isArray(input.characterCardStatOrder)
+      ? input.characterCardStatOrder
+        .map(item => String(item ?? "").trim().toLowerCase())
+        .filter(Boolean)
+      : [...defaultSettings.characterCardStatOrder],
     autoDetectActive: asBool(input.autoDetectActive, defaultSettings.autoDetectActive),
     generateOnGreetingMessages: asBool(input.generateOnGreetingMessages, defaultSettings.generateOnGreetingMessages),
     activityLookback: clampInt(input.activityLookback, defaultSettings.activityLookback, 1, 25),

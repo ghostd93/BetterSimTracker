@@ -133,6 +133,7 @@ export interface BetterSimTrackerSettings {
   sceneCardArrayCollapsedLimit: number;
   sceneCardStatOrder: string[];
   sceneCardStatDisplay: Record<string, SceneCardStatDisplayOptions>;
+  characterCardStatOrder: string[];
   autoDetectActive: boolean;
   generateOnGreetingMessages: boolean;
   activityLookback: number;

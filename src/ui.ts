@@ -4714,8 +4714,35 @@ export function renderTracker(
       const isUserCard = name === USER_TRACKER_KEY;
       const moodLookupName = isUserCard ? displayName : name;
       const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
-      const enabledNumeric = getNumericStatsForCharacter(data, name, settings);
-      const enabledNonNumeric = ownerCardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
+      const baseEnabledNumeric = getNumericStatsForCharacter(data, name, settings);
+      const baseEnabledNonNumeric = ownerCardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
+      const statOrderMap = new Map((settings.characterCardStatOrder ?? []).map((id, index) => [String(id ?? "").trim().toLowerCase(), index]));
+      const numericFallbackOrder = new Map(baseEnabledNumeric.map((def, index) => [String(def.key).trim().toLowerCase(), index]));
+      const nonNumericFallbackOrder = new Map(baseEnabledNonNumeric.map((def, index) => [String(def.id).trim().toLowerCase(), index]));
+      const enabledNumeric = isUserCard
+        ? baseEnabledNumeric
+        : [...baseEnabledNumeric].sort((a, b) => {
+          const aId = String(a.key).trim().toLowerCase();
+          const bId = String(b.key).trim().toLowerCase();
+          const aOrder = statOrderMap.get(aId);
+          const bOrder = statOrderMap.get(bId);
+          if (aOrder != null && bOrder != null && aOrder !== bOrder) return aOrder - bOrder;
+          if (aOrder != null && bOrder == null) return -1;
+          if (aOrder == null && bOrder != null) return 1;
+          return (numericFallbackOrder.get(aId) ?? 0) - (numericFallbackOrder.get(bId) ?? 0);
+        });
+      const enabledNonNumeric = isUserCard
+        ? baseEnabledNonNumeric
+        : [...baseEnabledNonNumeric].sort((a, b) => {
+          const aId = String(a.id).trim().toLowerCase();
+          const bId = String(b.id).trim().toLowerCase();
+          const aOrder = statOrderMap.get(aId);
+          const bOrder = statOrderMap.get(bId);
+          if (aOrder != null && bOrder != null && aOrder !== bOrder) return aOrder - bOrder;
+          if (aOrder != null && bOrder == null) return -1;
+          if (aOrder == null && bOrder != null) return 1;
+          return (nonNumericFallbackOrder.get(aId) ?? 0) - (nonNumericFallbackOrder.get(bId) ?? 0);
+        });
       const moodText = getEffectiveMoodText(name);
       const previousMoodData = findPreviousDataWithMood(entry.messageIndex, name);
       const prevMood = previousMoodData?.statistics.mood?.[name] !== undefined
@@ -5465,6 +5492,8 @@ function openEditStatsModal(input: {
       const visibility = input.settings.sceneCardStatDisplay?.[def.id]?.visible;
       return visibility !== false;
     }
+    // Global stats are edited only via Scene card modal.
+    if (def.globalScope) return false;
     return isUserCharacter ? def.trackUser : def.trackCharacters;
   });
   const nonNumericDefById = new Map(nonNumericDefs.map(def => [def.id, def]));
@@ -6304,6 +6333,9 @@ export function openSettingsModal(input: {
   let sceneCardStatOrderState: string[] = Array.isArray(input.settings.sceneCardStatOrder)
     ? input.settings.sceneCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
     : [];
+  let characterCardStatOrderState: string[] = Array.isArray(input.settings.characterCardStatOrder)
+    ? input.settings.characterCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
+    : [];
   let sceneCardStatDisplayState: Record<string, SceneCardStatDisplayOptions> = (() => {
     const raw = input.settings.sceneCardStatDisplay ?? {};
     const out: Record<string, SceneCardStatDisplayOptions> = {};
@@ -6587,6 +6619,13 @@ export function openSettingsModal(input: {
           </label>
           <label class="bst-check" data-bst-row="sceneCardShowWhenEmpty"><input data-k="sceneCardShowWhenEmpty" type="checkbox">Show Scene card even when empty</label>
           <div class="bst-help-line">When enabled, global custom stats are shown only in Scene Card (hidden on owner cards).</div>
+        </div>
+      </details>
+      <details class="bst-subdrawer" data-bst-row="characterCardOrderDrawer">
+        <summary><span class="bst-subdrawer-title"><span class="fa-solid fa-list-ol" aria-hidden="true"></span>Character Card Stat Order</span></summary>
+        <div class="bst-settings-grid bst-settings-grid-single">
+          <div class="bst-help-line">Order controls for stat rows shown on character cards (built-in + custom, non-global).</div>
+          <div class="bst-scene-order-list" data-bst-row="characterCardOrderList"></div>
         </div>
       </details>
     </div>
@@ -8105,6 +8144,24 @@ export function openSettingsModal(input: {
       return kind !== "numeric" && Boolean(stat.globalScope) && Boolean(stat.showOnCard);
     });
 
+  const getCharacterOrderEligibleStats = (): Array<{ id: string; label: string; source: "built_in" | "custom" }> => {
+    const numeric = getNumericStatDefinitions(input.settings)
+      .filter(def => def.showOnCard && def.trackCharacters && !def.globalScope)
+      .map(def => ({ id: String(def.key).trim().toLowerCase(), label: def.label, source: "built_in" as const }));
+    const custom = customStatsState
+      .filter(stat => {
+        const kind = normalizeCustomStatKind(stat.kind);
+        return kind !== "numeric" && Boolean(stat.showOnCard) && Boolean(stat.trackCharacters) && !Boolean(stat.globalScope);
+      })
+      .map(stat => ({
+        id: String(stat.id ?? "").trim().toLowerCase(),
+        label: String(stat.label ?? "").trim() || String(stat.id ?? "").trim(),
+        source: "custom" as const,
+      }))
+      .filter(stat => stat.id.length > 0);
+    return [...numeric, ...custom];
+  };
+
   const syncSceneCardStatOrderState = (): void => {
     const eligibleIds = getSceneOrderEligibleStats().map(stat => String(stat.id ?? "").trim().toLowerCase());
     const eligibleSet = new Set(eligibleIds);
@@ -8120,6 +8177,16 @@ export function openSettingsModal(input: {
       }
     }
     sceneCardStatDisplayState = nextDisplay;
+  };
+
+  const syncCharacterCardStatOrderState = (): void => {
+    const eligibleIds = getCharacterOrderEligibleStats().map(stat => stat.id);
+    const eligibleSet = new Set(eligibleIds);
+    const next = characterCardStatOrderState.filter(id => eligibleSet.has(id));
+    for (const id of eligibleIds) {
+      if (!next.includes(id)) next.push(id);
+    }
+    characterCardStatOrderState = next;
   };
 
   const renderSceneCardOrderList = (): void => {
@@ -8146,6 +8213,36 @@ export function openSettingsModal(input: {
             <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-order-edit" data-scene-order-id="${escapeHtml(id)}" title="Edit display options" aria-label="Edit display options"><span class="fa-solid fa-pen" aria-hidden="true"></span></button>
             <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-order-up" data-scene-order-id="${escapeHtml(id)}" ${index === 0 ? "disabled" : ""} title="Move up" aria-label="Move up"><span class="fa-solid fa-arrow-up" aria-hidden="true"></span></button>
             <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="scene-order-down" data-scene-order-id="${escapeHtml(id)}" ${index === orderedIds.length - 1 ? "disabled" : ""} title="Move down" aria-label="Move down"><span class="fa-solid fa-arrow-down" aria-hidden="true"></span></button>
+          </div>
+        </div>
+      `;
+    }).join("");
+    orderListNode.innerHTML = rows;
+  };
+
+  const renderCharacterCardOrderList = (): void => {
+    const orderListNode = modal.querySelector('[data-bst-row="characterCardOrderList"]') as HTMLElement | null;
+    if (!orderListNode) return;
+    syncCharacterCardStatOrderState();
+    const eligible = getCharacterOrderEligibleStats();
+    if (!eligible.length) {
+      orderListNode.innerHTML = `<div class="bst-scene-order-empty">No character-card stats available for ordering.</div>`;
+      return;
+    }
+    const byId = new Map(eligible.map(stat => [stat.id, stat]));
+    const orderedIds = characterCardStatOrderState.filter(id => byId.has(id));
+    const rows = orderedIds.map((id, index) => {
+      const stat = byId.get(id);
+      if (!stat) return "";
+      return `
+        <div class="bst-scene-order-row" data-bst-char-order-id="${escapeHtml(id)}">
+          <div class="bst-scene-order-meta">
+            <span class="bst-scene-order-name" title="${escapeHtml(stat.label)}">${escapeHtml(stat.label)}</span>
+            <span class="bst-scene-order-id">${escapeHtml(id)}${stat.source === "built_in" ? " · built-in" : ""}</span>
+          </div>
+          <div class="bst-scene-order-actions">
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="char-order-up" data-char-order-id="${escapeHtml(id)}" ${index === 0 ? "disabled" : ""} title="Move up" aria-label="Move up"><span class="fa-solid fa-arrow-up" aria-hidden="true"></span></button>
+            <button type="button" class="bst-btn bst-btn-soft bst-btn-icon" data-action="char-order-down" data-char-order-id="${escapeHtml(id)}" ${index === orderedIds.length - 1 ? "disabled" : ""} title="Move down" aria-label="Move down"><span class="fa-solid fa-arrow-down" aria-hidden="true"></span></button>
           </div>
         </div>
       `;
@@ -8410,6 +8507,7 @@ export function openSettingsModal(input: {
         dateTimePartOrder,
       };
       renderSceneCardOrderList();
+      renderCharacterCardOrderList();
       persistLive();
       close();
     });
@@ -9821,6 +9919,7 @@ export function openSettingsModal(input: {
       customStatsState = customStatsState.slice(0, MAX_CUSTOM_STATS);
       renderCustomStatsList();
       renderSceneCardOrderList();
+      renderCharacterCardOrderList();
       close();
       persistLive();
     });
@@ -9889,6 +9988,7 @@ export function openSettingsModal(input: {
       });
       renderCustomStatsList();
       renderSceneCardOrderList();
+      renderCharacterCardOrderList();
       persistLive();
       return;
     }
@@ -9931,6 +10031,7 @@ export function openSettingsModal(input: {
       [next[index - 1], next[index]] = [next[index], next[index - 1]];
       sceneCardStatOrderState = next;
       renderSceneCardOrderList();
+      renderCharacterCardOrderList();
       persistLive();
       return;
     }
@@ -9939,11 +10040,38 @@ export function openSettingsModal(input: {
       [next[index], next[index + 1]] = [next[index + 1], next[index]];
       sceneCardStatOrderState = next;
       renderSceneCardOrderList();
+      renderCharacterCardOrderList();
+      persistLive();
+    }
+  });
+  modal.addEventListener("click", event => {
+    const target = event.target as HTMLElement | null;
+    const button = target?.closest("button[data-action][data-char-order-id]") as HTMLButtonElement | null;
+    if (!button) return;
+    const id = String(button.getAttribute("data-char-order-id") ?? "").trim().toLowerCase();
+    if (!id) return;
+    const index = characterCardStatOrderState.indexOf(id);
+    if (index < 0) return;
+    const action = String(button.getAttribute("data-action") ?? "");
+    if (action === "char-order-up" && index > 0) {
+      const next = [...characterCardStatOrderState];
+      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      characterCardStatOrderState = next;
+      renderCharacterCardOrderList();
+      persistLive();
+      return;
+    }
+    if (action === "char-order-down" && index < characterCardStatOrderState.length - 1) {
+      const next = [...characterCardStatOrderState];
+      [next[index], next[index + 1]] = [next[index + 1], next[index]];
+      characterCardStatOrderState = next;
+      renderCharacterCardOrderList();
       persistLive();
     }
   });
   renderCustomStatsList();
   renderSceneCardOrderList();
+  renderCharacterCardOrderList();
 
   const collectSettings = (): BetterSimTrackerSettings => {
     const read = (k: keyof BetterSimTrackerSettings): string =>
@@ -10019,6 +10147,7 @@ export function openSettingsModal(input: {
       sceneCardArrayCollapsedLimit: readNumber("sceneCardArrayCollapsedLimit", input.settings.sceneCardArrayCollapsedLimit, 1, 20),
       sceneCardStatOrder: [...sceneCardStatOrderState],
       sceneCardStatDisplay: { ...sceneCardStatDisplayState },
+      characterCardStatOrder: [...characterCardStatOrderState],
       trackAffection: readBool("trackAffection", input.settings.trackAffection),
       trackTrust: readBool("trackTrust", input.settings.trackTrust),
       trackDesire: readBool("trackDesire", input.settings.trackDesire),
@@ -10229,16 +10358,22 @@ export function openSettingsModal(input: {
     sceneCardStatOrderState = Array.isArray(next.sceneCardStatOrder)
       ? next.sceneCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
       : [];
+    characterCardStatOrderState = Array.isArray(next.characterCardStatOrder)
+      ? next.characterCardStatOrder.map(id => String(id ?? "").trim().toLowerCase()).filter(Boolean)
+      : [];
     sceneCardStatDisplayState = next.sceneCardStatDisplay && typeof next.sceneCardStatDisplay === "object"
       ? { ...next.sceneCardStatDisplay }
       : {};
     syncSceneCardStatOrderState();
+    syncCharacterCardStatOrderState();
     builtInNumericStatUiState = cloneBuiltInNumericStatUi(next.builtInNumericStatUi);
     next.sceneCardStatOrder = [...sceneCardStatOrderState];
+    next.characterCardStatOrder = [...characterCardStatOrderState];
     input.settings = next;
     input.onSave(next);
     renderCustomStatsList();
     renderSceneCardOrderList();
+    renderCharacterCardOrderList();
     refreshSettingsTextareaCounters();
     updateGlobalStExpressionSummary();
     syncExtractionVisibility();
