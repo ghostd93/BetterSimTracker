@@ -3186,9 +3186,9 @@ function ensureStyles(): void {
   min-width: 96px;
 }
 .bst-icon-btn {
-  width: 34px;
-  height: 34px;
-  min-width: 34px !important;
+  width: 44px;
+  height: 44px;
+  min-width: 44px !important;
   padding: 0 !important;
   display: inline-flex;
   align-items: center;
@@ -3438,6 +3438,11 @@ function ensureStyles(): void {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+.bst-edit-array-status {
+  font-size: 11px;
+  color: rgba(255, 222, 160, 0.92);
+  min-height: 14px;
 }
 .bst-graph-backdrop {
   position: fixed;
@@ -3920,6 +3925,9 @@ function ensureStyles(): void {
     max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px);
     margin: 0;
     border-radius: 12px;
+  }
+  .bst-edit-grid.bst-edit-grid-two {
+    grid-template-columns: minmax(0, 1fr);
   }
   .bst-settings {
     left: 0;
@@ -5531,17 +5539,20 @@ function openEditStatsModal(input: {
             <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="edit-array-add" data-bst-edit-array-add="${safeId}" aria-label="Add item" title="Add item"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
             <span class="bst-editor-counter" data-bst-edit-array-counter="${safeId}">${items.length}/20 items</span>
           </div>
+          <div class="bst-edit-array-status" data-bst-edit-array-status="${safeId}" style="display:none;"></div>
           <textarea rows="1" style="display:none" data-bst-edit-non-numeric="${safeId}" data-bst-edit-kind="array" placeholder="One item per line, up to 20 items.">${escapeHtml(value)}</textarea>
         </div>
       `;
     }
     if (def.kind === "date_time") {
       const value = typeof currentValue === "string" ? currentValue : "";
-      const inputValue = toDateTimeInputValue(value);
+      const isStructuredDateTime = def.dateTimeMode === "structured";
+      const inputValue = isStructuredDateTime ? value : toDateTimeInputValue(value);
       return `
         <label class="bst-edit-field">
           <span>${escapeHtml(def.label)}</span>
-          <input type="datetime-local" data-bst-edit-non-numeric="${escapeHtml(def.id)}" data-bst-edit-kind="date_time" value="${escapeHtml(inputValue)}" placeholder="YYYY-MM-DD HH:mm">
+          <input type="${isStructuredDateTime ? "text" : "datetime-local"}" data-bst-edit-non-numeric="${escapeHtml(def.id)}" data-bst-edit-kind="${isStructuredDateTime ? "date_time_structured" : "date_time"}" value="${escapeHtml(inputValue)}" placeholder="YYYY-MM-DD HH:mm">
+          ${isStructuredDateTime ? `<div class="bst-help-line">Structured mode accepts semantic updates, but saves normalized value as <code>YYYY-MM-DD HH:mm</code>.</div>` : ""}
         </label>
       `;
     }
@@ -5556,12 +5567,15 @@ function openEditStatsModal(input: {
 
   const modal = document.createElement("div");
   modal.className = EDIT_STATS_MODAL_CLASS;
+  const modalIntro = isGlobalCharacter
+    ? "Scene/global stats only. Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest scene tracker snapshot."
+    : "Numeric values are percentages (0-100). Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest tracker snapshot for this character.";
   modal.innerHTML = `
     <div class="bst-edit-head">
       <div class="bst-edit-title">Edit Tracker Stats - ${escapeHtml(characterLabel)}</div>
       <button class="bst-btn bst-close-btn" data-action="close" aria-label="Close edit dialog">&times;</button>
     </div>
-    <div class="bst-edit-sub">Numeric values are percentages (0-100). Leave a field empty to clear that stat for this tracker entry. Edits apply to the latest tracker snapshot for this character.</div>
+    <div class="bst-edit-sub">${escapeHtml(modalIntro)}</div>
     ${(!isUserCharacter && !isGlobalCharacter)
       ? `<div class="bst-edit-divider"></div>
          <label class="bst-edit-field bst-check">
@@ -5571,7 +5585,7 @@ function openEditStatsModal(input: {
       : ""}
     ${builtInDefs.length
       ? `<div class="bst-edit-grid bst-edit-grid-two">${builtInDefs.map(numericField).join("")}</div>`
-      : `<div class="bst-edit-sub">No built-in numeric stats are currently tracked.</div>`}
+      : (!isGlobalCharacter ? `<div class="bst-edit-sub">No built-in numeric stats are currently tracked.</div>` : "")}
     ${customDefs.length
       ? `<div class="bst-edit-divider"></div>
          <div class="bst-edit-grid bst-edit-grid-two">${customDefs.map(numericField).join("")}</div>`
@@ -5670,6 +5684,7 @@ function openEditStatsModal(input: {
     const maxLength = Math.max(20, Math.min(200, Math.round(Number(editor.dataset.bstMaxLength) || 120)));
     const listNode = editor.querySelector<HTMLElement>(`[data-bst-edit-array-list="${CSS.escape(id)}"]`);
     const counterNode = editor.querySelector<HTMLElement>(`[data-bst-edit-array-counter="${CSS.escape(id)}"]`);
+    const statusNode = editor.querySelector<HTMLElement>(`[data-bst-edit-array-status="${CSS.escape(id)}"]`);
     const addBtn = editor.querySelector<HTMLButtonElement>(`[data-bst-edit-array-add="${CSS.escape(id)}"]`);
     const hiddenNode = editor.querySelector<HTMLTextAreaElement>(`textarea[data-bst-edit-non-numeric="${CSS.escape(id)}"][data-bst-edit-kind="array"]`);
     if (!listNode || !counterNode || !addBtn || !hiddenNode) return;
@@ -5687,10 +5702,23 @@ function openEditStatsModal(input: {
     const syncEditor = (): string[] => {
       const values = getItemInputs().map(inputNode => inputNode.value);
       const normalized = normalizeNonNumericArrayItems(values, maxLength);
+      const rawTrimmed = values.map(value => String(value ?? "").trim());
+      const rawNonEmpty = rawTrimmed.filter(value => value.length > 0);
+      const uniqueRawNonEmpty = new Set(rawNonEmpty).size;
+      const hadTooLong = rawNonEmpty.some(value => value.length > maxLength);
+      const hitLimit = rawNonEmpty.length > 20;
       hiddenNode.value = normalized.join("\n");
       counterNode.textContent = `${normalized.length}/20 items`;
       counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");
       addBtn.disabled = getItemInputs().length >= 20;
+      if (statusNode) {
+        const messages: string[] = [];
+        if (hadTooLong) messages.push(`Items longer than ${maxLength} chars were trimmed.`);
+        if (uniqueRawNonEmpty > normalized.length) messages.push("Duplicate/empty items were normalized.");
+        if (hitLimit) messages.push("Only first 20 items are kept.");
+        statusNode.textContent = messages.join(" ");
+        statusNode.style.display = messages.length ? "block" : "none";
+      }
       return normalized;
     };
 
@@ -5814,10 +5842,10 @@ function openEditStatsModal(input: {
         node.value = items.join("\n");
         return;
       }
-      if (kind === "date_time") {
+      if (kind === "date_time" || kind === "date_time_structured") {
         const normalized = normalizeDateTimeValue(node.value);
         nonNumeric[key] = normalized || null;
-        node.value = toDateTimeInputValue(normalized);
+        node.value = kind === "date_time_structured" ? (normalized || "") : toDateTimeInputValue(normalized);
         return;
       }
       const text = normalizeNonNumericTextValue(raw, def.textMaxLength);

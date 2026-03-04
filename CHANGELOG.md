@@ -2,6 +2,18 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.2.3-dev4] - 2026-03-04
+### Fixed
+- Edit Tracker modal UX cleanup across desktop/mobile:
+  - scene/global modal now uses scene-specific intro text
+  - scene/global modal no longer shows misleading built-in numeric empty-state copy
+  - mobile modal grids now collapse to single-column layout for readability
+  - icon button touch targets increased to 44x44 for better mobile usability
+- Date/time edit behavior now respects stat mode:
+  - `timestamp` mode keeps native `datetime-local` input
+  - `structured` mode uses text input with normalization helper, then saves normalized value
+- Array edit controls now surface normalization feedback (trim/duplicate cleanup/20-item cap) instead of silently normalizing.
+
 ## [2.2.2.3-dev2] - 2026-03-04
 ### Fixed
 - Scene card edit modal now uses `Scene` title instead of internal key labels.
