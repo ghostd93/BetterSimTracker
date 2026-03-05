@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.3] - 2026-03-05
+### Fixed
+- Extraction progress status labels are now explicit and step-specific (Built-in, Custom, Unified Batch, and no-extraction/default seeding paths) to avoid ambiguous progress reporting.
+
 ## [2.2.3] - 2026-03-04
 ### Added
 - New custom stat type: `date_time` with two modes:
