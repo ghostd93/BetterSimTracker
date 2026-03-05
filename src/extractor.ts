@@ -45,6 +45,33 @@ function enabledCustomStats(settings: BetterSimTrackerSettings): CustomStatDefin
   return settings.customStats.filter(def => Boolean(def.track));
 }
 
+function normalizeSequentialGroupId(value: unknown): string {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw) return "";
+  return raw.replace(/[^a-z0-9_\-]/g, "_").replace(/_+/g, "_").slice(0, 32);
+}
+
+function groupCustomStatsForSequential(
+  stats: CustomStatDefinition[],
+  enabled: boolean,
+): CustomStatDefinition[][] {
+  if (!stats.length) return [];
+  if (!enabled) return stats.map(stat => [stat]);
+  const groupsById = new Map<string, CustomStatDefinition[]>();
+  const solo: CustomStatDefinition[][] = [];
+  for (const stat of stats) {
+    const key = normalizeSequentialGroupId((stat as { sequentialGroup?: string }).sequentialGroup);
+    if (!key) {
+      solo.push([stat]);
+      continue;
+    }
+    const bucket = groupsById.get(key) ?? [];
+    bucket.push(stat);
+    groupsById.set(key, bucket);
+  }
+  return [...groupsById.values(), ...solo];
+}
+
 function emptyStatistics(): Statistics {
   return {
     affection: {},
@@ -274,6 +301,8 @@ export async function extractStatisticsParallel(input: {
   const builtInPublicStats = builtInAndTextStats.filter(stat => !builtInPrivateStats.includes(stat));
   const customPrivateStats = customStats.filter(stat => Boolean(stat.privateToOwner));
   const customPublicStats = customStats.filter(stat => !stat.privateToOwner);
+  const customPublicGroups = groupCustomStatsForSequential(customPublicStats, settings.enableSequentialStatGroups);
+  const customPrivateGroups = groupCustomStatsForSequential(customPrivateStats, settings.enableSequentialStatGroups);
   const output = emptyStatistics();
   const outputCustom: CustomStatistics = {};
   const outputCustomNonNumeric: CustomNonNumericStatistics = {};
@@ -356,9 +385,9 @@ export async function extractStatisticsParallel(input: {
   })();
   const sequentialStatPasses =
     builtInPublicStats.length +
-    customPublicStats.length +
+    customPublicGroups.length +
     (builtInPrivateStats.length * activeCharacters.length) +
-    (customPrivateStats.length > 0 ? customPrivateStats.length * activeCharacters.length : 0);
+    (customPrivateGroups.length > 0 ? customPrivateGroups.length * activeCharacters.length : 0);
   const progressTotal = settings.sequentialExtraction
     ? Math.max(1, sequentialStatPasses * 3)
     : Math.max(1, unifiedBatchCount * 3);
@@ -900,6 +929,13 @@ export async function extractStatisticsParallel(input: {
             preferredCharacterName,
             settings.includeCharacterCardsInPrompt,
             settings.includeLorebookInExtraction,
+            {
+              trackAffection: settings.trackAffection,
+              trackTrust: settings.trackTrust,
+              trackDesire: settings.trackDesire,
+              trackConnection: settings.trackConnection,
+              trackMood: settings.trackMood,
+            },
           )
         : buildUnifiedPrompt(
             statList,
@@ -1026,6 +1062,13 @@ export async function extractStatisticsParallel(input: {
           preferredCharacterName,
           includeCharacterCardsInPrompt: settings.includeCharacterCardsInPrompt,
           includeLorebookInExtraction: settings.includeLorebookInExtraction,
+          builtInTracking: {
+            trackAffection: settings.trackAffection,
+            trackTrust: settings.trackTrust,
+            trackDesire: settings.trackDesire,
+            trackConnection: settings.trackConnection,
+            trackMood: settings.trackMood,
+          },
         })
         : buildSequentialCustomNonNumericPrompt({
           statId,
@@ -1056,6 +1099,13 @@ export async function extractStatisticsParallel(input: {
           preferredCharacterName,
           includeCharacterCardsInPrompt: settings.includeCharacterCardsInPrompt,
           includeLorebookInExtraction: settings.includeLorebookInExtraction,
+          builtInTracking: {
+            trackAffection: settings.trackAffection,
+            trackTrust: settings.trackTrust,
+            trackDesire: settings.trackDesire,
+            trackConnection: settings.trackConnection,
+            trackMood: settings.trackMood,
+          },
         });
       const prompt = applyPromptCharacterAliases(builtPrompt);
       tickProgress(`Requesting ${label}`);
@@ -1250,6 +1300,13 @@ export async function extractStatisticsParallel(input: {
           preferredCharacterName,
           includeCharacterCardsInPrompt: settings.includeCharacterCardsInPrompt,
           includeLorebookInExtraction: settings.includeLorebookInExtraction,
+          builtInTracking: {
+            trackAffection: settings.trackAffection,
+            trackTrust: settings.trackTrust,
+            trackDesire: settings.trackDesire,
+            trackConnection: settings.trackConnection,
+            trackMood: settings.trackMood,
+          },
         });
         const prompt = applyPromptCharacterAliases(builtPrompt);
         tickProgress("Requesting stats");
@@ -1318,15 +1375,37 @@ export async function extractStatisticsParallel(input: {
       };
       await Promise.all(Array.from({ length: builtInWorkers }, () => runBuiltInWorker()));
 
-      const customQueue = [...customPublicStats];
-      const customWorkers = Math.max(1, Math.min(settings.maxConcurrentCalls || 1, 8, customQueue.length || 1));
-      const runCustomWorker = async (): Promise<void> => {
-        while (customQueue.length) {
-          checkCancelled();
-          const statDef = customQueue.shift();
-          if (!statDef) return;
+      const buildGroupedCustomTemplate = (group: CustomStatDefinition[]): string => {
+        const lines: string[] = [
+          `- Update only these custom stats in one response: ${group.map(stat => stat.id).join(", ")}.`,
+          "- Keep updates conservative and realistic.",
+          "- For array kind, prefer item-level maintenance (add/remove/edit) over full rewrites unless context clearly resets.",
+        ];
+        for (const stat of group) {
+          const base = (stat.promptOverride ?? stat.sequentialPromptTemplate ?? "").trim();
+          if (!base) continue;
+          const rendered = base
+            .replaceAll("{{statId}}", stat.id)
+            .replaceAll("{{statLabel}}", stat.label || stat.id)
+            .replaceAll("{{statDescription}}", stat.description ?? "");
+          lines.push(`- ${stat.id}:`);
+          for (const row of rendered.split(/\r?\n/g).map(item => item.trim()).filter(Boolean)) {
+            lines.push(`  ${row}`);
+          }
+        }
+        return lines.join("\n");
+      };
+
+      const runCustomGroupRequest = async (
+        group: CustomStatDefinition[],
+        requestCharacters: string[],
+        labelPrefix: string,
+      ): Promise<void> => {
+        if (!group.length) return;
+        if (group.length === 1) {
+          const statDef = group[0];
           const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
-          const split = splitCustomCharactersByBaseline(statDef.id, kind, statDef);
+          const split = splitCustomCharactersByBaseline(statDef.id, kind, statDef, requestCharacters);
           if (kind === "numeric") {
             seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
           } else {
@@ -1337,17 +1416,160 @@ export async function extractStatisticsParallel(input: {
             tickProgress(`Seeding ${label}`);
             tickProgress(`Seeding ${label}`);
             tickProgress(`Applying ${label}`);
-            continue;
+            return;
           }
           const one = await runOneCustomRequest(statDef, split.existing);
           checkCancelled();
-          rawBlocks.push({ label: `custom:${statDef.id}`, raw: one.raw });
-          promptBlocks.push({ label: `custom:${statDef.id}`, prompt: one.prompt });
+          rawBlocks.push({ label: `${labelPrefix}:${statDef.id}`, raw: one.raw });
+          promptBlocks.push({ label: `${labelPrefix}:${statDef.id}`, prompt: one.prompt });
           if ((statDef.kind ?? "numeric") === "numeric") {
             if (one.parsedNumeric) applyParsedForCustomStat(statDef, one.parsedNumeric, split.existing);
           } else {
             if (one.parsedNonNumeric) applyParsedForCustomNonNumericStat(statDef, one.parsedNonNumeric, split.existing);
           }
+          return;
+        }
+
+        const splitByStat = new Map<string, ReturnType<typeof splitCustomCharactersByBaseline>>();
+        let hasAnyExisting = false;
+        for (const statDef of group) {
+          const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
+          const split = splitCustomCharactersByBaseline(statDef.id, kind, statDef, requestCharacters);
+          splitByStat.set(statDef.id, split);
+          if (kind === "numeric") {
+            seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          } else {
+            seedCustomNonNumericStatDefaultsForNames(statDef, split.firstRunSeedOnly);
+          }
+          if (split.existing.length > 0) hasAnyExisting = true;
+        }
+        if (!hasAnyExisting) {
+          const label = group.map(stat => stat.label || stat.id).join(", ");
+          tickProgress(`Seeding ${label}`);
+          tickProgress(`Seeding ${label}`);
+          tickProgress(`Applying ${label}`);
+          return;
+        }
+
+        const statsForRequest = group.map(stat => stat.id);
+        const requestTemplate = buildGroupedCustomTemplate(group);
+        const builtPrompt = buildUnifiedAllStatsPrompt({
+          stats: [],
+          customStats: group,
+          userName,
+          characters: requestCharacters,
+          contextText,
+          current: previousStatistics,
+          currentCustom: previousCustomStatistics ?? {},
+          currentCustomNonNumeric: previousCustomNonNumericStatistics ?? {},
+          history,
+          maxDeltaPerTurn: settings.maxDeltaPerTurn,
+          template: requestTemplate,
+          preferredCharacterName,
+          includeCharacterCardsInPrompt: settings.includeCharacterCardsInPrompt,
+          includeLorebookInExtraction: settings.includeLorebookInExtraction,
+          builtInTracking: {
+            trackAffection: settings.trackAffection,
+            trackTrust: settings.trackTrust,
+            trackDesire: settings.trackDesire,
+            trackConnection: settings.trackConnection,
+            trackMood: settings.trackMood,
+          },
+        });
+        const prompt = applyPromptCharacterAliases(builtPrompt);
+        const groupLabel = group.map(stat => stat.id).join("+");
+        tickProgress(`Requesting ${groupLabel}`);
+        let response = await callGenerate(prompt, statsForRequest, "initial");
+        checkCancelled();
+        let raw = response.text;
+        const parseGroup = (rawText: string): {
+          numeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>>;
+          nonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>>;
+        } => {
+          const numeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>> = {};
+          const nonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>> = {};
+          for (const statDef of group) {
+            const split = splitByStat.get(statDef.id);
+            const requestNames = split?.existing ?? requestCharacters;
+            if (!requestNames.length) continue;
+            const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
+            if (kind === "numeric") {
+              numeric[statDef.id] = parseCustomDeltaResponse(
+                rawText,
+                requestNames,
+                statDef.id,
+                statDef.maxDeltaPerTurn ?? settings.maxDeltaPerTurn,
+                promptCharacterAliases,
+              );
+            } else {
+              const parsedValue = parseCustomValueResponse(
+                rawText,
+                requestNames,
+                statDef.id,
+                statDef.kind === "enum_single" || statDef.kind === "boolean" || statDef.kind === "text_short" || statDef.kind === "array"
+                  ? statDef.kind
+                  : "text_short",
+                {
+                  enumOptions: statDef.enumOptions,
+                  textMaxLength: statDef.textMaxLength,
+                },
+                promptCharacterAliases,
+              );
+              nonNumeric[statDef.id] = sanitizeParsedCustomNonNumeric(statDef, requestNames, parsedValue);
+            }
+          }
+          return { numeric, nonNumeric };
+        };
+
+        let parsedGroup = parseGroup(raw);
+        const hasCoverage = (candidate: { numeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>>; nonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>> }): boolean =>
+          group.every(statDef => {
+            const split = splitByStat.get(statDef.id);
+            if (!split?.existing?.length) return true;
+            const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
+            if (kind === "numeric") return hasAnyValues(candidate.numeric[statDef.id]?.delta ?? {});
+            return hasAnyValues(candidate.nonNumeric[statDef.id]?.value ?? {});
+          });
+        let retriesLeft = Math.max(0, Math.min(4, settings.maxRetriesPerStat));
+        while (!hasCoverage(parsedGroup) && retriesLeft > 0 && settings.strictJsonRepair) {
+          retryUsed = true;
+          retriesLeft -= 1;
+          const strictPrompt = buildStrictJsonRetryPrompt(prompt);
+          response = await callGenerate(strictPrompt, statsForRequest, "strict_loop");
+          checkCancelled();
+          const strictParsed = parseGroup(response.text);
+          if (hasCoverage(strictParsed)) {
+            raw = response.text;
+            parsedGroup = strictParsed;
+            break;
+          }
+        }
+        tickProgress(`Applying ${groupLabel}`);
+        rawBlocks.push({ label: `${labelPrefix}:${groupLabel}`, raw });
+        promptBlocks.push({ label: `${labelPrefix}:${groupLabel}`, prompt });
+        for (const statDef of group) {
+          const split = splitByStat.get(statDef.id);
+          const requestNames = split?.existing ?? [];
+          if (!requestNames.length) continue;
+          const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
+          if (kind === "numeric") {
+            const parsedOne = parsedGroup.numeric[statDef.id];
+            if (parsedOne) applyParsedForCustomStat(statDef, parsedOne, requestNames);
+          } else {
+            const parsedOne = parsedGroup.nonNumeric[statDef.id];
+            if (parsedOne) applyParsedForCustomNonNumericStat(statDef, parsedOne, requestNames);
+          }
+        }
+      };
+
+      const customQueue = [...customPublicGroups];
+      const customWorkers = Math.max(1, Math.min(settings.maxConcurrentCalls || 1, 8, customQueue.length || 1));
+      const runCustomWorker = async (): Promise<void> => {
+        while (customQueue.length) {
+          checkCancelled();
+          const group = customQueue.shift();
+          if (!group?.length) return;
+          await runCustomGroupRequest(group, activeCharacters, "custom");
         }
       };
       await Promise.all(Array.from({ length: customWorkers }, () => runCustomWorker()));
@@ -1363,32 +1585,10 @@ export async function extractStatisticsParallel(input: {
         }
       }
 
-      for (const statDef of customPrivateStats) {
-        const kind = (statDef.kind ?? "numeric") === "numeric" ? "numeric" : "non_numeric";
+      for (const group of customPrivateGroups) {
         for (const owner of activeCharacters) {
           checkCancelled();
-          const split = splitCustomCharactersByBaseline(statDef.id, kind, statDef, [owner]);
-          if (kind === "numeric") {
-            seedCustomStatDefaultsForNames(statDef, split.firstRunSeedOnly);
-          } else {
-            seedCustomNonNumericStatDefaultsForNames(statDef, split.firstRunSeedOnly);
-          }
-          if (!split.existing.length) {
-            const label = statDef.label || statDef.id;
-            tickProgress(`Seeding ${label}`);
-            tickProgress(`Seeding ${label}`);
-            tickProgress(`Applying ${label}`);
-            continue;
-          }
-          const one = await runOneCustomRequest(statDef, split.existing);
-          checkCancelled();
-          rawBlocks.push({ label: `custom:${statDef.id}:${owner}`, raw: one.raw });
-          promptBlocks.push({ label: `custom:${statDef.id}:${owner}`, prompt: one.prompt });
-          if ((statDef.kind ?? "numeric") === "numeric") {
-            if (one.parsedNumeric) applyParsedForCustomStat(statDef, one.parsedNumeric, split.existing);
-          } else {
-            if (one.parsedNonNumeric) applyParsedForCustomNonNumericStat(statDef, one.parsedNonNumeric, split.existing);
-          }
+          await runCustomGroupRequest(group, [owner], `custom:${owner}`);
         }
       }
     }

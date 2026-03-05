@@ -1049,6 +1049,9 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     promptOverride: typeof definition.promptOverride === "string"
       ? definition.promptOverride
       : (typeof definition.sequentialPromptTemplate === "string" ? definition.sequentialPromptTemplate : undefined),
+    sequentialGroup: typeof (definition as { sequentialGroup?: string }).sequentialGroup === "string"
+      ? String((definition as { sequentialGroup?: string }).sequentialGroup).trim().toLowerCase()
+      : undefined,
   };
 }
 
@@ -6445,6 +6448,7 @@ export function openSettingsModal(input: {
         <div class="bst-section-divider">Extraction Toggles</div>
         <div class="bst-check-grid">
           <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
+          <label class="bst-check"><input data-k="enableSequentialStatGroups" type="checkbox">Enable Sequential Stat Groups</label>
           <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
           <label class="bst-check"><input data-k="regenerateOnMessageEdit" type="checkbox">Regenerate Tracker After Message Edit</label>
@@ -7228,6 +7232,7 @@ export function openSettingsModal(input: {
 
   set("connectionProfile", input.settings.connectionProfile);
   set("sequentialExtraction", String(input.settings.sequentialExtraction));
+  set("enableSequentialStatGroups", String(input.settings.enableSequentialStatGroups));
   set("maxConcurrentCalls", String(input.settings.maxConcurrentCalls));
   set("strictJsonRepair", String(input.settings.strictJsonRepair));
   set("maxRetriesPerStat", String(input.settings.maxRetriesPerStat));
@@ -7388,6 +7393,7 @@ export function openSettingsModal(input: {
     includeInInjection: boolean;
     color: string;
     promptOverride: string;
+    sequentialGroup: string;
     lockId: boolean;
   };
 
@@ -7414,6 +7420,7 @@ export function openSettingsModal(input: {
         includeInInjection: true,
         color: "",
         promptOverride: "",
+        sequentialGroup: "",
         lockId: false,
       };
     }
@@ -7455,6 +7462,7 @@ export function openSettingsModal(input: {
       includeInInjection: clone.includeInInjection,
       color: clone.color ?? "",
       promptOverride: clone.promptOverride ?? "",
+      sequentialGroup: String((clone as { sequentialGroup?: string }).sequentialGroup ?? ""),
       lockId: mode === "edit",
     };
   };
@@ -7564,6 +7572,10 @@ export function openSettingsModal(input: {
       if (draft.promptOverride.length > 20000) {
         errors.push("Custom prompt override is too long.");
       }
+      const group = String(draft.sequentialGroup ?? "").trim().toLowerCase();
+      if (group && !/^[a-z][a-z0-9_-]{0,31}$/.test(group)) {
+        errors.push("Sequential group must start with a letter and use only a-z, 0-9, _ or - (max 32 chars).");
+      }
     }
 
     if (step >= 4) {
@@ -7588,6 +7600,12 @@ export function openSettingsModal(input: {
     const behaviorGuidance = draft.behaviorGuidance.trim();
     const color = draft.color.trim();
     const template = draft.promptOverride.trim();
+    const sequentialGroup = String(draft.sequentialGroup ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_\-]/g, "_")
+      .replace(/_+/g, "_")
+      .slice(0, 32);
     const kind = normalizeCustomStatKind(draft.kind);
     const enumOptions = normalizeCustomEnumOptions(draft.enumOptionsText.split(/\r?\n/));
     const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(draft.textMaxLength) || 120)));
@@ -7643,6 +7661,7 @@ export function openSettingsModal(input: {
       showInGraph: kind === "numeric" ? track : false,
       color: color || undefined,
       promptOverride: template || undefined,
+      sequentialGroup: sequentialGroup || undefined,
     };
   };
 
@@ -7712,6 +7731,14 @@ export function openSettingsModal(input: {
       && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(candidate.color.trim())
       ? candidate.color.trim()
       : undefined;
+    const sequentialGroup = typeof (candidate as { sequentialGroup?: string }).sequentialGroup === "string"
+      ? String((candidate as { sequentialGroup?: string }).sequentialGroup)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_\-]/g, "_")
+        .replace(/_+/g, "_")
+        .slice(0, 32)
+      : "";
     const base: CustomStatDefinition = {
       ...candidate,
       id,
@@ -7729,6 +7756,7 @@ export function openSettingsModal(input: {
       showInGraph: kind === "numeric" ? Boolean(candidate.showInGraph ?? track) : false,
       color,
       promptOverride: promptOverride || undefined,
+      sequentialGroup: sequentialGroup || undefined,
       dateTimeMode: undefined,
     };
 
@@ -8073,12 +8101,14 @@ export function openSettingsModal(input: {
       const trackCharacters = Boolean(stat.trackCharacters ?? stat.track);
       const trackUser = Boolean(stat.trackUser ?? stat.track);
       const globalScope = Boolean(stat.globalScope);
+      const sequentialGroup = String((stat as { sequentialGroup?: string }).sequentialGroup ?? "").trim();
       const flags = [
         stat.track ? "enabled" : "disabled",
         `char:${trackCharacters ? "on" : "off"}`,
         `user:${trackUser ? "on" : "off"}`,
         kind,
         globalScope ? "global" : (stat.privateToOwner ? "private" : "shared"),
+        sequentialGroup ? `group:${sequentialGroup}` : "group:solo",
         stat.includeInInjection ? "injection" : "no injection",
       ];
       const description = (stat.description ?? "").trim();
@@ -8940,6 +8970,10 @@ export function openSettingsModal(input: {
         <label>Per-Stat Prompt Override (optional)
           <textarea data-bst-custom-field="promptOverride" rows="6" placeholder="Optional per-stat override used in all extraction modes. Leave empty to use the global custom-stat fallback for this kind.">${escapeHtml(draft.promptOverride)}</textarea>
         </label>
+        <label>Sequential Group (optional)
+          <input type="text" data-bst-custom-field="sequentialGroup" maxlength="32" value="${escapeHtml(draft.sequentialGroup)}" placeholder="e.g. appearance">
+        </label>
+        <div class="bst-help-line">When <strong>Enable Sequential Stat Groups</strong> is on, stats with the same group are extracted together in one sequential request.</div>
         <div class="bst-help-line" data-bst-kind-help="templateFallback">Used in all extraction modes. Empty override uses global Custom Numeric Default.</div>
         <div class="bst-help-line">Template placeholders: <code>{{user}}</code>, <code>{{char}}</code>, <code>{{characters}}</code>, <code>{{contextText}}</code>, <code>{{envelope}}</code>, <code>{{statId}}</code>.</div>
         <div class="bst-custom-ai-row">
@@ -9173,6 +9207,7 @@ export function openSettingsModal(input: {
       const injectNode = getField("includeInInjection") as HTMLInputElement | null;
       const colorNode = getField("color");
       const templateNode = getField("promptOverride");
+      const sequentialGroupNode = getField("sequentialGroup");
       draft.label = String(labelNode?.value ?? "");
       draft.id = String(idNode?.value ?? "").toLowerCase();
       draft.kind = normalizeCustomStatKind(kindNode?.value);
@@ -9209,6 +9244,7 @@ export function openSettingsModal(input: {
       draft.includeInInjection = Boolean(injectNode?.checked);
       draft.color = String(colorNode?.value ?? "");
       draft.promptOverride = String(templateNode?.value ?? "");
+      draft.sequentialGroup = String(sequentialGroupNode?.value ?? "");
     };
 
     const syncColorPickerFromText = (): void => {
@@ -10116,6 +10152,7 @@ export function openSettingsModal(input: {
       ...input.settings,
       connectionProfile: read("connectionProfile"),
       sequentialExtraction: readBool("sequentialExtraction", input.settings.sequentialExtraction),
+      enableSequentialStatGroups: readBool("enableSequentialStatGroups", input.settings.enableSequentialStatGroups),
       maxConcurrentCalls: readNumber("maxConcurrentCalls", input.settings.maxConcurrentCalls, 1, 8),
       strictJsonRepair: readBool("strictJsonRepair", input.settings.strictJsonRepair),
       maxRetriesPerStat: readNumber("maxRetriesPerStat", input.settings.maxRetriesPerStat, 0, 4),
@@ -10426,6 +10463,7 @@ export function openSettingsModal(input: {
   const tooltips: Partial<Record<keyof BetterSimTrackerSettings, string>> = {
     connectionProfile: "Choose a specific SillyTavern connection profile for tracker extraction calls.",
     sequentialExtraction: "Run one extraction prompt per stat instead of one unified prompt. More robust but slower.",
+    enableSequentialStatGroups: "When enabled, custom stats with the same Sequential Group are extracted together in one sequential request.",
     maxConcurrentCalls: "When sequential mode is enabled, number of stat requests sent in parallel.",
     strictJsonRepair: "Enable strict retry prompts when model output is not valid or missing required fields.",
     maxRetriesPerStat: "Maximum repair retries for each stat extraction stage.",

@@ -320,6 +320,47 @@ function resolvePrimaryCharacter(characters: string[], preferredCharacterName?: 
   return primaryCharacter(characters);
 }
 
+type BuiltInTrackingFlags = {
+  trackAffection?: boolean;
+  trackTrust?: boolean;
+  trackDesire?: boolean;
+  trackConnection?: boolean;
+  trackMood?: boolean;
+};
+
+function renderBuiltInSnapshotChunk(
+  stats: {
+    affection?: number;
+    trust?: number;
+    desire?: number;
+    connection?: number;
+    mood?: string;
+  },
+  flags?: BuiltInTrackingFlags,
+): string {
+  const chunks: string[] = [];
+  if (flags?.trackAffection !== false && Number.isFinite(stats.affection)) {
+    const value = Number(stats.affection);
+    chunks.push(`affection=${Math.max(0, Math.min(100, Math.round(value)))}`);
+  }
+  if (flags?.trackTrust !== false && Number.isFinite(stats.trust)) {
+    const value = Number(stats.trust);
+    chunks.push(`trust=${Math.max(0, Math.min(100, Math.round(value)))}`);
+  }
+  if (flags?.trackDesire !== false && Number.isFinite(stats.desire)) {
+    const value = Number(stats.desire);
+    chunks.push(`desire=${Math.max(0, Math.min(100, Math.round(value)))}`);
+  }
+  if (flags?.trackConnection !== false && Number.isFinite(stats.connection)) {
+    const value = Number(stats.connection);
+    chunks.push(`connection=${Math.max(0, Math.min(100, Math.round(value)))}`);
+  }
+  if (flags?.trackMood !== false && typeof stats.mood === "string" && stats.mood.trim()) {
+    chunks.push(`mood=${stats.mood.trim()}`);
+  }
+  return chunks.join(", ");
+}
+
 export function buildPrompt(
   stat: StatKey,
   userName: string,
@@ -522,6 +563,7 @@ export function buildUnifiedAllStatsPrompt(input: {
   preferredCharacterName?: string;
   includeCharacterCardsInPrompt?: boolean;
   includeLorebookInExtraction?: boolean;
+  builtInTracking?: BuiltInTrackingFlags;
 }): string {
   const envelope = commonEnvelope(input.userName, input.characters, input.contextText);
   const char = resolvePrimaryCharacter(input.characters, input.preferredCharacterName);
@@ -542,16 +584,14 @@ export function buildUnifiedAllStatsPrompt(input: {
 
   const currentLines = input.characters.map(name => {
     const chunks: string[] = [];
-    const affection = Number(input.current?.affection?.[name] ?? 50);
-    const trust = Number(input.current?.trust?.[name] ?? 50);
-    const desire = Number(input.current?.desire?.[name] ?? 50);
-    const connection = Number(input.current?.connection?.[name] ?? 50);
-    const mood = String(input.current?.mood?.[name] ?? "Neutral");
-    chunks.push(`affection=${Math.max(0, Math.min(100, Math.round(affection)))}`);
-    chunks.push(`trust=${Math.max(0, Math.min(100, Math.round(trust)))}`);
-    chunks.push(`desire=${Math.max(0, Math.min(100, Math.round(desire)))}`);
-    chunks.push(`connection=${Math.max(0, Math.min(100, Math.round(connection)))}`);
-    chunks.push(`mood=${mood}`);
+    const builtInChunk = renderBuiltInSnapshotChunk({
+      affection: Number(input.current?.affection?.[name]),
+      trust: Number(input.current?.trust?.[name]),
+      desire: Number(input.current?.desire?.[name]),
+      connection: Number(input.current?.connection?.[name]),
+      mood: typeof input.current?.mood?.[name] === "string" ? String(input.current?.mood?.[name]) : undefined,
+    }, input.builtInTracking);
+    if (builtInChunk) chunks.push(builtInChunk);
     for (const stat of customNumeric) {
       const customRaw = Number(resolveScopedCustomNumericValue(input.currentCustom, stat.id, name, stat.globalScope) ?? stat.defaultValue);
       const customValue = Math.max(0, Math.min(100, Math.round(customRaw)));
@@ -581,16 +621,14 @@ export function buildUnifiedAllStatsPrompt(input: {
     const header = `Snapshot ${idx + 1} (newest-${idx}):`;
     const rows = input.characters.map(name => {
       const chunks: string[] = [];
-      const affection = Number(entry.statistics.affection?.[name] ?? 50);
-      const trust = Number(entry.statistics.trust?.[name] ?? 50);
-      const desire = Number(entry.statistics.desire?.[name] ?? 50);
-      const connection = Number(entry.statistics.connection?.[name] ?? 50);
-      const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
-      chunks.push(`affection=${Math.round(affection)}`);
-      chunks.push(`trust=${Math.round(trust)}`);
-      chunks.push(`desire=${Math.round(desire)}`);
-      chunks.push(`connection=${Math.round(connection)}`);
-      chunks.push(`mood=${mood}`);
+      const builtInChunk = renderBuiltInSnapshotChunk({
+        affection: Number(entry.statistics.affection?.[name]),
+        trust: Number(entry.statistics.trust?.[name]),
+        desire: Number(entry.statistics.desire?.[name]),
+        connection: Number(entry.statistics.connection?.[name]),
+        mood: typeof entry.statistics.mood?.[name] === "string" ? String(entry.statistics.mood?.[name]) : undefined,
+      }, input.builtInTracking);
+      if (builtInChunk) chunks.push(builtInChunk);
       for (const stat of customNumeric) {
         const customRaw = Number(resolveScopedCustomNumericValue(entry.customStatistics ?? undefined, stat.id, name, stat.globalScope) ?? stat.defaultValue);
         const customValue = Math.max(0, Math.min(100, Math.round(customRaw)));
@@ -744,6 +782,7 @@ export function buildSequentialPrompt(
   preferredCharacterName?: string,
   includeCharacterCardsInPrompt = true,
   includeLorebookInExtraction = true,
+  builtInTracking?: BuiltInTrackingFlags,
 ): string {
   const envelope = commonEnvelope(userName, characters, contextText);
   const char = resolvePrimaryCharacter(characters, preferredCharacterName);
@@ -753,23 +792,27 @@ export function buildSequentialPrompt(
   const textStats = stat === "mood" || stat === "lastThought" ? [stat] : [];
 
   const currentLines = characters.map(name => {
-    const affection = Number(current?.affection?.[name] ?? 50);
-    const trust = Number(current?.trust?.[name] ?? 50);
-    const desire = Number(current?.desire?.[name] ?? 50);
-    const connection = Number(current?.connection?.[name] ?? 50);
-    const mood = String(current?.mood?.[name] ?? "Neutral");
-    return `- ${name}: affection=${Math.max(0, Math.min(100, Math.round(affection)))}, trust=${Math.max(0, Math.min(100, Math.round(trust)))}, desire=${Math.max(0, Math.min(100, Math.round(desire)))}, connection=${Math.max(0, Math.min(100, Math.round(connection)))}, mood=${mood}`;
+    const chunk = renderBuiltInSnapshotChunk({
+      affection: Number(current?.affection?.[name]),
+      trust: Number(current?.trust?.[name]),
+      desire: Number(current?.desire?.[name]),
+      connection: Number(current?.connection?.[name]),
+      mood: typeof current?.mood?.[name] === "string" ? String(current?.mood?.[name]) : undefined,
+    }, builtInTracking);
+    return `- ${name}: ${chunk || "no built-in stats tracked"}`;
   }).join("\n");
 
   const historyLines = history.slice(0, 3).map((entry, idx) => {
     const header = `Snapshot ${idx + 1} (newest-${idx}):`;
     const rows = characters.map(name => {
-      const affection = Number(entry.statistics.affection?.[name] ?? 50);
-      const trust = Number(entry.statistics.trust?.[name] ?? 50);
-      const desire = Number(entry.statistics.desire?.[name] ?? 50);
-      const connection = Number(entry.statistics.connection?.[name] ?? 50);
-      const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
-      return `  - ${name}: affection=${Math.round(affection)}, trust=${Math.round(trust)}, desire=${Math.round(desire)}, connection=${Math.round(connection)}, mood=${mood}`;
+      const chunk = renderBuiltInSnapshotChunk({
+        affection: Number(entry.statistics.affection?.[name]),
+        trust: Number(entry.statistics.trust?.[name]),
+        desire: Number(entry.statistics.desire?.[name]),
+        connection: Number(entry.statistics.connection?.[name]),
+        mood: typeof entry.statistics.mood?.[name] === "string" ? String(entry.statistics.mood?.[name]) : undefined,
+      }, builtInTracking);
+      return `  - ${name}: ${chunk || "no built-in stats tracked"}`;
     }).join("\n");
     return `${header}\n${rows}`;
   }).join("\n");
@@ -838,6 +881,7 @@ export function buildSequentialCustomNumericPrompt(input: {
   preferredCharacterName?: string;
   includeCharacterCardsInPrompt?: boolean;
   includeLorebookInExtraction?: boolean;
+  builtInTracking?: BuiltInTrackingFlags;
 }): string {
   const statId = input.statId.trim();
   const statLabel = input.statLabel.trim() || statId;
@@ -848,27 +892,33 @@ export function buildSequentialCustomNumericPrompt(input: {
   const safeMaxDelta = Math.max(1, Math.round(Number(input.maxDeltaPerTurn) || 15));
 
   const currentLines = input.characters.map(name => {
-    const affection = Number(input.current?.affection?.[name] ?? 50);
-    const trust = Number(input.current?.trust?.[name] ?? 50);
-    const desire = Number(input.current?.desire?.[name] ?? 50);
-    const connection = Number(input.current?.connection?.[name] ?? 50);
-    const mood = String(input.current?.mood?.[name] ?? "Neutral");
+    const builtInChunk = renderBuiltInSnapshotChunk({
+      affection: Number(input.current?.affection?.[name]),
+      trust: Number(input.current?.trust?.[name]),
+      desire: Number(input.current?.desire?.[name]),
+      connection: Number(input.current?.connection?.[name]),
+      mood: typeof input.current?.mood?.[name] === "string" ? String(input.current?.mood?.[name]) : undefined,
+    }, input.builtInTracking);
     const customValueRaw = Number(resolveScopedCustomNumericValue(input.currentCustom, statId, name, false) ?? defaultValue);
     const customValue = Math.max(0, Math.min(100, Math.round(customValueRaw)));
-    return `- ${name}: affection=${Math.max(0, Math.min(100, Math.round(affection)))}, trust=${Math.max(0, Math.min(100, Math.round(trust)))}, desire=${Math.max(0, Math.min(100, Math.round(desire)))}, connection=${Math.max(0, Math.min(100, Math.round(connection)))}, mood=${mood}, ${statId}=${customValue}`;
+    const chunks = [builtInChunk, `${statId}=${customValue}`].filter(Boolean).join(", ");
+    return `- ${name}: ${chunks}`;
   }).join("\n");
 
   const historyLines = input.history.slice(0, 3).map((entry, idx) => {
     const header = `Snapshot ${idx + 1} (newest-${idx}):`;
     const rows = input.characters.map(name => {
-      const affection = Number(entry.statistics.affection?.[name] ?? 50);
-      const trust = Number(entry.statistics.trust?.[name] ?? 50);
-      const desire = Number(entry.statistics.desire?.[name] ?? 50);
-      const connection = Number(entry.statistics.connection?.[name] ?? 50);
-      const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
+      const builtInChunk = renderBuiltInSnapshotChunk({
+        affection: Number(entry.statistics.affection?.[name]),
+        trust: Number(entry.statistics.trust?.[name]),
+        desire: Number(entry.statistics.desire?.[name]),
+        connection: Number(entry.statistics.connection?.[name]),
+        mood: typeof entry.statistics.mood?.[name] === "string" ? String(entry.statistics.mood?.[name]) : undefined,
+      }, input.builtInTracking);
       const customValueRaw = Number(resolveScopedCustomNumericValue(entry.customStatistics ?? undefined, statId, name, false) ?? defaultValue);
       const customValue = Math.max(0, Math.min(100, Math.round(customValueRaw)));
-      return `  - ${name}: affection=${Math.round(affection)}, trust=${Math.round(trust)}, desire=${Math.round(desire)}, connection=${Math.round(connection)}, mood=${mood}, ${statId}=${customValue}`;
+      const chunks = [builtInChunk, `${statId}=${customValue}`].filter(Boolean).join(", ");
+      return `  - ${name}: ${chunks}`;
     }).join("\n");
     return `${header}\n${rows}`;
   }).join("\n");
@@ -1101,6 +1151,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   preferredCharacterName?: string;
   includeCharacterCardsInPrompt?: boolean;
   includeLorebookInExtraction?: boolean;
+  builtInTracking?: BuiltInTrackingFlags;
 }): string {
   const statId = input.statId.trim();
   const statLabel = input.statLabel.trim() || statId;
@@ -1135,11 +1186,13 @@ export function buildSequentialCustomNonNumericPrompt(input: {
           : `text<=${textMaxLen}`;
 
   const currentLines = input.characters.map(name => {
-    const affection = Number(input.current?.affection?.[name] ?? 50);
-    const trust = Number(input.current?.trust?.[name] ?? 50);
-    const desire = Number(input.current?.desire?.[name] ?? 50);
-    const connection = Number(input.current?.connection?.[name] ?? 50);
-    const mood = String(input.current?.mood?.[name] ?? "Neutral");
+    const builtInChunk = renderBuiltInSnapshotChunk({
+      affection: Number(input.current?.affection?.[name]),
+      trust: Number(input.current?.trust?.[name]),
+      desire: Number(input.current?.desire?.[name]),
+      connection: Number(input.current?.connection?.[name]),
+      mood: typeof input.current?.mood?.[name] === "string" ? String(input.current?.mood?.[name]) : undefined,
+    }, input.builtInTracking);
     const customRaw = resolveScopedCustomNonNumericValue(
       input.currentCustomNonNumeric ?? undefined,
       statId,
@@ -1148,17 +1201,20 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     );
     const customValue = formatCustomNonNumericValue(statKind, customRaw, defaultValue);
     const customLiteral = customNonNumericLiteral(customValue);
-    return `- ${name}: affection=${Math.max(0, Math.min(100, Math.round(affection)))}, trust=${Math.max(0, Math.min(100, Math.round(trust)))}, desire=${Math.max(0, Math.min(100, Math.round(desire)))}, connection=${Math.max(0, Math.min(100, Math.round(connection)))}, mood=${mood}, ${statId}=${customLiteral}`;
+    const chunks = [builtInChunk, `${statId}=${customLiteral}`].filter(Boolean).join(", ");
+    return `- ${name}: ${chunks}`;
   }).join("\n");
 
   const historyLines = input.history.slice(0, 3).map((entry, idx) => {
     const header = `Snapshot ${idx + 1} (newest-${idx}):`;
     const rows = input.characters.map(name => {
-      const affection = Number(entry.statistics.affection?.[name] ?? 50);
-      const trust = Number(entry.statistics.trust?.[name] ?? 50);
-      const desire = Number(entry.statistics.desire?.[name] ?? 50);
-      const connection = Number(entry.statistics.connection?.[name] ?? 50);
-      const mood = String(entry.statistics.mood?.[name] ?? "Neutral");
+      const builtInChunk = renderBuiltInSnapshotChunk({
+        affection: Number(entry.statistics.affection?.[name]),
+        trust: Number(entry.statistics.trust?.[name]),
+        desire: Number(entry.statistics.desire?.[name]),
+        connection: Number(entry.statistics.connection?.[name]),
+        mood: typeof entry.statistics.mood?.[name] === "string" ? String(entry.statistics.mood?.[name]) : undefined,
+      }, input.builtInTracking);
       const customRaw = resolveScopedCustomNonNumericValue(
         entry.customNonNumericStatistics ?? undefined,
         statId,
@@ -1167,7 +1223,8 @@ export function buildSequentialCustomNonNumericPrompt(input: {
       );
       const customValue = formatCustomNonNumericValue(statKind, customRaw, defaultValue);
       const customLiteral = customNonNumericLiteral(customValue);
-      return `  - ${name}: affection=${Math.round(affection)}, trust=${Math.round(trust)}, desire=${Math.round(desire)}, connection=${Math.round(connection)}, mood=${mood}, ${statId}=${customLiteral}`;
+      const chunks = [builtInChunk, `${statId}=${customLiteral}`].filter(Boolean).join(", ");
+      return `  - ${name}: ${chunks}`;
     }).join("\n");
     return `${header}\n${rows}`;
   }).join("\n");

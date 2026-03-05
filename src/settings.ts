@@ -63,6 +63,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   summarizationNoteVisibleForAI: false,
   injectSummarizationNote: false,
   sequentialExtraction: false,
+  enableSequentialStatGroups: false,
   maxDeltaPerTurn: 15,
   maxTokensOverride: 0,
   truncationLengthOverride: 0,
@@ -547,6 +548,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     summarizationNoteVisibleForAI: asBool(input.summarizationNoteVisibleForAI, defaultSettings.summarizationNoteVisibleForAI),
     injectSummarizationNote: asBool(input.injectSummarizationNote, defaultSettings.injectSummarizationNote),
     sequentialExtraction: asBool(input.sequentialExtraction, defaultSettings.sequentialExtraction),
+    enableSequentialStatGroups: asBool(input.enableSequentialStatGroups, defaultSettings.enableSequentialStatGroups),
     maxDeltaPerTurn: clampInt(input.maxDeltaPerTurn, defaultSettings.maxDeltaPerTurn, 1, 30),
     maxTokensOverride: clampInt(input.maxTokensOverride, defaultSettings.maxTokensOverride, 0, 100000),
     truncationLengthOverride: clampInt(input.truncationLengthOverride, defaultSettings.truncationLengthOverride, 0, 200000),
@@ -877,6 +879,9 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       : (typeof obj.sequentialPromptTemplate === "string"
         ? obj.sequentialPromptTemplate.trim().slice(0, 20000)
         : "");
+    const sequentialGroup = typeof obj.sequentialGroup === "string"
+      ? obj.sequentialGroup.trim().toLowerCase().replace(/[^a-z0-9_\-]/g, "_").replace(/_+/g, "_").slice(0, 32)
+      : "";
     const kind = normalizeKind(obj.kind);
     const dateTimeMode = kind === "date_time"
       ? normalizeDateTimeMode(obj.dateTimeMode)
@@ -952,6 +957,7 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       includeInInjection: asBool(obj.includeInInjection, true),
       color: color || undefined,
       promptOverride: template || undefined,
+      sequentialGroup: sequentialGroup || undefined,
     };
     out.push(entry);
     seen.add(id);
