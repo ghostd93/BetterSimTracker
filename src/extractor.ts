@@ -876,6 +876,63 @@ export async function extractStatisticsParallel(input: {
       parsedOne: ReturnType<typeof parseCustomValueResponse>,
     ): ReturnType<typeof parseCustomValueResponse> => {
       const kind = statDef.kind ?? "numeric";
+      if (kind === "array") {
+        const next = {
+          confidence: { ...(parsedOne.confidence ?? {}) },
+          value: { ...(parsedOne.value ?? {}) },
+        };
+        const toArrayItems = (raw: unknown): string[] => {
+          const source = Array.isArray(raw)
+            ? raw
+            : typeof raw === "string"
+              ? raw.split(/\r?\n|[,;]+/g)
+              : [];
+          const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(statDef.textMaxLength) || 120)));
+          const items: string[] = [];
+          const seen = new Set<string>();
+          for (const item of source) {
+            const cleaned = String(item ?? "")
+              .trim()
+              .replace(/\s+/g, " ")
+              .replace(/^[\s\-–—*•·\u2022\u25E6]+/, "")
+              .replace(/^\s*\d+[\.\)]\s+/, "")
+              .slice(0, textMaxLength);
+            if (!cleaned) continue;
+            const key = cleaned.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            items.push(cleaned);
+            if (items.length >= 20) break;
+          }
+          return items;
+        };
+        for (const name of requestCharacters) {
+          const candidateRaw = next.value[name];
+          if (candidateRaw === undefined) continue;
+          const candidate = toArrayItems(candidateRaw);
+          const previousByOwner = previousCustomNonNumericStatistics?.[statDef.id];
+          const previousRaw = statDef.globalScope
+            ? (previousByOwner?.[GLOBAL_TRACKER_KEY] ?? previousByOwner?.[name])
+            : previousByOwner?.[name];
+          const previous = toArrayItems(previousRaw);
+          const confidenceRaw = Number(next.confidence[name]);
+          const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : 0.8;
+          const isDestructiveDrop = previous.length > 0
+            && candidate.length < previous.length
+            && (candidate.length === 0 || candidate.length <= Math.floor(previous.length / 2));
+          // For weak-model responses, preserve prior array state when change is overly destructive.
+          if (isDestructiveDrop && confidence < 0.35) {
+            if (previous.length > 0) {
+              next.value[name] = previous;
+            } else {
+              delete next.value[name];
+            }
+            continue;
+          }
+          next.value[name] = candidate;
+        }
+        return next;
+      }
       if (kind === "date_time") {
         const next = {
           confidence: { ...(parsedOne.confidence ?? {}) },

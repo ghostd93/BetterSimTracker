@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.3-dev3] - 2026-03-05
+### Fixed
+- Hardened `array` custom-stat handling for weaker models:
+  - broader array value normalization (JSON array strings, bullet/numbered lines, comma/newline lists),
+  - explicit empty markers now parse as an intentional empty array,
+  - conservative apply guard prevents low-confidence destructive array drops from wiping prior values.
+
 ## [2.2.3-dev2] - 2026-03-05
 ### Changed
 - Extraction progress labels are now explicit and mode-aware (Built-in, Custom, Custom Group, Unified Batch), including clearer no-extraction/default seeding steps.
