@@ -3,8 +3,15 @@
 All notable changes to BetterSimTracker are documented here.
 
 ## [2.2.3.3] - 2026-03-05
+### Added
+- Optional sequential custom-stat grouping:
+  - global toggle `Enable Sequential Stat Groups`
+  - per-stat `Sequential Group` field
+  - stats sharing a group are extracted together in one sequential request.
+
 ### Fixed
 - Extraction progress status labels are now explicit and step-specific (Built-in, Custom, Unified Batch, and no-extraction/default seeding paths) to avoid ambiguous progress reporting.
+- Sequential snapshot prompts no longer inject fallback built-in values (`50`) for built-ins that are disabled in tracking settings.
 
 ## [2.2.3] - 2026-03-04
 ### Added

@@ -79,6 +79,7 @@ export interface CustomStatDefinition {
   includeInInjection: boolean;
   color?: string;
   promptOverride?: string;
+  sequentialGroup?: string;
   // Legacy key kept for backward-compatible import paths.
   sequentialPromptTemplate?: string;
 }
@@ -112,6 +113,7 @@ export interface BetterSimTrackerSettings {
   summarizationNoteVisibleForAI: boolean;
   injectSummarizationNote: boolean;
   sequentialExtraction: boolean;
+  enableSequentialStatGroups: boolean;
   maxDeltaPerTurn: number;
   maxTokensOverride: number;
   truncationLengthOverride: number;
