@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3-dev1] - 2026-03-05
+### Added
+- Optional sequential custom-stat grouping:
+  - global toggle `Enable Sequential Stat Groups`
+  - per-stat `Sequential Group` field in Custom Stat wizard/import/state
+  - stats sharing a group are extracted together in one sequential request.
+
+### Fixed
+- Sequential snapshot prompts no longer inject fallback built-in values (`50`) for built-ins that are disabled in tracking settings.
+
 ## [2.2.3] - 2026-03-04
 ### Added
 - New custom stat type: `date_time` with two modes:
