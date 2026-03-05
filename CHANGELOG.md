@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3-dev2] - 2026-03-05
+### Changed
+- Extraction progress labels are now explicit and mode-aware (Built-in, Custom, Custom Group, Unified Batch), including clearer no-extraction/default seeding steps.
+
 ## [2.2.3-dev1] - 2026-03-05
 ### Added
 - Optional sequential custom-stat grouping:

@@ -777,10 +777,18 @@ export async function extractStatisticsParallel(input: {
     };
   };
     let progressDone = 0;
-    const tickProgress = (label?: string): void => {
+  const tickProgress = (label?: string): void => {
       progressDone = Math.min(progressTotal, progressDone + 1);
       onProgress?.(progressDone, progressTotal, label);
     };
+    const formatBuiltInProgressLabel = (statList: StatKey[]): string => {
+      if (statList.length === 1) return `Built-in: ${statList[0]}`;
+      return `Built-ins: ${statList.join(", ")}`;
+    };
+    const formatCustomProgressLabel = (statDef: CustomStatDefinition): string =>
+      `Custom: ${statDef.label || statDef.id}`;
+    const formatCustomGroupProgressLabel = (group: CustomStatDefinition[]): string =>
+      `Custom Group: ${group.map(stat => stat.id).join("+")}`;
 
     const callGenerate = async (
       prompt: string,
@@ -914,7 +922,7 @@ export async function extractStatisticsParallel(input: {
       requestCharacters: string[] = activeCharacters,
     ): Promise<{ prompt: string; raw: string; parsedOne: ReturnType<typeof parseUnifiedDeltaResponse> }> => {
       checkCancelled();
-      const statLabel = statList.length === 1 ? statList[0] : "stats";
+      const progressLabel = formatBuiltInProgressLabel(statList);
       const builtPrompt = settings.sequentialExtraction && statList.length === 1
         ? buildSequentialPrompt(
             statList[0],
@@ -952,11 +960,11 @@ export async function extractStatisticsParallel(input: {
             settings.includeLorebookInExtraction,
           );
       const prompt = applyPromptCharacterAliases(builtPrompt);
-      tickProgress(`Requesting ${statLabel}`);
+      tickProgress(`Requesting ${progressLabel}`);
       let rawResponse = await callGenerate(prompt, statList, "initial");
       checkCancelled();
       let raw = rawResponse.text;
-      tickProgress(`Parsing ${statLabel}`);
+      tickProgress(`Parsing ${progressLabel}`);
       let parsedOne = parseUnifiedDeltaResponse(raw, requestCharacters, statList, settings.maxDeltaPerTurn, promptCharacterAliases);
       const firstHasValues = hasParsedValues(parsedOne);
       firstParseHadValues = firstParseHadValues && firstHasValues;
@@ -1025,7 +1033,7 @@ export async function extractStatisticsParallel(input: {
           break;
         }
       }
-      tickProgress(`Applying ${statLabel}`);
+      tickProgress(`Applying ${progressLabel}`);
       return { prompt, raw, parsedOne };
     };
 
@@ -1040,6 +1048,7 @@ export async function extractStatisticsParallel(input: {
     }> => {
       checkCancelled();
       const label = statDef.label || statDef.id;
+      const progressLabel = formatCustomProgressLabel(statDef);
       const statId = statDef.id;
       const kind = statDef.kind ?? "numeric";
       const builtPrompt = kind === "numeric"
@@ -1108,11 +1117,11 @@ export async function extractStatisticsParallel(input: {
           },
         });
       const prompt = applyPromptCharacterAliases(builtPrompt);
-      tickProgress(`Requesting ${label}`);
+      tickProgress(`Requesting ${progressLabel}`);
       let rawResponse = await callGenerate(prompt, [statId], "initial");
       checkCancelled();
       let raw = rawResponse.text;
-      tickProgress(`Parsing ${label}`);
+      tickProgress(`Parsing ${progressLabel}`);
       let parsedNumeric = kind === "numeric"
         ? parseCustomDeltaResponse(
           raw,
@@ -1174,7 +1183,7 @@ export async function extractStatisticsParallel(input: {
           }
         }
       }
-      tickProgress(`Applying ${label}`);
+      tickProgress(`Applying ${progressLabel}`);
       return { prompt, raw, parsedNumeric, parsedNonNumeric };
     };
 
@@ -1275,9 +1284,9 @@ export async function extractStatisticsParallel(input: {
 
         const shouldRequestUnifiedAll = batchBuiltInStats.length > 0 || customPlans.some(plan => plan.existing.length > 0);
         if (!shouldRequestUnifiedAll) {
-          tickProgress("Seeding defaults");
-          tickProgress("Seeding defaults");
-          tickProgress("Applying defaults");
+          tickProgress(`Seeding defaults (${batchLabel})`);
+          tickProgress(`No extraction needed (${batchLabel})`);
+          tickProgress(`Applying defaults (${batchLabel})`);
           return;
         }
 
@@ -1309,11 +1318,11 @@ export async function extractStatisticsParallel(input: {
           },
         });
         const prompt = applyPromptCharacterAliases(builtPrompt);
-        tickProgress("Requesting stats");
+        tickProgress(`Requesting Unified Batch (${batchLabel})`);
         const response = await callGenerate(prompt, allRequestedStats, "initial");
         checkCancelled();
         let raw = response.text;
-        tickProgress("Parsing stats");
+        tickProgress(`Parsing Unified Batch (${batchLabel})`);
         let parsedAll = parseUnifiedAllFromRaw(raw);
         const hasAnyCustomValues = Object.values(parsedAll.customNumeric).some(item => hasAnyValues(item.delta))
           || Object.values(parsedAll.customNonNumeric).some(item => hasAnyValues(item.value));
@@ -1332,7 +1341,7 @@ export async function extractStatisticsParallel(input: {
             break;
           }
         }
-        tickProgress("Applying stats");
+        tickProgress(`Applying Unified Batch (${batchLabel})`);
         rawBlocks.push({ label: batchLabel, raw });
         promptBlocks.push({ label: batchLabel, prompt });
         for (const stat of batchBuiltInStats) {
@@ -1413,9 +1422,9 @@ export async function extractStatisticsParallel(input: {
           }
           if (!split.existing.length) {
             const label = statDef.label || statDef.id;
-            tickProgress(`Seeding ${label}`);
-            tickProgress(`Seeding ${label}`);
-            tickProgress(`Applying ${label}`);
+            tickProgress(`Seeding Custom: ${label}`);
+            tickProgress(`No extraction needed (Custom: ${label})`);
+            tickProgress(`Applying Custom: ${label}`);
             return;
           }
           const one = await runOneCustomRequest(statDef, split.existing);
@@ -1445,9 +1454,9 @@ export async function extractStatisticsParallel(input: {
         }
         if (!hasAnyExisting) {
           const label = group.map(stat => stat.label || stat.id).join(", ");
-          tickProgress(`Seeding ${label}`);
-          tickProgress(`Seeding ${label}`);
-          tickProgress(`Applying ${label}`);
+          tickProgress(`Seeding Custom Group: ${label}`);
+          tickProgress(`No extraction needed (Custom Group: ${label})`);
+          tickProgress(`Applying Custom Group: ${label}`);
           return;
         }
 
@@ -1478,10 +1487,12 @@ export async function extractStatisticsParallel(input: {
         });
         const prompt = applyPromptCharacterAliases(builtPrompt);
         const groupLabel = group.map(stat => stat.id).join("+");
-        tickProgress(`Requesting ${groupLabel}`);
+        const groupProgressLabel = formatCustomGroupProgressLabel(group);
+        tickProgress(`Requesting ${groupProgressLabel}`);
         let response = await callGenerate(prompt, statsForRequest, "initial");
         checkCancelled();
         let raw = response.text;
+        tickProgress(`Parsing ${groupProgressLabel}`);
         const parseGroup = (rawText: string): {
           numeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>>;
           nonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>>;
@@ -1544,7 +1555,7 @@ export async function extractStatisticsParallel(input: {
             break;
           }
         }
-        tickProgress(`Applying ${groupLabel}`);
+        tickProgress(`Applying ${groupProgressLabel}`);
         rawBlocks.push({ label: `${labelPrefix}:${groupLabel}`, raw });
         promptBlocks.push({ label: `${labelPrefix}:${groupLabel}`, prompt });
         for (const statDef of group) {
