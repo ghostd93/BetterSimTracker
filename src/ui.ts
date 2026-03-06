@@ -6635,8 +6635,8 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea>
-            <div class="bst-prompt-ai-row">
-              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialAffection">Uses current connection profile.</span>
+            <div class="bst-prompt-ai-row" style="display:none;">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialAffection"></span>
             </div>
             <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
             <textarea data-k="builtInBehaviorAffection" rows="5" placeholder="How affection should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
@@ -6661,8 +6661,8 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea>
-            <div class="bst-prompt-ai-row">
-              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialTrust">Uses current connection profile.</span>
+            <div class="bst-prompt-ai-row" style="display:none;">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialTrust"></span>
             </div>
             <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
             <textarea data-k="builtInBehaviorTrust" rows="5" placeholder="How trust should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
@@ -6687,8 +6687,8 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea>
-            <div class="bst-prompt-ai-row">
-              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialDesire">Uses current connection profile.</span>
+            <div class="bst-prompt-ai-row" style="display:none;">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialDesire"></span>
             </div>
             <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
             <textarea data-k="builtInBehaviorDesire" rows="5" placeholder="How desire should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
@@ -6713,8 +6713,8 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
-            <div class="bst-prompt-ai-row">
-              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialConnection">Uses current connection profile.</span>
+            <div class="bst-prompt-ai-row" style="display:none;">
+              <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialConnection"></span>
             </div>
             <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
             <textarea data-k="builtInBehaviorConnection" rows="5" placeholder="How connection should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
@@ -10617,14 +10617,17 @@ export function openSettingsModal(input: {
   ): void => {
     const statusNode = modal.querySelector(`[data-bst-seq-ai-status="${key}"]`) as HTMLElement | null;
     if (!statusNode) return;
+    const rowNode = statusNode.closest(".bst-prompt-ai-row") as HTMLElement | null;
     const text = String(message ?? "").trim();
     if (!text && state === "idle") {
-      statusNode.textContent = "Uses current connection profile.";
+      statusNode.textContent = "";
       statusNode.setAttribute("data-state", "idle");
+      if (rowNode) rowNode.style.display = "none";
       return;
     }
     statusNode.textContent = text;
     statusNode.setAttribute("data-state", state);
+    if (rowNode) rowNode.style.display = text ? "block" : "none";
   };
 
   (Object.keys(builtInSequentialPromptKeyToStat) as BuiltInSequentialPromptSettingKey[])
