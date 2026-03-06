@@ -279,9 +279,10 @@ function registerBstMacro(
 }
 
 function syncBstMacros(context: STContext, currentSettings: BetterSimTrackerSettings): void {
-  const customStatIds = (currentSettings.customStats ?? [])
-    .map(def => String(def.id ?? "").trim().toLowerCase())
-    .filter(Boolean);
+  const customDefs = (currentSettings.customStats ?? [])
+    .map(def => ({ ...def, id: String(def.id ?? "").trim().toLowerCase() }))
+    .filter(def => def.id.length > 0);
+  const customStatIds = customDefs.map(def => def.id);
   const characterNames = Array.from(new Set(
     (allCharacterNames ?? [])
       .map(name => String(name ?? "").trim())
@@ -290,6 +291,24 @@ function syncBstMacros(context: STContext, currentSettings: BetterSimTrackerSett
   const characterSignature = characterNames.map(name => `${name}:${toCharacterSlug(name)}`).join("|");
   const signature = [
     "v1",
+    String(Boolean(currentSettings.trackAffection)),
+    String(Boolean(currentSettings.trackTrust)),
+    String(Boolean(currentSettings.trackDesire)),
+    String(Boolean(currentSettings.trackConnection)),
+    String(Boolean(currentSettings.trackMood)),
+    String(Boolean(currentSettings.trackLastThought)),
+    String(Boolean(currentSettings.enableUserTracking)),
+    String(Boolean(currentSettings.userTrackMood)),
+    String(Boolean(currentSettings.userTrackLastThought)),
+    customDefs
+      .map(def => [
+        def.id,
+        def.track ? 1 : 0,
+        def.trackCharacters ? 1 : 0,
+        def.trackUser ? 1 : 0,
+        def.globalScope ? 1 : 0,
+      ].join(":"))
+      .join("|"),
     customStatIds.join("|"),
     characterSignature,
   ].join("::");
@@ -307,7 +326,7 @@ function syncBstMacros(context: STContext, currentSettings: BetterSimTrackerSett
     () => getLastInjectedPrompt(),
   );
 
-  const statIds = new Set<string>([
+  const statIds = [
     "affection",
     "trust",
     "desire",
@@ -315,30 +334,66 @@ function syncBstMacros(context: STContext, currentSettings: BetterSimTrackerSett
     "mood",
     "lastThought",
     ...customStatIds,
-  ]);
-  const scopes = [BST_MACRO_STAT_SCOPE_USER, BST_MACRO_STAT_SCOPE_SCENE] as const;
+  ];
   for (const rawStatId of statIds) {
-    const statId = String(rawStatId ?? "").trim();
+    const statId = String(rawStatId ?? "").trim().toLowerCase();
     if (!statId) continue;
     const segment = toMacroIdSegment(statId);
     if (!segment) continue;
-    for (const scope of scopes) {
-      const macroName = `bst_stat_${scope}_${segment}`;
+    const customDef = customDefs.find(def => def.id === statId) ?? null;
+    const isBuiltInNumeric = statId === "affection" || statId === "trust" || statId === "desire" || statId === "connection";
+    const isMood = statId === "mood";
+    const isLastThought = statId === "lastthought" || statId === "last_thought";
+    const allowsScene = Boolean(customDef?.globalScope) && Boolean(customDef?.track);
+    const allowsUser = (() => {
+      if (isBuiltInNumeric) return false;
+      if (isMood) return Boolean(currentSettings.enableUserTracking && currentSettings.userTrackMood);
+      if (isLastThought) return Boolean(currentSettings.enableUserTracking && currentSettings.userTrackLastThought);
+      if (!customDef || customDef.globalScope) return false;
+      const baseTracked = Boolean(customDef.track);
+      return baseTracked && Boolean(customDef.trackUser ?? customDef.track);
+    })();
+    const allowsCharacter = (() => {
+      if (isBuiltInNumeric) {
+        if (statId === "affection") return Boolean(currentSettings.trackAffection);
+        if (statId === "trust") return Boolean(currentSettings.trackTrust);
+        if (statId === "desire") return Boolean(currentSettings.trackDesire);
+        return Boolean(currentSettings.trackConnection);
+      }
+      if (isMood) return Boolean(currentSettings.trackMood);
+      if (isLastThought) return Boolean(currentSettings.trackLastThought);
+      if (!customDef || customDef.globalScope) return false;
+      const baseTracked = Boolean(customDef.track);
+      return baseTracked && Boolean(customDef.trackCharacters ?? customDef.track);
+    })();
+    if (allowsUser) {
+      const macroName = `bst_stat_${BST_MACRO_STAT_SCOPE_USER}_${segment}`;
       registerBstMacro(
         context,
         macroName,
-        `BetterSimTracker stat macro for "${statId}" (${scope} scope).`,
-        () => resolveMacroStatValue(latestData, settings, statId, scope),
+        `BetterSimTracker stat macro for "${statId}" (${BST_MACRO_STAT_SCOPE_USER} scope).`,
+        () => resolveMacroStatValue(latestData, settings, statId, BST_MACRO_STAT_SCOPE_USER),
       );
     }
-    for (const characterName of characterNames) {
-      const slug = toCharacterSlug(characterName);
+    if (allowsScene) {
+      const macroName = `bst_stat_${BST_MACRO_STAT_SCOPE_SCENE}_${segment}`;
       registerBstMacro(
         context,
-        `bst_stat_char_${segment}_${slug}`,
-        `BetterSimTracker stat macro for "${statId}" (character "${characterName}").`,
-        () => resolveMacroStatValue(latestData, settings, statId, "char_target", characterName),
+        macroName,
+        `BetterSimTracker stat macro for "${statId}" (${BST_MACRO_STAT_SCOPE_SCENE} scope).`,
+        () => resolveMacroStatValue(latestData, settings, statId, BST_MACRO_STAT_SCOPE_SCENE),
       );
+    }
+    if (allowsCharacter) {
+      for (const characterName of characterNames) {
+        const slug = toCharacterSlug(characterName);
+        registerBstMacro(
+          context,
+          `bst_stat_char_${segment}_${slug}`,
+          `BetterSimTracker stat macro for "${statId}" (character "${characterName}").`,
+          () => resolveMacroStatValue(latestData, settings, statId, "char_target", characterName),
+        );
+      }
     }
   }
   bstMacroSignature = signature;

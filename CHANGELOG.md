@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.3-dev8] - 2026-03-06
+### Changed
+- Macro hints and macro registration are now stat-scope aware:
+  - User macros only for stats that actually track user.
+  - Scene macros only for global stats.
+  - Character-targeted macros only for stats that track characters.
+- Removed irrelevant macro suggestions for disabled/incompatible scopes.
+
 ## [2.2.3.3-dev7] - 2026-03-06
 ### Fixed
 - Settings macro preview candidates are now restricted to characters that actually exist in the current chat (chat message participants), instead of showing full character roster from global character list.

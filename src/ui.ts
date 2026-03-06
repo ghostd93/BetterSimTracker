@@ -8125,8 +8125,12 @@ export function openSettingsModal(input: {
         .toLowerCase()
         .replace(/[^a-z0-9_]+/g, "_")
         .replace(/^_+|_+$/g, "");
+      const quickEnabled = Boolean(stat.track);
+      const allowsSceneMacro = quickEnabled && Boolean(stat.globalScope);
+      const allowsUserMacro = quickEnabled && !Boolean(stat.globalScope) && Boolean(stat.trackUser ?? stat.track);
+      const allowsCharMacro = quickEnabled && !Boolean(stat.globalScope) && Boolean(stat.trackCharacters ?? stat.track);
       const characterMacroExamples = (() => {
-        if (!macroSegment) return [] as string[];
+        if (!macroSegment || !allowsCharMacro) return [] as string[];
         const names = Array.from(new Set(
           (input.previewCharacterCandidates ?? [])
             .map(candidate => String(candidate?.name ?? "").trim())
@@ -8139,7 +8143,11 @@ export function openSettingsModal(input: {
         return names.map(name => `{{bst_stat_char_${macroSegment}_${toMacroCharacterSlug(name)}}}`);
       })();
       const macroScopes = macroSegment
-        ? [`{{bst_stat_user_${macroSegment}}}`, `{{bst_stat_scene_${macroSegment}}}`, ...characterMacroExamples]
+        ? [
+          ...(allowsUserMacro ? [`{{bst_stat_user_${macroSegment}}}`] : []),
+          ...(allowsSceneMacro ? [`{{bst_stat_scene_${macroSegment}}}`] : []),
+          ...characterMacroExamples,
+        ]
         : [];
       const defaultMeta = (() => {
         if (kind === "numeric") {
@@ -8180,7 +8188,7 @@ export function openSettingsModal(input: {
               ${escapeHtml(defaultMeta)}
             </div>
             ${description ? `<div class="bst-custom-stat-meta">${escapeHtml(description)}</div>` : ""}
-            ${macroScopes.length ? `<div class="bst-custom-stat-meta">Macros: ${macroScopes.map(item => `<code>${escapeHtml(item)}</code>`).join(" ")}${characterMacroExamples.length ? "" : ` <code>{{bst_stat_char_${escapeHtml(macroSegment)}_&lt;character_slug&gt;}}</code>`}</div>` : ""}
+            ${macroScopes.length || allowsCharMacro ? `<div class="bst-custom-stat-meta">Macros: ${macroScopes.map(item => `<code>${escapeHtml(item)}</code>`).join(" ")}${(allowsCharMacro && !characterMacroExamples.length) ? ` <code>{{bst_stat_char_${escapeHtml(macroSegment)}_&lt;character_slug&gt;}}</code>` : ""}</div>` : ""}
             <div class="bst-custom-stat-flags">
               ${flags.map(flag => `<span class="bst-custom-stat-flag">${escapeHtml(flag)}</span>`).join("")}
             </div>
