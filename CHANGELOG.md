@@ -2,6 +2,18 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev6] - 2026-03-06
+### Added
+- Added release-safety validation scripts:
+  - `npm run validate:versions`
+  - `npm run validate:release`
+- Added script implementations:
+  - `scripts/validate-versions.mjs`
+  - `scripts/validate-release.mjs`
+
+### Changed
+- Version is now `2.2.3.10-dev6`.
+
 ## [2.2.3.10-dev5] - 2026-03-06
 ### Added
 - Added new targeted tests for extracted helper layers:
