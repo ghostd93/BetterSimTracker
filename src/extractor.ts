@@ -196,6 +196,25 @@ function normalizeTextForComparison(value: unknown): string {
     .replace(/\s+/g, " ");
 }
 
+function normalizeDebugText(value: string): string {
+  return String(value ?? "")
+    .replace(/\u2011/g, "-")
+    .replace(/\u2012/g, "-")
+    .replace(/\u2013/g, "-")
+    .replace(/\u2014/g, "-")
+    .replace(/\u2018/g, "'")
+    .replace(/\u2019/g, "'")
+    .replace(/\u201C/g, "\"")
+    .replace(/\u201D/g, "\"")
+    .replace(/â€“/g, "-")
+    .replace(/â€”/g, "-")
+    .replace(/â€‘/g, "-")
+    .replace(/â€™/g, "'")
+    .replace(/â€œ/g, "\"")
+    .replace(/â€/g, "\"")
+    .replace(/Â/g, "");
+}
+
 function resolveScopedStatOwnerKey(statDef: CustomStatDefinition, ownerName: string): string {
   return statDef.globalScope ? GLOBAL_TRACKER_KEY : ownerName;
 }
@@ -762,12 +781,13 @@ export async function extractStatisticsParallel(input: {
       for (let attemptIndex = 0; attemptIndex <= retryDelaysMs.length; attemptIndex += 1) {
         attempts += 1;
         requestSeq += 1;
+        const attemptNo = requestSeq;
         try {
           checkCancelled();
           const response = await generateJson(prompt, settings);
           checkCancelled();
           const type = attemptIndex === 0 ? retryType : `${retryType}_transport_retry_${attemptIndex}`;
-          requestMetas.push({ ...response.meta, statList, attempt: requestSeq, retryType: type });
+          requestMetas.push({ ...response.meta, statList, attempt: attemptNo, retryType: type });
           return response;
         } catch (error) {
           if (isAbortError(error) || input.isCancelled?.()) {
@@ -1623,8 +1643,8 @@ export async function extractStatisticsParallel(input: {
       }
     }
 
-    const rawOutputAggregate = rawBlocks.map(item => `--- ${item.label} ---\n${item.raw}`).join("\n\n");
-    const promptAggregate = promptBlocks.map(item => `--- ${item.label} ---\n${item.prompt}`).join("\n\n");
+    const rawOutputAggregate = rawBlocks.map(item => `--- ${item.label} ---\n${normalizeDebugText(item.raw)}`).join("\n\n");
+    const promptAggregate = promptBlocks.map(item => `--- ${item.label} ---\n${normalizeDebugText(item.prompt)}`).join("\n\n");
 
     debugRecord = {
       rawModelOutput: rawOutputAggregate,

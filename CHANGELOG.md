@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev7] - 2026-03-06
+### Fixed
+- Sequential extraction request diagnostics now use stable per-request attempt IDs (no duplicate/skipped numbering caused by async request ordering).
+- Debug prompt/raw text aggregation now normalizes common mojibake/encoding artifacts for cleaner diagnostics output.
+
 ## [2.2.3.10-dev6] - 2026-03-06
 ### Added
 - Added release-safety validation scripts:
