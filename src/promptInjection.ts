@@ -529,7 +529,7 @@ export async function syncPromptInjection(input: {
   const systemRole = Number(roles.SYSTEM ?? 0);
   const depth = injectionDepth(settings.injectPromptDepth);
 
-  if (!settings.enabled || !settings.injectTrackerIntoPrompt || !data) {
+  if (!settings.enabled || !data) {
     lastInjectedPrompt = "";
     setExtensionPrompt(INJECT_KEY, "", inChat, depth, false, systemRole);
     return;
@@ -537,6 +537,11 @@ export async function syncPromptInjection(input: {
 
   const prompt = buildPrompt(data, settings, context);
   lastInjectedPrompt = prompt;
+  if (!settings.injectTrackerIntoPrompt) {
+    setExtensionPrompt(INJECT_KEY, "", inChat, depth, false, systemRole);
+    return;
+  }
+
   setExtensionPrompt(INJECT_KEY, prompt, inChat, depth, Boolean(prompt), systemRole);
 }
 

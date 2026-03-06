@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.7-dev6] - 2026-03-06
+### Fixed
+- `{{bst_injection}}` now remains available for manual macro use even when `Inject Tracker Into Prompt` is disabled; the toggle now only controls BST auto-injection into the live prompt pipeline.
+
 ## [2.2.3.7-dev5] - 2026-03-06
 ### Changed
 - Continued step-2 modularization by extracting settings modal logic into `src/settingsModal.ts` and mood image preview modal logic into `src/moodImageModal.ts`, reducing `src/ui.ts` responsibility without changing user-facing behavior.
