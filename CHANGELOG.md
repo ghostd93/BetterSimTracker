@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.9-dev1] - 2026-03-06
+### Fixed
+- `{{bst_injection}}` and BST stat macros now build from a merged tracker-state baseline instead of a single latest message snapshot, preventing user, scene/global, and cross-turn character stat values from disappearing when the newest snapshot is partial.
+
 ## [2.2.3.9] - 2026-03-06
 ### Added
 - Added dedicated built-in `Behavior Instruction` textareas for affection, trust, desire, and connection directly inside the existing built-in prompt sections.

@@ -68,6 +68,7 @@ let runSequence = 0;
 let allCharacterNames: string[] = [];
 let latestData: TrackerData | null = null;
 let latestDataMessageIndex: number | null = null;
+let latestPromptMacroData: TrackerData | null = null;
 let trackerUiState: TrackerUiState = { phase: "idle", done: 0, total: 0, messageIndex: null, stepLabel: null };
 const trackerRecoveryByMessage = new Map<number, TrackerRecoveryEntry>();
 let renderQueued = false;
@@ -236,6 +237,63 @@ function resolveMacroStatValue(
   return formatMacroValue(raw);
 }
 
+function buildMergedPromptMacroData(
+  context: STContext,
+  preferred: TrackerData | null,
+): TrackerData | null {
+  const historyEntries = getRecentTrackerHistoryEntries(context, Math.max(120, context.chat.length + 8));
+  const entries = [...historyEntries].sort((a, b) => {
+    if (a.messageIndex !== b.messageIndex) return a.messageIndex - b.messageIndex;
+    return a.timestamp - b.timestamp;
+  });
+
+  if (!entries.length) {
+    return preferred ? { ...preferred } : null;
+  }
+
+  let mergedStatistics: Statistics | null = null;
+  let mergedCustomStatistics: CustomStatistics | null = null;
+  let mergedCustomNonNumericStatistics: CustomNonNumericStatistics | null = null;
+  let lastTimestamp = 0;
+  let fallbackActiveCharacters: string[] = [];
+
+  for (const entry of entries) {
+    mergedStatistics = mergeStatisticsWithFallback(entry.data.statistics, mergedStatistics, undefined);
+    mergedCustomStatistics = mergeCustomStatisticsWithFallback(entry.data.customStatistics, mergedCustomStatistics);
+    mergedCustomNonNumericStatistics = mergeCustomNonNumericStatisticsWithFallback(
+      entry.data.customNonNumericStatistics,
+      mergedCustomNonNumericStatistics,
+    );
+    lastTimestamp = Math.max(lastTimestamp, Number(entry.data.timestamp ?? entry.timestamp ?? 0));
+    if (Array.isArray(entry.data.activeCharacters) && entry.data.activeCharacters.length) {
+      fallbackActiveCharacters = entry.data.activeCharacters.map(name => String(name ?? "").trim()).filter(Boolean);
+    }
+  }
+
+  const preferredActiveCharacters = Array.isArray(preferred?.activeCharacters)
+    ? preferred.activeCharacters.map(name => String(name ?? "").trim()).filter(Boolean)
+    : [];
+
+  return {
+    timestamp: lastTimestamp || Number(preferred?.timestamp ?? Date.now()),
+    activeCharacters: preferredActiveCharacters.length ? preferredActiveCharacters : fallbackActiveCharacters,
+    statistics: mergedStatistics ?? {
+      affection: {},
+      trust: {},
+      desire: {},
+      connection: {},
+      mood: {},
+      lastThought: {},
+    },
+    customStatistics: mergedCustomStatistics ?? {},
+    customNonNumericStatistics: mergedCustomNonNumericStatistics ?? {},
+  };
+}
+
+function refreshPromptMacroData(context: STContext): void {
+  latestPromptMacroData = buildMergedPromptMacroData(context, latestData);
+}
+
 function unregisterBstMacro(context: STContext, name: string): void {
   try {
     if (typeof context.unregisterMacro === "function") {
@@ -376,7 +434,7 @@ function syncBstMacros(context: STContext, currentSettings: BetterSimTrackerSett
         context,
         macroName,
         `BetterSimTracker stat macro for "${statId}" (${BST_MACRO_STAT_SCOPE_USER} scope).`,
-        () => resolveMacroStatValue(latestData, settings, statId, BST_MACRO_STAT_SCOPE_USER),
+        () => resolveMacroStatValue(latestPromptMacroData, settings, statId, BST_MACRO_STAT_SCOPE_USER),
       );
     }
     if (allowsScene) {
@@ -385,7 +443,7 @@ function syncBstMacros(context: STContext, currentSettings: BetterSimTrackerSett
         context,
         macroName,
         `BetterSimTracker stat macro for "${statId}" (${BST_MACRO_STAT_SCOPE_SCENE} scope).`,
-        () => resolveMacroStatValue(latestData, settings, statId, BST_MACRO_STAT_SCOPE_SCENE),
+        () => resolveMacroStatValue(latestPromptMacroData, settings, statId, BST_MACRO_STAT_SCOPE_SCENE),
       );
     }
     if (allowsCharacter) {
@@ -395,7 +453,7 @@ function syncBstMacros(context: STContext, currentSettings: BetterSimTrackerSett
           context,
           `bst_stat_char_${segment}_${slug}`,
           `BetterSimTracker stat macro for "${statId}" (character "${characterName}").`,
-          () => resolveMacroStatValue(latestData, settings, statId, "char_target", characterName),
+          () => resolveMacroStatValue(latestPromptMacroData, settings, statId, "char_target", characterName),
         );
       }
     }
@@ -1869,7 +1927,7 @@ function queuePromptSync(context: STContext): void {
   void syncPromptInjection({
     context,
     settings,
-    data: latestData
+    data: latestPromptMacroData
   });
 }
 
@@ -3393,6 +3451,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
         customNonNumericStatistics: previous.customNonNumericStatistics,
       };
       latestDataMessageIndex = lastIndex;
+      refreshPromptMacroData(context);
       writeTrackerDataToMessage(context, latestData, lastIndex);
       context.saveChatDebounced?.();
       await context.saveChat?.();
@@ -3582,6 +3641,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       customNonNumericStatistics: mergedCustomNonNumeric,
     };
     latestDataMessageIndex = lastIndex;
+    refreshPromptMacroData(context);
 
     writeTrackerDataToMessage(context, latestData, lastIndex);
     clearTrackerRecovery(lastIndex);
@@ -3721,6 +3781,8 @@ function refreshFromStoredData(): void {
     latestData = null;
     latestDataMessageIndex = null;
   }
+
+  refreshPromptMacroData(context);
 
   if (!latestData) {
     latestDataMessageIndex = null;
@@ -4482,6 +4544,7 @@ function clearCurrentChat(): void {
   lastActivatedLorebookEntries = [];
   latestData = null;
   latestDataMessageIndex = null;
+  latestPromptMacroData = null;
   lastDebugRecord = null;
   trackerUiState = { phase: "idle", done: 0, total: 0, messageIndex: null };
   activeContext.saveChatDebounced?.();
