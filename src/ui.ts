@@ -6635,11 +6635,11 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialAffection" rows="6"></textarea>
+            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
+            <textarea data-k="builtInBehaviorAffection" rows="5" placeholder="How affection should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-prompt-ai-row" style="display:none;">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialAffection"></span>
             </div>
-            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
-            <textarea data-k="builtInBehaviorAffection" rows="5" placeholder="How affection should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-protocol-readonly-wrap">
               <div class="bst-prompt-caption">Protocol (read-only)</div>
               <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialAffection)}</pre>
@@ -6661,11 +6661,11 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialTrust" rows="6"></textarea>
+            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
+            <textarea data-k="builtInBehaviorTrust" rows="5" placeholder="How trust should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-prompt-ai-row" style="display:none;">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialTrust"></span>
             </div>
-            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
-            <textarea data-k="builtInBehaviorTrust" rows="5" placeholder="How trust should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-protocol-readonly-wrap">
               <div class="bst-prompt-caption">Protocol (read-only)</div>
               <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialTrust)}</pre>
@@ -6687,11 +6687,11 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialDesire" rows="6"></textarea>
+            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
+            <textarea data-k="builtInBehaviorDesire" rows="5" placeholder="How desire should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-prompt-ai-row" style="display:none;">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialDesire"></span>
             </div>
-            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
-            <textarea data-k="builtInBehaviorDesire" rows="5" placeholder="How desire should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-protocol-readonly-wrap">
               <div class="bst-prompt-caption">Protocol (read-only)</div>
               <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialDesire)}</pre>
@@ -6713,11 +6713,11 @@ export function openSettingsModal(input: {
           <div class="bst-prompt-body">
             <div class="bst-prompt-caption">Instruction (editable)</div>
             <textarea data-k="promptTemplateSequentialConnection" rows="6"></textarea>
+            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
+            <textarea data-k="builtInBehaviorConnection" rows="5" placeholder="How connection should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-prompt-ai-row" style="display:none;">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialConnection"></span>
             </div>
-            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
-            <textarea data-k="builtInBehaviorConnection" rows="5" placeholder="How connection should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-protocol-readonly-wrap">
               <div class="bst-prompt-caption">Protocol (read-only)</div>
               <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialConnection)}</pre>

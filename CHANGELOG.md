@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.7-dev4] - 2026-03-06
+### Fixed
+- Moved built-in AI status feedback below the new built-in `Behavior Instruction` fields so the UI no longer reads as if the behavior textarea itself depends on the current connection profile.
+
 ## [2.2.3.7-dev3] - 2026-03-06
 ### Fixed
 - Removed the misleading idle `Uses current connection profile.` hint under built-in prompt sections; AI status rows now stay hidden until generation is actively running or returns a result.
