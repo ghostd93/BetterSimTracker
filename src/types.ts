@@ -331,6 +331,14 @@ export interface STContext {
   getPresetManager?: (apiId?: string) => {
     getCompletionPresetByName: (name?: string) => Record<string, unknown> | undefined;
   };
+  registerMacro?: (name: string, value: string | (() => string), description?: string) => void;
+  unregisterMacro?: (name: string) => void;
+  macros?: {
+    register?: (name: string, definition: Record<string, unknown>) => void;
+    registry?: {
+      unregisterMacro?: (name: string) => void;
+    };
+  };
   csrf_token?: string;
 }
 

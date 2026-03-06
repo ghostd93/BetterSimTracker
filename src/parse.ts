@@ -468,16 +468,41 @@ export function parseCustomValueResponse(
     ? input.enumOptions.map(item => String(item ?? "")).filter(item => item.length > 0 && !hasScriptLikeContent(item))
     : [];
   const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
-  const normalizeArrayItems = (raw: unknown): string[] => {
-    const source = Array.isArray(raw)
-      ? raw
+  const normalizeArrayItems = (raw: unknown): { items: string[]; explicitEmpty: boolean } => {
+    const coerceStringItem = (value: unknown): string => String(value ?? "").trim();
+    const emptyMarkers = new Set(["[]", "none", "no items", "empty", "n/a", "null", "clear"]);
+    const normalizeToken = (token: string): string =>
+      token
+        .replace(/^[\s\-–—*•·\u2022\u25E6]+/, "")
+        .replace(/^\s*\d+[\.\)]\s+/, "")
+        .replace(/^"(.*)"$/s, "$1")
+        .replace(/^'(.*)'$/s, "$1")
+        .trim();
+    const fromString = (text: string): { source: unknown[]; explicitEmpty: boolean } => {
+      const trimmed = text.trim();
+      if (!trimmed) return { source: [], explicitEmpty: false };
+      const lowered = trimmed.toLowerCase();
+      if (emptyMarkers.has(lowered)) return { source: [], explicitEmpty: true };
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsedArray = JSON.parse(trimmed);
+          if (Array.isArray(parsedArray)) return { source: parsedArray, explicitEmpty: parsedArray.length === 0 };
+        } catch {
+          // Fallback to loose tokenization below.
+        }
+      }
+      const split = trimmed.split(/\r?\n|[,;]+/g);
+      return { source: split, explicitEmpty: false };
+    };
+    const { source, explicitEmpty } = Array.isArray(raw)
+      ? { source: raw, explicitEmpty: raw.length === 0 }
       : typeof raw === "string"
-        ? raw.split(/\r?\n|[,;]+/g)
-        : [];
+        ? fromString(raw)
+        : { source: [], explicitEmpty: false };
     const items: string[] = [];
     const seenItems = new Set<string>();
     for (const item of source) {
-      const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, textMaxLength);
+      const cleaned = normalizeToken(coerceStringItem(item)).replace(/\s+/g, " ").slice(0, textMaxLength);
       if (!cleaned) continue;
       if (hasScriptLikeContent(cleaned)) continue;
       const dedupeKey = cleaned.toLowerCase();
@@ -486,7 +511,7 @@ export function parseCustomValueResponse(
       items.push(cleaned);
       if (items.length >= 20) break;
     }
-    return items;
+    return { items, explicitEmpty };
   };
 
   for (const name of activeCharacters) {
@@ -511,8 +536,8 @@ export function parseCustomValueResponse(
       continue;
     }
     if (kind === "array") {
-      const items = normalizeArrayItems(candidate);
-      if (items.length > 0) result.value[name] = items;
+      const { items, explicitEmpty } = normalizeArrayItems(candidate);
+      if (items.length > 0 || explicitEmpty) result.value[name] = items;
       continue;
     }
     if (kind === "date_time") {

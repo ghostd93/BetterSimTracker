@@ -111,6 +111,293 @@ const EDIT_MOOD_LABELS = new Map(moodOptions.map(label => [label.toLowerCase(), 
 const LOREBOOK_ACTIVATED_METADATA_KEY = "bstLorebookActivatedEntries";
 const TRACKER_RECOVERY_METADATA_KEY = "bstTrackerRecoveries";
 let lastActivatedLorebookEntries: string[] = [];
+const BST_INJECTION_MACRO = "bst_injection";
+const BST_MACRO_STAT_SCOPE_USER = "user";
+const BST_MACRO_STAT_SCOPE_SCENE = "scene";
+const registeredBstMacros = new Set<string>();
+let bstMacroSignature = "";
+
+function toMacroIdSegment(value: string): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function toCharacterSlug(value: string): string {
+  const slug = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return slug || "character";
+}
+
+function getPreferredCharacterOwner(data: TrackerData): string | null {
+  for (const name of data.activeCharacters ?? []) {
+    const candidate = String(name ?? "").trim();
+    if (!candidate || candidate === USER_TRACKER_KEY || candidate === GLOBAL_TRACKER_KEY) continue;
+    return candidate;
+  }
+  const fromMood = Object.keys(data.statistics.mood ?? {}).find(key => {
+    const candidate = String(key ?? "").trim();
+    return candidate && candidate !== USER_TRACKER_KEY && candidate !== GLOBAL_TRACKER_KEY;
+  });
+  if (fromMood) return fromMood;
+  const fromAffection = Object.keys(data.statistics.affection ?? {}).find(key => {
+    const candidate = String(key ?? "").trim();
+    return candidate && candidate !== USER_TRACKER_KEY && candidate !== GLOBAL_TRACKER_KEY;
+  });
+  return fromAffection ? String(fromAffection).trim() : null;
+}
+
+function resolveMacroTargetOwner(scope: string, data: TrackerData, globalScope: boolean): string | null {
+  if (globalScope) return GLOBAL_TRACKER_KEY;
+  if (scope === BST_MACRO_STAT_SCOPE_SCENE) return GLOBAL_TRACKER_KEY;
+  if (scope === BST_MACRO_STAT_SCOPE_USER) return USER_TRACKER_KEY;
+  return null;
+}
+
+function formatMacroValue(value: unknown): string {
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (Array.isArray(value)) {
+    return value
+      .map(item => String(item ?? "").trim())
+      .filter(Boolean)
+      .join(", ");
+  }
+  return String(value ?? "").trim();
+}
+
+function resolveMacroStatValue(
+  data: TrackerData | null,
+  currentSettings: BetterSimTrackerSettings | null,
+  statId: string,
+  scope: string,
+  explicitOwner?: string,
+): string {
+  if (!data || !currentSettings) return "";
+  const normalized = String(statId ?? "").trim().toLowerCase();
+  if (!normalized) return "";
+  const customById = new Map(
+    (currentSettings.customStats ?? []).map(def => [String(def.id ?? "").trim().toLowerCase(), def] as const),
+  );
+  const customDef = customById.get(normalized);
+  const owner = explicitOwner || resolveMacroTargetOwner(scope, data, Boolean(customDef?.globalScope));
+  if (!owner) return "";
+
+  if (normalized === "affection" || normalized === "trust" || normalized === "desire" || normalized === "connection") {
+    if (owner === GLOBAL_TRACKER_KEY) return "";
+    const bucket = data.statistics[normalized];
+    const value = Number(bucket?.[owner]);
+    if (Number.isNaN(value)) return "";
+    return String(Math.max(0, Math.min(100, Math.round(value))));
+  }
+
+  if (normalized === "mood") {
+    if (owner === GLOBAL_TRACKER_KEY) return "";
+    return String(data.statistics.mood?.[owner] ?? "").trim();
+  }
+  if (normalized === "lastthought" || normalized === "last_thought") {
+    if (owner === GLOBAL_TRACKER_KEY) return "";
+    return String(data.statistics.lastThought?.[owner] ?? "").trim();
+  }
+  if (!customDef) return "";
+
+  if ((customDef.kind ?? "numeric") === "numeric") {
+    const bucket = data.customStatistics?.[normalized];
+    if (!bucket) return "";
+    let raw = bucket[owner];
+    if (raw === undefined && owner !== GLOBAL_TRACKER_KEY && customDef.globalScope) {
+      raw = bucket[GLOBAL_TRACKER_KEY];
+    }
+    if (raw === undefined && owner !== GLOBAL_TRACKER_KEY && !customDef.globalScope) {
+      raw = bucket[GLOBAL_TRACKER_KEY];
+    }
+    const numeric = Number(raw);
+    if (Number.isNaN(numeric)) return "";
+    return String(Math.max(0, Math.min(100, Math.round(numeric))));
+  }
+
+  const bucket = data.customNonNumericStatistics?.[normalized];
+  if (!bucket) return "";
+  let raw: unknown = bucket[owner];
+  if (raw === undefined && owner !== GLOBAL_TRACKER_KEY && customDef.globalScope) {
+    raw = bucket[GLOBAL_TRACKER_KEY];
+  }
+  if (raw === undefined && owner !== GLOBAL_TRACKER_KEY && !customDef.globalScope) {
+    raw = bucket[GLOBAL_TRACKER_KEY];
+  }
+  return formatMacroValue(raw);
+}
+
+function unregisterBstMacro(context: STContext, name: string): void {
+  try {
+    if (typeof context.unregisterMacro === "function") {
+      context.unregisterMacro(name);
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    context.macros?.registry?.unregisterMacro?.(name);
+  } catch {
+    // ignore
+  }
+}
+
+function registerBstMacro(
+  context: STContext,
+  name: string,
+  description: string,
+  getter: () => string,
+): void {
+  let registered = false;
+  try {
+    if (typeof context.registerMacro === "function") {
+      context.registerMacro(name, getter, description);
+      registered = true;
+    }
+  } catch {
+    // fallback below
+  }
+  if (!registered) {
+    try {
+      context.macros?.register?.(name, {
+        description,
+        handler: () => getter(),
+      });
+      registered = true;
+    } catch {
+      // ignore
+    }
+  }
+  if (registered) {
+    registeredBstMacros.add(name);
+  }
+}
+
+function syncBstMacros(context: STContext, currentSettings: BetterSimTrackerSettings): void {
+  const customDefs = (currentSettings.customStats ?? [])
+    .map(def => ({ ...def, id: String(def.id ?? "").trim().toLowerCase() }))
+    .filter(def => def.id.length > 0);
+  const customStatIds = customDefs.map(def => def.id);
+  const characterNames = Array.from(new Set(
+    (allCharacterNames ?? [])
+      .map(name => String(name ?? "").trim())
+      .filter(name => name && name !== USER_TRACKER_KEY && name !== GLOBAL_TRACKER_KEY),
+  ));
+  const characterSignature = characterNames.map(name => `${name}:${toCharacterSlug(name)}`).join("|");
+  const signature = [
+    "v1",
+    String(Boolean(currentSettings.trackAffection)),
+    String(Boolean(currentSettings.trackTrust)),
+    String(Boolean(currentSettings.trackDesire)),
+    String(Boolean(currentSettings.trackConnection)),
+    String(Boolean(currentSettings.trackMood)),
+    String(Boolean(currentSettings.trackLastThought)),
+    String(Boolean(currentSettings.enableUserTracking)),
+    String(Boolean(currentSettings.userTrackMood)),
+    String(Boolean(currentSettings.userTrackLastThought)),
+    customDefs
+      .map(def => [
+        def.id,
+        def.track ? 1 : 0,
+        def.trackCharacters ? 1 : 0,
+        def.trackUser ? 1 : 0,
+        def.globalScope ? 1 : 0,
+      ].join(":"))
+      .join("|"),
+    customStatIds.join("|"),
+    characterSignature,
+  ].join("::");
+  if (signature === bstMacroSignature && registeredBstMacros.size > 0) return;
+
+  for (const name of registeredBstMacros) {
+    unregisterBstMacro(context, name);
+  }
+  registeredBstMacros.clear();
+
+  registerBstMacro(
+    context,
+    BST_INJECTION_MACRO,
+    "BetterSimTracker hidden injection block (latest generated value).",
+    () => getLastInjectedPrompt(),
+  );
+
+  const statIds = [
+    "affection",
+    "trust",
+    "desire",
+    "connection",
+    "mood",
+    "lastThought",
+    ...customStatIds,
+  ];
+  for (const rawStatId of statIds) {
+    const statId = String(rawStatId ?? "").trim().toLowerCase();
+    if (!statId) continue;
+    const segment = toMacroIdSegment(statId);
+    if (!segment) continue;
+    const customDef = customDefs.find(def => def.id === statId) ?? null;
+    const isBuiltInNumeric = statId === "affection" || statId === "trust" || statId === "desire" || statId === "connection";
+    const isMood = statId === "mood";
+    const isLastThought = statId === "lastthought" || statId === "last_thought";
+    const allowsScene = Boolean(customDef?.globalScope) && Boolean(customDef?.track);
+    const allowsUser = (() => {
+      if (isBuiltInNumeric) return false;
+      if (isMood) return Boolean(currentSettings.enableUserTracking && currentSettings.userTrackMood);
+      if (isLastThought) return Boolean(currentSettings.enableUserTracking && currentSettings.userTrackLastThought);
+      if (!customDef || customDef.globalScope) return false;
+      const baseTracked = Boolean(customDef.track);
+      return baseTracked && Boolean(customDef.trackUser ?? customDef.track);
+    })();
+    const allowsCharacter = (() => {
+      if (isBuiltInNumeric) {
+        if (statId === "affection") return Boolean(currentSettings.trackAffection);
+        if (statId === "trust") return Boolean(currentSettings.trackTrust);
+        if (statId === "desire") return Boolean(currentSettings.trackDesire);
+        return Boolean(currentSettings.trackConnection);
+      }
+      if (isMood) return Boolean(currentSettings.trackMood);
+      if (isLastThought) return Boolean(currentSettings.trackLastThought);
+      if (!customDef || customDef.globalScope) return false;
+      const baseTracked = Boolean(customDef.track);
+      return baseTracked && Boolean(customDef.trackCharacters ?? customDef.track);
+    })();
+    if (allowsUser) {
+      const macroName = `bst_stat_${BST_MACRO_STAT_SCOPE_USER}_${segment}`;
+      registerBstMacro(
+        context,
+        macroName,
+        `BetterSimTracker stat macro for "${statId}" (${BST_MACRO_STAT_SCOPE_USER} scope).`,
+        () => resolveMacroStatValue(latestData, settings, statId, BST_MACRO_STAT_SCOPE_USER),
+      );
+    }
+    if (allowsScene) {
+      const macroName = `bst_stat_${BST_MACRO_STAT_SCOPE_SCENE}_${segment}`;
+      registerBstMacro(
+        context,
+        macroName,
+        `BetterSimTracker stat macro for "${statId}" (${BST_MACRO_STAT_SCOPE_SCENE} scope).`,
+        () => resolveMacroStatValue(latestData, settings, statId, BST_MACRO_STAT_SCOPE_SCENE),
+      );
+    }
+    if (allowsCharacter) {
+      for (const characterName of characterNames) {
+        const slug = toCharacterSlug(characterName);
+        registerBstMacro(
+          context,
+          `bst_stat_char_${segment}_${slug}`,
+          `BetterSimTracker stat macro for "${statId}" (character "${characterName}").`,
+          () => resolveMacroStatValue(latestData, settings, statId, "char_target", characterName),
+        );
+      }
+    }
+  }
+  bstMacroSignature = signature;
+}
 
 function collectSummaryCharacters(data: TrackerData): string[] {
   const names = new Set<string>();
@@ -3107,10 +3394,16 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
           customStats: scopedCustomStats,
         };
 
+    const includeCurrentTrackerAsBaseline =
+      isManualRefreshReason &&
+      typeof targetMessageIndex === "number" &&
+      targetMessageIndex >= 0;
     const baselineBeforeIndex =
-      typeof targetMessageIndex === "number" && targetMessageIndex >= 0
-        ? targetMessageIndex
-        : lastIndex;
+      includeCurrentTrackerAsBaseline
+        ? targetMessageIndex! + 1
+        : (typeof targetMessageIndex === "number" && targetMessageIndex >= 0
+          ? targetMessageIndex
+          : lastIndex);
     const previousEntry = getLatestRelevantTrackerDataWithIndexBefore(
       context,
       baselineBeforeIndex,
@@ -3545,6 +3838,7 @@ function refreshFromStoredData(): void {
     latestDataMessageIndex,
     hasLatestData: Boolean(latestData)
   });
+  syncBstMacros(context, settings);
   queuePromptSync(context);
   queueRender();
   upsertSettingsPanel({
@@ -3998,21 +4292,37 @@ function registerEvents(context: STContext): void {
 function openSettings(): void {
   if (!settings) return;
   const context = getSafeContext();
+  const chatCharacterNameSet = new Set<string>();
+  for (const message of context?.chat ?? []) {
+    if (!isTrackableAiMessage(message)) continue;
+    const name = String(message?.name ?? "").trim();
+    if (!name) continue;
+    if (name === USER_TRACKER_KEY || name === GLOBAL_TRACKER_KEY) continue;
+    chatCharacterNameSet.add(name.toLowerCase());
+  }
   const previewCandidateMap = new Map<string, { name: string; avatar?: string | null }>();
   for (const character of context?.characters ?? []) {
     const name = String(character?.name ?? "").trim();
     if (!name) continue;
     const key = name.toLowerCase();
+    if (!chatCharacterNameSet.has(key)) continue;
     if (!previewCandidateMap.has(key)) {
       previewCandidateMap.set(key, { name, avatar: String(character?.avatar ?? "").trim() || null });
     }
   }
   const fallbackName = String(context?.name2 ?? "").trim();
-  if (fallbackName) {
+  if (fallbackName && chatCharacterNameSet.has(fallbackName.toLowerCase())) {
     const key = fallbackName.toLowerCase();
     if (!previewCandidateMap.has(key)) {
       previewCandidateMap.set(key, { name: fallbackName, avatar: null });
     }
+  }
+  for (const lowerName of chatCharacterNameSet) {
+    if (previewCandidateMap.has(lowerName)) continue;
+    const match = (context?.characters ?? []).find(character => String(character?.name ?? "").trim().toLowerCase() === lowerName);
+    const resolvedName = String(match?.name ?? "").trim() || lowerName;
+    const avatar = String(match?.avatar ?? "").trim() || null;
+    previewCandidateMap.set(lowerName, { name: resolvedName, avatar });
   }
   const previewCharacterCandidates = Array.from(previewCandidateMap.values());
   openSettingsModal({

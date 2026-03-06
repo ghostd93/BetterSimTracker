@@ -2,16 +2,26 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.3.3] - 2026-03-05
+## [2.2.3.7] - 2026-03-06
 ### Added
-- Optional sequential custom-stat grouping:
-  - global toggle `Enable Sequential Stat Groups`
-  - per-stat `Sequential Group` field
-  - stats sharing a group are extracted together in one sequential request.
+- Global injection macro hint added near injection toggle: `{{bst_injection}}`.
+- New ST macro support for stat values with explicit scopes:
+  - `{{bst_stat_user_<id>}}`
+  - `{{bst_stat_scene_<id>}}`
+  - `{{bst_stat_char_<id>_<character_slug>}}`
+
+### Changed
+- Macro hints in Custom Stats are now dynamic and scope-aware (only valid scopes are shown per stat).
+- Character-targeted macro examples are generated from characters that exist in the current chat context.
+- Removed ambiguous auto/generic stat macro variants to avoid multi-character ambiguity.
+- Extraction progress labels are explicit and mode-aware (Built-in, Custom, Custom Group, Unified Batch), including clearer no-extraction/default seeding steps.
 
 ### Fixed
-- Extraction progress status labels are now explicit and step-specific (Built-in, Custom, Unified Batch, and no-extraction/default seeding paths) to avoid ambiguous progress reporting.
-- Sequential snapshot prompts no longer inject fallback built-in values (`50`) for built-ins that are disabled in tracking settings.
+- Manual retrack/manual refresh now uses the currently edited tracker snapshot on that message as baseline, preventing immediate value reversion after edits.
+- Hardened `array` custom-stat handling for weaker models:
+  - broader array value normalization (JSON array strings, bullet/numbered lines, comma/newline lists),
+  - explicit empty markers now parse as an intentional empty array,
+  - conservative apply guard prevents low-confidence destructive array drops from wiping prior values.
 
 ## [2.2.3] - 2026-03-04
 ### Added

@@ -132,6 +132,14 @@ function shortLabelFrom(label: string): string {
   return cleaned.slice(0, 2);
 }
 
+function toMacroCharacterSlug(value: string): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "character";
+}
+
 function normalizeCustomStatKind(value: unknown): CustomStatKind {
   if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array" || value === "date_time") return value;
   return "numeric";
@@ -6471,6 +6479,7 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="summarizationNoteVisibleForAI" type="checkbox">Summarization Note Visible for AI (future notes)</label>
           <label class="bst-check" data-bst-row="injectSummarizationNote"><input data-k="injectSummarizationNote" type="checkbox">Inject Summarization Note</label>
         </div>
+        <div class="bst-help-line bst-toggle-help">Global macro: <code>{{bst_injection}}</code></div>
         <div class="bst-help-line bst-toggle-help"><strong>Summarize</strong> creates a prose note of current tracked stats (no numbers), typically 4-6 sentences, grounded in recent messages.</div>
         <div class="bst-help-line bst-toggle-help"><code>Summarization Note Visible for AI</code> affects only newly generated BetterSimTracker summary notes. Existing notes are not modified for safety.</div>
         <div class="bst-help-line bst-toggle-help"><code>Inject Summarization Note</code> only affects hidden tracker prompt injection guidance and does not edit chat messages.</div>
@@ -8112,6 +8121,35 @@ export function openSettingsModal(input: {
         stat.includeInInjection ? "injection" : "no injection",
       ];
       const description = (stat.description ?? "").trim();
+      const macroSegment = String(stat.id ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+      const quickEnabled = Boolean(stat.track);
+      const allowsSceneMacro = quickEnabled && Boolean(stat.globalScope);
+      const allowsUserMacro = quickEnabled && !Boolean(stat.globalScope) && Boolean(stat.trackUser ?? stat.track);
+      const allowsCharMacro = quickEnabled && !Boolean(stat.globalScope) && Boolean(stat.trackCharacters ?? stat.track);
+      const characterMacroExamples = (() => {
+        if (!macroSegment || !allowsCharMacro) return [] as string[];
+        const names = Array.from(new Set(
+          (input.previewCharacterCandidates ?? [])
+            .map(candidate => String(candidate?.name ?? "").trim())
+            .filter(Boolean)
+            .filter(name => {
+              const normalized = name.toLowerCase();
+              return normalized !== USER_TRACKER_KEY.toLowerCase() && normalized !== GLOBAL_TRACKER_KEY.toLowerCase() && normalized !== "user";
+            }),
+        )).slice(0, 4);
+        return names.map(name => `{{bst_stat_char_${macroSegment}_${toMacroCharacterSlug(name)}}}`);
+      })();
+      const macroScopes = macroSegment
+        ? [
+          ...(allowsUserMacro ? [`{{bst_stat_user_${macroSegment}}}`] : []),
+          ...(allowsSceneMacro ? [`{{bst_stat_scene_${macroSegment}}}`] : []),
+          ...characterMacroExamples,
+        ]
+        : [];
       const defaultMeta = (() => {
         if (kind === "numeric") {
           return `Default: ${Math.round(Number(stat.defaultValue) || 0)}% | Max delta: ${stat.maxDeltaPerTurn == null ? "global" : Math.round(Number(stat.maxDeltaPerTurn))}`;
@@ -8151,6 +8189,7 @@ export function openSettingsModal(input: {
               ${escapeHtml(defaultMeta)}
             </div>
             ${description ? `<div class="bst-custom-stat-meta">${escapeHtml(description)}</div>` : ""}
+            ${macroScopes.length || allowsCharMacro ? `<div class="bst-custom-stat-meta">Macros: ${macroScopes.map(item => `<code>${escapeHtml(item)}</code>`).join(" ")}${(allowsCharMacro && !characterMacroExamples.length) ? ` <code>{{bst_stat_char_${escapeHtml(macroSegment)}_&lt;character_slug&gt;}}</code>` : ""}</div>` : ""}
             <div class="bst-custom-stat-flags">
               ${flags.map(flag => `<span class="bst-custom-stat-flag">${escapeHtml(flag)}</span>`).join("")}
             </div>
