@@ -8117,9 +8117,8 @@ export function openSettingsModal(input: {
         .toLowerCase()
         .replace(/[^a-z0-9_]+/g, "_")
         .replace(/^_+|_+$/g, "");
-      const macroAuto = macroSegment ? `{{bst_stat_${macroSegment}}}` : "";
       const macroScopes = macroSegment
-        ? [`{{bst_stat_char_${macroSegment}}}`, `{{bst_stat_user_${macroSegment}}}`, `{{bst_stat_scene_${macroSegment}}}`]
+        ? [`{{bst_stat_user_${macroSegment}}}`, `{{bst_stat_scene_${macroSegment}}}`, `{{bst_stat_char_${macroSegment}_<character_slug>}}`]
         : [];
       const defaultMeta = (() => {
         if (kind === "numeric") {
@@ -8160,7 +8159,7 @@ export function openSettingsModal(input: {
               ${escapeHtml(defaultMeta)}
             </div>
             ${description ? `<div class="bst-custom-stat-meta">${escapeHtml(description)}</div>` : ""}
-            ${macroAuto ? `<div class="bst-custom-stat-meta">Macro: <code>${escapeHtml(macroAuto)}</code>${macroScopes.length ? ` <span class="bst-subtle">scopes:</span> ${macroScopes.map(item => `<code>${escapeHtml(item)}</code>`).join(" ")}` : ""}</div>` : ""}
+            ${macroScopes.length ? `<div class="bst-custom-stat-meta">Macros: ${macroScopes.map(item => `<code>${escapeHtml(item)}</code>`).join(" ")} </div>` : ""}
             <div class="bst-custom-stat-flags">
               ${flags.map(flag => `<span class="bst-custom-stat-flag">${escapeHtml(flag)}</span>`).join("")}
             </div>

@@ -112,8 +112,6 @@ const LOREBOOK_ACTIVATED_METADATA_KEY = "bstLorebookActivatedEntries";
 const TRACKER_RECOVERY_METADATA_KEY = "bstTrackerRecoveries";
 let lastActivatedLorebookEntries: string[] = [];
 const BST_INJECTION_MACRO = "bst_injection";
-const BST_MACRO_STAT_SCOPE_AUTO = "auto";
-const BST_MACRO_STAT_SCOPE_CHAR = "char";
 const BST_MACRO_STAT_SCOPE_USER = "user";
 const BST_MACRO_STAT_SCOPE_SCENE = "scene";
 const registeredBstMacros = new Set<string>();
@@ -127,8 +125,13 @@ function toMacroIdSegment(value: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-function normalizeMacroOwner(value: string): string {
-  return String(value ?? "").trim().toLowerCase();
+function toCharacterSlug(value: string): string {
+  const slug = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return slug || "character";
 }
 
 function getPreferredCharacterOwner(data: TrackerData): string | null {
@@ -153,12 +156,7 @@ function resolveMacroTargetOwner(scope: string, data: TrackerData, globalScope: 
   if (globalScope) return GLOBAL_TRACKER_KEY;
   if (scope === BST_MACRO_STAT_SCOPE_SCENE) return GLOBAL_TRACKER_KEY;
   if (scope === BST_MACRO_STAT_SCOPE_USER) return USER_TRACKER_KEY;
-  if (scope === BST_MACRO_STAT_SCOPE_CHAR) {
-    return getPreferredCharacterOwner(data);
-  }
-  const preferredCharacter = getPreferredCharacterOwner(data);
-  if (preferredCharacter) return preferredCharacter;
-  return USER_TRACKER_KEY;
+  return null;
 }
 
 function formatMacroValue(value: unknown): string {
@@ -177,6 +175,7 @@ function resolveMacroStatValue(
   currentSettings: BetterSimTrackerSettings | null,
   statId: string,
   scope: string,
+  explicitOwner?: string,
 ): string {
   if (!data || !currentSettings) return "";
   const normalized = String(statId ?? "").trim().toLowerCase();
@@ -185,7 +184,7 @@ function resolveMacroStatValue(
     (currentSettings.customStats ?? []).map(def => [String(def.id ?? "").trim().toLowerCase(), def] as const),
   );
   const customDef = customById.get(normalized);
-  const owner = resolveMacroTargetOwner(scope, data, Boolean(customDef?.globalScope));
+  const owner = explicitOwner || resolveMacroTargetOwner(scope, data, Boolean(customDef?.globalScope));
   if (!owner) return "";
 
   if (normalized === "affection" || normalized === "trust" || normalized === "desire" || normalized === "connection") {
@@ -283,9 +282,16 @@ function syncBstMacros(context: STContext, currentSettings: BetterSimTrackerSett
   const customStatIds = (currentSettings.customStats ?? [])
     .map(def => String(def.id ?? "").trim().toLowerCase())
     .filter(Boolean);
+  const characterNames = Array.from(new Set(
+    (allCharacterNames ?? [])
+      .map(name => String(name ?? "").trim())
+      .filter(name => name && name !== USER_TRACKER_KEY && name !== GLOBAL_TRACKER_KEY),
+  ));
+  const characterSignature = characterNames.map(name => `${name}:${toCharacterSlug(name)}`).join("|");
   const signature = [
     "v1",
     customStatIds.join("|"),
+    characterSignature,
   ].join("::");
   if (signature === bstMacroSignature && registeredBstMacros.size > 0) return;
 
@@ -310,7 +316,7 @@ function syncBstMacros(context: STContext, currentSettings: BetterSimTrackerSett
     "lastThought",
     ...customStatIds,
   ]);
-  const scopes = [BST_MACRO_STAT_SCOPE_AUTO, BST_MACRO_STAT_SCOPE_CHAR, BST_MACRO_STAT_SCOPE_USER, BST_MACRO_STAT_SCOPE_SCENE] as const;
+  const scopes = [BST_MACRO_STAT_SCOPE_USER, BST_MACRO_STAT_SCOPE_SCENE] as const;
   for (const rawStatId of statIds) {
     const statId = String(rawStatId ?? "").trim();
     if (!statId) continue;
@@ -324,14 +330,15 @@ function syncBstMacros(context: STContext, currentSettings: BetterSimTrackerSett
         `BetterSimTracker stat macro for "${statId}" (${scope} scope).`,
         () => resolveMacroStatValue(latestData, settings, statId, scope),
       );
-      if (scope === BST_MACRO_STAT_SCOPE_AUTO) {
-        registerBstMacro(
-          context,
-          `bst_stat_${segment}`,
-          `BetterSimTracker stat macro for "${statId}" (auto scope).`,
-          () => resolveMacroStatValue(latestData, settings, statId, scope),
-        );
-      }
+    }
+    for (const characterName of characterNames) {
+      const slug = toCharacterSlug(characterName);
+      registerBstMacro(
+        context,
+        `bst_stat_char_${segment}_${slug}`,
+        `BetterSimTracker stat macro for "${statId}" (character "${characterName}").`,
+        () => resolveMacroStatValue(latestData, settings, statId, "char_target", characterName),
+      );
     }
   }
   bstMacroSignature = signature;

@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.3-dev5] - 2026-03-06
+### Changed
+- BST macro set was narrowed to explicit scopes only:
+  - kept `{{bst_stat_user_<id>}}`
+  - kept `{{bst_stat_scene_<id>}}`
+  - added explicit name-targeted character macros: `{{bst_stat_char_<id>_<character_slug>}}`
+- Removed ambiguous auto/generic character stat macros to avoid multi-character ambiguity.
+- Custom Stats macro hint text now shows the explicit macro pattern set.
+
 ## [2.2.3.3-dev4] - 2026-03-06
 ### Added
 - New ST macro support:
