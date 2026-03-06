@@ -3,6 +3,7 @@ import type { Statistics } from "./types";
 import type { TrackerData } from "./types";
 import { GLOBAL_TRACKER_KEY } from "./constants";
 import { normalizeDateTimeValue } from "./dateTime";
+import { normalizeNonNumericArrayItems } from "./customStatRuntime";
 
 export const moodOptions = [
   "Happy",
@@ -973,26 +974,6 @@ export function buildSequentialCustomNumericPrompt(input: {
   });
 }
 
-function normalizeArrayItems(value: unknown, maxItemLen: number): string[] {
-  const source = Array.isArray(value)
-    ? value
-    : typeof value === "string"
-      ? value.split(/\r?\n|[,;]+/g)
-      : [];
-  const items: string[] = [];
-  const seenItems = new Set<string>();
-  for (const item of source) {
-    const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, maxItemLen);
-    if (!cleaned) continue;
-    const dedupeKey = cleaned.toLowerCase();
-    if (seenItems.has(dedupeKey)) continue;
-    seenItems.add(dedupeKey);
-    items.push(cleaned);
-    if (items.length >= 20) break;
-  }
-  return items;
-}
-
 function customNonNumericLiteral(value: string | boolean | string[]): string {
   if (typeof value === "boolean") return String(value);
   if (Array.isArray(value)) return JSON.stringify(value);
@@ -1016,9 +997,9 @@ function formatCustomNonNumericValue(
   }
 
   if (kind === "array") {
-    const items = normalizeArrayItems(value, textMaxLen);
+    const items = normalizeNonNumericArrayItems(value, textMaxLen);
     if (items.length) return items;
-    const fallbackItems = normalizeArrayItems(fallback, textMaxLen);
+    const fallbackItems = normalizeNonNumericArrayItems(fallback, textMaxLen);
     return fallbackItems;
   }
 

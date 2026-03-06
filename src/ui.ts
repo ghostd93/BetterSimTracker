@@ -48,6 +48,15 @@ import {
 import { fetchFirstExpressionSprite } from "./stExpressionSprites";
 import { getAllNumericStatDefinitions } from "./statRegistry";
 import { getDateTimeStructuredParts, normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
+import {
+  normalizeCustomEnumOptions,
+  normalizeCustomStatDefaultValue,
+  normalizeCustomStatKind,
+  normalizeCustomTextMaxLength,
+  normalizeNonNumericArrayItems,
+  resolveEnumOption,
+  hasScriptLikeContent,
+} from "./customStatRuntime";
 
 type UiNumericStatDefinition = {
   key: string;
@@ -140,65 +149,8 @@ function toMacroCharacterSlug(value: string): string {
     .replace(/^_+|_+$/g, "") || "character";
 }
 
-function normalizeCustomStatKind(value: unknown): CustomStatKind {
-  if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array" || value === "date_time") return value;
-  return "numeric";
-}
-
 function normalizeNonNumericTextValue(value: unknown, maxLength: number): string {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, Math.max(20, Math.min(200, maxLength)));
-}
-
-function normalizeNonNumericArrayItems(value: unknown, maxLength: number): string[] {
-  const boundedMaxLength = Math.max(20, Math.min(200, maxLength));
-  const source = Array.isArray(value)
-    ? value.map(item => String(item ?? ""))
-    : (typeof value === "string" ? value.split(/\r?\n|[,;]/g) : []);
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const item of source) {
-    const text = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, boundedMaxLength);
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
-    out.push(text);
-    if (out.length >= 20) break;
-  }
-  return out;
-}
-
-function normalizeCustomEnumOptions(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  const options: string[] = [];
-  const seen = new Set<string>();
-  for (const item of value) {
-    const text = String(item ?? "");
-    if (!text.length || hasScriptLikeContent(text) || seen.has(text)) continue;
-    seen.add(text);
-    options.push(text);
-    if (options.length >= 12) break;
-  }
-  return options;
-}
-
-function resolveEnumOption(options: string[], candidate: unknown): string | null {
-  if (!Array.isArray(options) || options.length === 0) return null;
-  if (typeof candidate !== "string") return null;
-  if (options.includes(candidate)) return candidate;
-  const trimmed = candidate.trim();
-  if (trimmed && options.includes(trimmed)) return trimmed;
-  const lowered = candidate.toLowerCase();
-  const lowerMatch = options.find(option => option.toLowerCase() === lowered);
-  if (lowerMatch) return lowerMatch;
-  if (trimmed) {
-    const trimmedLower = trimmed.toLowerCase();
-    const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
-    if (trimmedMatch) return trimmedMatch;
-  }
-  return null;
-}
-
-function hasScriptLikeContent(value: string): boolean {
-  return /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(value);
 }
 
 function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNonNumericStatDefinition[] {
@@ -216,25 +168,16 @@ function getNonNumericStatDefinitions(settings: BetterSimTrackerSettings): UiNon
       const trackCharacters = Boolean(def.trackCharacters ?? def.track);
       const trackUser = Boolean(def.trackUser ?? def.track);
       const enumOptions = normalizeCustomEnumOptions(def.enumOptions);
-      const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(def.textMaxLength) || 120)));
+      const textMaxLength = normalizeCustomTextMaxLength(def.textMaxLength);
       const booleanTrueLabel = String(def.booleanTrueLabel ?? "enabled").trim().slice(0, 40) || "enabled";
       const booleanFalseLabel = String(def.booleanFalseLabel ?? "disabled").trim().slice(0, 40) || "disabled";
-      let defaultValue: string | boolean | string[];
-      if (kind === "boolean") {
-        defaultValue = typeof def.defaultValue === "boolean" ? def.defaultValue : false;
-      } else if (kind === "array") {
-        defaultValue = normalizeNonNumericArrayItems(def.defaultValue, textMaxLength);
-      } else if (kind === "date_time") {
-        defaultValue = normalizeDateTimeValue(def.defaultValue);
-      } else {
-        if (kind === "enum_single" && enumOptions.length > 0) {
-          const matched = resolveEnumOption(enumOptions, def.defaultValue);
-          defaultValue = matched ?? enumOptions[0];
-        } else {
-          const text = normalizeNonNumericTextValue(def.defaultValue, textMaxLength);
-          defaultValue = text;
-        }
-      }
+      const defaultValue = normalizeCustomStatDefaultValue({
+        kind,
+        defaultValue: def.defaultValue,
+        enumOptions,
+        textMaxLength,
+        dateTimeMode: def.dateTimeMode,
+      }) as string | boolean | string[];
       const dateTimeMode: DateTimeMode = kind === "date_time" && def.dateTimeMode === "structured" ? "structured" : "timestamp";
       return {
         id: String(def.id ?? "").trim().toLowerCase(),
@@ -1005,28 +948,9 @@ function sanitizeStExpressionImageOptions(raw: unknown, fallback: StExpressionIm
 function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStatDefinition {
   const kind = normalizeCustomStatKind(definition.kind);
   const enumOptions = normalizeCustomEnumOptions(definition.enumOptions);
-  const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
+  const textMaxLength = normalizeCustomTextMaxLength(definition.textMaxLength);
   const booleanTrueLabel = String(definition.booleanTrueLabel ?? "enabled").trim().slice(0, 40) || "enabled";
   const booleanFalseLabel = String(definition.booleanFalseLabel ?? "disabled").trim().slice(0, 40) || "disabled";
-  const resolveDefaultValue = (): number | string | boolean | string[] => {
-    if (kind === "numeric") {
-      return Math.max(0, Math.min(100, Math.round(Number(definition.defaultValue) || 50)));
-    }
-    if (kind === "boolean") {
-      return typeof definition.defaultValue === "boolean" ? definition.defaultValue : false;
-    }
-    if (kind === "enum_single" && enumOptions.length > 0) {
-      return resolveEnumOption(enumOptions, definition.defaultValue) ?? enumOptions[0];
-    }
-    if (kind === "array") {
-      return normalizeNonNumericArrayItems(definition.defaultValue, textMaxLength);
-    }
-    if (kind === "date_time") {
-      return normalizeDateTimeValue(definition.defaultValue);
-    }
-    const text = normalizeNonNumericTextValue(definition.defaultValue, textMaxLength);
-    return text;
-  };
 
   return {
     id: String(definition.id ?? "").trim().toLowerCase(),
@@ -1034,7 +958,13 @@ function cloneCustomStatDefinition(definition: CustomStatDefinition): CustomStat
     label: String(definition.label ?? "").trim(),
     description: typeof definition.description === "string" ? definition.description : undefined,
     behaviorGuidance: typeof definition.behaviorGuidance === "string" ? definition.behaviorGuidance : undefined,
-    defaultValue: resolveDefaultValue(),
+    defaultValue: normalizeCustomStatDefaultValue({
+      kind,
+      defaultValue: definition.defaultValue,
+      enumOptions,
+      textMaxLength,
+      dateTimeMode: definition.dateTimeMode,
+    }),
     maxDeltaPerTurn: kind === "numeric"
       ? (definition.maxDeltaPerTurn === undefined ? undefined : Number(definition.maxDeltaPerTurn))
       : undefined,

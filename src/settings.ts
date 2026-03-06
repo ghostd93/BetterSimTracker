@@ -31,6 +31,14 @@ import type {
   STContext,
 } from "./types";
 import { normalizeDateTimeValue } from "./dateTime";
+import {
+  normalizeCustomEnumOptions,
+  normalizeCustomNonNumericValue,
+  normalizeCustomStatDefaultValue,
+  normalizeCustomStatKind,
+  normalizeCustomTextMaxLength,
+  normalizeDateTimeMode,
+} from "./customStatRuntime";
 
 const DEFAULT_MOOD_EXPRESSION_MAP: Record<MoodLabel, string> = {
   "Happy": "joy",
@@ -793,66 +801,6 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
   if (!Array.isArray(raw)) return [];
   const out: BetterSimTrackerSettings["customStats"] = [];
   const seen = new Set<string>();
-  const normalizeKind = (value: unknown): "numeric" | "enum_single" | "boolean" | "text_short" | "array" | "date_time" => {
-    if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array" || value === "date_time") return value;
-    return "numeric";
-  };
-  const normalizeDateTimeMode = (value: unknown): "timestamp" | "structured" =>
-    value === "structured" ? "structured" : "timestamp";
-  const hasScriptLikeContent = (text: string): boolean =>
-    /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
-  const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
-    if (!Array.isArray(options) || options.length === 0) return null;
-    if (typeof candidate !== "string") return null;
-    if (options.includes(candidate)) return candidate;
-    const trimmed = candidate.trim();
-    if (trimmed && options.includes(trimmed)) return trimmed;
-    const lowered = candidate.toLowerCase();
-    const lowerMatch = options.find(option => option.toLowerCase() === lowered);
-    if (lowerMatch) return lowerMatch;
-    if (trimmed) {
-      const trimmedLower = trimmed.toLowerCase();
-      const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
-      if (trimmedMatch) return trimmedMatch;
-    }
-    return null;
-  };
-  const normalizeEnumOptions = (value: unknown): string[] => {
-    if (!Array.isArray(value)) return [];
-    const seenValues = new Set<string>();
-    const outValues: string[] = [];
-    for (const item of value) {
-      const option = String(item ?? "");
-      if (!option.length) continue;
-      if (hasScriptLikeContent(option)) continue;
-      if (seenValues.has(option)) continue;
-      seenValues.add(option);
-      outValues.push(option);
-      if (outValues.length >= 12) break;
-    }
-    return outValues;
-  };
-  const normalizeArrayItems = (value: unknown, maxItemLength: number): string[] => {
-    const toCleanItem = (raw: unknown): string => String(raw ?? "").trim().replace(/\s+/g, " ").slice(0, maxItemLength);
-    const fromArray = Array.isArray(value) ? value : null;
-    const fromString = typeof value === "string"
-      ? value.split(/\r?\n|[,;]+/g)
-      : null;
-    const source = fromArray ?? fromString ?? [];
-    const seenItems = new Set<string>();
-    const outItems: string[] = [];
-    for (const item of source) {
-      const cleaned = toCleanItem(item);
-      if (!cleaned) continue;
-      if (hasScriptLikeContent(cleaned)) continue;
-      const dedupeKey = cleaned.toLowerCase();
-      if (seenItems.has(dedupeKey)) continue;
-      seenItems.add(dedupeKey);
-      outItems.push(cleaned);
-      if (outItems.length >= 20) break;
-    }
-    return outItems;
-  };
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const obj = item as Record<string, unknown>;
@@ -882,12 +830,12 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
     const sequentialGroup = typeof obj.sequentialGroup === "string"
       ? obj.sequentialGroup.trim().toLowerCase().replace(/[^a-z0-9_\-]/g, "_").replace(/_+/g, "_").slice(0, 32)
       : "";
-    const kind = normalizeKind(obj.kind);
+    const kind = normalizeCustomStatKind(obj.kind);
     const dateTimeMode = kind === "date_time"
       ? normalizeDateTimeMode(obj.dateTimeMode)
       : undefined;
-    const enumOptions = normalizeEnumOptions(obj.enumOptions);
-    const textMaxLength = clampInt(obj.textMaxLength, 120, 20, 200);
+    const enumOptions = normalizeCustomEnumOptions(obj.enumOptions);
+    const textMaxLength = normalizeCustomTextMaxLength(obj.textMaxLength, 120);
     const booleanTrueLabel = typeof obj.booleanTrueLabel === "string"
       ? obj.booleanTrueLabel.trim().slice(0, 40)
       : "";
@@ -895,48 +843,25 @@ function sanitizeCustomStats(raw: unknown): BetterSimTrackerSettings["customStat
       ? obj.booleanFalseLabel.trim().slice(0, 40)
       : "";
 
-    const resolveDefaultValue = (): number | string | boolean | string[] => {
-      if (kind === "numeric") {
-        return clampInt(obj.defaultValue, 50, 0, 100);
-      }
-      if (kind === "boolean") {
-        if (typeof obj.defaultValue === "boolean") return obj.defaultValue;
-        if (typeof obj.defaultValue === "string") {
-          const cleaned = obj.defaultValue.trim().toLowerCase();
-          if (cleaned === "true") return true;
-          if (cleaned === "false") return false;
-        }
-        return false;
-      }
-      if (kind === "enum_single") {
-        const fallback = enumOptions[0] ?? "state";
-        const matched = resolveEnumOption(enumOptions, obj.defaultValue);
-        if (matched != null && !hasScriptLikeContent(matched)) return matched;
-        return fallback;
-      }
-      if (kind === "array") {
-        return normalizeArrayItems(obj.defaultValue, textMaxLength);
-      }
-      if (kind === "date_time") {
-        return normalizeDateTimeValue(obj.defaultValue);
-      }
-      const text = typeof obj.defaultValue === "string" ? obj.defaultValue.trim().replace(/\s+/g, " ") : "";
-      return text.slice(0, textMaxLength);
-    };
-
     const legacyTrack = asBool(obj.track, true);
     const globalScope = asBool(obj.globalScope, false);
     const trackCharacters = globalScope ? true : asBool(obj.trackCharacters, legacyTrack);
     const trackUser = globalScope ? true : asBool(obj.trackUser, legacyTrack);
     const trackEnabled = asBool(obj.track, trackCharacters || trackUser);
     const privateToOwner = globalScope ? false : asBool(obj.privateToOwner, false);
-    const entry = {
+    const entry: BetterSimTrackerSettings["customStats"][number] = {
       id,
       kind,
       label,
       description: description || undefined,
       behaviorGuidance: behaviorGuidance || undefined,
-      defaultValue: resolveDefaultValue(),
+      defaultValue: normalizeCustomStatDefaultValue({
+        kind,
+        defaultValue: obj.defaultValue,
+        enumOptions,
+        textMaxLength,
+        dateTimeMode,
+      }),
       maxDeltaPerTurn: kind === "numeric"
         ? (obj.maxDeltaPerTurn === undefined
           ? undefined
@@ -985,24 +910,6 @@ function sanitizeCustomNonNumericStatDefaults(
   raw: unknown,
   customStats: BetterSimTrackerSettings["customStats"],
 ): Record<string, string | boolean | string[]> | null {
-  const hasScriptLikeContent = (text: string): boolean =>
-    /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
-  const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
-    if (!Array.isArray(options) || options.length === 0) return null;
-    if (typeof candidate !== "string") return null;
-    if (options.includes(candidate)) return candidate;
-    const trimmed = candidate.trim();
-    if (trimmed && options.includes(trimmed)) return trimmed;
-    const lowered = candidate.toLowerCase();
-    const lowerMatch = options.find(option => option.toLowerCase() === lowered);
-    if (lowerMatch) return lowerMatch;
-    if (trimmed) {
-      const trimmedLower = trimmed.toLowerCase();
-      const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
-      if (trimmedMatch) return trimmedMatch;
-    }
-    return null;
-  };
   if (!raw || typeof raw !== "object") return null;
   const byId = new Map(customStats.map(stat => [stat.id, stat]));
   const out: Record<string, string | boolean | string[]> = {};
@@ -1013,60 +920,15 @@ function sanitizeCustomNonNumericStatDefaults(
     if (!stat) continue;
     const kind = stat.kind ?? "numeric";
     if (kind === "numeric") continue;
-    if (kind === "boolean") {
-      if (typeof value === "boolean") {
-        out[id] = value;
-      } else if (typeof value === "string") {
-        const cleaned = value.trim().toLowerCase();
-        if (cleaned === "true") out[id] = true;
-        if (cleaned === "false") out[id] = false;
-      }
-      continue;
-    }
-    const textMaxLength = kind === "text_short" || kind === "array"
-      ? clampInt(stat.textMaxLength, 120, 20, 200)
-      : 120;
-    const options = kind === "enum_single"
-      ? (Array.isArray(stat.enumOptions) ? stat.enumOptions : [])
-      : [];
-    if (kind === "enum_single") {
-      const matched = resolveEnumOption(options, value);
-      if (matched != null && !hasScriptLikeContent(matched)) out[id] = matched;
-      continue;
-    }
-    if (kind === "array") {
-      const source = Array.isArray(value)
-        ? value
-        : typeof value === "string"
-          ? value.split(/\r?\n|[,;]+/g)
-          : [];
-      const items: string[] = [];
-      const seenItems = new Set<string>();
-      for (const item of source) {
-        const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, textMaxLength);
-        if (!cleaned) continue;
-        if (hasScriptLikeContent(cleaned)) continue;
-        const dedupeKey = cleaned.toLowerCase();
-        if (seenItems.has(dedupeKey)) continue;
-        seenItems.add(dedupeKey);
-        items.push(cleaned);
-        if (items.length >= 20) break;
-      }
-      if (items.length) out[id] = items;
-      continue;
-    }
-    if (kind === "date_time") {
-      const normalized = normalizeDateTimeValue(value);
-      if (normalized) out[id] = normalized;
-      continue;
-    }
-    const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
-    if (!text) continue;
-    if (kind === "text_short") {
-      out[id] = text.slice(0, textMaxLength);
-    } else {
-      out[id] = text;
-    }
+    const normalized = normalizeCustomNonNumericValue(kind, value, {
+      enumOptions: stat.enumOptions,
+      textMaxLength: stat.textMaxLength,
+      dateTimeMode: stat.dateTimeMode,
+    });
+    if (normalized === undefined) continue;
+    if (Array.isArray(normalized) && normalized.length === 0) continue;
+    if (typeof normalized === "string" && !normalized) continue;
+    out[id] = normalized;
   }
   return Object.keys(out).length ? out : null;
 }
@@ -1075,24 +937,6 @@ function sanitizeCharacterDefaults(
   raw: unknown,
   customStats: BetterSimTrackerSettings["customStats"],
 ): Record<string, CharacterDefaults> {
-  const hasScriptLikeContent = (text: string): boolean =>
-    /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
-  const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
-    if (!Array.isArray(options) || options.length === 0) return null;
-    if (typeof candidate !== "string") return null;
-    if (options.includes(candidate)) return candidate;
-    const trimmed = candidate.trim();
-    if (trimmed && options.includes(trimmed)) return trimmed;
-    const lowered = candidate.toLowerCase();
-    const lowerMatch = options.find(option => option.toLowerCase() === lowered);
-    if (lowerMatch) return lowerMatch;
-    if (trimmed) {
-      const trimmedLower = trimmed.toLowerCase();
-      const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
-      if (trimmedMatch) return trimmedMatch;
-    }
-    return null;
-  };
   if (!raw || typeof raw !== "object") return {};
   const out: Record<string, CharacterDefaults> = {};
   for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {

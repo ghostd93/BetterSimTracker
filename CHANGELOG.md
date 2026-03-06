@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.7-dev1] - 2026-03-06
+### Changed
+- Centralized custom stat kind runtime behavior into shared normalization helpers used across settings, parsing, storage, prompts, defaults, and UI flows.
+- Reduced duplicated custom-stat coercion/default logic in the runtime, making enum/array/text/date-time handling more consistent across both extraction modes.
+
 ## [2.2.3.3-dev9] - 2026-03-06
 ### Added
 - Added visible global injection macro hint near the injection toggle in settings: `{{bst_injection}}`.

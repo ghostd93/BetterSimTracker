@@ -55,6 +55,11 @@ import { initCharacterPanel } from "./characterPanel";
 import { initPersonaPanel } from "./personaPanel";
 import { extractLorebookEntriesFromPayload, readLorebookContext } from "./lorebook";
 import { normalizeDateTimeWithMode } from "./dateTime";
+import {
+  normalizeCustomNonNumericValue,
+  normalizeCustomTextMaxLength,
+  normalizeNonNumericArrayItems,
+} from "./customStatRuntime";
 
 declare const __BST_VERSION__: string;
 
@@ -2137,25 +2142,6 @@ function parseDefaultText(raw: unknown): string | null {
   return text ? text : null;
 }
 
-function normalizeArrayItems(raw: unknown, maxLength = 200, maxItems = 20): string[] {
-  const boundedMaxLength = Math.max(20, Math.min(200, Math.round(Number(maxLength) || 120)));
-  const asList = Array.isArray(raw)
-    ? raw.map(item => String(item ?? ""))
-    : (typeof raw === "string"
-      ? raw.split(/\r?\n|[,;]/g)
-      : []);
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const item of asList) {
-    const text = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, boundedMaxLength);
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
-    out.push(text);
-    if (out.length >= maxItems) break;
-  }
-  return out;
-}
-
 function slugifyDefaultsKey(value: string): string {
   return value
     .normalize("NFKD")
@@ -2226,8 +2212,8 @@ function getConfiguredCharacterDefaults(
         const statDef = customDefById.get(id);
         const kind = statDef?.kind ?? "text_short";
         if (kind === "array") {
-          const maxLength = Math.max(20, Math.min(200, Math.round(Number(statDef?.textMaxLength) || 120)));
-          const items = normalizeArrayItems(value, maxLength, 20);
+          const maxLength = normalizeCustomTextMaxLength(statDef?.textMaxLength, 120);
+          const items = normalizeNonNumericArrayItems(value, maxLength);
           if (!items.length) continue;
           customNonNumericStatDefaults[id] = items;
           continue;
@@ -2300,8 +2286,8 @@ function getConfiguredCharacterDefaults(
       const statDef = customDefById.get(id);
       const kind = statDef?.kind ?? "text_short";
       if (kind === "array") {
-        const maxLength = Math.max(20, Math.min(200, Math.round(Number(statDef?.textMaxLength) || 120)));
-        const items = normalizeArrayItems(value, maxLength, 20);
+        const maxLength = normalizeCustomTextMaxLength(statDef?.textMaxLength, 120);
+        const items = normalizeNonNumericArrayItems(value, maxLength);
         if (!items.length) continue;
         customNonNumericStatDefaults[id] = items;
         continue;
@@ -2424,58 +2410,18 @@ function buildSeededCustomNonNumericStatisticsForActiveCharacters(
     const statId = String(def.id ?? "").trim().toLowerCase();
     if (!statId) continue;
     if (!seeded[statId]) seeded[statId] = {};
-    const hasScriptLikeContent = (text: string): boolean =>
-      /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
-    const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
-      if (!Array.isArray(options) || options.length === 0) return null;
-      if (typeof candidate !== "string") return null;
-      if (options.includes(candidate)) return candidate;
-      const trimmed = candidate.trim();
-      if (trimmed && options.includes(trimmed)) return trimmed;
-      const lowered = candidate.toLowerCase();
-      const lowerMatch = options.find(option => option.toLowerCase() === lowered);
-      if (lowerMatch) return lowerMatch;
-      if (trimmed) {
-        const trimmedLower = trimmed.toLowerCase();
-        const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
-        if (trimmedMatch) return trimmedMatch;
-      }
-      return null;
-    };
-    const enumOptions = Array.isArray(def.enumOptions)
-      ? def.enumOptions.map(option => String(option ?? "")).filter(option => option.length > 0 && !hasScriptLikeContent(option))
-      : [];
-    const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(def.textMaxLength) || 120)));
     const normalizeValue = (raw: unknown): CustomNonNumericValue => {
-      if (kind === "boolean") {
-        if (typeof raw === "boolean") return raw;
-        if (typeof raw === "string") {
-          const lowered = raw.trim().toLowerCase();
-          if (lowered === "true") return true;
-          if (lowered === "false") return false;
-        }
-        return typeof def.defaultValue === "boolean" ? def.defaultValue : false;
-      }
-      if (kind === "enum_single") {
-        const defaultOption = resolveEnumOption(enumOptions, def.defaultValue);
-        const fallback = defaultOption ?? enumOptions[0] ?? String(def.defaultValue ?? "");
-        const matched = resolveEnumOption(enumOptions, raw);
-        const selected = matched ?? fallback;
-        return hasScriptLikeContent(selected) ? (enumOptions[0] ?? "") : selected;
-      }
-      if (kind === "array") {
-        const fallback = normalizeArrayItems(def.defaultValue, textMaxLength, 20);
-        const items = normalizeArrayItems(raw, textMaxLength, 20);
-        return items.length ? items : fallback;
-      }
-      if (kind === "date_time") {
-        return normalizeDateTimeWithMode(raw, def.dateTimeMode ?? "timestamp", def.defaultValue);
-      }
-      const fallback = String(def.defaultValue ?? "").trim().replace(/\s+/g, " ");
-      const text = typeof raw === "string"
-        ? raw.trim().replace(/\s+/g, " ")
-        : "";
-      return (text || fallback).slice(0, textMaxLength);
+      return normalizeCustomNonNumericValue(kind, raw, {
+        enumOptions: def.enumOptions,
+        textMaxLength: def.textMaxLength,
+        dateTimeMode: def.dateTimeMode,
+        preserveExplicitEmptyArray: true,
+      }) ?? normalizeCustomNonNumericValue(kind, def.defaultValue, {
+        enumOptions: def.enumOptions,
+        textMaxLength: def.textMaxLength,
+        dateTimeMode: def.dateTimeMode,
+        preserveExplicitEmptyArray: true,
+      }) ?? (kind === "boolean" ? false : kind === "array" ? [] : "");
     };
     for (const name of activeCharacters) {
       if (seeded[statId][name] !== undefined) {
@@ -2598,9 +2544,9 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
         const maxLength = Math.max(20, Math.min(200, Math.round(Number(def.textMaxLength) || 120)));
         const configuredCustom = defaults.customNonNumericStatDefaults?.[statId];
         const configuredItems = Array.isArray(configuredCustom)
-          ? normalizeArrayItems(configuredCustom, maxLength, 20)
-          : normalizeArrayItems(configuredCustom, maxLength, 20);
-        const fallbackItems = normalizeArrayItems(def.defaultValue, maxLength, 20);
+          ? normalizeNonNumericArrayItems(configuredCustom, maxLength)
+          : normalizeNonNumericArrayItems(configuredCustom, maxLength);
+        const fallbackItems = normalizeNonNumericArrayItems(def.defaultValue, maxLength);
         customNonNumericDefaults[statId] = configuredItems.length ? configuredItems : fallbackItems;
       } else if (kind === "date_time") {
         const configuredCustom = defaults.customNonNumericStatDefaults?.[statId];
@@ -2666,7 +2612,7 @@ function buildBaselineData(activeCharacters: string[], s: BetterSimTrackerSettin
         activeCharacters.map(name => [name, baselinePerCharacter.get(name)?.customNonNumeric?.[statId] ?? (kind === "boolean"
           ? false
           : kind === "array"
-            ? normalizeArrayItems(def.defaultValue, maxLength, 20)
+            ? normalizeNonNumericArrayItems(def.defaultValue, maxLength)
             : kind === "date_time"
               ? normalizeDateTimeWithMode(def.defaultValue, def.dateTimeMode ?? "timestamp")
             : String(def.defaultValue ?? "").trim())]),
@@ -2966,7 +2912,7 @@ function filterCustomNonNumericStatisticsToCharacters(
       if (typeof value === "boolean") {
         filtered[name] = value;
       } else if (Array.isArray(value)) {
-        const items = normalizeArrayItems(value, 200, 20);
+        const items = normalizeNonNumericArrayItems(value, 200);
         if (!items.length) continue;
         filtered[name] = items;
       } else {
@@ -3061,7 +3007,7 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
       continue;
     }
     if (Array.isArray(rawValue)) {
-      customNonNumeric[statKey][ownerKey] = normalizeArrayItems(rawValue, 200, 20);
+      customNonNumeric[statKey][ownerKey] = normalizeNonNumericArrayItems(rawValue, 200);
       continue;
     }
     if ((statDef?.kind ?? "text_short") === "date_time") {

@@ -2,6 +2,11 @@ import { moodOptions } from "./prompts";
 import type { CustomNonNumericValue, CustomStatKind, NumericStatKey, StatKey, StatValue } from "./types";
 import type { Statistics } from "./types";
 import { normalizeDateTimeWithMode } from "./dateTime";
+import {
+  normalizeCustomEnumOptions,
+  normalizeCustomNonNumericValue,
+  normalizeCustomTextMaxLength,
+} from "./customStatRuntime";
 
 type CharacterNameAliases = Record<string, string>;
 
@@ -419,24 +424,6 @@ export function parseCustomValueResponse(
   confidence: Record<string, number>;
   value: Record<string, CustomNonNumericValue>;
 } {
-  const hasScriptLikeContent = (text: string): boolean =>
-    /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
-  const resolveEnumOption = (options: string[], candidate: unknown): string | null => {
-    if (!Array.isArray(options) || options.length === 0) return null;
-    if (typeof candidate !== "string") return null;
-    if (options.includes(candidate)) return candidate;
-    const trimmed = candidate.trim();
-    if (trimmed && options.includes(trimmed)) return trimmed;
-    const lowered = candidate.toLowerCase();
-    const lowerMatch = options.find(option => option.toLowerCase() === lowered);
-    if (lowerMatch) return lowerMatch;
-    if (trimmed) {
-      const trimmedLower = trimmed.toLowerCase();
-      const trimmedMatch = options.find(option => option.trim().toLowerCase() === trimmedLower);
-      if (trimmedMatch) return trimmedMatch;
-    }
-    return null;
-  };
   const parsed = safeJsonParse(rawText);
   const byName = new Map<string, Record<string, unknown>>();
   const result = {
@@ -464,56 +451,8 @@ export function parseCustomValueResponse(
     }
   }
 
-  const enumOptions = Array.isArray(input.enumOptions)
-    ? input.enumOptions.map(item => String(item ?? "")).filter(item => item.length > 0 && !hasScriptLikeContent(item))
-    : [];
-  const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
-  const normalizeArrayItems = (raw: unknown): { items: string[]; explicitEmpty: boolean } => {
-    const coerceStringItem = (value: unknown): string => String(value ?? "").trim();
-    const emptyMarkers = new Set(["[]", "none", "no items", "empty", "n/a", "null", "clear"]);
-    const normalizeToken = (token: string): string =>
-      token
-        .replace(/^[\s\-–—*•·\u2022\u25E6]+/, "")
-        .replace(/^\s*\d+[\.\)]\s+/, "")
-        .replace(/^"(.*)"$/s, "$1")
-        .replace(/^'(.*)'$/s, "$1")
-        .trim();
-    const fromString = (text: string): { source: unknown[]; explicitEmpty: boolean } => {
-      const trimmed = text.trim();
-      if (!trimmed) return { source: [], explicitEmpty: false };
-      const lowered = trimmed.toLowerCase();
-      if (emptyMarkers.has(lowered)) return { source: [], explicitEmpty: true };
-      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-        try {
-          const parsedArray = JSON.parse(trimmed);
-          if (Array.isArray(parsedArray)) return { source: parsedArray, explicitEmpty: parsedArray.length === 0 };
-        } catch {
-          // Fallback to loose tokenization below.
-        }
-      }
-      const split = trimmed.split(/\r?\n|[,;]+/g);
-      return { source: split, explicitEmpty: false };
-    };
-    const { source, explicitEmpty } = Array.isArray(raw)
-      ? { source: raw, explicitEmpty: raw.length === 0 }
-      : typeof raw === "string"
-        ? fromString(raw)
-        : { source: [], explicitEmpty: false };
-    const items: string[] = [];
-    const seenItems = new Set<string>();
-    for (const item of source) {
-      const cleaned = normalizeToken(coerceStringItem(item)).replace(/\s+/g, " ").slice(0, textMaxLength);
-      if (!cleaned) continue;
-      if (hasScriptLikeContent(cleaned)) continue;
-      const dedupeKey = cleaned.toLowerCase();
-      if (seenItems.has(dedupeKey)) continue;
-      seenItems.add(dedupeKey);
-      items.push(cleaned);
-      if (items.length >= 20) break;
-    }
-    return { items, explicitEmpty };
-  };
-
+  const enumOptions = normalizeCustomEnumOptions(input.enumOptions);
+  const textMaxLength = normalizeCustomTextMaxLength(input.textMaxLength);
   for (const name of activeCharacters) {
     const row = byName.get(name);
     if (!row) continue;
@@ -525,19 +464,12 @@ export function parseCustomValueResponse(
 
     const valueObj = (row.value && typeof row.value === "object" ? row.value : null) as Record<string, unknown> | null;
     const candidate = valueObj?.[statId] ?? row[statId] ?? row.value;
-    if (kind === "boolean") {
-      if (typeof candidate === "boolean") {
-        result.value[name] = candidate;
-      } else if (typeof candidate === "string") {
-        const cleaned = candidate.trim().toLowerCase();
-        if (cleaned === "true") result.value[name] = true;
-        if (cleaned === "false") result.value[name] = false;
-      }
-      continue;
-    }
     if (kind === "array") {
-      const { items, explicitEmpty } = normalizeArrayItems(candidate);
-      if (items.length > 0 || explicitEmpty) result.value[name] = items;
+      const normalized = normalizeCustomNonNumericValue(kind, candidate, {
+        textMaxLength,
+        preserveExplicitEmptyArray: true,
+      });
+      if (Array.isArray(normalized)) result.value[name] = normalized;
       continue;
     }
     if (kind === "date_time") {
@@ -545,16 +477,14 @@ export function parseCustomValueResponse(
       if (normalized) result.value[name] = normalized;
       continue;
     }
-    if (typeof candidate !== "string") continue;
-    if (kind === "enum_single") {
-      const matched = resolveEnumOption(enumOptions, candidate);
-      if (matched != null && !hasScriptLikeContent(matched)) result.value[name] = matched;
-      continue;
-    }
-    const cleaned = candidate.trim().replace(/\s+/g, " ");
-    if (!cleaned) continue;
-    result.value[name] = cleaned.slice(0, textMaxLength);
+    const normalized = normalizeCustomNonNumericValue(kind, candidate, {
+      enumOptions,
+      textMaxLength,
+    });
+    if (normalized !== undefined) result.value[name] = normalized;
   }
 
   return result;
 }
+
+
