@@ -2,6 +2,20 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev4] - 2026-03-06
+### Added
+- Added a dependency-free automated test harness using Node's built-in test runner and a dedicated test TypeScript config.
+- Added coverage for core pure/runtime logic:
+  - custom stat runtime normalization
+  - date/time normalization and structured parsing
+  - response parsing
+  - message filtering
+  - storage merge behavior
+  - merged prompt/macro tracker-state resolution
+
+### Changed
+- Added `npm run test` and `npm run test:compile` scripts so BST now has a real local automated validation path before push/release.
+
 ## [2.2.3.10-dev3] - 2026-03-06
 ### Changed
 - Continued step-2 modularization by extracting the tracker edit modal, graph modal, and runtime tracker-state resolution into dedicated modules:

@@ -1,12 +1,14 @@
 {
   "name": "better-sim-tracker",
-  "version": "2.2.3.10-dev3",
+  "version": "2.2.3.10-dev4",
   "private": true,
   "description": "TypeScript SillyTavern extension for relationship tracking",
   "scripts": {
     "build": "webpack",
     "dev": "webpack --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:compile": "tsc -p tsconfig.tests.json",
+    "test": "npm run test:compile && node --test --experimental-test-isolation=none .test-dist/tests/*.test.js"
   },
   "dependencies": {
     "sillytavern-utils-lib": "^1.0.64"
