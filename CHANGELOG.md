@@ -2,101 +2,18 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.3.7-dev6] - 2026-03-06
-### Fixed
-- `{{bst_injection}}` now remains available for manual macro use even when `Inject Tracker Into Prompt` is disabled; the toggle now only controls BST auto-injection into the live prompt pipeline.
-
-## [2.2.3.7-dev5] - 2026-03-06
-### Changed
-- Continued step-2 modularization by extracting settings modal logic into `src/settingsModal.ts` and mood image preview modal logic into `src/moodImageModal.ts`, reducing `src/ui.ts` responsibility without changing user-facing behavior.
-
-### Fixed
-- Tightened thought expand-button heuristics so `More thought` only appears when the thought is actually likely truncated, avoiding no-op toggles on fully visible text.
-
-## [2.2.3.7-dev4] - 2026-03-06
-### Fixed
-- Moved built-in AI status feedback below the new built-in `Behavior Instruction` fields so the UI no longer reads as if the behavior textarea itself depends on the current connection profile.
-
-## [2.2.3.7-dev3] - 2026-03-06
-### Fixed
-- Removed the misleading idle `Uses current connection profile.` hint under built-in prompt sections; AI status rows now stay hidden until generation is actively running or returns a result.
-
-## [2.2.3.7-dev2] - 2026-03-06
+## [2.2.3.9] - 2026-03-06
 ### Added
-- Added dedicated built-in `Behavior Instruction` textareas for affection, trust, desire, and connection directly inside their existing prompt sections.
+- Added dedicated built-in `Behavior Instruction` textareas for affection, trust, desire, and connection directly inside the existing built-in prompt sections.
 
 ### Changed
-- Built-in hidden injection behavior now prefers those per-stat behavior instructions when present, while keeping BST fallback react rules for empty fields.
-
-## [2.2.3.7-dev1] - 2026-03-06
-### Changed
-- Centralized custom stat kind runtime behavior into shared normalization helpers used across settings, parsing, storage, prompts, defaults, and UI flows.
-- Reduced duplicated custom-stat coercion/default logic in the runtime, making enum/array/text/date-time handling more consistent across both extraction modes.
-- Built-in prompt sections now include dedicated injection-only `Behavior Instruction` textareas for affection, trust, desire, and connection, with backward-compatible fallback to BST default react rules.
-
-## [2.2.3.3-dev9] - 2026-03-06
-### Added
-- Added visible global injection macro hint near the injection toggle in settings: `{{bst_injection}}`.
-
-## [2.2.3.3-dev8] - 2026-03-06
-### Changed
-- Macro hints and macro registration are now stat-scope aware:
-  - User macros only for stats that actually track user.
-  - Scene macros only for global stats.
-  - Character-targeted macros only for stats that track characters.
-- Removed irrelevant macro suggestions for disabled/incompatible scopes.
-
-## [2.2.3.3-dev7] - 2026-03-06
-### Fixed
-- Settings macro preview candidates are now restricted to characters that actually exist in the current chat (chat message participants), instead of showing full character roster from global character list.
-
-## [2.2.3.3-dev6] - 2026-03-06
-### Changed
-- Custom Stats list macro hints now include ready-to-copy character-targeted examples derived from current preview character names (slug-based), instead of only showing a generic `<character_slug>` pattern.
-
-## [2.2.3.3-dev5] - 2026-03-06
-### Changed
-- BST macro set was narrowed to explicit scopes only:
-  - kept `{{bst_stat_user_<id>}}`
-  - kept `{{bst_stat_scene_<id>}}`
-  - added explicit name-targeted character macros: `{{bst_stat_char_<id>_<character_slug>}}`
-- Removed ambiguous auto/generic character stat macros to avoid multi-character ambiguity.
-- Custom Stats macro hint text now shows the explicit macro pattern set.
-
-## [2.2.3.3-dev4] - 2026-03-06
-### Added
-- New ST macro support:
-  - `{{bst_injection}}` for current BST hidden injection block.
-  - per-stat macros for built-ins + custom stats:
-    - `{{bst_stat_<id>}}` (auto scope)
-    - `{{bst_stat_char_<id>}}`
-    - `{{bst_stat_user_<id>}}`
-    - `{{bst_stat_scene_<id>}}`
-- Custom Stats list now shows per-stat macro hints directly in each row for quick copy/use.
+- Built-in hidden injection behavior now prefers those per-stat behavior instructions when present, while keeping BST fallback react rules when the fields are empty.
+- Continued internal step-2 modularization by extracting settings and mood-preview modal logic into dedicated modules without changing tracker behavior.
 
 ### Fixed
-- Manual refresh/retrack now uses the currently edited tracker on that same message as baseline context, preventing immediate reversion to pre-edit values.
-
-## [2.2.3.3-dev3] - 2026-03-05
-### Fixed
-- Hardened `array` custom-stat handling for weaker models:
-  - broader array value normalization (JSON array strings, bullet/numbered lines, comma/newline lists),
-  - explicit empty markers now parse as an intentional empty array,
-  - conservative apply guard prevents low-confidence destructive array drops from wiping prior values.
-
-## [2.2.3-dev2] - 2026-03-05
-### Changed
-- Extraction progress labels are now explicit and mode-aware (Built-in, Custom, Custom Group, Unified Batch), including clearer no-extraction/default seeding steps.
-
-## [2.2.3-dev1] - 2026-03-05
-### Added
-- Optional sequential custom-stat grouping:
-  - global toggle `Enable Sequential Stat Groups`
-  - per-stat `Sequential Group` field in Custom Stat wizard/import/state
-  - stats sharing a group are extracted together in one sequential request.
-
-### Fixed
-- Sequential snapshot prompts no longer inject fallback built-in values (`50`) for built-ins that are disabled in tracking settings.
+- Built-in prompt sections no longer show misleading idle AI status text, and status feedback is now positioned correctly below the behavior field.
+- `{{bst_injection}}` now remains available for manual macro use even when `Inject Tracker Into Prompt` is disabled; the toggle now controls only automatic BST injection.
+- Thought expand buttons now appear only when the thought is actually likely truncated, preventing no-op `More thought` toggles on fully visible text.
 
 ## [2.2.3] - 2026-03-04
 ### Added
@@ -719,6 +636,7 @@ And more...
 - Route extraction through Generator with the selected profile, and build as ES module for utils-lib compatibility.
 - Graph history now dedupes by message index, ignores legacy entries without messageIndex, skips deleted messages, and keeps up to 120 snapshots.
 - Diagnostics dumps now include settings provenance, graph preferences, profile resolution, request metadata, history sample, and request numbering starts at 1.
+
 ## [1.0.3.12] - 2026-02-18
 ### Changed
 - Diagnostics request numbering now starts at 1 for each run.
@@ -796,5 +714,3 @@ And more...
 ## [1.0.0] - 2026-02-18
 
 - First stable public release.
-
-
