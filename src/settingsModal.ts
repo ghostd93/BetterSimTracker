@@ -51,6 +51,7 @@ import {
   resolveEnumOption,
 } from "./customStatRuntime";
 import { normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
+import { normalizeDateTimePartOrder } from "./uiDateTimeDisplay";
 import {
   BUILT_IN_NUMERIC_STAT_KEY_LIST,
   BUILT_IN_NUMERIC_STAT_KEYS,
@@ -71,7 +72,6 @@ import {
   getStableAutoCardColor,
   getNumericStatDefinitions,
   normalizeHexColor,
-  normalizeDateTimePartOrder,
   normalizeMoodLabel,
   safeSetLocalStorage,
   sanitizeGeneratedSequentialTemplate,

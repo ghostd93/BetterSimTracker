@@ -2,6 +2,25 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev14] - 2026-03-06
+### Added
+- Added dedicated date/time display helper module and tests:
+  - `src/uiDateTimeDisplay.ts`
+  - `tests/uiDateTimeDisplay.test.ts`
+
+### Changed
+- Continued step-2 UI modularization by moving date/time rendering/format/order helper logic out of `src/ui.ts` into a dedicated helper module.
+- `src/settingsModal.ts` now consumes `normalizeDateTimePartOrder` from the dedicated date/time display helper module.
+
+## [2.2.3.10-dev13] - 2026-03-06
+### Added
+- Added focused thought-rendering helper module and tests:
+  - `src/uiThought.ts`
+  - `tests/uiThought.test.ts`
+
+### Changed
+- Continued step-2 UI modularization by moving thought expand/collapse rendering logic out of `src/ui.ts` into the new helper module without behavior changes.
+
 ## [2.2.3.10-dev12] - 2026-03-06
 ### Added
 - Added dedicated test/coverage scripts to the maintainer workflow:

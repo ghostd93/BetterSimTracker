@@ -51,6 +51,8 @@ import { closeEditStatsModal, openEditStatsModal, type EditStatsPayload } from "
 import { closeGraphModal, openGraphModal } from "./graphModal";
 import { getAllNumericStatDefinitions } from "./statRegistry";
 import { getDateTimeStructuredParts, normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
+import { renderThoughtMarkup } from "./uiThought";
+import { formatDateTimeTimestampDisplay, renderDateTimeStructuredChips } from "./uiDateTimeDisplay";
 import {
   normalizeCustomEnumOptions,
   normalizeCustomStatDefaultValue,
@@ -125,8 +127,6 @@ const ST_EXPRESSION_CACHE_TTL_MS = 60_000;
 const stExpressionCache = new Map<string, CachedExpressionSprites>();
 const stExpressionFetchInFlight = new Set<string>();
 export const CUSTOM_STAT_DESCRIPTION_MAX_LENGTH = 300;
-const DATE_TIME_PART_KEYS = ["weekday", "date", "time", "phase"] as const;
-type DateTimePartKey = (typeof DATE_TIME_PART_KEYS)[number];
 export const DEFAULT_ST_EXPRESSION_IMAGE_OPTIONS: StExpressionImageOptions = {
   zoom: 1.2,
   positionX: 50,
@@ -378,138 +378,6 @@ function formatNonNumericForDisplay(def: UiNonNumericStatDefinition, value: stri
   return String(value);
 }
 
-const MONTH_NAMES_SHORT_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
-const MONTH_NAMES_LONG_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] as const;
-
-function getOrdinalSuffix(day: number): string {
-  const mod100 = day % 100;
-  if (mod100 >= 11 && mod100 <= 13) return "th";
-  const mod10 = day % 10;
-  if (mod10 === 1) return "st";
-  if (mod10 === 2) return "nd";
-  if (mod10 === 3) return "rd";
-  return "th";
-}
-
-function parseNormalizedDateTime(raw: unknown): { year: number; month: number; day: number; hour: number; minute: number } | null {
-  const normalized = normalizeDateTimeValue(raw);
-  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
-  if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const hour = Number(match[4]);
-  const minute = Number(match[5]);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day) || !Number.isFinite(hour) || !Number.isFinite(minute)) return null;
-  return { year, month, day, hour, minute };
-}
-
-function formatDateWithPreset(
-  parts: { year: number; month: number; day: number },
-  format: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy",
-): string {
-  const yyyy = String(parts.year).padStart(4, "0");
-  const mm = String(parts.month).padStart(2, "0");
-  const dd = String(parts.day).padStart(2, "0");
-  const monthShort = MONTH_NAMES_SHORT_EN[parts.month - 1] ?? mm;
-  const monthLong = MONTH_NAMES_LONG_EN[parts.month - 1] ?? mm;
-  if (format === "dmy") return `${dd}-${mm}-${yyyy}`;
-  if (format === "mdy") return `${mm}-${dd}-${yyyy}`;
-  if (format === "d_mmm_yyyy") return `${dd} ${monthShort} ${yyyy}`;
-  if (format === "mmmm_d_yyyy") return `${monthLong} ${parts.day}, ${yyyy}`;
-  if (format === "mmmm_do_yyyy") return `${monthLong} ${parts.day}${getOrdinalSuffix(parts.day)}, ${yyyy}`;
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function formatDateTimeTimestampDisplay(
-  raw: unknown,
-  format: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy",
-): string {
-  const parsed = parseNormalizedDateTime(raw);
-  if (!parsed) return String(raw ?? "");
-  const datePart = formatDateWithPreset(parsed, format);
-  const timePart = `${String(parsed.hour).padStart(2, "0")}:${String(parsed.minute).padStart(2, "0")}`;
-  return `${datePart} ${timePart}`;
-}
-
-function renderDateTimeStructuredChips(
-  value: string | boolean | string[],
-  color: string,
-  options?: {
-    showWeekday?: boolean;
-    showDate?: boolean;
-    showTime?: boolean;
-    showPhase?: boolean;
-    showPartLabels?: boolean;
-    labelWeekday?: string;
-    labelDate?: string;
-    labelTime?: string;
-    labelPhase?: string;
-    dateFormat?: "iso" | "dmy" | "mdy" | "d_mmm_yyyy" | "mmmm_d_yyyy" | "mmmm_do_yyyy";
-    partOrder?: Array<"weekday" | "date" | "time" | "phase">;
-  },
-): string {
-  const parts = getDateTimeStructuredParts(value);
-  if (!parts) {
-    const raw = String(value ?? "").trim();
-    return raw
-      ? `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`
-      : `<span class="bst-array-item-empty">Not set</span>`;
-  }
-  const formatDatePart = (rawDate: string): string => {
-    const match = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return rawDate;
-    const [, y, m, d] = match;
-    const mode =
-      options?.dateFormat === "dmy" ||
-      options?.dateFormat === "mdy" ||
-      options?.dateFormat === "d_mmm_yyyy" ||
-      options?.dateFormat === "mmmm_d_yyyy" ||
-      options?.dateFormat === "mmmm_do_yyyy"
-        ? options.dateFormat
-        : "iso";
-    return formatDateWithPreset({ year: Number(y), month: Number(m), day: Number(d) }, mode);
-  };
-  const showMap = {
-    weekday: options?.showWeekday !== false,
-    date: options?.showDate !== false,
-    time: options?.showTime !== false,
-    phase: options?.showPhase !== false,
-  };
-  const labelMap = {
-    weekday: String(options?.labelWeekday ?? "Day").trim() || "Day",
-    date: String(options?.labelDate ?? "Date").trim() || "Date",
-    time: String(options?.labelTime ?? "Time").trim() || "Time",
-    phase: String(options?.labelPhase ?? "Phase").trim() || "Phase",
-  };
-  const valueMap = {
-    weekday: parts.dayOfWeek,
-    date: formatDatePart(parts.date),
-    time: parts.time,
-    phase: parts.phase,
-  };
-  const rawOrder = Array.isArray(options?.partOrder) ? options!.partOrder : ["weekday", "date", "time", "phase"];
-  const order: Array<"weekday" | "date" | "time" | "phase"> = [];
-  for (const key of rawOrder) {
-    if (key === "weekday" || key === "date" || key === "time" || key === "phase") {
-      if (!order.includes(key)) order.push(key);
-    }
-  }
-  for (const key of ["weekday", "date", "time", "phase"] as const) {
-    if (!order.includes(key)) order.push(key);
-  }
-  const showPartLabels = Boolean(options?.showPartLabels);
-  const chips = order
-    .filter(key => showMap[key])
-    .map(key => {
-      const valueText = valueMap[key];
-      const displayText = showPartLabels ? `${labelMap[key]}: ${valueText}` : valueText;
-      return `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayText)}">${escapeHtml(displayText)}</span>`;
-    });
-  return chips.length
-    ? chips.join("")
-    : `<span class="bst-array-item-empty">Not set</span>`;
-}
 
 function truncateDisplayText(value: string, maxLength: number | null | undefined): string {
   if (typeof maxLength !== "number" || !Number.isFinite(maxLength) || maxLength < 10) return value;
@@ -566,20 +434,6 @@ function toPercent(value: StatValue): number {
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase();
-}
-
-export function normalizeDateTimePartOrder(parts: string[]): DateTimePartKey[] {
-  const next: DateTimePartKey[] = [];
-  for (const raw of parts) {
-    const key = String(raw ?? "").trim().toLowerCase();
-    if ((key === "weekday" || key === "date" || key === "time" || key === "phase") && !next.includes(key)) {
-      next.push(key);
-    }
-  }
-  for (const key of DATE_TIME_PART_KEYS) {
-    if (!next.includes(key)) next.push(key);
-  }
-  return next;
 }
 
 function toOwnerClassSuffix(value: string): string {
@@ -871,27 +725,6 @@ function getResolvedCardColor(settings: BetterSimTrackerSettings, characterName:
 
 function thoughtKey(messageIndex: number, characterName: string): string {
   return `${messageIndex}:${normalizeName(characterName)}`;
-}
-
-function shouldEnableThoughtExpand(text: string, variant: "bubble" | "panel"): boolean {
-  const normalized = text.trim();
-  if (!normalized) return false;
-  if (normalized.includes("\n")) return true;
-  const minLength = variant === "bubble" ? 190 : 150;
-  return normalized.length > minLength;
-}
-
-function renderThoughtMarkup(text: string, key: string, variant: "bubble" | "panel"): string {
-  const expanded = expandedThoughtKeys.has(key);
-  const expandable = shouldEnableThoughtExpand(text, variant);
-  const containerClass = variant === "bubble" ? "bst-mood-bubble" : "bst-thought";
-  const textClass = variant === "bubble" ? "bst-mood-bubble-text" : "bst-thought-text";
-  return `
-    <div class="${containerClass}${expanded ? " bst-thought-expanded" : ""}" data-bst-thought-container="1" data-bst-thought-key="${escapeHtml(key)}">
-      <span class="${textClass}">${escapeHtml(text)}</span>
-      ${expandable ? `<button class="bst-thought-toggle" data-bst-action="toggle-thought" data-bst-thought-key="${escapeHtml(key)}" aria-expanded="${String(expanded)}">${expanded ? "Less thought" : "More thought"}</button>` : ""}
-    </div>
-  `;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -4816,13 +4649,13 @@ export function renderTracker(
               ? `<button type="button" class="bst-mood-image-trigger" data-bst-action="open-mood-preview" data-bst-image-src="${escapeHtml(moodImage)}" data-bst-image-alt="${escapeHtml(moodText)}" data-bst-image-character="${escapeHtml(displayName)}" data-bst-image-mood="${escapeHtml(moodText)}" aria-label="Open mood image preview for ${escapeHtml(displayName)} (${escapeHtml(moodText)})"><span class="bst-mood-image-frame${moodSource === "st_expressions" ? " bst-mood-image-frame--st-expression" : ""}"><img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}"${stExpressionImageStyle}></span></button>`
               : `<span class="bst-mood-chip"><span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span></span>`}
             ${moodImage && lastThoughtText
-              ? renderThoughtMarkup(lastThoughtText, thoughtUiKey, "bubble")
+              ? renderThoughtMarkup(lastThoughtText, thoughtUiKey, "bubble", expandedThoughtKeys.has(thoughtUiKey))
               : moodImage
                 ? ""
                 : `<span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>`}
           </div>
         </div>` : ""}
-        ${settings.showLastThought && lastThoughtText !== "" && !moodImage ? renderThoughtMarkup(lastThoughtText, thoughtUiKey, "panel") : ""}
+        ${settings.showLastThought && lastThoughtText !== "" && !moodImage ? renderThoughtMarkup(lastThoughtText, thoughtUiKey, "panel", expandedThoughtKeys.has(thoughtUiKey)) : ""}
         ${enabledNumeric.length === 0 && enabledNonNumeric.length === 0 && moodText === "" && !(settings.showLastThought && lastThoughtText !== "") ? `<div class="bst-empty">No stats recorded.</div>` : ""}
         </div>
       `;
