@@ -132,6 +132,14 @@ function shortLabelFrom(label: string): string {
   return cleaned.slice(0, 2);
 }
 
+function toMacroCharacterSlug(value: string): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "character";
+}
+
 function normalizeCustomStatKind(value: unknown): CustomStatKind {
   if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array" || value === "date_time") return value;
   return "numeric";
@@ -8117,8 +8125,21 @@ export function openSettingsModal(input: {
         .toLowerCase()
         .replace(/[^a-z0-9_]+/g, "_")
         .replace(/^_+|_+$/g, "");
+      const characterMacroExamples = (() => {
+        if (!macroSegment) return [] as string[];
+        const names = Array.from(new Set(
+          (input.previewCharacterCandidates ?? [])
+            .map(candidate => String(candidate?.name ?? "").trim())
+            .filter(Boolean)
+            .filter(name => {
+              const normalized = name.toLowerCase();
+              return normalized !== USER_TRACKER_KEY.toLowerCase() && normalized !== GLOBAL_TRACKER_KEY.toLowerCase() && normalized !== "user";
+            }),
+        )).slice(0, 4);
+        return names.map(name => `{{bst_stat_char_${macroSegment}_${toMacroCharacterSlug(name)}}}`);
+      })();
       const macroScopes = macroSegment
-        ? [`{{bst_stat_user_${macroSegment}}}`, `{{bst_stat_scene_${macroSegment}}}`, `{{bst_stat_char_${macroSegment}_<character_slug>}}`]
+        ? [`{{bst_stat_user_${macroSegment}}}`, `{{bst_stat_scene_${macroSegment}}}`, ...characterMacroExamples]
         : [];
       const defaultMeta = (() => {
         if (kind === "numeric") {
@@ -8159,7 +8180,7 @@ export function openSettingsModal(input: {
               ${escapeHtml(defaultMeta)}
             </div>
             ${description ? `<div class="bst-custom-stat-meta">${escapeHtml(description)}</div>` : ""}
-            ${macroScopes.length ? `<div class="bst-custom-stat-meta">Macros: ${macroScopes.map(item => `<code>${escapeHtml(item)}</code>`).join(" ")} </div>` : ""}
+            ${macroScopes.length ? `<div class="bst-custom-stat-meta">Macros: ${macroScopes.map(item => `<code>${escapeHtml(item)}</code>`).join(" ")}${characterMacroExamples.length ? "" : ` <code>{{bst_stat_char_${escapeHtml(macroSegment)}_&lt;character_slug&gt;}}</code>`}</div>` : ""}
             <div class="bst-custom-stat-flags">
               ${flags.map(flag => `<span class="bst-custom-stat-flag">${escapeHtml(flag)}</span>`).join("")}
             </div>

@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.3-dev6] - 2026-03-06
+### Changed
+- Custom Stats list macro hints now include ready-to-copy character-targeted examples derived from current preview character names (slug-based), instead of only showing a generic `<character_slug>` pattern.
+
 ## [2.2.3.3-dev5] - 2026-03-06
 ### Changed
 - BST macro set was narrowed to explicit scopes only:
