@@ -10,6 +10,7 @@ import type {
   Statistics,
   TrackerData
 } from "./types";
+import { normalizeCustomNonNumericValue } from "./customStatRuntime";
 const CHAT_STATE_KEY = `${EXTENSION_KEY}:chat`;
 
 function createEmptyStatistics(): Statistics {
@@ -66,25 +67,6 @@ function normalizeCustomStatistics(raw: unknown): CustomStatistics {
 function normalizeCustomNonNumericStatistics(raw: unknown): CustomNonNumericStatistics {
   if (!raw || typeof raw !== "object") return {};
   const out: CustomNonNumericStatistics = {};
-  const normalizeArrayItems = (value: unknown): string[] => {
-    const source = Array.isArray(value)
-      ? value
-      : typeof value === "string"
-        ? value.split(/\r?\n|[,;]+/g)
-        : [];
-    const items: string[] = [];
-    const seenItems = new Set<string>();
-    for (const item of source) {
-      const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, 200);
-      if (!cleaned) continue;
-      const dedupeKey = cleaned.toLowerCase();
-      if (seenItems.has(dedupeKey)) continue;
-      seenItems.add(dedupeKey);
-      items.push(cleaned);
-      if (items.length >= 20) break;
-    }
-    return items;
-  };
   for (const [statId, values] of Object.entries(raw as Record<string, unknown>)) {
     if (!values || typeof values !== "object" || Array.isArray(values)) continue;
     const statKey = String(statId ?? "").trim().toLowerCase();
@@ -96,15 +78,17 @@ function normalizeCustomNonNumericStatistics(raw: unknown): CustomNonNumericStat
         continue;
       }
       if (Array.isArray(value)) {
-        const items = normalizeArrayItems(value);
+        const items = normalizeCustomNonNumericValue("array", value, { textMaxLength: 200 });
+        if (!Array.isArray(items)) continue;
         if (!items.length) continue;
         byCharacter[characterName] = items;
         continue;
       }
       if (typeof value === "string") {
-        const cleaned = value.trim().replace(/\s+/g, " ");
+        const cleaned = normalizeCustomNonNumericValue("text_short", value, { textMaxLength: 200 });
+        if (typeof cleaned !== "string") continue;
         if (!cleaned) continue;
-        byCharacter[characterName] = cleaned.slice(0, 200);
+        byCharacter[characterName] = cleaned;
       }
     }
     if (Object.keys(byCharacter).length > 0) {

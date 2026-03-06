@@ -14,7 +14,6 @@ import {
 import { fetchExpressionSpritePaths, fetchFirstExpressionSprite } from "./stExpressionSprites";
 import type {
   BetterSimTrackerSettings,
-  CustomStatKind,
   CustomStatDefinition,
   MoodExpressionMap,
   MoodLabel,
@@ -23,6 +22,12 @@ import type {
   STContext,
 } from "./types";
 import { normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
+import {
+  normalizeCustomEnumOptions,
+  normalizeCustomStatKind,
+  normalizeCustomTextMaxLength,
+  normalizeNonNumericArrayItems,
+} from "./customStatRuntime";
 
 const PANEL_ID = "bst-character-panel";
 const NAME_INPUT_SELECTORS = ["#character_name_pole", "#character_name", "input[name='name']"];
@@ -255,44 +260,6 @@ function clampStat(value: string): number | null {
   const num = Number(value);
   if (Number.isNaN(num)) return null;
   return Math.max(0, Math.min(100, Math.round(num)));
-}
-
-function normalizeCustomStatKind(value: unknown): CustomStatKind {
-  if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array" || value === "date_time") return value;
-  return "numeric";
-}
-
-function normalizeCustomEnumOptions(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  const out: string[] = [];
-  const seen = new Set<string>();
-  const hasScriptLikeContent = (text: string): boolean =>
-    /<\s*\/?\s*script\b|javascript\s*:|data\s*:\s*text\/html|on[a-z]+\s*=/i.test(text);
-  for (const item of value) {
-    const option = String(item ?? "");
-    if (!option.length || hasScriptLikeContent(option) || seen.has(option)) continue;
-    seen.add(option);
-    out.push(option);
-    if (out.length >= 12) break;
-  }
-  return out;
-}
-
-function normalizeArrayItems(value: unknown, maxLength: number): string[] {
-  const boundedMaxLength = Math.max(20, Math.min(200, Math.round(Number(maxLength) || 120)));
-  const values = Array.isArray(value)
-    ? value.map(item => String(item ?? ""))
-    : (typeof value === "string" ? value.split(/\r?\n|[,;]/g) : []);
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const item of values) {
-    const text = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, boundedMaxLength);
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
-    out.push(text);
-    if (out.length >= 20) break;
-  }
-  return out;
 }
 
 function isCustomStatTrackableForScope(definition: CustomStatDefinition, scope: "character" | "user"): boolean {
@@ -682,7 +649,7 @@ function renderPanel(input: InitInput, force = false): void {
     }
     if (kind === "array") {
       const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
-      const items = normalizeArrayItems(customNonNumericDefaultsRaw[id], maxLength);
+      const items = normalizeNonNumericArrayItems(customNonNumericDefaultsRaw[id], maxLength);
       const rows = (items.length ? items : [""]).slice(0, 20);
       const value = items.join("\n");
       return `
@@ -1086,7 +1053,7 @@ function renderPanel(input: InitInput, force = false): void {
       const id = String(node.dataset.bstCustomDefaultArray ?? "").trim().toLowerCase();
       if (!id) return;
       const maxLength = Math.max(20, Math.min(200, Math.round(Number(node.dataset.bstMaxLength) || 120)));
-      const items = normalizeArrayItems(node.value, maxLength);
+      const items = normalizeNonNumericArrayItems(node.value, maxLength);
       node.value = items.join("\n");
       const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
         const copy = { ...current };
@@ -1124,7 +1091,7 @@ function renderPanel(input: InitInput, force = false): void {
 
     const syncEditorUi = (): string[] => {
       const values = getItemInputs().map(inputNode => inputNode.value);
-      const normalized = normalizeArrayItems(values, maxLength);
+      const normalized = normalizeNonNumericArrayItems(values, maxLength);
       hiddenNode.value = normalized.join("\n");
       counterNode.textContent = `${normalized.length}/20 items`;
       counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");

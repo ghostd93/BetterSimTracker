@@ -2,6 +2,19 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.9] - 2026-03-06
+### Added
+- Added dedicated built-in `Behavior Instruction` textareas for affection, trust, desire, and connection directly inside the existing built-in prompt sections.
+
+### Changed
+- Built-in hidden injection behavior now prefers those per-stat behavior instructions when present, while keeping BST fallback react rules when the fields are empty.
+- Continued internal step-2 modularization by extracting settings and mood-preview modal logic into dedicated modules without changing tracker behavior.
+
+### Fixed
+- Built-in prompt sections no longer show misleading idle AI status text, and status feedback is now positioned correctly below the behavior field.
+- `{{bst_injection}}` now remains available for manual macro use even when `Inject Tracker Into Prompt` is disabled; the toggle now controls only automatic BST injection.
+- Thought expand buttons now appear only when the thought is actually likely truncated, preventing no-op `More thought` toggles on fully visible text.
+
 ## [2.2.3.7] - 2026-03-06
 ### Added
 - Global injection macro hint added near injection toggle: `{{bst_injection}}`.
@@ -644,6 +657,7 @@ And more...
 - Route extraction through Generator with the selected profile, and build as ES module for utils-lib compatibility.
 - Graph history now dedupes by message index, ignores legacy entries without messageIndex, skips deleted messages, and keeps up to 120 snapshots.
 - Diagnostics dumps now include settings provenance, graph preferences, profile resolution, request metadata, history sample, and request numbering starts at 1.
+
 ## [1.0.3.12] - 2026-02-18
 ### Changed
 - Diagnostics request numbering now starts at 1 for each run.
@@ -721,5 +735,3 @@ And more...
 ## [1.0.0] - 2026-02-18
 
 - First stable public release.
-
-

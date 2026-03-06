@@ -410,12 +410,14 @@ Two editable prompt types are supported:
 
 - Unified prompt: used when sequential extraction is off.
 - Per-stat prompts: used in sequential mode (`affection`, `trust`, `desire`, `connection`, `mood`, `lastThought`).
+- Built-in numeric stats also support dedicated `Behavior Instruction` textareas in settings (`affection`, `trust`, `desire`, `connection`) used only by hidden prompt injection, not extraction.
 - `Custom Numeric Default` prompt: global default for custom numeric per-stat extraction in all modes when a custom stat does not define its own template override.
 - `Custom Non-Numeric Default` prompt: global default for `enum_single` / `boolean` / `text_short` / `array` per-stat extraction in all modes when a custom stat does not define its own template override.
 - Default desire prompt guardrail: only increase desire when the recent messages are explicitly romantic/sexual; non-romantic context should be 0 or negative.
 
 Each prompt instruction can be reset to its default with the per-prompt reset button. Protocol blocks are read-only.
 Built-in sequential prompt sections also include `Generate with AI` to draft a stat-specific instruction using your current connection profile.
+Built-in `Behavior Instruction` fields are injection-only guidance. If left empty, BST falls back to its default built-in reaction rules.
 
 Available placeholders:
 
