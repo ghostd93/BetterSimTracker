@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.3-dev9] - 2026-03-06
+### Added
+- Added visible global injection macro hint near the injection toggle in settings: `{{bst_injection}}`.
+
 ## [2.2.3.3-dev8] - 2026-03-06
 ### Changed
 - Macro hints and macro registration are now stat-scope aware:
