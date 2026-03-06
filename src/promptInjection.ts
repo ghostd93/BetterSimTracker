@@ -242,7 +242,8 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     .slice(0, 8);
   const allEnabledCustomNumeric = allEnabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
   const allEnabledCustomNonNumeric = allEnabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
-  const buildWithCustom = (customStatCount: number): string => {
+  type InjectionVerbosityMode = "full" | "no_react_rules" | "minimal";
+  const buildWithCustom = (customStatCount: number, verbosity: InjectionVerbosityMode): string => {
     const enabledCustom = allEnabledCustom.slice(0, customStatCount);
     const names = [...data.activeCharacters];
     if (settings.includeUserTrackerInInjection && settings.enableUserTracking) {
@@ -369,14 +370,17 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       ...scopedEnabledCustom.map(stat => {
         const label = stat.label?.trim() || stat.id;
         const description = stat.description?.trim();
+        const compactMode = verbosity === "minimal";
         return description
-          ? `- ${stat.id}: ${description}`
+          ? `- ${stat.id}: ${compactMode ? label : description}`
           : `- ${stat.id}: custom stat "${label}"`;
       }),
       ...(includeMood ? ["- mood: immediate emotional tone for this turn"] : []),
       ...(includeLastThoughtByPrivacy ? ["- lastThought: brief internal thought grounded in recent messages"] : []),
     ].join("\n");
-    const behaviorBands = hasAnyNumeric
+    const behaviorBands = verbosity === "minimal"
+      ? ""
+      : hasAnyNumeric
       ? [
           "Behavior bands:",
           "- 0-30 low: guarded, distant, skeptical, defensive, cold, or avoidant",
@@ -431,7 +435,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         : []),
       ...customBehaviorLines,
     ];
-    const reactRules = reactRuleItems.length
+    const reactRules = verbosity === "full" && reactRuleItems.length
       ? ["How to react:", ...reactRuleItems].join("\n")
       : "";
     const priorityRules = [
@@ -439,7 +443,9 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       "- if stats conflict, trust and connection should constrain risky intimacy",
       "- remain consistent with character core personality and scenario",
     ].join("\n");
-    const summarizationNote = includeSummarizationNote
+    const summarizationNote = verbosity === "minimal"
+      ? ""
+      : includeSummarizationNote
       ? ["Summarization note:", `- ${latestSummaryNote}`].join("\n")
       : "";
     const template = settings.promptTemplateInjection || DEFAULT_INJECTION_PROMPT_TEMPLATE;
@@ -461,23 +467,27 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     return `${basePrompt}\n</bst_inject_block>`.trim();
   };
 
-  let customCount = allEnabledCustomNumeric.length + allEnabledCustomNonNumeric.length;
-  while (customCount >= 0) {
-    const prompt = buildWithCustom(customCount);
-    if (prompt.length <= injectionPromptMaxChars) {
-      if (customCount < allEnabledCustom.length) {
-        console.warn("[BetterSimTracker] prompt injection custom stat lines truncated to stay within safe prompt size.", {
-          keptCustomStats: customCount,
-          totalCustomStats: allEnabledCustom.length,
-          maxChars: injectionPromptMaxChars,
-          promptChars: prompt.length
-        });
+  const verbosityOrder: InjectionVerbosityMode[] = ["full", "no_react_rules", "minimal"];
+  for (const verbosity of verbosityOrder) {
+    let customCount = allEnabledCustomNumeric.length + allEnabledCustomNonNumeric.length;
+    while (customCount >= 0) {
+      const prompt = buildWithCustom(customCount, verbosity);
+      if (prompt.length <= injectionPromptMaxChars) {
+        if (customCount < allEnabledCustom.length) {
+          console.warn("[BetterSimTracker] prompt injection custom stat lines truncated to stay within safe prompt size.", {
+            keptCustomStats: customCount,
+            totalCustomStats: allEnabledCustom.length,
+            maxChars: injectionPromptMaxChars,
+            promptChars: prompt.length,
+            verbosity,
+          });
+        }
+        return prompt;
       }
-      return prompt;
+      customCount -= 1;
     }
-    customCount -= 1;
   }
-  return buildWithCustom(0).slice(0, injectionPromptMaxChars).trim();
+  return buildWithCustom(0, "minimal").slice(0, injectionPromptMaxChars).trim();
 }
 
 type ScriptModule = {

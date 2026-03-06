@@ -2,16 +2,20 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.3.10-dev2] - 2026-03-06
+## [2.2.3.10-dev3] - 2026-03-06
 ### Changed
 - Continued step-2 modularization by extracting the tracker edit modal, graph modal, and runtime tracker-state resolution into dedicated modules:
   - `src/editStatsModal.ts`
   - `src/graphModal.ts`
   - `src/runtimeState.ts`
 - Rewired settings/runtime imports to use the extracted modules while keeping existing tracker behavior unchanged.
+- Continued step-2 modularization by extracting BST macro runtime helpers and prompt/refresh scheduling into dedicated modules:
+  - `src/runtimeMacros.ts`
+  - `src/runtimePromptSync.ts`
 
 ### Fixed
 - Hardened settings loading so a stale local fallback cannot silently flip the main `enabled` toggle off when SillyTavern context settings are still hydrating.
+- Prompt injection now trims verbosity before dropping custom stats, so `{{bst_injection}}` keeps included custom stat values under prompt-size pressure more reliably.
 
 ## [2.2.3.10] - 2026-03-06
 ### Fixed

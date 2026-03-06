@@ -3,7 +3,7 @@ import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
 import { isTrackableAiMessage, isTrackableMessage, isTrackableUserMessage } from "./messageFilter";
-import { clearPromptInjection, getLastInjectedPrompt, syncPromptInjection } from "./promptInjection";
+import { clearPromptInjection, getLastInjectedPrompt } from "./promptInjection";
 import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
 import {
   buildTrackerSummaryGenerationPrompt,
@@ -56,6 +56,7 @@ import {
 } from "./customStatRuntime";
 import { buildMergedPromptMacroData, resolveLatestStoredTrackerData } from "./runtimeState";
 import { syncBstMacros } from "./runtimeMacros";
+import { createPromptRefreshController } from "./runtimePromptSync";
 
 declare const __BST_VERSION__: string;
 
@@ -74,8 +75,6 @@ let swipeExtractionTimer: number | null = null;
 let pendingSwipeExtraction: { reason: string; messageIndex?: number; waitForGenerationEnd?: boolean } | null = null;
 let lastDebugRecord: DeltaDebugRecord | null = null;
 let runtimeManifestVersion: string | null = null;
-let refreshTimer: number | null = null;
-let lastPromptSyncSignature = "";
 let debugTrace: string[] = [];
 let traceCacheKey: string | null = null;
 let traceCacheLines: string[] = [];
@@ -88,6 +87,7 @@ let pendingLateRenderExtraction = false;
 let pendingLateRenderStartLastAiIndex: number | null = null;
 let lateRenderPollTimer: number | null = null;
 let autoBootstrapExtractionKey: string | null = null;
+let promptRefreshController: ReturnType<typeof createPromptRefreshController> | null = null;
 const BOOTSTRAP_CONTINUE_REASON = "AUTO_BOOTSTRAP_MISSING_TRACKER_CONTINUE";
 type CapturedGenerationIntent = {
   type: string;
@@ -1560,60 +1560,11 @@ function queueRender(): void {
 }
 
 function queuePromptSync(context: STContext): void {
-  if (!settings) return;
-  const customPrivacySignature = (settings.customStats ?? [])
-    .slice(0, 12)
-    .map(stat => [
-      stat.id,
-      stat.kind ?? "numeric",
-      stat.includeInInjection ? 1 : 0,
-      stat.track ? 1 : 0,
-      stat.trackCharacters ? 1 : 0,
-      stat.trackUser ? 1 : 0,
-      stat.privateToOwner ? 1 : 0,
-    ].join(":"))
-    .join("|");
-  const signature = [
-    settings.enabled ? "1" : "0",
-    settings.injectTrackerIntoPrompt ? "1" : "0",
-    settings.enableUserTracking ? "1" : "0",
-    settings.includeUserTrackerInInjection ? "1" : "0",
-    settings.trackMood ? "1" : "0",
-    settings.trackLastThought ? "1" : "0",
-    settings.lastThoughtPrivate ? "1" : "0",
-    settings.userTrackMood ? "1" : "0",
-    settings.userTrackLastThought ? "1" : "0",
-    customPrivacySignature,
-    latestData?.timestamp ?? 0,
-    context.groupId ?? "",
-    context.characterId ?? "",
-  ].join("|");
-  if (signature === lastPromptSyncSignature) {
-    pushTrace("prompt.sync.skip", { reason: "signature_unchanged" });
-    return;
-  }
-  pushTrace("prompt.sync", {
-    hasData: Boolean(latestData),
-    groupId: context.groupId ?? null,
-    characterId: context.characterId ?? null
-  });
-  lastPromptSyncSignature = signature;
-  void syncPromptInjection({
-    context,
-    settings,
-    data: latestPromptMacroData
-  });
+  promptRefreshController?.queuePromptSync(context);
 }
 
 function scheduleRefresh(delay = 80): void {
-  if (refreshTimer !== null) {
-    window.clearTimeout(refreshTimer);
-  }
-  refreshTimer = window.setTimeout(() => {
-    refreshTimer = null;
-    pushTrace("refresh.run", { delay });
-    refreshFromStoredData();
-  }, delay);
+  promptRefreshController?.scheduleRefresh(delay);
 }
 
 function scheduleExtraction(reason: string, targetMessageIndex?: number, delay = 180): void {
@@ -4221,6 +4172,13 @@ async function init(): Promise<void> {
     console.warn("[BetterSimTracker] SillyTavern context not available.");
     return;
   }
+  promptRefreshController = createPromptRefreshController({
+    getSettings: () => settings,
+    getLatestData: () => latestData,
+    getLatestPromptMacroData: () => latestPromptMacroData,
+    pushTrace,
+    refreshFromStoredData,
+  });
   void hydrateRuntimeManifestVersion();
 
   settings = loadSettings(context);
