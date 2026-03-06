@@ -7,12 +7,14 @@ export function createPromptRefreshController(input: {
   getLatestPromptMacroData: () => TrackerData | null;
   pushTrace: (event: string, payload?: Record<string, unknown>) => void;
   refreshFromStoredData: () => void;
+  syncPromptInjectionFn?: typeof syncPromptInjection;
 }): {
   queuePromptSync: (context: STContext) => void;
   scheduleRefresh: (delay?: number) => void;
 } {
   let refreshTimer: number | null = null;
   let lastPromptSyncSignature = "";
+  const syncPromptInjectionFn = input.syncPromptInjectionFn ?? syncPromptInjection;
 
   return {
     queuePromptSync(context: STContext): void {
@@ -57,7 +59,7 @@ export function createPromptRefreshController(input: {
         characterId: context.characterId ?? null,
       });
       lastPromptSyncSignature = signature;
-      void syncPromptInjection({
+      void syncPromptInjectionFn({
         context,
         settings,
         data: latestPromptMacroData,

@@ -1,5 +1,13 @@
 import { DEFAULT_INJECTION_PROMPT_TEMPLATE } from "./prompts";
 import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
+import {
+  behaviorGuidanceLines,
+  customStatTracksAnyScope,
+  customStatTracksScope,
+  renderNonNumericValue,
+  resolveScopedCustomNonNumericValue,
+  resolveScopedCustomNumericValue,
+} from "./promptInjectionHelpers";
 import type { BetterSimTrackerSettings, STContext, TrackerData } from "./types";
 
 const INJECT_KEY = "bst_relationship_state";
@@ -22,41 +30,8 @@ function numeric(value: unknown): number | null {
   return clamp(n);
 }
 
-function renderNonNumericValue(value: unknown): string | null {
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (Array.isArray(value)) {
-    const items: string[] = [];
-    const seenItems = new Set<string>();
-    for (const item of value) {
-      const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
-      if (!cleaned) continue;
-      const dedupeKey = cleaned.toLowerCase();
-      if (seenItems.has(dedupeKey)) continue;
-      seenItems.add(dedupeKey);
-      items.push(cleaned);
-      if (items.length >= 20) break;
-    }
-    if (!items.length) return null;
-    return `[${items.map(item => `"${item.replace(/"/g, "\\\"")}"`).join(", ")}]`;
-  }
-  if (typeof value !== "string") return null;
-  const text = value.trim().replace(/\s+/g, " ");
-  return text ? `"${text.slice(0, 120)}"` : null;
-}
-
 function normalizeOwnerName(value: string): string {
   return String(value ?? "").trim().toLowerCase();
-}
-
-function behaviorGuidanceLines(value: unknown): string[] {
-  return String(value ?? "")
-    .split("\n")
-    .map(line => line.trim())
-    .filter(Boolean)
-    .slice(0, 8)
-    .map(line => line.replace(/^[-*]\s*/, "").trim())
-    .filter(Boolean)
-    .map(line => `- ${line}`);
 }
 
 function resolveInjectionTargetOwner(context: STContext, data: TrackerData): string | null {
@@ -102,88 +77,6 @@ function resolveInjectionTargetOwner(context: STContext, data: TrackerData): str
   return null;
 }
 
-function customStatTracksScope(
-  stat: { track?: boolean; trackCharacters?: boolean; trackUser?: boolean },
-  scope: "character" | "user",
-): boolean {
-  if (scope === "user") {
-    if (stat.trackUser !== undefined) return Boolean(stat.trackUser);
-    return Boolean(stat.track);
-  }
-  if (stat.trackCharacters !== undefined) return Boolean(stat.trackCharacters);
-  return Boolean(stat.track);
-}
-
-function customStatTracksAnyScope(
-  stat: { track?: boolean; trackCharacters?: boolean; trackUser?: boolean },
-): boolean {
-  return customStatTracksScope(stat, "character") || customStatTracksScope(stat, "user");
-}
-
-function resolveScopedCustomNumericValue(
-  data: TrackerData,
-  statId: string,
-  ownerName: string,
-  globalScope?: boolean,
-): number | undefined {
-  const byOwner = data.customStatistics?.[statId];
-  if (!byOwner) return undefined;
-  const legacyFallback = (): number | undefined => {
-    for (const [owner, value] of Object.entries(byOwner)) {
-      if (owner === GLOBAL_TRACKER_KEY) continue;
-      const parsed = Number(value);
-      if (!Number.isNaN(parsed)) return parsed;
-    }
-    return undefined;
-  };
-  if (globalScope) {
-    const globalValue = byOwner[GLOBAL_TRACKER_KEY];
-    if (globalValue !== undefined) return Number(globalValue);
-    const ownerValue = byOwner[ownerName];
-    if (ownerValue !== undefined) return Number(ownerValue);
-    const fallback = legacyFallback();
-    if (fallback !== undefined) return fallback;
-  }
-  const ownerValue = byOwner[ownerName];
-  if (ownerValue !== undefined) return Number(ownerValue);
-  if (!globalScope) {
-    const globalFallback = byOwner[GLOBAL_TRACKER_KEY];
-    if (globalFallback !== undefined) return Number(globalFallback);
-  }
-  return undefined;
-}
-
-function resolveScopedCustomNonNumericValue(
-  data: TrackerData,
-  statId: string,
-  ownerName: string,
-  globalScope?: boolean,
-): unknown {
-  const byOwner = data.customNonNumericStatistics?.[statId];
-  if (!byOwner) return undefined;
-  const legacyFallback = (): unknown => {
-    for (const [owner, value] of Object.entries(byOwner)) {
-      if (owner === GLOBAL_TRACKER_KEY) continue;
-      if (value !== undefined) return value;
-    }
-    return undefined;
-  };
-  if (globalScope) {
-    const globalValue = byOwner[GLOBAL_TRACKER_KEY];
-    if (globalValue !== undefined) return globalValue;
-    const ownerValue = byOwner[ownerName];
-    if (ownerValue !== undefined) return ownerValue;
-    const fallback = legacyFallback();
-    if (fallback !== undefined) return fallback;
-  }
-  const ownerValue = byOwner[ownerName];
-  if (ownerValue !== undefined) return ownerValue;
-  if (!globalScope) {
-    const globalFallback = byOwner[GLOBAL_TRACKER_KEY];
-    if (globalFallback !== undefined) return globalFallback;
-  }
-  return undefined;
-}
 
 function renderTemplate(template: string, values: Record<string, string>): string {
   let output = template;

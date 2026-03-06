@@ -277,3 +277,8 @@ export function syncBstMacros(input: {
   }
   bstMacroSignature = signature;
 }
+
+export function resetBstMacroStateForTests(): void {
+  registeredBstMacros.clear();
+  bstMacroSignature = "";
+}

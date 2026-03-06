@@ -1,0 +1,84 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { defaultSettings } from "../src/settings";
+import {
+  enabledBuiltInAndTextStats,
+  enabledCustomStats,
+  groupCustomStatsForSequential,
+  normalizeSequentialGroupId,
+} from "../src/extractorHelpers";
+import type { BetterSimTrackerSettings, CustomStatDefinition } from "../src/types";
+
+function makeSettings(overrides: Partial<BetterSimTrackerSettings> = {}): BetterSimTrackerSettings {
+  return { ...defaultSettings, ...overrides };
+}
+
+function textStat(id: string, group = ""): CustomStatDefinition {
+  return {
+    id,
+    label: id,
+    kind: "text_short",
+    defaultValue: "",
+    track: true,
+    includeInInjection: true,
+    showOnCard: true,
+    showInGraph: false,
+    textMaxLength: 120,
+    sequentialGroup: group,
+  };
+}
+
+test("normalizeSequentialGroupId sanitizes, lowers and clamps group id", () => {
+  assert.equal(normalizeSequentialGroupId("  Clothes + Pose  "), "clothes_pose");
+  assert.equal(normalizeSequentialGroupId(""), "");
+  assert.equal(normalizeSequentialGroupId("A".repeat(80)).length, 32);
+});
+
+test("enabledBuiltInAndTextStats returns enabled built-ins only", () => {
+  const settings = makeSettings({
+    trackAffection: true,
+    trackTrust: false,
+    trackDesire: true,
+    trackConnection: false,
+    trackMood: true,
+    trackLastThought: false,
+  });
+  assert.deepEqual(enabledBuiltInAndTextStats(settings), ["affection", "desire", "mood"]);
+});
+
+test("enabledCustomStats returns tracked-only custom definitions", () => {
+  const settings = makeSettings({
+    customStats: [
+      textStat("a"),
+      { ...textStat("b"), track: false },
+      textStat("c"),
+    ],
+  });
+  assert.deepEqual(
+    enabledCustomStats(settings).map(stat => stat.id),
+    ["a", "c"],
+  );
+});
+
+test("groupCustomStatsForSequential groups by sanitized group id when enabled", () => {
+  const stats = [
+    textStat("clothes", "appearance"),
+    textStat("pose", " Appearance "),
+    textStat("vitals", ""),
+    textStat("goal", "goal@group"),
+  ];
+  const groups = groupCustomStatsForSequential(stats, true);
+  assert.equal(groups.length, 3);
+  assert.deepEqual(groups[0].map(stat => stat.id), ["clothes", "pose"]);
+  assert.deepEqual(groups[1].map(stat => stat.id), ["goal"]);
+  assert.deepEqual(groups[2].map(stat => stat.id), ["vitals"]);
+});
+
+test("groupCustomStatsForSequential keeps one-stat groups when disabled", () => {
+  const stats = [textStat("clothes", "appearance"), textStat("pose", "appearance")];
+  const groups = groupCustomStatsForSequential(stats, false);
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups[0].map(stat => stat.id), ["clothes"]);
+  assert.deepEqual(groups[1].map(stat => stat.id), ["pose"]);
+});

@@ -2,6 +2,18 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev5] - 2026-03-06
+### Added
+- Added new targeted tests for extracted helper layers:
+  - `tests/extractorHelpers.test.ts`
+  - `tests/promptInjectionHelpers.test.ts`
+
+### Changed
+- Continued modularization by extracting reusable helper logic from large runtime modules:
+  - `src/extractorHelpers.ts` (enabled built-ins/custom stats + sequential grouping helpers)
+  - `src/promptInjectionHelpers.ts` (custom stat scope/value resolution + non-numeric/behavior formatting helpers)
+- `src/extractor.ts` and `src/promptInjection.ts` now consume those helper modules without behavior changes.
+
 ## [2.2.3.10-dev4] - 2026-03-06
 ### Added
 - Added a dependency-free automated test harness using Node's built-in test runner and a dedicated test TypeScript config.
