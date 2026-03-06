@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev11] - 2026-03-06
+### Added
+- Added extraction baseline helper module and dedicated regression tests for baseline/global overlay behavior:
+  - `src/extractionBaselineHelpers.ts`
+  - `tests/extractionBaselineHelpers.test.ts`
+
+### Changed
+- Refactored character extraction baseline logic in `src/index.ts` to use the shared baseline helper module (behavior preserved, now test-covered).
+
 ## [2.2.3.10-dev10] - 2026-03-06
 ### Added
 - Persona defaults now support ST expression image framing overrides (matching character defaults): override toggle, framing editor launcher, and override summary.
