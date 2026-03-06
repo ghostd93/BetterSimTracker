@@ -4237,21 +4237,37 @@ function registerEvents(context: STContext): void {
 function openSettings(): void {
   if (!settings) return;
   const context = getSafeContext();
+  const chatCharacterNameSet = new Set<string>();
+  for (const message of context?.chat ?? []) {
+    if (!isTrackableAiMessage(message)) continue;
+    const name = String(message?.name ?? "").trim();
+    if (!name) continue;
+    if (name === USER_TRACKER_KEY || name === GLOBAL_TRACKER_KEY) continue;
+    chatCharacterNameSet.add(name.toLowerCase());
+  }
   const previewCandidateMap = new Map<string, { name: string; avatar?: string | null }>();
   for (const character of context?.characters ?? []) {
     const name = String(character?.name ?? "").trim();
     if (!name) continue;
     const key = name.toLowerCase();
+    if (!chatCharacterNameSet.has(key)) continue;
     if (!previewCandidateMap.has(key)) {
       previewCandidateMap.set(key, { name, avatar: String(character?.avatar ?? "").trim() || null });
     }
   }
   const fallbackName = String(context?.name2 ?? "").trim();
-  if (fallbackName) {
+  if (fallbackName && chatCharacterNameSet.has(fallbackName.toLowerCase())) {
     const key = fallbackName.toLowerCase();
     if (!previewCandidateMap.has(key)) {
       previewCandidateMap.set(key, { name: fallbackName, avatar: null });
     }
+  }
+  for (const lowerName of chatCharacterNameSet) {
+    if (previewCandidateMap.has(lowerName)) continue;
+    const match = (context?.characters ?? []).find(character => String(character?.name ?? "").trim().toLowerCase() === lowerName);
+    const resolvedName = String(match?.name ?? "").trim() || lowerName;
+    const avatar = String(match?.avatar ?? "").trim() || null;
+    previewCandidateMap.set(lowerName, { name: resolvedName, avatar });
   }
   const previewCharacterCandidates = Array.from(previewCandidateMap.values());
   openSettingsModal({

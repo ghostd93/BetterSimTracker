@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.3-dev7] - 2026-03-06
+### Fixed
+- Settings macro preview candidates are now restricted to characters that actually exist in the current chat (chat message participants), instead of showing full character roster from global character list.
+
 ## [2.2.3.3-dev6] - 2026-03-06
 ### Changed
 - Custom Stats list macro hints now include ready-to-copy character-targeted examples derived from current preview character names (slug-based), instead of only showing a generic `<character_slug>` pattern.
