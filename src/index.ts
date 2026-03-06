@@ -40,15 +40,14 @@ import type {
 } from "./types";
 import {
   closeGraphModal,
-  closeSettingsModal,
   getGraphPreferences,
   openGraphModal,
-  openSettingsModal,
   removeTrackerUI,
   renderTracker,
   type TrackerRecoveryEntry,
   type TrackerUiState,
 } from "./ui";
+import { closeSettingsModal, openSettingsModal } from "./settingsModal";
 import { cancelActiveGenerations, generateJson } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
 import { initCharacterPanel } from "./characterPanel";

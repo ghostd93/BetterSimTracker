@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.7-dev5] - 2026-03-06
+### Changed
+- Continued step-2 modularization by extracting settings modal logic into `src/settingsModal.ts` and mood image preview modal logic into `src/moodImageModal.ts`, reducing `src/ui.ts` responsibility without changing user-facing behavior.
+
+### Fixed
+- Tightened thought expand-button heuristics so `More thought` only appears when the thought is actually likely truncated, avoiding no-op toggles on fully visible text.
+
 ## [2.2.3.7-dev4] - 2026-03-06
 ### Fixed
 - Moved built-in AI status feedback below the new built-in `Behavior Instruction` fields so the UI no longer reads as if the behavior textarea itself depends on the current connection profile.
