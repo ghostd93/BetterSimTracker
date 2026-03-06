@@ -48,6 +48,17 @@ function normalizeOwnerName(value: string): string {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function behaviorGuidanceLines(value: unknown): string[] {
+  return String(value ?? "")
+    .split("\n")
+    .map(line => line.trim())
+    .filter(Boolean)
+    .slice(0, 8)
+    .map(line => line.replace(/^[-*]\s*/, "").trim())
+    .filter(Boolean)
+    .map(line => `- ${line}`);
+}
+
 function resolveInjectionTargetOwner(context: STContext, data: TrackerData): string | null {
   const userName = String(context.name1 ?? "").trim();
   const userAliases = new Set(
@@ -393,11 +404,31 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         )
         .map(line => `- ${line}`);
     });
+    const affectionBehaviorLines = behaviorGuidanceLines(settings.builtInBehaviorAffection);
+    const trustBehaviorLines = behaviorGuidanceLines(settings.builtInBehaviorTrust);
+    const desireBehaviorLines = behaviorGuidanceLines(settings.builtInBehaviorDesire);
+    const connectionBehaviorLines = behaviorGuidanceLines(settings.builtInBehaviorConnection);
     const reactRuleItems = [
-      ...(enabledBuiltInKeys.has("trust") ? ["- low trust -> avoid deep vulnerability; require proof/consistency", "- high trust -> share more, accept reassurance, collaborate"] : []),
-      ...(enabledBuiltInKeys.has("affection") ? ["- low affection -> limited warmth; less caring language", "- high affection -> caring language, concern, emotional support"] : []),
-      ...(enabledBuiltInKeys.has("desire") ? ["- low desire -> little/no flirtation; keep distance", "- high desire -> increased flirtation/attraction cues (respect context and consent)"] : []),
-      ...(enabledBuiltInKeys.has("connection") ? ["- low connection -> conversations stay surface-level", "- high connection -> personal references, emotional continuity, deeper empathy"] : []),
+      ...(enabledBuiltInKeys.has("trust")
+        ? (trustBehaviorLines.length
+          ? trustBehaviorLines
+          : ["- low trust -> avoid deep vulnerability; require proof/consistency", "- high trust -> share more, accept reassurance, collaborate"])
+        : []),
+      ...(enabledBuiltInKeys.has("affection")
+        ? (affectionBehaviorLines.length
+          ? affectionBehaviorLines
+          : ["- low affection -> limited warmth; less caring language", "- high affection -> caring language, concern, emotional support"])
+        : []),
+      ...(enabledBuiltInKeys.has("desire")
+        ? (desireBehaviorLines.length
+          ? desireBehaviorLines
+          : ["- low desire -> little/no flirtation; keep distance", "- high desire -> increased flirtation/attraction cues (respect context and consent)"])
+        : []),
+      ...(enabledBuiltInKeys.has("connection")
+        ? (connectionBehaviorLines.length
+          ? connectionBehaviorLines
+          : ["- low connection -> conversations stay surface-level", "- high connection -> personal references, emotional continuity, deeper empathy"])
+        : []),
       ...customBehaviorLines,
     ];
     const reactRules = reactRuleItems.length

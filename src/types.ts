@@ -180,6 +180,10 @@ export interface BetterSimTrackerSettings {
   promptTemplateSequentialCustomNonNumeric: string;
   promptTemplateSequentialMood: string;
   promptTemplateSequentialLastThought: string;
+  builtInBehaviorAffection: string;
+  builtInBehaviorTrust: string;
+  builtInBehaviorDesire: string;
+  builtInBehaviorConnection: string;
   promptTemplateInjection: string;
   unlockProtocolPrompts: boolean;
   promptProtocolUnified: string;

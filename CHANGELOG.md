@@ -2,10 +2,18 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.7-dev2] - 2026-03-06
+### Added
+- Added dedicated built-in `Behavior Instruction` textareas for affection, trust, desire, and connection directly inside their existing prompt sections.
+
+### Changed
+- Built-in hidden injection behavior now prefers those per-stat behavior instructions when present, while keeping BST fallback react rules for empty fields.
+
 ## [2.2.3.7-dev1] - 2026-03-06
 ### Changed
 - Centralized custom stat kind runtime behavior into shared normalization helpers used across settings, parsing, storage, prompts, defaults, and UI flows.
 - Reduced duplicated custom-stat coercion/default logic in the runtime, making enum/array/text/date-time handling more consistent across both extraction modes.
+- Built-in prompt sections now include dedicated injection-only `Behavior Instruction` textareas for affection, trust, desire, and connection, with backward-compatible fallback to BST default react rules.
 
 ## [2.2.3.3-dev9] - 2026-03-06
 ### Added

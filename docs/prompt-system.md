@@ -22,6 +22,7 @@ Editable in settings:
 
 - Unified extraction instruction
 - Sequential instructions for each built-in stat
+- Per-built-in injection behavior instructions for `affection`, `trust`, `desire`, `connection`
 - Global default for custom numeric per-stat extraction
 - Global default for custom non-numeric per-stat extraction
 - Injection template
@@ -96,6 +97,22 @@ If guidance grows too large:
 - warning is logged in debug mode
 
 This preserves core relationship guidance under token pressure.
+
+### Built-in Behavior Instructions
+
+Built-in numeric stats now have dedicated injection-only guidance fields in settings:
+
+- `Affection`
+- `Trust`
+- `Desire`
+- `Connection`
+
+These fields:
+
+- do not affect extraction
+- do affect hidden prompt injection behavior assembly
+- override BST's default built-in react rules when non-empty
+- fall back to BST defaults when left empty
 
 ## AI Helper Generation Prompts
 

@@ -6638,6 +6638,8 @@ export function openSettingsModal(input: {
             <div class="bst-prompt-ai-row">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialAffection">Uses current connection profile.</span>
             </div>
+            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
+            <textarea data-k="builtInBehaviorAffection" rows="5" placeholder="How affection should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-protocol-readonly-wrap">
               <div class="bst-prompt-caption">Protocol (read-only)</div>
               <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialAffection)}</pre>
@@ -6662,6 +6664,8 @@ export function openSettingsModal(input: {
             <div class="bst-prompt-ai-row">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialTrust">Uses current connection profile.</span>
             </div>
+            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
+            <textarea data-k="builtInBehaviorTrust" rows="5" placeholder="How trust should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-protocol-readonly-wrap">
               <div class="bst-prompt-caption">Protocol (read-only)</div>
               <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialTrust)}</pre>
@@ -6686,6 +6690,8 @@ export function openSettingsModal(input: {
             <div class="bst-prompt-ai-row">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialDesire">Uses current connection profile.</span>
             </div>
+            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
+            <textarea data-k="builtInBehaviorDesire" rows="5" placeholder="How desire should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-protocol-readonly-wrap">
               <div class="bst-prompt-caption">Protocol (read-only)</div>
               <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialDesire)}</pre>
@@ -6710,6 +6716,8 @@ export function openSettingsModal(input: {
             <div class="bst-prompt-ai-row">
               <span class="bst-prompt-ai-status" data-bst-seq-ai-status="promptTemplateSequentialConnection">Uses current connection profile.</span>
             </div>
+            <div class="bst-prompt-caption">Behavior Instruction (injection only)</div>
+            <textarea data-k="builtInBehaviorConnection" rows="5" placeholder="How connection should change visible behavior in replies. Leave empty to use BST fallback rules."></textarea>
             <div class="bst-protocol-readonly-wrap">
               <div class="bst-prompt-caption">Protocol (read-only)</div>
               <pre class="bst-prompt-protocol">${escapeHtml(input.settings.promptProtocolSequentialConnection)}</pre>
@@ -7243,6 +7251,10 @@ export function openSettingsModal(input: {
   set("promptTemplateSequentialCustomNonNumeric", input.settings.promptTemplateSequentialCustomNonNumeric);
   set("promptTemplateSequentialMood", input.settings.promptTemplateSequentialMood);
   set("promptTemplateSequentialLastThought", input.settings.promptTemplateSequentialLastThought);
+  set("builtInBehaviorAffection", input.settings.builtInBehaviorAffection || "");
+  set("builtInBehaviorTrust", input.settings.builtInBehaviorTrust || "");
+  set("builtInBehaviorDesire", input.settings.builtInBehaviorDesire || "");
+  set("builtInBehaviorConnection", input.settings.builtInBehaviorConnection || "");
   set("promptTemplateInjection", input.settings.promptTemplateInjection);
   set("unlockProtocolPrompts", String(input.settings.unlockProtocolPrompts));
   set("promptProtocolUnified", input.settings.promptProtocolUnified);
@@ -10198,6 +10210,10 @@ export function openSettingsModal(input: {
       promptTemplateSequentialCustomNonNumeric: read("promptTemplateSequentialCustomNonNumeric") || DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
       promptTemplateSequentialMood: read("promptTemplateSequentialMood") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
       promptTemplateSequentialLastThought: read("promptTemplateSequentialLastThought") || DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
+      builtInBehaviorAffection: read("builtInBehaviorAffection").slice(0, 4000),
+      builtInBehaviorTrust: read("builtInBehaviorTrust").slice(0, 4000),
+      builtInBehaviorDesire: read("builtInBehaviorDesire").slice(0, 4000),
+      builtInBehaviorConnection: read("builtInBehaviorConnection").slice(0, 4000),
       promptTemplateInjection: read("promptTemplateInjection") || DEFAULT_INJECTION_PROMPT_TEMPLATE,
       unlockProtocolPrompts: readBool("unlockProtocolPrompts", input.settings.unlockProtocolPrompts),
       promptProtocolUnified: read("promptProtocolUnified") || DEFAULT_PROTOCOL_UNIFIED,
@@ -10497,6 +10513,10 @@ export function openSettingsModal(input: {
     promptTemplateSequentialCustomNonNumeric: "Default instruction for custom non-numeric per-stat extraction (used in all modes; per-stat override in custom stat wizard still wins).",
     promptTemplateSequentialMood: "Sequential Mood instruction (protocol is separately configurable in advanced mode).",
     promptTemplateSequentialLastThought: "Sequential LastThought instruction (protocol is separately configurable in advanced mode).",
+    builtInBehaviorAffection: "Injection-only behavior guidance for how high/low affection should change replies.",
+    builtInBehaviorTrust: "Injection-only behavior guidance for how high/low trust should change replies.",
+    builtInBehaviorDesire: "Injection-only behavior guidance for how high/low desire should change replies.",
+    builtInBehaviorConnection: "Injection-only behavior guidance for how high/low connection should change replies.",
     unlockProtocolPrompts: "Advanced mode: unlock protocol blocks for editing. Incorrect protocol formatting can break extraction.",
     promptProtocolUnified: "Protocol block for unified extraction (advanced override).",
     promptProtocolSequentialAffection: "Protocol block for sequential affection extraction (advanced override).",
@@ -10554,6 +10574,10 @@ export function openSettingsModal(input: {
     promptTemplateSequentialCustomNonNumeric: DEFAULT_SEQUENTIAL_CUSTOM_NON_NUMERIC_PROMPT_INSTRUCTION,
     promptTemplateSequentialMood: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.mood,
     promptTemplateSequentialLastThought: DEFAULT_SEQUENTIAL_PROMPT_INSTRUCTIONS.lastThought,
+    builtInBehaviorAffection: "",
+    builtInBehaviorTrust: "",
+    builtInBehaviorDesire: "",
+    builtInBehaviorConnection: "",
     promptTemplateInjection: DEFAULT_INJECTION_PROMPT_TEMPLATE,
     promptProtocolUnified: DEFAULT_PROTOCOL_UNIFIED,
     promptProtocolSequentialAffection: DEFAULT_PROTOCOL_SEQUENTIAL_AFFECTION,
