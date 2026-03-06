@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev12] - 2026-03-06
+### Added
+- Added dedicated test/coverage scripts to the maintainer workflow:
+  - `npm run test:run`
+  - `npm run coverage`
+  - `npm run coverage:gate`
+
+### Changed
+- Documented mandatory test/coverage execution flow in `docs/operations.md`, including enforced coverage thresholds (lines/functions/branches).
+
 ## [2.2.3.10-dev11] - 2026-03-06
 ### Added
 - Added extraction baseline helper module and dedicated regression tests for baseline/global overlay behavior:

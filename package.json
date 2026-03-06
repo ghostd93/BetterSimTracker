@@ -1,6 +1,6 @@
 {
   "name": "better-sim-tracker",
-  "version": "2.2.3.10-dev11",
+  "version": "2.2.3.10-dev12",
   "private": true,
   "description": "TypeScript SillyTavern extension for relationship tracking",
   "scripts": {
@@ -8,7 +8,10 @@
     "dev": "webpack --watch",
     "typecheck": "tsc --noEmit",
     "test:compile": "tsc -p tsconfig.tests.json",
-    "test": "npm run test:compile && node --test --experimental-test-isolation=none .test-dist/tests/*.test.js",
+    "test:run": "node --test --experimental-test-isolation=none .test-dist/tests/*.test.js",
+    "test": "npm run test:compile && npm run test:run",
+    "coverage": "npm run test:compile && node --test --experimental-test-isolation=none --experimental-test-coverage .test-dist/tests/*.test.js",
+    "coverage:gate": "npm run test:compile && node --test --experimental-test-isolation=none --experimental-test-coverage --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=75 .test-dist/tests/*.test.js",
     "validate:versions": "node scripts/validate-versions.mjs",
     "validate:release": "node scripts/validate-release.mjs"
   },
