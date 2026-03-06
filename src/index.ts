@@ -876,6 +876,35 @@ function hasTrackedValueForCharacter(
   return false;
 }
 
+function hasCharacterOwnedTrackedValueForCharacter(
+  data: TrackerData,
+  characterName: string,
+  settingsInput: BetterSimTrackerSettings,
+): boolean {
+  if (settingsInput.trackAffection && data.statistics.affection[characterName] !== undefined) return true;
+  if (settingsInput.trackTrust && data.statistics.trust[characterName] !== undefined) return true;
+  if (settingsInput.trackDesire && data.statistics.desire[characterName] !== undefined) return true;
+  if (settingsInput.trackConnection && data.statistics.connection[characterName] !== undefined) return true;
+  if (settingsInput.trackMood && data.statistics.mood[characterName] !== undefined) return true;
+  if (settingsInput.trackLastThought && data.statistics.lastThought[characterName] !== undefined) return true;
+
+  const customDefs = Array.isArray(settingsInput.customStats) ? settingsInput.customStats : [];
+  for (const def of customDefs) {
+    if (!def.track) continue;
+    if (def.globalScope) continue;
+    const statId = String(def.id ?? "").trim().toLowerCase();
+    if (!statId) continue;
+    const kind = def.kind ?? "numeric";
+    if (kind === "numeric") {
+      if (data.customStatistics?.[statId]?.[characterName] !== undefined) return true;
+      continue;
+    }
+    if (data.customNonNumericStatistics?.[statId]?.[characterName] !== undefined) return true;
+  }
+
+  return false;
+}
+
 function getLatestRelevantTrackerDataWithIndexBefore(
   context: STContext,
   beforeIndex: number,
@@ -910,6 +939,40 @@ function getLatestRelevantTrackerDataWithIndexBefore(
   }
 
   return null;
+}
+
+function getLatestCharacterOwnedTrackerDataWithIndexBefore(
+  context: STContext,
+  beforeIndex: number,
+  activeCharacters: string[],
+  settingsInput: BetterSimTrackerSettings,
+): { data: TrackerData; messageIndex: number } | null {
+  if (beforeIndex <= 0 || context.chat.length === 0) return null;
+  const start = Math.min(beforeIndex - 1, context.chat.length - 1);
+  for (let i = start; i >= 0; i -= 1) {
+    const found = getTrackerDataFromMessage(context.chat[i]);
+    if (!found) continue;
+    const hasRelevantValue = activeCharacters.some(name =>
+      hasCharacterOwnedTrackedValueForCharacter(found, name, settingsInput),
+    );
+    if (hasRelevantValue) {
+      return { data: found, messageIndex: i };
+    }
+  }
+
+  const historyEntries = getRecentTrackerHistoryEntries(context, Math.max(120, context.chat.length));
+  let best: { data: TrackerData; messageIndex: number } | null = null;
+  for (const entry of historyEntries) {
+    if (entry.messageIndex >= beforeIndex) continue;
+    const hasRelevantValue = activeCharacters.some(name =>
+      hasCharacterOwnedTrackedValueForCharacter(entry.data, name, settingsInput),
+    );
+    if (!hasRelevantValue) continue;
+    if (!best || entry.messageIndex > best.messageIndex) {
+      best = { data: entry.data, messageIndex: entry.messageIndex };
+    }
+  }
+  return best;
 }
 
 function isRenderableTrackerIndex(context: STContext, index: number): boolean {
@@ -3032,12 +3095,24 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
         : (typeof targetMessageIndex === "number" && targetMessageIndex >= 0
           ? targetMessageIndex
           : lastIndex);
-    const previousEntry = getLatestRelevantTrackerDataWithIndexBefore(
-      context,
-      baselineBeforeIndex,
-      activeCharacters,
-      runScopedSettings,
-    );
+    const previousEntry = userExtraction
+      ? getLatestRelevantTrackerDataWithIndexBefore(
+          context,
+          baselineBeforeIndex,
+          activeCharacters,
+          runScopedSettings,
+        )
+      : (getLatestCharacterOwnedTrackerDataWithIndexBefore(
+          context,
+          baselineBeforeIndex,
+          activeCharacters,
+          runScopedSettings,
+        ) ?? getLatestRelevantTrackerDataWithIndexBefore(
+          context,
+          baselineBeforeIndex,
+          activeCharacters,
+          runScopedSettings,
+        ));
     let previous = previousEntry?.data ?? null;
     if (!previous) {
       previous = buildBaselineData(activeCharacters, runScopedSettings);
@@ -3130,7 +3205,11 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     const rawHistoryEntries = getRecentTrackerHistoryEntries(context, 6);
     const boundedHistoryEntries = rawHistoryEntries.filter(entry => entry.messageIndex < baselineBeforeIndex);
     const relevantHistory = boundedHistoryEntries
-      .filter(entry => activeCharacters.some(name => hasTrackedValueForCharacter(entry.data, name, runScopedSettings)))
+      .filter(entry => activeCharacters.some(name => (
+        userExtraction
+          ? hasTrackedValueForCharacter(entry.data, name, runScopedSettings)
+          : hasCharacterOwnedTrackedValueForCharacter(entry.data, name, runScopedSettings)
+      )))
       .map(entry => entry.data);
     if (relevantHistory.length !== rawHistoryEntries.length) {
       pushTrace("extract.history_filter", {

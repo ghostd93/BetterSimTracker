@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev8] - 2026-03-06
+### Fixed
+- Character extraction baseline selection now prefers the latest character-owned snapshot (instead of a newer user-only snapshot), preventing false built-in resets and delta drift after user turns.
+- Character extraction history seeding now filters by character-owned tracked values, preventing user-only snapshots from polluting character stat context.
+
 ## [2.2.3.10-dev7] - 2026-03-06
 ### Fixed
 - Sequential extraction request diagnostics now use stable per-request attempt IDs (no duplicate/skipped numbering caused by async request ordering).
