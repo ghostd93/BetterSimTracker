@@ -209,7 +209,19 @@ export function loadSettings(context: STContext): BetterSimTrackerSettings {
   const bag = (context.extensionSettings ?? {}) as Record<string, unknown>;
   const fromContext = (bag[EXTENSION_KEY] ?? {}) as Partial<BetterSimTrackerSettings>;
   const fromLocal = loadFromLocalStorage();
-  return sanitizeSettings({ ...defaultSettings, ...fromLocal, ...fromContext });
+  const merged = { ...defaultSettings, ...fromLocal, ...fromContext };
+  const contextHasExplicitEnabled = Object.prototype.hasOwnProperty.call(fromContext, "enabled");
+  const localHasExplicitEnabled = Object.prototype.hasOwnProperty.call(fromLocal, "enabled");
+  if (contextHasExplicitEnabled) {
+    merged.enabled = asBool(fromContext.enabled, defaultSettings.enabled);
+  } else if (localHasExplicitEnabled && !Object.keys(fromContext).length) {
+    // Only trust the local fallback for the main toggle when context has no BST settings at all.
+    merged.enabled = asBool(fromLocal.enabled, defaultSettings.enabled);
+  } else {
+    // Avoid stale local fallback silently disabling BST during partial/early context hydration.
+    merged.enabled = defaultSettings.enabled;
+  }
+  return sanitizeSettings(merged);
 }
 
 export function getSettingsProvenance(context: STContext): Record<string, "context" | "local" | "default"> {
