@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev9] - 2026-03-06
+### Fixed
+- Character extraction now preserves the latest global custom-stat values (for example scene/global timeline stats) while still using character-owned baseline for built-ins and character-scoped stats.
+- Prevents global stats from unintentionally rewinding to older character snapshot values when a newer user/global snapshot exists.
+
 ## [2.2.3.10-dev8] - 2026-03-06
 ### Fixed
 - Character extraction baseline selection now prefers the latest character-owned snapshot (instead of a newer user-only snapshot), preventing false built-in resets and delta drift after user turns.

@@ -905,6 +905,48 @@ function hasCharacterOwnedTrackedValueForCharacter(
   return false;
 }
 
+function overlayLatestGlobalCustomStats(
+  base: TrackerData,
+  latest: TrackerData | null,
+  settingsInput: BetterSimTrackerSettings,
+): TrackerData {
+  if (!latest) return base;
+  const customDefs = Array.isArray(settingsInput.customStats) ? settingsInput.customStats : [];
+  const globalDefs = customDefs.filter(def => Boolean(def.track) && Boolean(def.globalScope));
+  if (!globalDefs.length) return base;
+
+  const next: TrackerData = {
+    ...base,
+    customStatistics: { ...(base.customStatistics ?? {}) },
+    customNonNumericStatistics: { ...(base.customNonNumericStatistics ?? {}) },
+  };
+  const nextCustomNumeric = next.customStatistics ?? (next.customStatistics = {});
+  const nextCustomNonNumeric = next.customNonNumericStatistics ?? (next.customNonNumericStatistics = {});
+
+  for (const def of globalDefs) {
+    const statId = String(def.id ?? "").trim().toLowerCase();
+    if (!statId) continue;
+    const kind = def.kind ?? "numeric";
+    if (kind === "numeric") {
+      const raw = latest.customStatistics?.[statId]?.[GLOBAL_TRACKER_KEY];
+      if (typeof raw === "number" && Number.isFinite(raw)) {
+        const byOwner = { ...(nextCustomNumeric[statId] ?? {}) };
+        byOwner[GLOBAL_TRACKER_KEY] = raw;
+        nextCustomNumeric[statId] = byOwner;
+      }
+      continue;
+    }
+    const raw = latest.customNonNumericStatistics?.[statId]?.[GLOBAL_TRACKER_KEY];
+    if (raw !== undefined) {
+      const byOwner = { ...(nextCustomNonNumeric[statId] ?? {}) };
+      byOwner[GLOBAL_TRACKER_KEY] = raw;
+      nextCustomNonNumeric[statId] = byOwner;
+    }
+  }
+
+  return next;
+}
+
 function getLatestRelevantTrackerDataWithIndexBefore(
   context: STContext,
   beforeIndex: number,
@@ -3113,7 +3155,18 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
           activeCharacters,
           runScopedSettings,
         ));
+    const previousGlobalEntry = userExtraction
+      ? null
+      : getLatestRelevantTrackerDataWithIndexBefore(
+          context,
+          baselineBeforeIndex,
+          activeCharacters,
+          runScopedSettings,
+        );
     let previous = previousEntry?.data ?? null;
+    if (previous && !userExtraction) {
+      previous = overlayLatestGlobalCustomStats(previous, previousGlobalEntry?.data ?? null, runScopedSettings);
+    }
     if (!previous) {
       previous = buildBaselineData(activeCharacters, runScopedSettings);
       pushTrace("extract.baseline", { runId, forMessageIndex: lastIndex, activeCharacters: activeCharacters.length });
