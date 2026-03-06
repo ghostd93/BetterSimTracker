@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev10] - 2026-03-06
+### Added
+- Persona defaults now support ST expression image framing overrides (matching character defaults): override toggle, framing editor launcher, and override summary.
+
+### Fixed
+- Persona-scoped ST expression framing can now be configured directly from Persona Defaults instead of only using global framing.
+
 ## [2.2.3.10-dev9] - 2026-03-06
 ### Fixed
 - Character extraction now preserves the latest global custom-stat values (for example scene/global timeline stats) while still using character-owned baseline for built-ins and character-scoped stats.

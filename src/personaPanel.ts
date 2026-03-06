@@ -6,11 +6,18 @@ import {
   updateCharacterDefaultsEntry,
 } from "./characterDefaults";
 import { fetchExpressionSpritePaths } from "./stExpressionSprites";
+import {
+  closeStExpressionFrameEditor,
+  formatStExpressionFrameSummary,
+  openStExpressionFrameEditor,
+  sanitizeStExpressionFrame,
+} from "./stExpressionFrameEditor";
 import type {
   BetterSimTrackerSettings,
   CustomStatDefinition,
   MoodLabel,
   MoodSource,
+  StExpressionImageOptions,
   STContext,
 } from "./types";
 import { normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
@@ -101,6 +108,21 @@ function normalizeMoodLabel(raw: string): MoodLabel | null {
 function normalizeMoodSource(raw: string): MoodSource | null {
   if (raw === "bst_images" || raw === "st_expressions") return raw;
   return null;
+}
+
+function sanitizeStExpressionImageOptions(raw: unknown, fallback: StExpressionImageOptions): StExpressionImageOptions | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Partial<StExpressionImageOptions>;
+  const parsed = sanitizeStExpressionFrame({
+    zoom: Number(obj.zoom),
+    positionX: Number(obj.positionX),
+    positionY: Number(obj.positionY),
+  }, fallback);
+  const sameAsFallback =
+    Math.abs(parsed.zoom - fallback.zoom) < 1e-6 &&
+    Math.abs(parsed.positionX - fallback.positionX) < 1e-6 &&
+    Math.abs(parsed.positionY - fallback.positionY) < 1e-6;
+  return sameAsFallback ? null : parsed;
 }
 
 function slugify(value: string): string {
@@ -435,7 +457,16 @@ function renderPanel(input: InitInput, force = false): void {
   const moodCount = countMoodImages(moodImages);
   const moodSourceOverride = normalizeMoodSource(String(defaults.moodSource ?? ""));
   const effectiveMoodSource = resolveEffectiveMoodSource(settings, defaults);
+  const showStExpressionControls = effectiveMoodSource === "st_expressions";
   const showBstMoodImageControls = effectiveMoodSource === "bst_images";
+  const globalStImageDefaults: StExpressionImageOptions = {
+    zoom: settings.stExpressionImageZoom,
+    positionX: settings.stExpressionImagePositionX,
+    positionY: settings.stExpressionImagePositionY,
+  };
+  const stExpressionImageOptionsOverride = sanitizeStExpressionImageOptions(defaults.stExpressionImageOptions, globalStImageDefaults);
+  const hasStExpressionImageOverride = Boolean(stExpressionImageOptionsOverride);
+  const stExpressionImageOptions = stExpressionImageOptionsOverride ?? globalStImageDefaults;
   const customStatDefinitions = Array.isArray(settings.customStats)
     ? settings.customStats as CustomStatDefinition[]
     : [];
@@ -549,6 +580,27 @@ function renderPanel(input: InitInput, force = false): void {
     <div class="bst-character-help">
       Effective mood source right now: <strong>${effectiveMoodSource === "st_expressions" ? "ST expressions" : "BST mood images"}</strong>.
     </div>
+    <div style="display:${showStExpressionControls ? "grid" : "none"}; gap:8px;">
+      <div class="bst-character-divider">ST Expression Image Options</div>
+      <div class="bst-character-help">
+        Optional per-persona override for ST expression image framing on user cards.
+      </div>
+      <label class="bst-character-check">
+        <input type="checkbox" data-bst-persona-st-image-override ${hasStExpressionImageOverride ? "checked" : ""}>
+        <span>Advanced image options (override global)</span>
+      </label>
+      <div class="bst-character-grid" data-bst-persona-st-image-options style="display:${hasStExpressionImageOverride ? "grid" : "none"};">
+        <div class="bst-character-wide bst-character-st-tools">
+          <button type="button" class="bst-btn bst-btn-soft" data-action="open-persona-st-image-editor">Adjust ST Expression Framing</button>
+          <div class="bst-character-help bst-character-help-compact" data-bst-persona-st-image-summary>
+            Current override: ${formatStExpressionFrameSummary(stExpressionImageOptions)}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="bst-character-help" style="display:${showStExpressionControls ? "none" : "block"};">
+      Switch effective mood source to ST expressions to edit persona ST expression framing.
+    </div>
     <div class="bst-character-divider">Persona Defaults</div>
     <div class="bst-character-help">
       These defaults apply to the user tracker when this persona is active.
@@ -660,6 +712,89 @@ function renderPanel(input: InitInput, force = false): void {
     });
     persistSettings(next);
     renderPanel(input, true);
+  });
+
+  const stImageOverrideToggle = panel.querySelector<HTMLInputElement>("[data-bst-persona-st-image-override]");
+  const stImageOptionsBlock = panel.querySelector<HTMLElement>("[data-bst-persona-st-image-options]");
+  const stImageSummaryNode = panel.querySelector<HTMLElement>("[data-bst-persona-st-image-summary]");
+  const setStImageSummary = (value: StExpressionImageOptions): void => {
+    if (!stImageSummaryNode) return;
+    stImageSummaryNode.textContent = `Current override: ${formatStExpressionFrameSummary(value)}`;
+  };
+  if (hasStExpressionImageOverride) {
+    setStImageSummary(stExpressionImageOptions);
+  }
+  stImageOverrideToggle?.addEventListener("change", () => {
+    const enabled = stImageOverrideToggle.checked;
+    if (stImageOptionsBlock) {
+      stImageOptionsBlock.style.display = enabled ? "grid" : "none";
+    }
+    if (!enabled) {
+      closeStExpressionFrameEditor();
+    }
+    const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+      const copy = { ...current };
+      if (!enabled) {
+        delete copy.stExpressionImageOptions;
+      } else {
+        copy.stExpressionImageOptions = {
+          zoom: globalStImageDefaults.zoom,
+          positionX: globalStImageDefaults.positionX,
+          positionY: globalStImageDefaults.positionY,
+        };
+      }
+      return copy;
+    });
+    persistSettings(next);
+  });
+
+  panel.querySelector('[data-action="open-persona-st-image-editor"]')?.addEventListener("click", async event => {
+    if (!stImageOverrideToggle?.checked) return;
+    const button = event.currentTarget as HTMLButtonElement | null;
+    const originalLabel = button?.textContent ?? "Adjust ST Expression Framing";
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Loading preview...";
+    }
+    const liveSettings = input.getSettings() ?? settings;
+    const liveDefaults = getDefaults(liveSettings, identity);
+    const liveOverride = sanitizeStExpressionImageOptions(liveDefaults.stExpressionImageOptions, globalStImageDefaults);
+    const initialFrame = liveOverride ?? globalStImageDefaults;
+    let previewSpriteUrl: string | null = null;
+    try {
+      const sprites = await fetchExpressionSpritePaths(persona.personaName);
+      previewSpriteUrl = sprites.find(path => typeof path === "string" && path.trim()) ?? null;
+    } catch {
+      previewSpriteUrl = null;
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
+    openStExpressionFrameEditor({
+      title: `${persona.personaName}: ST Expression Framing`,
+      description: previewSpriteUrl
+        ? "Per-persona framing override with this persona's ST expression preview."
+        : "Per-persona framing override used when user card resolves to ST expressions.",
+      initial: initialFrame,
+      fallback: globalStImageDefaults,
+      previewChoices: previewSpriteUrl ? [{ name: persona.personaName, imageUrl: previewSpriteUrl }] : [],
+      selectedPreviewName: persona.personaName,
+      emptyPreviewText: "No ST expressions found for this persona. Add at least one expression sprite and try again.",
+      onChange: nextFrame => {
+        if (!stImageOverrideToggle?.checked) return;
+        const sanitized = sanitizeStExpressionFrame(nextFrame, globalStImageDefaults);
+        setStImageSummary(sanitized);
+        const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+          const copy = { ...current };
+          copy.stExpressionImageOptions = sanitized;
+          return copy;
+        });
+        persistSettings(next);
+      },
+    });
   });
 
   panel.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-bst-persona-default]").forEach(node => {
