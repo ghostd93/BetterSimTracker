@@ -15,10 +15,6 @@ import { upsertSettingsPanel } from "./settingsPanel";
 import { discoverConnectionProfiles, getActiveConnectionProfileId, getContext, getSettingsProvenance, loadSettings, logDebug, resolveConnectionProfileId, saveSettings } from "./settings";
 import {
   clearTrackerDataForCurrentChat,
-  getChatStateLatestTrackerData,
-  getLatestTrackerDataWithIndex,
-  getLocalLatestTrackerData,
-  getMetadataLatestTrackerData,
   getRecentTrackerHistory,
   getRecentTrackerHistoryEntries,
   getTrackerDataFromMessage,
@@ -39,14 +35,13 @@ import type {
   TrackerData
 } from "./types";
 import {
-  closeGraphModal,
   getGraphPreferences,
-  openGraphModal,
   removeTrackerUI,
   renderTracker,
   type TrackerRecoveryEntry,
   type TrackerUiState,
 } from "./ui";
+import { closeGraphModal, openGraphModal } from "./graphModal";
 import { closeSettingsModal, openSettingsModal } from "./settingsModal";
 import { cancelActiveGenerations, generateJson } from "./generator";
 import { registerSlashCommands } from "./slashCommands";
@@ -59,6 +54,7 @@ import {
   normalizeCustomTextMaxLength,
   normalizeNonNumericArrayItems,
 } from "./customStatRuntime";
+import { buildMergedPromptMacroData, resolveLatestStoredTrackerData } from "./runtimeState";
 
 declare const __BST_VERSION__: string;
 
@@ -235,59 +231,6 @@ function resolveMacroStatValue(
     raw = bucket[GLOBAL_TRACKER_KEY];
   }
   return formatMacroValue(raw);
-}
-
-function buildMergedPromptMacroData(
-  context: STContext,
-  preferred: TrackerData | null,
-): TrackerData | null {
-  const historyEntries = getRecentTrackerHistoryEntries(context, Math.max(120, context.chat.length + 8));
-  const entries = [...historyEntries].sort((a, b) => {
-    if (a.messageIndex !== b.messageIndex) return a.messageIndex - b.messageIndex;
-    return a.timestamp - b.timestamp;
-  });
-
-  if (!entries.length) {
-    return preferred ? { ...preferred } : null;
-  }
-
-  let mergedStatistics: Statistics | null = null;
-  let mergedCustomStatistics: CustomStatistics | null = null;
-  let mergedCustomNonNumericStatistics: CustomNonNumericStatistics | null = null;
-  let lastTimestamp = 0;
-  let fallbackActiveCharacters: string[] = [];
-
-  for (const entry of entries) {
-    mergedStatistics = mergeStatisticsWithFallback(entry.data.statistics, mergedStatistics, undefined);
-    mergedCustomStatistics = mergeCustomStatisticsWithFallback(entry.data.customStatistics, mergedCustomStatistics);
-    mergedCustomNonNumericStatistics = mergeCustomNonNumericStatisticsWithFallback(
-      entry.data.customNonNumericStatistics,
-      mergedCustomNonNumericStatistics,
-    );
-    lastTimestamp = Math.max(lastTimestamp, Number(entry.data.timestamp ?? entry.timestamp ?? 0));
-    if (Array.isArray(entry.data.activeCharacters) && entry.data.activeCharacters.length) {
-      fallbackActiveCharacters = entry.data.activeCharacters.map(name => String(name ?? "").trim()).filter(Boolean);
-    }
-  }
-
-  const preferredActiveCharacters = Array.isArray(preferred?.activeCharacters)
-    ? preferred.activeCharacters.map(name => String(name ?? "").trim()).filter(Boolean)
-    : [];
-
-  return {
-    timestamp: lastTimestamp || Number(preferred?.timestamp ?? Date.now()),
-    activeCharacters: preferredActiveCharacters.length ? preferredActiveCharacters : fallbackActiveCharacters,
-    statistics: mergedStatistics ?? {
-      affection: {},
-      trust: {},
-      desire: {},
-      connection: {},
-      mood: {},
-      lastThought: {},
-    },
-    customStatistics: mergedCustomStatistics ?? {},
-    customNonNumericStatistics: mergedCustomNonNumericStatistics ?? {},
-  };
 }
 
 function refreshPromptMacroData(context: STContext): void {
@@ -3735,24 +3678,7 @@ function refreshFromStoredData(): void {
   if (settings.enableUserTracking && !allCharacterNames.includes(USER_TRACKER_KEY)) {
     allCharacterNames = [...allCharacterNames, USER_TRACKER_KEY];
   }
-  const latestEntry = getLatestTrackerDataWithIndex(context);
-  const chatStateEntry = getChatStateLatestTrackerData(context);
-  const metadataEntry = getMetadataLatestTrackerData(context);
-  const localEntry = getLocalLatestTrackerData(context);
   const lastTrackableIndex = getLastTrackableMessageIndex(context);
-  const isEntrySafeForCurrentLastAi = (entry: { data: TrackerData; messageIndex: number } | null): boolean => {
-    if (!entry) return false;
-    if (lastTrackableIndex == null) return false;
-    if (entry.messageIndex !== lastTrackableIndex) return false;
-    if (entry.messageIndex < 0 || entry.messageIndex >= context.chat.length) return false;
-    const message = context.chat[entry.messageIndex];
-    return isTrackableMessage(message);
-  };
-  const isEntrySafeForAnyChatMessage = (entry: { data: TrackerData; messageIndex: number } | null): boolean => {
-    if (!entry) return false;
-    if (entry.messageIndex < 0 || entry.messageIndex >= context.chat.length) return false;
-    return isTrackableMessage(context.chat[entry.messageIndex]);
-  };
 
   if (!lastDebugRecord) {
     lastDebugRecord = loadDebugRecord(context);
@@ -3760,27 +3686,9 @@ function refreshFromStoredData(): void {
       lastDebugRecord.trace = readTraceLines(context).slice(-200);
     }
   }
-  let source: "message" | "chatState" | "metadata" | "local" | "none" = "none";
-  if (isEntrySafeForAnyChatMessage(latestEntry)) {
-    latestData = latestEntry!.data;
-    latestDataMessageIndex = latestEntry!.messageIndex;
-    source = "message";
-  } else if (isEntrySafeForCurrentLastAi(chatStateEntry)) {
-    latestData = chatStateEntry!.data;
-    latestDataMessageIndex = chatStateEntry!.messageIndex;
-    source = "chatState";
-  } else if (isEntrySafeForCurrentLastAi(metadataEntry)) {
-    latestData = metadataEntry!.data;
-    latestDataMessageIndex = metadataEntry!.messageIndex;
-    source = "metadata";
-  } else if (isEntrySafeForCurrentLastAi(localEntry)) {
-    latestData = localEntry!.data;
-    latestDataMessageIndex = localEntry!.messageIndex;
-    source = "local";
-  } else {
-    latestData = null;
-    latestDataMessageIndex = null;
-  }
+  const { source, data, messageIndex } = resolveLatestStoredTrackerData(context, lastTrackableIndex);
+  latestData = data;
+  latestDataMessageIndex = messageIndex;
 
   refreshPromptMacroData(context);
 

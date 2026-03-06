@@ -64,7 +64,6 @@ import {
   clampNumberInputToBounds,
   cloneBuiltInNumericStatUi,
   cloneCustomStatDefinition,
-  closeGraphModal,
   ensureStyles,
   escapeHtml,
   getGlobalStExpressionImageOptions,
@@ -82,6 +81,7 @@ import {
   toCustomStatSlug,
   toMacroCharacterSlug,
 } from "./ui";
+import { closeGraphModal } from "./graphModal";
 export function openSettingsModal(input: {
   settings: BetterSimTrackerSettings;
   profileOptions: ConnectionProfileOption[];

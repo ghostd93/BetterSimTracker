@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev1] - 2026-03-06
+### Changed
+- Continued step-2 modularization by extracting the tracker edit modal, graph modal, and runtime tracker-state resolution into dedicated modules:
+  - `src/editStatsModal.ts`
+  - `src/graphModal.ts`
+  - `src/runtimeState.ts`
+- Rewired settings/runtime imports to use the extracted modules while keeping existing tracker behavior unchanged.
+
 ## [2.2.3.10] - 2026-03-06
 ### Fixed
 - `{{bst_injection}}` and BST stat macros now build from a merged tracker-state baseline instead of a single latest message snapshot, preventing user, scene/global, and cross-turn character stat values from disappearing when the newest snapshot is partial.
