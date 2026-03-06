@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev15] - 2026-03-06
+### Added
+- Added dedicated non-numeric display helper module and tests:
+  - `src/uiNonNumericDisplay.ts`
+  - `tests/uiNonNumericDisplay.test.ts`
+
+### Changed
+- Continued step-2 UI modularization by moving non-numeric value display/shortening logic out of `src/ui.ts` into the new helper module.
+
 ## [2.2.3.10-dev14] - 2026-03-06
 ### Added
 - Added dedicated date/time display helper module and tests:

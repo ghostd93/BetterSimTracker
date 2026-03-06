@@ -53,6 +53,7 @@ import { getAllNumericStatDefinitions } from "./statRegistry";
 import { getDateTimeStructuredParts, normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
 import { renderThoughtMarkup } from "./uiThought";
 import { formatDateTimeTimestampDisplay, renderDateTimeStructuredChips } from "./uiDateTimeDisplay";
+import { formatNonNumericForDisplay, truncateDisplayText } from "./uiNonNumericDisplay";
 import {
   normalizeCustomEnumOptions,
   normalizeCustomStatDefaultValue,
@@ -357,33 +358,6 @@ function hasNonNumericValue(
   return true;
 }
 
-function formatNonNumericForDisplay(def: UiNonNumericStatDefinition, value: string | boolean | string[]): string {
-  if (def.kind === "boolean") {
-    return value ? def.booleanTrueLabel : def.booleanFalseLabel;
-  }
-  if (def.kind === "array") {
-    const items = Array.isArray(value) ? value : normalizeNonNumericArrayItems(value, def.textMaxLength);
-    if (!items.length) return "0 items";
-    if (items.length === 1) return items[0];
-    return `${items[0]} +${items.length - 1}`;
-  }
-  if (def.kind === "date_time" && def.dateTimeMode === "structured") {
-    const parts = getDateTimeStructuredParts(value);
-    if (!parts) return String(value);
-    return `${parts.dayOfWeek}, ${parts.time} (${parts.phase})`;
-  }
-  if (def.kind === "date_time") {
-    return formatDateTimeTimestampDisplay(value, "iso");
-  }
-  return String(value);
-}
-
-
-function truncateDisplayText(value: string, maxLength: number | null | undefined): string {
-  if (typeof maxLength !== "number" || !Number.isFinite(maxLength) || maxLength < 10) return value;
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, Math.max(0, maxLength - 1))}\u2026`;
-}
 
 export type TrackerUiState = {
   phase: "idle" | "generating" | "extracting";
