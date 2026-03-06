@@ -8112,6 +8112,15 @@ export function openSettingsModal(input: {
         stat.includeInInjection ? "injection" : "no injection",
       ];
       const description = (stat.description ?? "").trim();
+      const macroSegment = String(stat.id ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+      const macroAuto = macroSegment ? `{{bst_stat_${macroSegment}}}` : "";
+      const macroScopes = macroSegment
+        ? [`{{bst_stat_char_${macroSegment}}}`, `{{bst_stat_user_${macroSegment}}}`, `{{bst_stat_scene_${macroSegment}}}`]
+        : [];
       const defaultMeta = (() => {
         if (kind === "numeric") {
           return `Default: ${Math.round(Number(stat.defaultValue) || 0)}% | Max delta: ${stat.maxDeltaPerTurn == null ? "global" : Math.round(Number(stat.maxDeltaPerTurn))}`;
@@ -8151,6 +8160,7 @@ export function openSettingsModal(input: {
               ${escapeHtml(defaultMeta)}
             </div>
             ${description ? `<div class="bst-custom-stat-meta">${escapeHtml(description)}</div>` : ""}
+            ${macroAuto ? `<div class="bst-custom-stat-meta">Macro: <code>${escapeHtml(macroAuto)}</code>${macroScopes.length ? ` <span class="bst-subtle">scopes:</span> ${macroScopes.map(item => `<code>${escapeHtml(item)}</code>`).join(" ")}` : ""}</div>` : ""}
             <div class="bst-custom-stat-flags">
               ${flags.map(flag => `<span class="bst-custom-stat-flag">${escapeHtml(flag)}</span>`).join("")}
             </div>

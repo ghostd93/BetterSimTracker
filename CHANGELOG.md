@@ -2,6 +2,20 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.3-dev4] - 2026-03-06
+### Added
+- New ST macro support:
+  - `{{bst_injection}}` for current BST hidden injection block.
+  - per-stat macros for built-ins + custom stats:
+    - `{{bst_stat_<id>}}` (auto scope)
+    - `{{bst_stat_char_<id>}}`
+    - `{{bst_stat_user_<id>}}`
+    - `{{bst_stat_scene_<id>}}`
+- Custom Stats list now shows per-stat macro hints directly in each row for quick copy/use.
+
+### Fixed
+- Manual refresh/retrack now uses the currently edited tracker on that same message as baseline context, preventing immediate reversion to pre-edit values.
+
 ## [2.2.3.3-dev3] - 2026-03-05
 ### Fixed
 - Hardened `array` custom-stat handling for weaker models:
