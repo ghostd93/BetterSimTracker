@@ -19,10 +19,7 @@ let lastInjectedPromptDebug: Record<string, unknown> | null = null;
 
 function extractOwnerLinesFromPrompt(prompt: string): string[] {
   const raw = String(prompt ?? "");
-  const match = raw.match(/<BST_TRACKER_STATE>\n?([\s\S]*?)\n?<\/BST_TRACKER_STATE>/i)
-    ?? raw.match(/<BST_PUBLIC_STATE_STATS>\n?([\s\S]*?)\n?<\/BST_PUBLIC_STATE_STATS>/i)
-    ?? raw.match(/<BST_OWNER_STATE_STATS>\n?([\s\S]*?)\n?<\/BST_OWNER_STATE_STATS>/i)
-    ?? raw.match(/<BST_OWNER_STATE_LINES>\n?([\s\S]*?)\n?<\/BST_OWNER_STATE_LINES>/i);
+  const match = raw.match(/<BST_TRACKER_STATE>\n?([\s\S]*?)\n?<\/BST_TRACKER_STATE>/i);
   if (!match) return [];
   return String(match[1] ?? "")
     .split("\n")
@@ -181,13 +178,19 @@ function resolveInjectionTargetOwner(context: STContext, data: TrackerData): str
     candidates.push(String(data.activeCharacters[0] ?? "").trim());
   }
 
+  let hasUserCandidate = false;
   for (const candidate of candidates) {
     const normalized = normalizeOwnerName(candidate);
     if (!normalized) continue;
-    if (userAliases.has(normalized)) return USER_TRACKER_KEY;
+    if (isReservedSystemOwnerName(candidate)) continue;
+    if (userAliases.has(normalized)) {
+      hasUserCandidate = true;
+      continue;
+    }
     return candidate;
   }
 
+  if (hasUserCandidate) return USER_TRACKER_KEY;
   return null;
 }
 
@@ -510,12 +513,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     ].join("\n");
     const priorityRules = bstTagBlock("BST_PRIORITY_RULES", priorityRulesRaw);
     const ownerStats = lines.join("\n");
-    const ownerStateLines = [
-      bstTagBlock("BST_TRACKER_STATE", ownerStats),
-      bstTagBlock("BST_PUBLIC_STATE_STATS", ownerStats),
-      bstTagBlock("BST_OWNER_STATE_STATS", ownerStats),
-      bstTagBlock("BST_OWNER_STATE_LINES", ownerStats),
-    ].join("\n");
+    const ownerStateLines = bstTagBlock("BST_TRACKER_STATE", ownerStats);
     const summarizationNoteRaw = verbosity === "minimal"
       ? ""
       : includeSummarizationNote

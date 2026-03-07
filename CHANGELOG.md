@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.4-dev3] - 2026-03-07
+### Changed
+- Injection state output now emits only one canonical stats block tag: `BST_TRACKER_STATE`.
+- Injection diagnostics owner-line extraction now reads only `BST_TRACKER_STATE` (legacy alias parsing removed).
+
+### Fixed
+- Fixed injection target owner resolution to prefer non-user, non-system character candidates before falling back to user.
+- Fixed 1:1 injection cases where character stats (for example Chloe) could be dropped when context candidate order included a user alias first.
+
 ## [2.2.4.4-dev2] - 2026-03-07
 ### Changed
 - Injection state block now uses `BST_TRACKER_STATE` as the primary state tag, while keeping legacy aliases for compatibility.
