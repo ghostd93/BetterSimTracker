@@ -2,7 +2,7 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.4.2-dev1] - 2026-03-07
+## [2.2.4.3] - 2026-03-07
 ### Changed
 - Character stat macros now use collision-safe slugs (avatar-first with deterministic suffixes) so duplicate character names no longer overwrite each other.
 - Custom stat macro examples in Settings now mirror collision-safe character slug generation.
