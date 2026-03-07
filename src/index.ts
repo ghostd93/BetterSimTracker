@@ -81,6 +81,7 @@ import {
   sanitizeGenerationOptions,
   type CapturedGenerationIntent,
 } from "./runtimeEventHelpers";
+import { isManualExtractionReason } from "./extractorHelpers";
 
 declare const __BST_VERSION__: string;
 
@@ -1509,6 +1510,14 @@ function scheduleRefresh(delay = 80): void {
 }
 
 function scheduleExtraction(reason: string, targetMessageIndex?: number, delay = 180): void {
+  if (settings && !settings.autoGenerateTracker && !isManualExtractionReason(reason)) {
+    pushTrace("extract.schedule.skip", {
+      reason: "auto_generate_disabled",
+      trigger: reason,
+      targetMessageIndex: targetMessageIndex ?? null,
+    });
+    return;
+  }
   if (extractionTimer !== null) {
     window.clearTimeout(extractionTimer);
   }
@@ -2885,6 +2894,11 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   };
   if (!settings?.enabled) return;
   const activeSettings = settings;
+  if (!activeSettings.autoGenerateTracker && !isManualExtractionReason(reason)) {
+    pushTrace("extract.skip", { reason: "auto_generate_disabled", trigger: reason });
+    clearGeneratingUiIfStale("auto_generate_disabled");
+    return;
+  }
   if (context.chat.length === 0) return;
   if (isExtracting) {
     pushTrace("extract.skip", { reason: "already_extracting", trigger: reason });
@@ -3721,6 +3735,11 @@ function registerEvents(context: STContext): void {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.user_message_rendered", { messageIndex: messageIndex ?? null });
       scheduleRefresh(120);
+      if (settings && !settings.autoGenerateTracker) {
+        resetUserTurnGate("auto_generate_disabled");
+        pushTrace("extract.skip", { reason: "auto_generate_disabled", trigger: "USER_MESSAGE_RENDERED" });
+        return;
+      }
       if (!settings || !hasUserTrackingEnabledForExtraction(settings)) {
         resetUserTurnGate("user_tracking_disabled");
         pushTrace("extract.skip", { reason: "user_tracking_disabled", trigger: "USER_MESSAGE_RENDERED" });

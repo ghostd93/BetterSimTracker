@@ -42,3 +42,7 @@ export function groupCustomStatsForSequential(
   }
   return [...groupsById.values(), ...solo];
 }
+
+export function isManualExtractionReason(reason: string): boolean {
+  return reason === "manual_refresh" || reason === "manual_refresh_retry";
+}

@@ -2,6 +2,17 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4-dev1] - 2026-03-07
+### Added
+- New extraction toggle: `Auto-Generate Tracker`.
+  - When disabled, BST runs in manual-only mode (no automatic extraction on AI/user events).
+
+### Changed
+- Extraction settings UI now hides `Regenerate Tracker After Message Edit` and `Generate Tracker on Greetings` when auto-generation is disabled.
+
+### Fixed
+- Auto event hooks now skip extraction scheduling when auto-generation is disabled while keeping manual refresh/retry fully available.
+
 ## [2.2.4] - 2026-03-07
 ### Added
 - Per-owner tracker controls in defaults:

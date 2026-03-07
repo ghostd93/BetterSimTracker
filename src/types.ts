@@ -138,6 +138,7 @@ export interface BetterSimTrackerSettings {
   sceneCardStatDisplay: Record<string, SceneCardStatDisplayOptions>;
   characterCardStatOrder: string[];
   autoDetectActive: boolean;
+  autoGenerateTracker: boolean;
   regenerateOnMessageEdit: boolean;
   generateOnGreetingMessages: boolean;
   activityLookback: number;

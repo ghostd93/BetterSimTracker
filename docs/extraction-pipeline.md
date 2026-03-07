@@ -133,6 +133,7 @@ Extractor returns:
 - Prompt history snapshots are filtered to entries with tracked values for currently active characters, so user-only turns do not inject default-seeded character rows into extraction prompts.
 - Parsed maps are initialized defensively to avoid undefined access during merge/apply.
 - If generation-end/render event ordering is delayed, a late-render poll fallback checks for the newly added AI message and schedules extraction to avoid mobile race misses.
+- If `Auto-Generate Tracker` is disabled, automatic extraction scheduling is skipped for AI/user lifecycle events; only manual refresh/retry triggers extraction.
 - On chat load, if the latest AI message has no tracker payload yet, a one-shot bootstrap run is scheduled for that message.
 - If that bootstrap target is an initial greeting (no prior user message), tracker values are seeded from configured defaults instead of model extraction.
 - If extraction fails or is manually stopped before first save for a target message, runtime exposes an inline recovery card with reason + retry action.

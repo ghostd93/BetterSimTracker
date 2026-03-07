@@ -233,12 +233,13 @@ export function openSettingsModal(input: {
 
         <div class="bst-section-divider">Extraction Toggles</div>
         <div class="bst-check-grid">
+          <label class="bst-check"><input data-k="autoGenerateTracker" type="checkbox">Auto-Generate Tracker</label>
           <label class="bst-check"><input data-k="sequentialExtraction" type="checkbox">Sequential Extraction (per stat)</label>
           <label class="bst-check"><input data-k="enableSequentialStatGroups" type="checkbox">Enable Sequential Stat Groups</label>
           <label class="bst-check"><input data-k="strictJsonRepair" type="checkbox">Strict JSON Repair</label>
           <label class="bst-check"><input data-k="autoDetectActive" type="checkbox">Auto Detect Active</label>
-          <label class="bst-check"><input data-k="regenerateOnMessageEdit" type="checkbox">Regenerate Tracker After Message Edit</label>
-          <label class="bst-check"><input data-k="generateOnGreetingMessages" type="checkbox">Generate Tracker on Greetings</label>
+          <label class="bst-check" data-bst-row="regenerateOnMessageEdit"><input data-k="regenerateOnMessageEdit" type="checkbox">Regenerate Tracker After Message Edit</label>
+          <label class="bst-check" data-bst-row="generateOnGreetingMessages"><input data-k="generateOnGreetingMessages" type="checkbox">Generate Tracker on Greetings</label>
         </div>
 
         <div class="bst-section-divider">User Tracking</div>
@@ -1047,6 +1048,7 @@ export function openSettingsModal(input: {
   set("summarizationNoteVisibleForAI", String(input.settings.summarizationNoteVisibleForAI));
   set("injectSummarizationNote", String(input.settings.injectSummarizationNote));
   set("autoDetectActive", String(input.settings.autoDetectActive));
+  set("autoGenerateTracker", String(input.settings.autoGenerateTracker));
   set("regenerateOnMessageEdit", String(input.settings.regenerateOnMessageEdit));
   set("generateOnGreetingMessages", String(input.settings.generateOnGreetingMessages));
   set("activityLookback", String(input.settings.activityLookback));
@@ -4003,6 +4005,7 @@ export function openSettingsModal(input: {
       summarizationNoteVisibleForAI: readBool("summarizationNoteVisibleForAI", input.settings.summarizationNoteVisibleForAI),
       injectSummarizationNote: readBool("injectSummarizationNote", input.settings.injectSummarizationNote),
       autoDetectActive: readBool("autoDetectActive", input.settings.autoDetectActive),
+      autoGenerateTracker: readBool("autoGenerateTracker", input.settings.autoGenerateTracker),
       regenerateOnMessageEdit: readBool("regenerateOnMessageEdit", input.settings.regenerateOnMessageEdit),
       generateOnGreetingMessages: readBool("generateOnGreetingMessages", input.settings.generateOnGreetingMessages),
       activityLookback: readNumber("activityLookback", input.settings.activityLookback, 1, 25),
@@ -4085,6 +4088,8 @@ export function openSettingsModal(input: {
     const injectPromptDepthRow = modal.querySelector('[data-bst-row="injectPromptDepth"]') as HTMLElement | null;
     const maxRetriesRow = modal.querySelector('[data-bst-row="maxRetriesPerStat"]') as HTMLElement | null;
     const lookbackRow = modal.querySelector('[data-bst-row="activityLookback"]') as HTMLElement | null;
+    const regenerateOnMessageEditRow = modal.querySelector('[data-bst-row="regenerateOnMessageEdit"]') as HTMLElement | null;
+    const generateOnGreetingMessagesRow = modal.querySelector('[data-bst-row="generateOnGreetingMessages"]') as HTMLElement | null;
     const inactiveLabelRow = modal.querySelector('[data-bst-row="inactiveLabel"]') as HTMLElement | null;
     const sceneCardDrawer = modal.querySelector('[data-bst-row="sceneCardDrawer"]') as HTMLElement | null;
     const sceneCardPositionRow = modal.querySelector('[data-bst-row="sceneCardPosition"]') as HTMLElement | null;
@@ -4130,6 +4135,12 @@ export function openSettingsModal(input: {
       lookbackRow.style.display = current.autoDetectActive ? "flex" : "none";
       lookbackRow.style.flexDirection = "column";
       lookbackRow.style.gap = "4px";
+    }
+    if (regenerateOnMessageEditRow) {
+      regenerateOnMessageEditRow.style.display = current.autoGenerateTracker ? "" : "none";
+    }
+    if (generateOnGreetingMessagesRow) {
+      generateOnGreetingMessagesRow.style.display = current.autoGenerateTracker ? "" : "none";
     }
     if (inactiveLabelRow) {
       inactiveLabelRow.style.display = current.showInactive ? "flex" : "none";
@@ -4318,6 +4329,7 @@ export function openSettingsModal(input: {
     summarizationNoteVisibleForAI: "Controls visibility mode for newly generated Summarize notes (prose summaries of current tracked stats). Existing notes are unchanged for safety.",
     injectSummarizationNote: "Include the latest Summarize note (prose summary of current tracked stats) in hidden tracker prompt injection guidance only (no chat-message edits).",
     autoDetectActive: "Automatically decide which group characters are active in current scene.",
+    autoGenerateTracker: "When disabled, BST does not auto-extract on new AI/user messages. Use manual refresh/retry only.",
     regenerateOnMessageEdit: "When enabled, editing an already-tracked message triggers tracker regeneration for that message.",
     generateOnGreetingMessages: "When disabled, skips tracker extraction for first-message greetings (no prior user message in chat).",
     activityLookback: "Primary recent-speaker window. Characters stay active longer via persistence unless departure cues remove them.",
