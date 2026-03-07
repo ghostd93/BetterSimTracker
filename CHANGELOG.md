@@ -2,251 +2,31 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.3.10-dev27] - 2026-03-07
+## [2.2.4] - 2026-03-07
+### Added
+- Per-owner tracker controls in defaults:
+  - `Enable tracker for this character`
+  - `Enable tracker for this persona`
+- Per-owner per-stat enable toggles in Character/Persona defaults (built-ins + owner-trackable custom stats).
+- New global display toggle: `Collapse Cards By Default`.
+- Dedicated collapse/expand control for Scene cards.
+- Persona defaults now support ST expression image framing overrides (matching character defaults).
+
 ### Changed
-- Updated array editor counters and limit states in edit/default modals to use the shared runtime cap (`MAX_CUSTOM_ARRAY_ITEMS`) instead of hardcoded `20`.
-- Updated Scene Card array-collapse controls/labels to use the shared runtime cap (`MAX_CUSTOM_ARRAY_ITEMS`) across settings forms and per-stat scene display options.
+- Increased custom stat limits for better real-world setups:
+  - enum options cap: `12 -> 30`
+  - array item cap: `20 -> 30`
+  - `Injection Prompt Max Chars` max: `30000 -> 100000`
+- Prompt injection now emits global custom stats as dedicated `Scene` lines from global scope.
+- Owner-level stat toggles are now enforced consistently in extraction, card rendering, and injection.
+- Scene card array-collapse controls/labels now use shared runtime limits across settings and per-stat display options.
 
 ### Fixed
-- Fixed array add/remove controls in edit/default modals still using hardcoded `20` checks after raising array cap to `30`.
-- Fixed settings sanitization/parsing mismatch where `sceneCardArrayCollapsedLimit` could still clamp to `20` in some paths.
-- Fixed custom stat list metadata showing `/20 items` after cap was increased to `30`.
-
-## [2.2.3.10-dev26] - 2026-03-07
-### Changed
-- Increased custom enum option cap from 12 to 30.
-- Increased custom array item cap from 20 to 30 across runtime normalization, wizard/editors, defaults panels, and prompt contracts.
-- Increased `Injection Prompt Max Chars` upper bound from 30,000 to 100,000.
-
-### Fixed
-- Aligned array/enum limits consistently across settings UI, prompt builders, and sanitization to avoid cap mismatches.
-
-### Added
-- Extended regression expectations in settings/custom-stat tests for new caps.
-
-## [2.2.3.10-dev25] - 2026-03-07
-### Changed
-- Prompt injection now emits global custom stats as dedicated `Scene` lines from global scope, independent of character/user owner lines.
-
-### Fixed
-- Fixed a regression where global custom stats (for example `characters_in_scene`, `scene_date_time`) could be omitted from the hidden injection block even when enabled for injection.
-
-### Added
-- Added regression tests for prompt injection global-stat behavior:
-  - `tests/promptInjection.test.ts`
-
-## [2.2.3.10-dev24] - 2026-03-07
-### Added
-- Added runtime event helper module and tests:
-  - `src/runtimeEventHelpers.ts`
-  - `tests/runtimeEventHelpers.test.ts`
-
-### Changed
-- Continued event/orchestration modularization by moving generation-intent and event-payload helper logic out of `src/index.ts` into `src/runtimeEventHelpers.ts`.
-
-## [2.2.3.10-dev23] - 2026-03-07
-### Added
-- Added diagnostics helper module and tests:
-  - `src/runtimeDiagnostics.ts`
-  - `tests/runtimeDiagnostics.test.ts`
-
-### Changed
-- Continued step-2 modularization by moving diagnostics report assembly/filtering logic out of `src/index.ts` into `src/runtimeDiagnostics.ts`.
-- Diagnostics dump flow now uses shared helpers for trace filtering, history sample formatting, and debug-record filtering.
-
-## [2.2.3.10-dev22] - 2026-03-07
-### Added
-- Added extractor progress-label helper module and tests:
-  - `src/extractorProgress.ts`
-  - `tests/extractorProgress.test.ts`
-- Added summary-text helper module and tests:
-  - `src/summaryText.ts`
-  - `tests/summaryText.test.ts`
-
-### Changed
-- Continued step-2 modularization by moving summary text sanitization/normalization helpers from `src/index.ts` to `src/summaryText.ts`.
-- Continued step-2 modularization by routing extractor progress labels through the shared `src/extractorProgress.ts` helpers for more consistent status strings.
-
-## [2.2.3.10-dev21] - 2026-03-07
-### Added
-- Added dedicated graph timeline helper module and tests:
-  - `src/graphTimeline.ts`
-  - `tests/graphTimeline.test.ts`
-
-### Changed
-- Continued step-2 modularization by moving graph timeline value-carry/snapshot helpers out of `src/ui.ts` and wiring `graphModal` to use the new module.
-
-## [2.2.3.10-dev20] - 2026-03-07
-### Changed
-- Continued step-2 modularization by extracting graph preference persistence into `src/graphPreferences.ts` and wiring graph consumers to use it.
-- Continued step-2 modularization by extracting graph-series rendering helpers into `src/graphSeries.ts` and wiring graph modal to use the new module.
-
-### Fixed
-- Added regression coverage for graph preferences and graph series helpers to keep graph rendering/persistence behavior stable across refactors.
-
-## [2.2.3.10-dev19] - 2026-03-07
-### Changed
-- Per-owner stat toggles in Character/Persona defaults now list only owner-scoped stats (global stats are excluded).
-
-### Fixed
-- Prompt injection now respects owner-level stat toggles for both built-in and custom stats, so disabled stats are not injected for that specific character/persona.
-
-## [2.2.3.10-dev18] - 2026-03-07
-### Added
-- Added a dedicated collapse/expand button for Scene cards.
-
-### Changed
-- Scene card collapse state is now tracked per message independently from the main card-group collapse state.
-- Scene collapse toggle works in both scene placements (`above_tracker_cards` and `above_message`).
-
-## [2.2.3.10-dev17] - 2026-03-07
-### Added
-- Added per-stat owner-level toggles in defaults panels:
-  - Character Defaults: built-ins + character-trackable custom stats
-  - Persona Defaults: user built-ins + user-trackable custom stats
-- Added compact toggle-pill variant for defaults panels to match Custom Stats toggle style with reduced visual size.
-
-### Changed
-- Defaults panel inputs for a stat are now disabled automatically when that stat is toggled off for that owner.
-- Extraction now skips disabled owner/stat pairs and excludes stats with no enabled owners in the current run.
-- Card rendering now hides stats disabled for a specific owner.
-
-## [2.2.3.10-dev16] - 2026-03-07
-### Added
-- New global Display toggle: `Collapse Cards By Default`.
-- New per-owner tracker toggles in defaults panels:
-  - Character Defaults: `Enable tracker for this character`
-  - Persona Defaults: `Enable tracker for this persona`
-
-### Changed
-- Card collapse state now supports default-collapsed behavior while preserving per-message manual expand/collapse overrides.
-- Scene card collapse now follows the same root collapse state (including scene-above-message placement).
-
-### Fixed
-- Disabled character/persona tracker owners are now excluded from both extraction active-target selection and tracker card rendering.
-
-## [2.2.3.10-dev15] - 2026-03-06
-### Added
-- Added dedicated non-numeric display helper module and tests:
-  - `src/uiNonNumericDisplay.ts`
-  - `tests/uiNonNumericDisplay.test.ts`
-
-### Changed
-- Continued step-2 UI modularization by moving non-numeric value display/shortening logic out of `src/ui.ts` into the new helper module.
-
-## [2.2.3.10-dev14] - 2026-03-06
-### Added
-- Added dedicated date/time display helper module and tests:
-  - `src/uiDateTimeDisplay.ts`
-  - `tests/uiDateTimeDisplay.test.ts`
-
-### Changed
-- Continued step-2 UI modularization by moving date/time rendering/format/order helper logic out of `src/ui.ts` into a dedicated helper module.
-- `src/settingsModal.ts` now consumes `normalizeDateTimePartOrder` from the dedicated date/time display helper module.
-
-## [2.2.3.10-dev13] - 2026-03-06
-### Added
-- Added focused thought-rendering helper module and tests:
-  - `src/uiThought.ts`
-  - `tests/uiThought.test.ts`
-
-### Changed
-- Continued step-2 UI modularization by moving thought expand/collapse rendering logic out of `src/ui.ts` into the new helper module without behavior changes.
-
-## [2.2.3.10-dev12] - 2026-03-06
-### Added
-- Added dedicated test/coverage scripts to the maintainer workflow:
-  - `npm run test:run`
-  - `npm run coverage`
-  - `npm run coverage:gate`
-
-### Changed
-- Documented mandatory test/coverage execution flow in `docs/operations.md`, including enforced coverage thresholds (lines/functions/branches).
-
-## [2.2.3.10-dev11] - 2026-03-06
-### Added
-- Added extraction baseline helper module and dedicated regression tests for baseline/global overlay behavior:
-  - `src/extractionBaselineHelpers.ts`
-  - `tests/extractionBaselineHelpers.test.ts`
-
-### Changed
-- Refactored character extraction baseline logic in `src/index.ts` to use the shared baseline helper module (behavior preserved, now test-covered).
-
-## [2.2.3.10-dev10] - 2026-03-06
-### Added
-- Persona defaults now support ST expression image framing overrides (matching character defaults): override toggle, framing editor launcher, and override summary.
-
-### Fixed
-- Persona-scoped ST expression framing can now be configured directly from Persona Defaults instead of only using global framing.
-
-## [2.2.3.10-dev9] - 2026-03-06
-### Fixed
-- Character extraction now preserves the latest global custom-stat values (for example scene/global timeline stats) while still using character-owned baseline for built-ins and character-scoped stats.
-- Prevents global stats from unintentionally rewinding to older character snapshot values when a newer user/global snapshot exists.
-
-## [2.2.3.10-dev8] - 2026-03-06
-### Fixed
-- Character extraction baseline selection now prefers the latest character-owned snapshot (instead of a newer user-only snapshot), preventing false built-in resets and delta drift after user turns.
-- Character extraction history seeding now filters by character-owned tracked values, preventing user-only snapshots from polluting character stat context.
-
-## [2.2.3.10-dev7] - 2026-03-06
-### Fixed
-- Sequential extraction request diagnostics now use stable per-request attempt IDs (no duplicate/skipped numbering caused by async request ordering).
-- Debug prompt/raw text aggregation now normalizes common mojibake/encoding artifacts for cleaner diagnostics output.
-
-## [2.2.3.10-dev6] - 2026-03-06
-### Added
-- Added release-safety validation scripts:
-  - `npm run validate:versions`
-  - `npm run validate:release`
-- Added script implementations:
-  - `scripts/validate-versions.mjs`
-  - `scripts/validate-release.mjs`
-
-### Changed
-- Version is now `2.2.3.10-dev6`.
-
-## [2.2.3.10-dev5] - 2026-03-06
-### Added
-- Added new targeted tests for extracted helper layers:
-  - `tests/extractorHelpers.test.ts`
-  - `tests/promptInjectionHelpers.test.ts`
-
-### Changed
-- Continued modularization by extracting reusable helper logic from large runtime modules:
-  - `src/extractorHelpers.ts` (enabled built-ins/custom stats + sequential grouping helpers)
-  - `src/promptInjectionHelpers.ts` (custom stat scope/value resolution + non-numeric/behavior formatting helpers)
-- `src/extractor.ts` and `src/promptInjection.ts` now consume those helper modules without behavior changes.
-
-## [2.2.3.10-dev4] - 2026-03-06
-### Added
-- Added a dependency-free automated test harness using Node's built-in test runner and a dedicated test TypeScript config.
-- Added coverage for core pure/runtime logic:
-  - custom stat runtime normalization
-  - date/time normalization and structured parsing
-  - response parsing
-  - message filtering
-  - storage merge behavior
-  - merged prompt/macro tracker-state resolution
-
-### Changed
-- Added `npm run test` and `npm run test:compile` scripts so BST now has a real local automated validation path before push/release.
-
-## [2.2.3.10-dev3] - 2026-03-06
-### Changed
-- Continued step-2 modularization by extracting the tracker edit modal, graph modal, and runtime tracker-state resolution into dedicated modules:
-  - `src/editStatsModal.ts`
-  - `src/graphModal.ts`
-  - `src/runtimeState.ts`
-- Rewired settings/runtime imports to use the extracted modules while keeping existing tracker behavior unchanged.
-- Continued step-2 modularization by extracting BST macro runtime helpers and prompt/refresh scheduling into dedicated modules:
-  - `src/runtimeMacros.ts`
-  - `src/runtimePromptSync.ts`
-
-### Fixed
-- Hardened settings loading so a stale local fallback cannot silently flip the main `enabled` toggle off when SillyTavern context settings are still hydrating.
-- Prompt injection now trims verbosity before dropping custom stats, so `{{bst_injection}}` keeps included custom stat values under prompt-size pressure more reliably.
-
+- Fixed character baseline selection and history seeding so user-only snapshots do not corrupt character extraction context.
+- Fixed global custom stat baseline handling so latest global values are preserved during character extraction.
+- Fixed prompt injection regression where global custom stats could be omitted even when enabled for injection.
+- Fixed late-load `enabled` toggle hydration edge case that could incorrectly flip BST off.
+- Fixed array cap mismatches in edit/default modals and settings parsing (removed stale hardcoded `20` paths).
 ## [2.2.3.10] - 2026-03-06
 ### Fixed
 - `{{bst_injection}}` and BST stat macros now build from a merged tracker-state baseline instead of a single latest message snapshot, preventing user, scene/global, and cross-turn character stat values from disappearing when the newest snapshot is partial.
