@@ -162,3 +162,28 @@ test("syncBstMacros unregisters previous macros when signature changes and skips
   assert.equal(registered.get("bst_injection")?.(), "third");
   assert.equal(registered.has("bst_stat_user_clothes"), false);
 });
+
+test("syncBstMacros creates collision-safe character macros for duplicate names", () => {
+  const { context, registered } = makeContext();
+  context.characters = [
+    { name: "Chloe", avatar: "chloe_a.png" } as any,
+    { name: "Chloe", avatar: "chloe_b.png" } as any,
+  ];
+  const settings = makeSettings();
+  const tracker = makeTracker();
+  tracker.statistics.affection = { Chloe: 42 };
+  tracker.activeCharacters = ["Chloe"];
+
+  syncBstMacros({
+    context,
+    settings,
+    allCharacterNames: ["Chloe"],
+    latestPromptMacroData: tracker,
+    getLastInjectedPrompt: () => "demo",
+  });
+
+  assert.equal(registered.has("bst_stat_char_affection_chloe_a"), true);
+  assert.equal(registered.has("bst_stat_char_affection_chloe_b"), true);
+  assert.equal(registered.get("bst_stat_char_affection_chloe_a")?.(), "42");
+  assert.equal(registered.get("bst_stat_char_affection_chloe_b")?.(), "42");
+});

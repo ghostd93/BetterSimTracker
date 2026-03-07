@@ -1925,16 +1925,30 @@ export function openSettingsModal(input: {
       const allowsCharMacro = quickEnabled && !Boolean(stat.globalScope) && Boolean(stat.trackCharacters ?? stat.track);
       const characterMacroExamples = (() => {
         if (!macroSegment || !allowsCharMacro) return [] as string[];
-        const names = Array.from(new Set(
-          (input.previewCharacterCandidates ?? [])
-            .map(candidate => String(candidate?.name ?? "").trim())
-            .filter(Boolean)
-            .filter(name => {
-              const normalized = name.toLowerCase();
-              return normalized !== USER_TRACKER_KEY.toLowerCase() && normalized !== GLOBAL_TRACKER_KEY.toLowerCase() && normalized !== "user";
-            }),
-        )).slice(0, 4);
-        return names.map(name => `{{bst_stat_char_${macroSegment}_${toMacroCharacterSlug(name)}}}`);
+        const preview = (input.previewCharacterCandidates ?? [])
+          .map(candidate => ({
+            name: String(candidate?.name ?? "").trim(),
+            avatar: String(candidate?.avatar ?? "").trim(),
+          }))
+          .filter(item => {
+            if (!item.name) return false;
+            const normalized = item.name.toLowerCase();
+            return normalized !== USER_TRACKER_KEY.toLowerCase() && normalized !== GLOBAL_TRACKER_KEY.toLowerCase() && normalized !== "user";
+          });
+        const counts = new Map<string, number>();
+        const examples: string[] = [];
+        for (const item of preview) {
+          if (examples.length >= 4) break;
+          const avatarStem = item.avatar
+            ? item.avatar.split(/[\\/]/).filter(Boolean).pop()?.replace(/\.[a-z0-9]+$/i, "") ?? ""
+            : "";
+          const baseSlug = toMacroCharacterSlug(avatarStem || item.name);
+          const next = (counts.get(baseSlug) ?? 0) + 1;
+          counts.set(baseSlug, next);
+          const resolvedSlug = next === 1 ? baseSlug : `${baseSlug}_${next}`;
+          examples.push(`{{bst_stat_char_${macroSegment}_${resolvedSlug}}}`);
+        }
+        return examples;
       })();
       const macroScopes = macroSegment
         ? [
