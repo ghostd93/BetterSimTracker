@@ -2,6 +2,29 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4-dev3] - 2026-03-07
+### Fixed
+- When `Auto-Generate Tracker` is disabled and a message has no tracker snapshot yet, BST now renders a visible manual placeholder with `Generate Tracker` so manual mode always has an in-chat entry point.
+
+## [2.2.4-dev2] - 2026-03-07
+### Changed
+- Character-card extraction context now resolves duplicate-name characters by avatar identity to avoid same-name overwrite collisions.
+- Settings preview candidate resolution is now avatar-aware, so same-name characters are no longer collapsed into one candidate.
+
+### Fixed
+- Fixed character card prompt context generation for chats where more than one character shares the same name.
+
+## [2.2.4-dev1] - 2026-03-07
+### Added
+- New extraction toggle: `Auto-Generate Tracker`.
+  - When disabled, BST runs in manual-only mode (no automatic extraction on AI/user events).
+
+### Changed
+- Extraction settings UI now hides `Regenerate Tracker After Message Edit` and `Generate Tracker on Greetings` when auto-generation is disabled.
+
+### Fixed
+- Auto event hooks now skip extraction scheduling when auto-generation is disabled while keeping manual refresh/retry fully available.
+
 ## [2.2.4] - 2026-03-07
 ### Added
 - Per-owner tracker controls in defaults:

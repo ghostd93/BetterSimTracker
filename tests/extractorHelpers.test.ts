@@ -6,6 +6,7 @@ import {
   enabledBuiltInAndTextStats,
   enabledCustomStats,
   groupCustomStatsForSequential,
+  isManualExtractionReason,
   normalizeSequentialGroupId,
 } from "../src/extractorHelpers";
 import type { BetterSimTrackerSettings, CustomStatDefinition } from "../src/types";
@@ -81,4 +82,11 @@ test("groupCustomStatsForSequential keeps one-stat groups when disabled", () => 
   assert.equal(groups.length, 2);
   assert.deepEqual(groups[0].map(stat => stat.id), ["clothes"]);
   assert.deepEqual(groups[1].map(stat => stat.id), ["pose"]);
+});
+
+test("isManualExtractionReason only allows manual refresh flows", () => {
+  assert.equal(isManualExtractionReason("manual_refresh"), true);
+  assert.equal(isManualExtractionReason("manual_refresh_retry"), true);
+  assert.equal(isManualExtractionReason("GENERATION_ENDED"), false);
+  assert.equal(isManualExtractionReason("USER_MESSAGE_RENDERED"), false);
 });

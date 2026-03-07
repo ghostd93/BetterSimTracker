@@ -252,3 +252,11 @@ test("sanitizeSettings clamps sceneCardArrayCollapsedLimit to MAX_CUSTOM_ARRAY_I
 
   assert.equal(sanitized.sceneCardArrayCollapsedLimit, 30);
 });
+
+test("sanitizeSettings keeps autoGenerateTracker toggle", () => {
+  const disabled = sanitizeSettings({ autoGenerateTracker: false });
+  const enabled = sanitizeSettings({ autoGenerateTracker: true });
+
+  assert.equal(disabled.autoGenerateTracker, false);
+  assert.equal(enabled.autoGenerateTracker, true);
+});

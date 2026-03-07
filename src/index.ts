@@ -81,6 +81,9 @@ import {
   sanitizeGenerationOptions,
   type CapturedGenerationIntent,
 } from "./runtimeEventHelpers";
+import { isManualExtractionReason } from "./extractorHelpers";
+import { buildCharacterCardsContext } from "./characterCardContext";
+import { computeManualPlaceholderMessageIndices } from "./renderQueueHelpers";
 
 declare const __BST_VERSION__: string;
 
@@ -1402,6 +1405,26 @@ function queueRender(): void {
         if (entries.some(entry => entry.messageIndex === messageIndex)) continue;
         entries.push({ messageIndex, data: null, recovery });
       }
+
+      const existingIndices = new Set(entries.map(entry => entry.messageIndex));
+      const manualPlaceholderIndices = computeManualPlaceholderMessageIndices(
+        context,
+        existingIndices,
+        settings.autoGenerateTracker,
+        (ctx, messageIndex) => isRenderableTrackerIndex(ctx, messageIndex),
+      );
+      for (const messageIndex of manualPlaceholderIndices) {
+        entries.push({
+          messageIndex,
+          data: null,
+          recovery: {
+            kind: "stopped",
+            title: "Tracker not generated",
+            detail: "Auto-generation is disabled for this chat. Generate tracker manually for this message.",
+            actionLabel: "Generate Tracker",
+          },
+        });
+      }
       if (recoveryMapMutated) {
         persistTrackerRecoveries(context);
       }
@@ -1509,6 +1532,14 @@ function scheduleRefresh(delay = 80): void {
 }
 
 function scheduleExtraction(reason: string, targetMessageIndex?: number, delay = 180): void {
+  if (settings && !settings.autoGenerateTracker && !isManualExtractionReason(reason)) {
+    pushTrace("extract.schedule.skip", {
+      reason: "auto_generate_disabled",
+      trigger: reason,
+      targetMessageIndex: targetMessageIndex ?? null,
+    });
+    return;
+  }
   if (extractionTimer !== null) {
     window.clearTimeout(extractionTimer);
   }
@@ -2885,6 +2916,11 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   };
   if (!settings?.enabled) return;
   const activeSettings = settings;
+  if (!activeSettings.autoGenerateTracker && !isManualExtractionReason(reason)) {
+    pushTrace("extract.skip", { reason: "auto_generate_disabled", trigger: reason });
+    clearGeneratingUiIfStale("auto_generate_disabled");
+    return;
+  }
   if (context.chat.length === 0) return;
   if (isExtracting) {
     pushTrace("extract.skip", { reason: "already_extracting", trigger: reason });
@@ -3721,6 +3757,11 @@ function registerEvents(context: STContext): void {
       const messageIndex = getEventMessageIndex(payload);
       pushTrace("event.user_message_rendered", { messageIndex: messageIndex ?? null });
       scheduleRefresh(120);
+      if (settings && !settings.autoGenerateTracker) {
+        resetUserTurnGate("auto_generate_disabled");
+        pushTrace("extract.skip", { reason: "auto_generate_disabled", trigger: "USER_MESSAGE_RENDERED" });
+        return;
+      }
       if (!settings || !hasUserTrackingEnabledForExtraction(settings)) {
         resetUserTurnGate("user_tracking_disabled");
         pushTrace("extract.skip", { reason: "user_tracking_disabled", trigger: "USER_MESSAGE_RENDERED" });
@@ -3924,31 +3965,36 @@ function openSettings(): void {
     if (name === USER_TRACKER_KEY || name === GLOBAL_TRACKER_KEY) continue;
     chatCharacterNameSet.add(name.toLowerCase());
   }
-  const previewCandidateMap = new Map<string, { name: string; avatar?: string | null }>();
-  for (const character of context?.characters ?? []) {
+  const previewCharacterCandidates: Array<{ name: string; avatar?: string | null }> = [];
+  const seenPreviewKeys = new Set<string>();
+  const addPreviewCandidate = (name: string, avatar: string | null, fallbackIndex?: number): void => {
+    const normalizedName = String(name ?? "").trim();
+    if (!normalizedName) return;
+    const normalizedAvatar = String(avatar ?? "").trim() || null;
+    const key = normalizedAvatar
+      ? `avatar:${normalizedAvatar}`
+      : `name:${normalizedName.toLowerCase()}:${fallbackIndex ?? 0}`;
+    if (seenPreviewKeys.has(key)) return;
+    seenPreviewKeys.add(key);
+    previewCharacterCandidates.push({ name: normalizedName, avatar: normalizedAvatar });
+  };
+  for (const [index, character] of (context?.characters ?? []).entries()) {
     const name = String(character?.name ?? "").trim();
     if (!name) continue;
-    const key = name.toLowerCase();
-    if (!chatCharacterNameSet.has(key)) continue;
-    if (!previewCandidateMap.has(key)) {
-      previewCandidateMap.set(key, { name, avatar: String(character?.avatar ?? "").trim() || null });
-    }
+    const lowerName = name.toLowerCase();
+    if (!chatCharacterNameSet.has(lowerName)) continue;
+    addPreviewCandidate(name, String(character?.avatar ?? "").trim() || null, index);
   }
   const fallbackName = String(context?.name2 ?? "").trim();
   if (fallbackName && chatCharacterNameSet.has(fallbackName.toLowerCase())) {
-    const key = fallbackName.toLowerCase();
-    if (!previewCandidateMap.has(key)) {
-      previewCandidateMap.set(key, { name: fallbackName, avatar: null });
-    }
+    addPreviewCandidate(fallbackName, null, (context?.characters ?? []).length + 1);
   }
   for (const lowerName of chatCharacterNameSet) {
-    if (previewCandidateMap.has(lowerName)) continue;
     const match = (context?.characters ?? []).find(character => String(character?.name ?? "").trim().toLowerCase() === lowerName);
     const resolvedName = String(match?.name ?? "").trim() || lowerName;
     const avatar = String(match?.avatar ?? "").trim() || null;
-    previewCandidateMap.set(lowerName, { name: resolvedName, avatar });
+    addPreviewCandidate(resolvedName, avatar, (context?.characters ?? []).length + 2);
   }
-  const previewCharacterCandidates = Array.from(previewCandidateMap.values());
   openSettingsModal({
     settings,
     profileOptions: context ? discoverConnectionProfiles(context) : [],
@@ -4025,27 +4071,6 @@ function openSettings(): void {
 
 function closeSettings(): void {
   closeSettingsModal();
-}
-
-function buildCharacterCardsContext(context: STContext, activeCharacters: string[]): string {
-  if (!context.characters || !context.characters.length) return "";
-  const byName = new Map<string, Character>();
-  for (const character of context.characters) {
-    if (character?.name) byName.set(character.name, character);
-  }
-  const chunks: string[] = [];
-  for (const name of activeCharacters) {
-    const card = byName.get(name);
-    if (!card) continue;
-    const lines: string[] = [];
-    if (card.description) lines.push(`Description: ${card.description}`);
-    if (card.personality) lines.push(`Personality: ${card.personality}`);
-    if (card.scenario) lines.push(`Scenario: ${card.scenario}`);
-    if (!lines.length) continue;
-    chunks.push(`Character Card - ${name}\n${lines.join("\n")}`);
-  }
-  if (!chunks.length) return "";
-  return `\n\nCharacter cards (use only to disambiguate if recent messages are unclear):\n${chunks.join("\n\n")}`;
 }
 
 function applyLorebookCharLimit(text: string, maxChars: number, maxCap = 12000): string {
