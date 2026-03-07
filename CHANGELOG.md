@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4-dev2] - 2026-03-07
+### Changed
+- Character-card extraction context now resolves duplicate-name characters by avatar identity to avoid same-name overwrite collisions.
+- Settings preview candidate resolution is now avatar-aware, so same-name characters are no longer collapsed into one candidate.
+
+### Fixed
+- Fixed character card prompt context generation for chats where more than one character shares the same name.
+
 ## [2.2.4-dev1] - 2026-03-07
 ### Added
 - New extraction toggle: `Auto-Generate Tracker`.
