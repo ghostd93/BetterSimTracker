@@ -383,6 +383,7 @@ type RenderEntry = {
 const ROOT_CLASS = "bst-root";
 const collapsedTrackerMessages = new Set<number>();
 const expandedTrackerMessages = new Set<number>();
+const collapsedSceneMessages = new Set<number>();
 const expandedThoughtKeys = new Set<string>();
 const expandedArrayValueKeys = new Set<string>();
 const renderedCardKeys = new Set<string>();
@@ -4158,6 +4159,20 @@ export function renderTracker(
           });
           return;
         }
+        const sceneCollapse = target?.closest('[data-bst-action="toggle-scene-collapse"]') as HTMLElement | null;
+        if (sceneCollapse) {
+          const idx = Number(sceneRoot?.dataset.messageIndex ?? root.dataset.messageIndex);
+          if (Number.isNaN(idx)) return;
+          if (collapsedSceneMessages.has(idx)) {
+            collapsedSceneMessages.delete(idx);
+          } else {
+            collapsedSceneMessages.add(idx);
+          }
+          root.dataset.bstRenderSignature = "";
+          sceneRoot?.setAttribute("data-bst-render-signature", "");
+          onRequestRerender?.();
+          return;
+        }
         const retrack = target?.closest('[data-bst-action="retrack"]') as HTMLElement | null;
         if (retrack) {
           const idx = Number(root.dataset.messageIndex);
@@ -4257,6 +4272,20 @@ export function renderTracker(
             settings,
             onSave: onEditStats,
           });
+          return;
+        }
+        const sceneCollapse = target?.closest('[data-bst-action="toggle-scene-collapse"]') as HTMLElement | null;
+        if (sceneCollapse) {
+          const idx = Number(sceneRoot.dataset.messageIndex);
+          if (Number.isNaN(idx)) return;
+          if (collapsedSceneMessages.has(idx)) {
+            collapsedSceneMessages.delete(idx);
+          } else {
+            collapsedSceneMessages.add(idx);
+          }
+          root.dataset.bstRenderSignature = "";
+          sceneRoot.dataset.bstRenderSignature = "";
+          onRequestRerender?.();
           return;
         }
         const arrayToggle = target?.closest('[data-bst-action="toggle-array-values"]') as HTMLElement | null;
@@ -4740,18 +4769,20 @@ export function renderTracker(
     const canEditSceneCard =
       (latestTrackedAiMessageIndex != null && entry.messageIndex === latestTrackedAiMessageIndex) ||
       (latestTrackedUserMessageIndex != null && entry.messageIndex === latestTrackedUserMessageIndex);
+    const sceneCollapsed = collapsedSceneMessages.has(entry.messageIndex);
     const sceneCardHtml = sceneCardVisible
       ? `
         <div class="bst-head">
           <div class="bst-name" title="${escapeHtml(settings.sceneCardTitle)}">${escapeHtml(settings.sceneCardTitle)}</div>
           <div class="bst-actions">
+            <button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="toggle-scene-collapse" title="${sceneCollapsed ? "Expand scene card" : "Collapse scene card"}" aria-expanded="${sceneCollapsed ? "false" : "true"}"><span aria-hidden="true">${sceneCollapsed ? "&#9656;" : "&#9662;"}</span></button>
             ${canEditSceneCard
               ? `<button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="edit-stats" data-bst-edit-message="${entry.messageIndex}" data-bst-edit-character="${escapeHtml(GLOBAL_TRACKER_KEY)}" title="Edit latest Scene tracker stats" aria-label="Edit latest Scene tracker stats"><span aria-hidden="true">&#9998;</span></button>`
               : ""}
             <div class="bst-state" title="Global scene stats">Global</div>
           </div>
         </div>
-        <div class="bst-body">
+        <div class="bst-body"${sceneCollapsed ? ` style="display:none"` : ""}>
           ${sceneValues.map(item => {
             const def = item.def;
             const resolved = item.value as string | boolean | string[];
@@ -4929,7 +4960,7 @@ export function renderTracker(
         </div>
       `
       : "";
-    signatureParts.push(`scene:${sceneCardVisible ? "1" : "0"}:${settings.sceneCardEnabled ? "1" : "0"}:${settings.sceneCardPosition}:${settings.sceneCardLayout}:${(settings.sceneCardStatOrder ?? []).join(",")}:${JSON.stringify(settings.sceneCardStatDisplay ?? {})}:${settings.sceneCardTitle}:${settings.sceneCardColor}:${settings.sceneCardValueColor}:${settings.sceneCardShowWhenEmpty ? "1" : "0"}:${settings.sceneCardArrayCollapsedLimit}:${sceneCardHtml}`);
+    signatureParts.push(`scene:${sceneCardVisible ? "1" : "0"}:${sceneCollapsed ? "1" : "0"}:${settings.sceneCardEnabled ? "1" : "0"}:${settings.sceneCardPosition}:${settings.sceneCardLayout}:${(settings.sceneCardStatOrder ?? []).join(",")}:${JSON.stringify(settings.sceneCardStatDisplay ?? {})}:${settings.sceneCardTitle}:${settings.sceneCardColor}:${settings.sceneCardValueColor}:${settings.sceneCardShowWhenEmpty ? "1" : "0"}:${settings.sceneCardArrayCollapsedLimit}:${sceneCardHtml}`);
     const renderSignature = signatureParts.join("|#|");
     if (root.dataset.bstRenderPhase === "idle" && root.dataset.bstRenderSignature === renderSignature) {
       continue;
@@ -4994,7 +5025,7 @@ export function renderTracker(
       }
     };
     if (sceneRoot) {
-      const sceneSignature = `sceneRoot:${sceneCardVisible ? "1" : "0"}:${sceneCardHtml}`;
+      const sceneSignature = `sceneRoot:${sceneCardVisible ? "1" : "0"}:${sceneCollapsed ? "1" : "0"}:${sceneCardHtml}`;
       if (sceneRoot.dataset.bstRenderPhase !== "idle" || sceneRoot.dataset.bstRenderSignature !== sceneSignature) {
         sceneRoot.dataset.bstRenderPhase = "idle";
         sceneRoot.dataset.bstRenderSignature = sceneSignature;

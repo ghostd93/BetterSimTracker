@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev18] - 2026-03-07
+### Added
+- Added a dedicated collapse/expand button for Scene cards.
+
+### Changed
+- Scene card collapse state is now tracked per message independently from the main card-group collapse state.
+- Scene collapse toggle works in both scene placements (`above_tracker_cards` and `above_message`).
+
 ## [2.2.3.10-dev17] - 2026-03-07
 ### Added
 - Added per-stat owner-level toggles in defaults panels:
