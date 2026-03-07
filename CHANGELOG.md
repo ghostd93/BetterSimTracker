@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.4-dev5] - 2026-03-07
+### Fixed
+- Edit Tracker modal now resolves owner-scoped custom stats strictly by the edited owner, preventing Scene/global fallback values from appearing in non-global owner cards.
+- Added regression tests for edit-modal owner/global value resolution to prevent owner-scoping regressions.
+
 ## [2.2.4.4-dev4] - 2026-03-07
 ### Fixed
 - Injection non-numeric text serialization now truncates at safe word boundaries with ellipsis instead of hard character cuts, improving readability and model context quality in `BST_TRACKER_STATE`.

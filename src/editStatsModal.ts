@@ -14,10 +14,8 @@ import {
   ensureStyles,
   escapeHtml,
   getNonNumericStatDefinitions,
-  getNumericRawValue,
   normalizeMoodLabel,
   normalizeNonNumericTextValue,
-  resolveNonNumericValue,
 } from "./ui";
 
 export type EditStatsPayload = {
@@ -29,6 +27,56 @@ export type EditStatsPayload = {
   mood?: string | null;
   lastThought?: string | null;
 };
+
+function uniqueOwnerKeys(primary: string, displayName: string): string[] {
+  const out: string[] = [];
+  const push = (value: string) => {
+    const v = String(value ?? "").trim();
+    if (!v || out.includes(v)) return;
+    out.push(v);
+  };
+  push(primary);
+  push(displayName);
+  return out;
+}
+
+function resolveEditNumericRawValue(
+  data: TrackerData,
+  statId: string,
+  ownerKeys: string[],
+  globalScope = false,
+): number | undefined {
+  const byOwner = data.customStatistics?.[statId];
+  if (!byOwner) return undefined;
+  if (globalScope) {
+    const globalRaw = byOwner[GLOBAL_TRACKER_KEY];
+    if (globalRaw !== undefined) return Number(globalRaw);
+  }
+  for (const ownerKey of ownerKeys) {
+    const ownerRaw = byOwner[ownerKey];
+    if (ownerRaw !== undefined) return Number(ownerRaw);
+  }
+  return undefined;
+}
+
+function resolveEditNonNumericRawValue(
+  data: TrackerData,
+  statId: string,
+  ownerKeys: string[],
+  globalScope = false,
+): string | boolean | string[] | null | undefined {
+  const byOwner = data.customNonNumericStatistics?.[statId];
+  if (!byOwner) return undefined;
+  if (globalScope) {
+    const globalRaw = byOwner[GLOBAL_TRACKER_KEY];
+    if (globalRaw !== undefined) return globalRaw;
+  }
+  for (const ownerKey of ownerKeys) {
+    const ownerRaw = byOwner[ownerKey];
+    if (ownerRaw !== undefined) return ownerRaw;
+  }
+  return undefined;
+}
 
 export function closeEditStatsModal(): void {
   const dialog = document.querySelector(`.${EDIT_STATS_DIALOG_CLASS}`) as HTMLDialogElement | null;
@@ -105,10 +153,15 @@ export function openEditStatsModal(input: {
   const isCurrentlyActive = !isUserCharacter
     && Array.isArray(input.data.activeCharacters)
     && input.data.activeCharacters.some(name => String(name ?? "").trim() === input.character);
+  const ownerKeys = uniqueOwnerKeys(input.character, characterLabel);
 
   const numericField = (def: { id: string; label: string; defaultValue: number }): string => {
-    const scope = customScopeById.get(String(def.id ?? "").trim().toLowerCase());
-    const raw = getNumericRawValue(input.data, def.id, input.character, Boolean(scope?.globalScope));
+    const builtInId = String(def.id ?? "").trim().toLowerCase();
+    const isBuiltIn = builtInId === "affection" || builtInId === "trust" || builtInId === "desire" || builtInId === "connection";
+    const scope = customScopeById.get(builtInId);
+    const raw = isBuiltIn
+      ? Number(input.data.statistics[builtInId as "affection" | "trust" | "desire" | "connection"]?.[input.character])
+      : resolveEditNumericRawValue(input.data, def.id, ownerKeys, Boolean(scope?.globalScope));
     const value = raw !== undefined && Number.isFinite(raw) ? String(Math.round(raw)) : "";
     const placeholder = String(Math.round(def.defaultValue ?? 50));
     return `
@@ -120,7 +173,7 @@ export function openEditStatsModal(input: {
   };
 
   const nonNumericField = (def: ReturnType<typeof getNonNumericStatDefinitions>[number]): string => {
-    const currentValue = resolveNonNumericValue(input.data, def, input.character);
+    const currentValue = resolveEditNonNumericRawValue(input.data, def.id, ownerKeys, def.globalScope);
     if (def.kind === "enum_single") {
       const selected = typeof currentValue === "string" ? currentValue : "";
       return `
@@ -517,3 +570,9 @@ export function openEditStatsModal(input: {
     closeEditStatsModal();
   });
 }
+
+export const __testables = {
+  resolveEditNumericRawValue,
+  resolveEditNonNumericRawValue,
+  uniqueOwnerKeys,
+};
