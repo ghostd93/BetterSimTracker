@@ -6,6 +6,7 @@ const BST_MACRO_STAT_SCOPE_USER = "user";
 const BST_MACRO_STAT_SCOPE_SCENE = "scene";
 const registeredBstMacros = new Set<string>();
 let bstMacroSignature = "";
+const CHARACTER_SLUG_FALLBACK = "character";
 
 function toMacroIdSegment(value: string): string {
   return String(value ?? "")
@@ -21,7 +22,69 @@ function toCharacterSlug(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
-  return slug || "character";
+  return slug || CHARACTER_SLUG_FALLBACK;
+}
+
+function normalizeName(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function toAvatarSlug(value: string): string {
+  const token = String(value ?? "").trim();
+  if (!token) return "";
+  const parts = token.split(/[\\/]/).filter(Boolean);
+  const last = parts.length ? parts[parts.length - 1] : token;
+  const withoutExt = last.replace(/\.[a-z0-9]+$/i, "");
+  return toCharacterSlug(withoutExt);
+}
+
+type CharacterMacroTarget = {
+  ownerName: string;
+  macroSlug: string;
+  displayName: string;
+  avatar: string | null;
+};
+
+function buildCharacterMacroTargets(context: STContext, allCharacterNames: string[]): CharacterMacroTarget[] {
+  const ownerNameSet = new Set(
+    (allCharacterNames ?? [])
+      .map(name => String(name ?? "").trim())
+      .filter(name => name && name !== USER_TRACKER_KEY && name !== GLOBAL_TRACKER_KEY),
+  );
+  const ownerNameKeySet = new Set(Array.from(ownerNameSet, normalizeName));
+
+  const candidates: Array<{ ownerName: string; displayName: string; avatar: string | null; baseSlug: string }> = [];
+
+  for (const character of context.characters ?? []) {
+    const name = String(character?.name ?? "").trim();
+    if (!name || !ownerNameKeySet.has(normalizeName(name))) continue;
+    const avatar = String(character?.avatar ?? "").trim() || null;
+    const baseSlug = avatar ? toAvatarSlug(avatar) : toCharacterSlug(name);
+    candidates.push({ ownerName: name, displayName: name, avatar, baseSlug });
+  }
+
+  if (!candidates.length) {
+    for (const ownerName of ownerNameSet) {
+      const baseSlug = toCharacterSlug(ownerName);
+      candidates.push({ ownerName, displayName: ownerName, avatar: null, baseSlug });
+    }
+  }
+
+  const slugCounts = new Map<string, number>();
+  const targets: CharacterMacroTarget[] = [];
+  for (const candidate of candidates) {
+    const base = candidate.baseSlug || CHARACTER_SLUG_FALLBACK;
+    const next = (slugCounts.get(base) ?? 0) + 1;
+    slugCounts.set(base, next);
+    const macroSlug = next === 1 ? base : `${base}_${next}`;
+    targets.push({
+      ownerName: candidate.ownerName,
+      macroSlug,
+      displayName: candidate.displayName,
+      avatar: candidate.avatar,
+    });
+  }
+  return targets;
 }
 
 function resolveMacroTargetOwner(scope: string, globalScope: boolean): string | null {
@@ -162,12 +225,10 @@ export function syncBstMacros(input: {
     .map(def => ({ ...def, id: String(def.id ?? "").trim().toLowerCase() }))
     .filter(def => def.id.length > 0);
   const customStatIds = customDefs.map(def => def.id);
-  const characterNames = Array.from(new Set(
-    (allCharacterNames ?? [])
-      .map(name => String(name ?? "").trim())
-      .filter(name => name && name !== USER_TRACKER_KEY && name !== GLOBAL_TRACKER_KEY),
-  ));
-  const characterSignature = characterNames.map(name => `${name}:${toCharacterSlug(name)}`).join("|");
+  const characterTargets = buildCharacterMacroTargets(context, allCharacterNames);
+  const characterSignature = characterTargets
+    .map(target => `${target.ownerName}:${target.macroSlug}:${target.avatar ?? ""}`)
+    .join("|");
   const signature = [
     "v1",
     String(Boolean(settings.trackAffection)),
@@ -264,13 +325,12 @@ export function syncBstMacros(input: {
       );
     }
     if (allowsCharacter) {
-      for (const characterName of characterNames) {
-        const slug = toCharacterSlug(characterName);
+      for (const target of characterTargets) {
         registerBstMacro(
           context,
-          `bst_stat_char_${segment}_${slug}`,
-          `BetterSimTracker stat macro for "${statId}" (character "${characterName}").`,
-          () => resolveMacroStatValue(latestPromptMacroData, settings, statId, "char_target", characterName),
+          `bst_stat_char_${segment}_${target.macroSlug}`,
+          `BetterSimTracker stat macro for "${statId}" (character "${target.displayName}").`,
+          () => resolveMacroStatValue(latestPromptMacroData, settings, statId, "char_target", target.ownerName),
         );
       }
     }
