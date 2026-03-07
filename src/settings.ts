@@ -594,7 +594,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     sceneCardColor: sanitizeHexColor(input.sceneCardColor) ?? defaultSettings.sceneCardColor,
     sceneCardValueColor: sanitizeHexColor(input.sceneCardValueColor) ?? defaultSettings.sceneCardValueColor,
     sceneCardShowWhenEmpty: asBool(input.sceneCardShowWhenEmpty, defaultSettings.sceneCardShowWhenEmpty),
-    sceneCardArrayCollapsedLimit: clampInt(input.sceneCardArrayCollapsedLimit, defaultSettings.sceneCardArrayCollapsedLimit, 1, 20),
+    sceneCardArrayCollapsedLimit: clampInt(input.sceneCardArrayCollapsedLimit, defaultSettings.sceneCardArrayCollapsedLimit, 1, MAX_CUSTOM_ARRAY_ITEMS),
     sceneCardStatOrder: Array.isArray(input.sceneCardStatOrder)
       ? input.sceneCardStatOrder
         .map(item => String(item ?? "").trim().toLowerCase())

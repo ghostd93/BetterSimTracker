@@ -244,3 +244,11 @@ test("sanitizeSettings supports collapseCardsByDefault and trackerEnabled in cha
     "Standing by the bed",
   );
 });
+
+test("sanitizeSettings clamps sceneCardArrayCollapsedLimit to MAX_CUSTOM_ARRAY_ITEMS", () => {
+  const sanitized = sanitizeSettings({
+    sceneCardArrayCollapsedLimit: 999,
+  });
+
+  assert.equal(sanitized.sceneCardArrayCollapsedLimit, 30);
+});

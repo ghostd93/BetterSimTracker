@@ -337,11 +337,12 @@ export function openEditStatsModal(input: {
       const rawNonEmpty = rawTrimmed.filter(value => value.length > 0);
       const uniqueRawNonEmpty = new Set(rawNonEmpty).size;
       const hadTooLong = rawNonEmpty.some(value => value.length > maxLength);
-      const hitLimit = rawNonEmpty.length > 20;
+      const hitLimit = rawNonEmpty.length > MAX_CUSTOM_ARRAY_ITEMS;
       hiddenNode.value = normalized.join("\n");
       counterNode.textContent = `${normalized.length}/${MAX_CUSTOM_ARRAY_ITEMS} items`;
-      counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");
-      addBtn.disabled = getItemInputs().length >= 20;
+      const warnThreshold = Math.max(1, Math.floor(MAX_CUSTOM_ARRAY_ITEMS * 0.8));
+      counterNode.setAttribute("data-state", normalized.length >= MAX_CUSTOM_ARRAY_ITEMS ? "limit" : normalized.length >= warnThreshold ? "warn" : "ok");
+      addBtn.disabled = getItemInputs().length >= MAX_CUSTOM_ARRAY_ITEMS;
       if (statusNode) {
         const messages: string[] = [];
         if (hadTooLong) messages.push(`Items longer than ${maxLength} chars were trimmed.`);
@@ -359,7 +360,7 @@ export function openEditStatsModal(input: {
     };
 
     addBtn.addEventListener("click", () => {
-      if (getItemInputs().length >= 20) return;
+      if (getItemInputs().length >= MAX_CUSTOM_ARRAY_ITEMS) return;
       listNode.insertAdjacentHTML("beforeend", rowHtml(""));
       syncEditor();
     });

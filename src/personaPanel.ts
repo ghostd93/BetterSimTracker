@@ -1073,8 +1073,9 @@ function renderPanel(input: InitInput, force = false): void {
       const normalized = normalizeNonNumericArrayItems(values, maxLength);
       hiddenNode.value = normalized.join("\n");
       counterNode.textContent = `${normalized.length}/${MAX_CUSTOM_ARRAY_ITEMS} items`;
-      counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");
-      addBtn.disabled = getItemInputs().length >= 20;
+      const warnThreshold = Math.max(1, Math.floor(MAX_CUSTOM_ARRAY_ITEMS * 0.8));
+      counterNode.setAttribute("data-state", normalized.length >= MAX_CUSTOM_ARRAY_ITEMS ? "limit" : normalized.length >= warnThreshold ? "warn" : "ok");
+      addBtn.disabled = getItemInputs().length >= MAX_CUSTOM_ARRAY_ITEMS;
       return normalized;
     };
 
@@ -1084,7 +1085,7 @@ function renderPanel(input: InitInput, force = false): void {
     };
 
     addBtn.addEventListener("click", () => {
-      if (getItemInputs().length >= 20) return;
+      if (getItemInputs().length >= MAX_CUSTOM_ARRAY_ITEMS) return;
       listNode.insertAdjacentHTML("beforeend", renderPersonaArrayDefaultRowHtml(id, "", maxLength));
       syncEditorUi();
     });

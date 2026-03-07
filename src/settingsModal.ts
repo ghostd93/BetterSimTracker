@@ -395,7 +395,7 @@ export function openSettingsModal(input: {
             <div class="bst-scene-order-list" data-bst-row="sceneCardOrderList"></div>
           </div>
           <label data-bst-row="sceneCardArrayCollapsedLimit">Array chips before collapse
-            <input data-k="sceneCardArrayCollapsedLimit" type="number" min="1" max="20">
+            <input data-k="sceneCardArrayCollapsedLimit" type="number" min="1" max="${MAX_CUSTOM_ARRAY_ITEMS}">
           </label>
           <label data-bst-row="sceneCardTitle">Card Title <input data-k="sceneCardTitle" type="text" maxlength="40"></label>
           <label data-bst-row="sceneCardColor">Card Color
@@ -1339,7 +1339,7 @@ export function openSettingsModal(input: {
         }
         const bounded = Math.max(20, Math.min(200, Math.round(maxLen || 120)));
         const items = normalizeNonNumericArrayItems(draft.defaultValue, bounded);
-        if (items.length > 20) {
+        if (items.length > MAX_CUSTOM_ARRAY_ITEMS) {
           errors.push(`Array default supports up to ${MAX_CUSTOM_ARRAY_ITEMS} items.`);
         }
         if (items.some(item => item.length > bounded)) {
@@ -1959,7 +1959,7 @@ export function openSettingsModal(input: {
           const items = normalizeNonNumericArrayItems(stat.defaultValue, limit);
           const preview = items.length ? items.slice(0, 2).join(", ") : "(empty)";
           const suffix = items.length > 2 ? ` +${items.length - 2} more` : "";
-          return `Default: ${preview}${suffix} | Items: ${items.length}/20 | Item max: ${limit} | Graph: disabled`;
+          return `Default: ${preview}${suffix} | Items: ${items.length}/${MAX_CUSTOM_ARRAY_ITEMS} | Item max: ${limit} | Graph: disabled`;
         }
         if (kind === "date_time") {
           const normalized = normalizeDateTimeValue(stat.defaultValue);
@@ -2197,7 +2197,7 @@ export function openSettingsModal(input: {
           </div>
           <div class="bst-scene-stat-editor-group" data-scene-opt-row="arrayLimit">
             <div class="bst-scene-stat-editor-group-title">Array Handling</div>
-            <label>Array Collapse Limit (1-20)
+            <label>Array Collapse Limit (1-${MAX_CUSTOM_ARRAY_ITEMS})
               <input type="number" min="1" max="${MAX_CUSTOM_ARRAY_ITEMS}" data-scene-opt="arrayCollapsedLimit" value="${current.arrayCollapsedLimit == null ? "" : String(current.arrayCollapsedLimit)}" placeholder="Use Scene Card default">
             </label>
           </div>
@@ -2336,7 +2336,7 @@ export function openSettingsModal(input: {
         : null;
       const parsedLimitRaw = Number(arrayLimitNode?.value ?? "");
       const arrayCollapsedLimit = Number.isFinite(parsedLimitRaw) && !Number.isNaN(parsedLimitRaw)
-        ? Math.max(1, Math.min(20, Math.round(parsedLimitRaw)))
+        ? Math.max(1, Math.min(MAX_CUSTOM_ARRAY_ITEMS, Math.round(parsedLimitRaw)))
         : null;
       const dateTimePartOrder = normalizeDateTimePartOrder(dateTimePartOrderDraft);
       sceneCardStatDisplayState[targetId] = {
@@ -2723,7 +2723,7 @@ export function openSettingsModal(input: {
           </label>
         </div>
         <div class="bst-custom-wizard-grid" data-bst-kind-panel="array" style="display:none;">
-          <label>Default Items (max 20)
+          <label>Default Items (max ${MAX_CUSTOM_ARRAY_ITEMS})
             <div class="bst-array-default-editor">
               <div class="bst-array-default-list" data-bst-array-default-list></div>
               <div class="bst-array-default-actions">
@@ -2910,7 +2910,8 @@ export function openSettingsModal(input: {
     const updateArrayEditorCounter = (count: number): void => {
       if (!arrayDefaultsCounterNode) return;
       arrayDefaultsCounterNode.textContent = `${count}/${MAX_CUSTOM_ARRAY_ITEMS} items`;
-      const state = count >= 20 ? "limit" : count >= 16 ? "warn" : "ok";
+      const warnThreshold = Math.max(1, Math.floor(MAX_CUSTOM_ARRAY_ITEMS * 0.8));
+      const state = count >= MAX_CUSTOM_ARRAY_ITEMS ? "limit" : count >= warnThreshold ? "warn" : "ok";
       arrayDefaultsCounterNode.setAttribute("data-state", state);
     };
 
@@ -3380,7 +3381,7 @@ export function openSettingsModal(input: {
       if (!arrayDefaultsListNode) return;
       const maxLen = getArrayEditorItemMaxLength();
       const count = getArrayEditorItemInputs().length;
-      if (count >= 20) return;
+      if (count >= MAX_CUSTOM_ARRAY_ITEMS) return;
       arrayDefaultsListNode.insertAdjacentHTML("beforeend", arrayEditorRowHtml("", maxLen));
       const nextInput = getArrayEditorItemInputs().at(-1);
       nextInput?.focus();
@@ -4015,7 +4016,7 @@ export function openSettingsModal(input: {
       sceneCardColor: read("sceneCardColor") || "",
       sceneCardValueColor: read("sceneCardValueColor") || "",
       sceneCardShowWhenEmpty: readBool("sceneCardShowWhenEmpty", input.settings.sceneCardShowWhenEmpty),
-      sceneCardArrayCollapsedLimit: readNumber("sceneCardArrayCollapsedLimit", input.settings.sceneCardArrayCollapsedLimit, 1, 20),
+      sceneCardArrayCollapsedLimit: readNumber("sceneCardArrayCollapsedLimit", input.settings.sceneCardArrayCollapsedLimit, 1, MAX_CUSTOM_ARRAY_ITEMS),
       sceneCardStatOrder: [...sceneCardStatOrderState],
       sceneCardStatDisplay: { ...sceneCardStatDisplayState },
       characterCardStatOrder: [...characterCardStatOrderState],

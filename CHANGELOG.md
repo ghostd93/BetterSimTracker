@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev27] - 2026-03-07
+### Changed
+- Updated array editor counters and limit states in edit/default modals to use the shared runtime cap (`MAX_CUSTOM_ARRAY_ITEMS`) instead of hardcoded `20`.
+- Updated Scene Card array-collapse controls/labels to use the shared runtime cap (`MAX_CUSTOM_ARRAY_ITEMS`) across settings forms and per-stat scene display options.
+
+### Fixed
+- Fixed array add/remove controls in edit/default modals still using hardcoded `20` checks after raising array cap to `30`.
+- Fixed settings sanitization/parsing mismatch where `sceneCardArrayCollapsedLimit` could still clamp to `20` in some paths.
+- Fixed custom stat list metadata showing `/20 items` after cap was increased to `30`.
+
 ## [2.2.3.10-dev26] - 2026-03-07
 ### Changed
 - Increased custom enum option cap from 12 to 30.
