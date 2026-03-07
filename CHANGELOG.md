@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev24] - 2026-03-07
+### Added
+- Added runtime event helper module and tests:
+  - `src/runtimeEventHelpers.ts`
+  - `tests/runtimeEventHelpers.test.ts`
+
+### Changed
+- Continued event/orchestration modularization by moving generation-intent and event-payload helper logic out of `src/index.ts` into `src/runtimeEventHelpers.ts`.
+
 ## [2.2.3.10-dev23] - 2026-03-07
 ### Added
 - Added diagnostics helper module and tests:

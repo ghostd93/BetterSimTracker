@@ -74,6 +74,13 @@ import {
   filterDebugRecordForDiagnostics,
   filterDiagnosticsTrace,
 } from "./runtimeDiagnostics";
+import {
+  buildCapturedGenerationIntent,
+  cloneCapturedGenerationIntent,
+  getEventMessageIndex,
+  sanitizeGenerationOptions,
+  type CapturedGenerationIntent,
+} from "./runtimeEventHelpers";
 
 declare const __BST_VERSION__: string;
 
@@ -106,12 +113,6 @@ let lateRenderPollTimer: number | null = null;
 let autoBootstrapExtractionKey: string | null = null;
 let promptRefreshController: ReturnType<typeof createPromptRefreshController> | null = null;
 const BOOTSTRAP_CONTINUE_REASON = "AUTO_BOOTSTRAP_MISSING_TRACKER_CONTINUE";
-type CapturedGenerationIntent = {
-  type: string;
-  options: Record<string, unknown>;
-  dryRun: boolean;
-  capturedAt: number;
-};
 let userTurnGateActive = false;
 let userTurnGateMessageIndex: number | null = null;
 let userTurnGateMessageText = "";
@@ -918,50 +919,6 @@ function hasUserTrackingEnabledForExtraction(input: BetterSimTrackerSettings): b
 
 function isUserExtractionReason(reason: string): boolean {
   return reason === "USER_MESSAGE_RENDERED" || reason === "USER_MESSAGE_EDITED";
-}
-
-function isReplayableGenerationIntent(type: string, dryRun: boolean): boolean {
-  const normalized = String(type ?? "").trim().toLowerCase();
-  if (dryRun) return false;
-  if (!normalized) return false;
-  return normalized !== "quiet";
-}
-
-function sanitizeGenerationOptions(raw: unknown): Record<string, unknown> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (key === "signal" || value === undefined) continue;
-    if (value == null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-      out[key] = value;
-      continue;
-    }
-    try {
-      out[key] = JSON.parse(JSON.stringify(value));
-    } catch {
-      // Skip non-serializable options (functions, cyclic refs, etc.).
-    }
-  }
-  return out;
-}
-
-function buildCapturedGenerationIntent(type: string, options: unknown, dryRun: boolean): CapturedGenerationIntent | null {
-  if (!isReplayableGenerationIntent(type, dryRun)) return null;
-  return {
-    type,
-    options: sanitizeGenerationOptions(options),
-    dryRun,
-    capturedAt: Date.now(),
-  };
-}
-
-function cloneCapturedGenerationIntent(intent: CapturedGenerationIntent): CapturedGenerationIntent {
-  return {
-    type: intent.type,
-    options: sanitizeGenerationOptions(intent.options),
-    dryRun: intent.dryRun,
-    capturedAt: intent.capturedAt,
-  };
 }
 
 function findCharacterIndexByName(context: STContext, name: string): number | null {
@@ -2533,15 +2490,6 @@ function syncSummaryNoteVisibilityForCurrentChat(context: STContext, visibleForA
     context.saveChatDebounced?.();
   }
   return changedCount;
-}
-
-function getEventMessageIndex(payload: unknown): number | null {
-  if (typeof payload === "number") return Number.isInteger(payload) ? payload : null;
-  if (!payload || typeof payload !== "object") return null;
-  const obj = payload as Record<string, unknown>;
-  const candidate = obj.message ?? obj.messageId ?? obj.id;
-  if (typeof candidate !== "number") return null;
-  return Number.isInteger(candidate) ? candidate : null;
 }
 
 type ManualEditPayload = {
