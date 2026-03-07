@@ -55,6 +55,14 @@ import { renderThoughtMarkup } from "./uiThought";
 import { formatDateTimeTimestampDisplay, renderDateTimeStructuredChips } from "./uiDateTimeDisplay";
 import { formatNonNumericForDisplay, truncateDisplayText } from "./uiNonNumericDisplay";
 import {
+  buildLastPointCircle,
+  buildPointCircles,
+  buildPolyline,
+  downsampleTimeline,
+  graphSeriesDomId,
+  smoothSeries,
+} from "./graphSeries";
+import {
   normalizeCustomEnumOptions,
   normalizeCustomStatDefaultValue,
   normalizeCustomStatKind,
@@ -5105,118 +5113,5 @@ export function buildStatSeries(
     carry = statValue(item, def.key, character, carry, def.globalScope);
     return carry;
   });
-}
-
-export function smoothSeries(values: number[], windowSize = 3): number[] {
-  if (values.length <= 2 || windowSize <= 1) return values;
-  const half = Math.floor(windowSize / 2);
-  return values.map((_, i) => {
-    let sum = 0;
-    let count = 0;
-    for (let j = i - half; j <= i + half; j += 1) {
-      if (j < 0 || j >= values.length) continue;
-      sum += values[j];
-      count += 1;
-    }
-    if (count === 0) return values[i];
-    return sum / count;
-  });
-}
-
-const GRAPH_SMOOTH_KEY = "bst-graph-smoothing";
-const GRAPH_WINDOW_KEY = "bst-graph-window";
-export type GraphWindow = "30" | "60" | "120" | "all";
-
-export function getGraphSmoothingPreference(): boolean {
-  try {
-    return localStorage.getItem(GRAPH_SMOOTH_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function setGraphSmoothingPreference(enabled: boolean): void {
-  try {
-    safeSetLocalStorage(GRAPH_SMOOTH_KEY, enabled ? "1" : "0");
-  } catch {
-    // ignore
-  }
-}
-
-export function getGraphWindowPreference(): GraphWindow {
-  try {
-    const raw = String(localStorage.getItem(GRAPH_WINDOW_KEY) ?? "all");
-    if (raw === "30" || raw === "60" || raw === "120" || raw === "all") return raw;
-  } catch {
-    // ignore
-  }
-  return "all";
-}
-
-export function setGraphWindowPreference(windowSize: GraphWindow): void {
-  try {
-    safeSetLocalStorage(GRAPH_WINDOW_KEY, windowSize);
-  } catch {
-    // ignore
-  }
-}
-
-export function getGraphPreferences(): { window: GraphWindow; smoothing: boolean } {
-  return {
-    window: getGraphWindowPreference(),
-    smoothing: getGraphSmoothingPreference()
-  };
-}
-
-function downsampleIndices(length: number, target: number): number[] {
-  if (length <= target) return Array.from({ length }, (_, i) => i);
-  const out = new Set<number>([0, length - 1]);
-  const step = (length - 1) / (target - 1);
-  for (let i = 1; i < target - 1; i += 1) {
-    out.add(Math.round(i * step));
-  }
-  return Array.from(out).sort((a, b) => a - b);
-}
-
-export function downsampleTimeline(values: TrackerData[], target = 140): TrackerData[] {
-  if (values.length <= target) return values;
-  const indexes = downsampleIndices(values.length, target);
-  return indexes.map(i => values[i]);
-}
-
-export function buildPolyline(values: number[], width: number, height: number, pad = 24): string {
-  if (!values.length) return "";
-  const drawableW = Math.max(1, width - pad * 2);
-  const drawableH = Math.max(1, height - pad * 2);
-  return values.map((value, idx) => {
-    const x = pad + (values.length === 1 ? drawableW / 2 : (drawableW * idx) / (values.length - 1));
-    const y = pad + ((100 - value) / 100) * drawableH;
-    return `${x},${y}`;
-  }).join(" ");
-}
-
-export function buildPointCircles(values: number[], color: string, _stat: string, width: number, height: number, pad = 24): string {
-  if (!values.length) return "";
-  const drawableW = Math.max(1, width - pad * 2);
-  const drawableH = Math.max(1, height - pad * 2);
-  return values.map((value, idx) => {
-    const x = pad + (values.length === 1 ? drawableW / 2 : (drawableW * idx) / (values.length - 1));
-    const y = pad + ((100 - value) / 100) * drawableH;
-    return `<circle cx="${x}" cy="${y}" r="2.7" fill="${color}" />`;
-  }).join("");
-}
-
-export function buildLastPointCircle(values: number[], color: string, width: number, height: number, pad = 24): string {
-  if (!values.length) return "";
-  const drawableW = Math.max(1, width - pad * 2);
-  const drawableH = Math.max(1, height - pad * 2);
-  const idx = values.length - 1;
-  const x = pad + (values.length === 1 ? drawableW / 2 : (drawableW * idx) / (values.length - 1));
-  const y = pad + ((100 - values[idx]) / 100) * drawableH;
-  return `<circle cx="${x}" cy="${y}" r="4.2" fill="${color}" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />`;
-}
-
-export function graphSeriesDomId(key: string): string {
-  return `series-${key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 

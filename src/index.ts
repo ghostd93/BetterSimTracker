@@ -35,12 +35,12 @@ import type {
   TrackerData
 } from "./types";
 import {
-  getGraphPreferences,
   removeTrackerUI,
   renderTracker,
   type TrackerRecoveryEntry,
   type TrackerUiState,
 } from "./ui";
+import { getGraphPreferences } from "./graphPreferences";
 import { closeGraphModal, openGraphModal } from "./graphModal";
 import { closeSettingsModal, openSettingsModal } from "./settingsModal";
 import { cancelActiveGenerations, generateJson } from "./generator";

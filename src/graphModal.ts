@@ -1,21 +1,25 @@
 import type { BetterSimTrackerSettings, TrackerData } from "./types";
 import {
+  buildStatSeries,
+  ensureStyles,
+  getNumericStatsForHistory,
+  hasNumericSnapshot,
+} from "./ui";
+import {
   buildLastPointCircle,
   buildPointCircles,
   buildPolyline,
-  buildStatSeries,
   downsampleTimeline,
-  ensureStyles,
+  graphSeriesDomId,
+  smoothSeries,
+} from "./graphSeries";
+import {
   getGraphSmoothingPreference,
   getGraphWindowPreference,
-  getNumericStatsForHistory,
-  graphSeriesDomId,
-  hasNumericSnapshot,
   setGraphSmoothingPreference,
   setGraphWindowPreference,
-  smoothSeries,
   type GraphWindow,
-} from "./ui";
+} from "./graphPreferences";
 import { closeEditStatsModal } from "./editStatsModal";
 
 export function openGraphModal(input: {

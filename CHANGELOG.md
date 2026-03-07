@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev20] - 2026-03-07
+### Changed
+- Continued step-2 modularization by extracting graph preference persistence into `src/graphPreferences.ts` and wiring graph consumers to use it.
+- Continued step-2 modularization by extracting graph-series rendering helpers into `src/graphSeries.ts` and wiring graph modal to use the new module.
+
+### Fixed
+- Added regression coverage for graph preferences and graph series helpers to keep graph rendering/persistence behavior stable across refactors.
+
 ## [2.2.3.10-dev19] - 2026-03-07
 ### Changed
 - Per-owner stat toggles in Character/Persona defaults now list only owner-scoped stats (global stats are excluded).
