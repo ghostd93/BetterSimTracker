@@ -204,3 +204,38 @@ test("discoverConnectionProfiles and resolveConnectionProfileId use discovered a
   assert.equal(hasExplicitConnectionProfileValue("active"), false);
   assert.equal(hasExplicitConnectionProfileValue("profile-x"), true);
 });
+
+test("sanitizeSettings supports collapseCardsByDefault and trackerEnabled in character defaults", () => {
+  const sanitized = sanitizeSettings({
+    collapseCardsByDefault: true,
+    customStats: [
+      {
+        id: "pose",
+        kind: "text_short",
+        label: "Pose",
+        defaultValue: "",
+        track: true,
+        trackCharacters: true,
+        trackUser: true,
+        showOnCard: true,
+        showInGraph: false,
+        includeInInjection: true,
+      },
+    ],
+    characterDefaults: {
+      Seraphina: {
+        trackerEnabled: false,
+        customNonNumericStatDefaults: {
+          pose: "Standing by the bed",
+        },
+      },
+    },
+  });
+
+  assert.equal(sanitized.collapseCardsByDefault, true);
+  assert.equal(sanitized.characterDefaults.Seraphina?.trackerEnabled, false);
+  assert.equal(
+    sanitized.characterDefaults.Seraphina?.customNonNumericStatDefaults?.pose,
+    "Standing by the bed",
+  );
+});

@@ -382,6 +382,7 @@ type RenderEntry = {
 
 const ROOT_CLASS = "bst-root";
 const collapsedTrackerMessages = new Set<number>();
+const expandedTrackerMessages = new Set<number>();
 const expandedThoughtKeys = new Set<string>();
 const expandedArrayValueKeys = new Set<string>();
 const renderedCardKeys = new Set<string>();
@@ -3924,6 +3925,7 @@ export function renderTracker(
   isUserMessageIndex?: (messageIndex: number) => boolean,
   resolveDisplayName?: (characterName: string) => string,
   resolveCharacterAvatar?: (characterName: string) => string | null,
+  isTrackerEnabled?: (characterName: string) => boolean,
   onOpenGraph?: (characterName: string) => void,
   onRetrackMessage?: (messageIndex: number) => void,
   onSendSummaryMessage?: (messageIndex: number) => void,
@@ -3954,6 +3956,10 @@ export function renderTracker(
     .reverse()
     .find(item => item.data && isUserEntryIndex(item.messageIndex))
     ?.messageIndex ?? null;
+  const isMessageCollapsed = (messageIndex: number): boolean =>
+    settings.collapseCardsByDefault
+      ? !expandedTrackerMessages.has(messageIndex)
+      : collapsedTrackerMessages.has(messageIndex);
   const numericGlobalScopeById = new Map(
     (settings.customStats ?? [])
       .map(def => [String(def.id ?? "").trim().toLowerCase(), Boolean(def.globalScope)] as const),
@@ -4157,12 +4163,21 @@ export function renderTracker(
         if (collapse) {
           const idx = Number(root.dataset.messageIndex);
           if (Number.isNaN(idx)) return;
-          const nextCollapsed = !root.classList.contains("bst-root-collapsed");
+          const nextCollapsed = !isMessageCollapsed(idx);
           root.classList.toggle("bst-root-collapsed", nextCollapsed);
+          sceneRoot?.classList.toggle("bst-root-collapsed", nextCollapsed);
           if (nextCollapsed) {
-            collapsedTrackerMessages.add(idx);
+            if (settings.collapseCardsByDefault) {
+              expandedTrackerMessages.delete(idx);
+            } else {
+              collapsedTrackerMessages.add(idx);
+            }
           } else {
-            collapsedTrackerMessages.delete(idx);
+            if (settings.collapseCardsByDefault) {
+              expandedTrackerMessages.add(idx);
+            } else {
+              collapsedTrackerMessages.delete(idx);
+            }
           }
           collapse.setAttribute("aria-expanded", String(!nextCollapsed));
           collapse.setAttribute("title", nextCollapsed ? "Expand cards" : "Collapse cards");
@@ -4232,7 +4247,8 @@ export function renderTracker(
         onRequestRerender?.();
       });
     }
-    root.classList.toggle("bst-root-collapsed", collapsedTrackerMessages.has(entry.messageIndex));
+    root.classList.toggle("bst-root-collapsed", isMessageCollapsed(entry.messageIndex));
+    sceneRoot?.classList.toggle("bst-root-collapsed", isMessageCollapsed(entry.messageIndex));
 
     if (uiState.phase === "generating" && uiState.messageIndex === entry.messageIndex) {
       if (sceneRoot) {
@@ -4350,7 +4366,7 @@ export function renderTracker(
     const retrackTargetsUserMessage = showRetrackAction && Boolean(isUserMessageIndex?.(entry.messageIndex));
     const summaryBusy = Boolean(showSummaryAction && summaryBusyMessageIndices?.has(entry.messageIndex));
     const userMessageEntry = Boolean(isUserMessageIndex?.(entry.messageIndex));
-    const collapsed = root.classList.contains("bst-root-collapsed");
+    const collapsed = isMessageCollapsed(entry.messageIndex);
     const activeSet = new Set(data.activeCharacters.map(normalizeName));
     const allNumericDefs = getNumericStatDefinitions(settings);
     const cardNumericDefs = allNumericDefs.filter(def => def.showOnCard);
@@ -4428,7 +4444,7 @@ export function renderTracker(
     const targetSource = includeAllTargets
       ? scopedDisplayPool
       : scopedDisplayPool.filter(name => hasAnyStatFor(name) || activeSet.has(normalizeName(name)));
-    const targets = Array.from(new Set(targetSource))
+    const targets = Array.from(new Set(targetSource.filter(name => isTrackerEnabled?.(name) !== false)))
       .sort((a, b) => {
         const aActive = activeSet.has(normalizeName(a));
         const bActive = activeSet.has(normalizeName(b));
@@ -4447,6 +4463,7 @@ export function renderTracker(
       `summary:${showSummaryAction ? "1" : "0"}`,
       `retrackUser:${retrackTargetsUserMessage ? "1" : "0"}`,
       `summarybusy:${summaryBusy ? "1" : "0"}`,
+      `collapseDefault:${settings.collapseCardsByDefault ? "1" : "0"}`,
       `inactive:${settings.showInactive ? "1" : "0"}`,
       `thought:${settings.showLastThought ? "1" : "0"}`,
       `inactivelabel:${settings.inactiveLabel}`,

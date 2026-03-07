@@ -696,6 +696,10 @@ function renderPanel(input: InitInput, force = false): void {
   panel.innerHTML = `
     <div class="bst-character-title">BetterSimTracker Defaults</div>
     <div class="bst-character-sub">Per-character defaults and optional mood source overrides.</div>
+    <label class="bst-character-check">
+      <input type="checkbox" data-bst-default-toggle="trackerEnabled" ${defaults.trackerEnabled !== false ? "checked" : ""}>
+      <span>Enable tracker for this character</span>
+    </label>
     <div class="bst-character-grid">
       <label>Affection Default <input type="number" min="0" max="100" step="1" data-bst-default="affection" value="${defaults.affection ?? ""}" ${trackAffection ? "" : "disabled"}></label>
       <label>Trust Default <input type="number" min="0" max="100" step="1" data-bst-default="trust" value="${defaults.trust ?? ""}" ${trackTrust ? "" : "disabled"}></label>
@@ -906,6 +910,22 @@ function renderPanel(input: InitInput, force = false): void {
           } else {
             copy[key] = num;
           }
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLInputElement>('[data-bst-default-toggle="trackerEnabled"]').forEach(node => {
+    node.addEventListener("change", () => {
+      const enabled = node.checked;
+      const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
+        const copy = { ...current };
+        if (enabled) {
+          delete copy.trackerEnabled;
+        } else {
+          copy.trackerEnabled = false;
         }
         return copy;
       });

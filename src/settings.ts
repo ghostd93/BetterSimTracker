@@ -81,6 +81,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   strictJsonRepair: true,
   maxRetriesPerStat: 2,
   showLastThought: true,
+  collapseCardsByDefault: false,
   showInactive: true,
   inactiveLabel: "Off-screen",
   sceneCardEnabled: false,
@@ -582,6 +583,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     strictJsonRepair: asBool(input.strictJsonRepair, defaultSettings.strictJsonRepair),
     maxRetriesPerStat: clampInt(input.maxRetriesPerStat, defaultSettings.maxRetriesPerStat, 0, 4),
     showLastThought: asBool(input.showLastThought, defaultSettings.showLastThought),
+    collapseCardsByDefault: asBool(input.collapseCardsByDefault, defaultSettings.collapseCardsByDefault),
     showInactive: asBool(input.showInactive, defaultSettings.showInactive),
     inactiveLabel: asText(input.inactiveLabel, defaultSettings.inactiveLabel).slice(0, 40),
     sceneCardEnabled: asBool(input.sceneCardEnabled, defaultSettings.sceneCardEnabled),
@@ -965,6 +967,7 @@ function sanitizeCharacterDefaults(
     if (!value || typeof value !== "object") continue;
     const obj = value as Record<string, unknown>;
     const entry: CharacterDefaults = {};
+    if (obj.trackerEnabled !== undefined) entry.trackerEnabled = asBool(obj.trackerEnabled, true);
     if (obj.affection !== undefined) entry.affection = clampInt(obj.affection, defaultSettings.defaultAffection, 0, 100);
     if (obj.trust !== undefined) entry.trust = clampInt(obj.trust, defaultSettings.defaultTrust, 0, 100);
     if (obj.desire !== undefined) entry.desire = clampInt(obj.desire, defaultSettings.defaultDesire, 0, 100);

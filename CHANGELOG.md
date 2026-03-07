@@ -2,6 +2,20 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev16] - 2026-03-07
+### Added
+- New global Display toggle: `Collapse Cards By Default`.
+- New per-owner tracker toggles in defaults panels:
+  - Character Defaults: `Enable tracker for this character`
+  - Persona Defaults: `Enable tracker for this persona`
+
+### Changed
+- Card collapse state now supports default-collapsed behavior while preserving per-message manual expand/collapse overrides.
+- Scene card collapse now follows the same root collapse state (including scene-above-message placement).
+
+### Fixed
+- Disabled character/persona tracker owners are now excluded from both extraction active-target selection and tracker card rendering.
+
 ## [2.2.3.10-dev15] - 2026-03-06
 ### Added
 - Added dedicated non-numeric display helper module and tests:

@@ -367,6 +367,7 @@ export function openSettingsModal(input: {
         <label>Font Size <input data-k="fontSize" type="number" min="10" max="22"></label>
         <div class="bst-section-divider">Toggles</div>
         <div class="bst-check-grid">
+          <label class="bst-check"><input data-k="collapseCardsByDefault" type="checkbox">Collapse Cards By Default</label>
           <label class="bst-check"><input data-k="showInactive" type="checkbox">Show Inactive</label>
           <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
         </div>

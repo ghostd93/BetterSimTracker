@@ -567,6 +567,10 @@ function renderPanel(input: InitInput, force = false): void {
     <div class="bst-character-sub">Per-persona user defaults, mood source override, and BST mood images for the user tracker card.</div>
     <div class="bst-character-help">Active persona: <strong>${escapeHtml(persona.personaName)}</strong></div>
     <div class="bst-character-help">Persona avatar key: <code>${escapeHtml(persona.avatarId || "(missing)")}</code></div>
+    <label class="bst-character-check">
+      <input type="checkbox" data-bst-persona-toggle="trackerEnabled" ${defaults.trackerEnabled !== false ? "checked" : ""}>
+      <span>Enable tracker for this persona</span>
+    </label>
     <div class="bst-character-divider">Mood Source Override</div>
     <div class="bst-character-grid">
       <label class="bst-character-wide">Mood Source
@@ -823,6 +827,22 @@ function renderPanel(input: InitInput, force = false): void {
             copy.lastThought = value.slice(0, LAST_THOUGHT_DEFAULT_MAX_CHARS);
             node.value = String(copy.lastThought);
           }
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLInputElement>('[data-bst-persona-toggle="trackerEnabled"]').forEach(node => {
+    node.addEventListener("change", () => {
+      const enabled = node.checked;
+      const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+        const copy = { ...current };
+        if (enabled) {
+          delete copy.trackerEnabled;
+        } else {
+          copy.trackerEnabled = false;
         }
         return copy;
       });

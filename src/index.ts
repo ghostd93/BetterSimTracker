@@ -1547,6 +1547,9 @@ function queueRender(): void {
       const avatar = String(character?.avatar ?? "").trim();
       return avatar || null;
     }, characterName => {
+      const liveContext = getSafeContext();
+      return isTrackerEnabledForOwner(liveContext, settings!, characterName);
+    }, characterName => {
       const context = getSafeContext();
       if (!context || !settings) return;
       const history = getRecentTrackerHistory(context, 120);
@@ -1887,6 +1890,7 @@ function getConfiguredCharacterDefaults(
   settingsInput: BetterSimTrackerSettings,
   name: string,
 ): {
+  trackerEnabled?: boolean;
   affection?: number;
   trust?: number;
   desire?: number;
@@ -1903,6 +1907,7 @@ function getConfiguredCharacterDefaults(
       ? {}
       : resolveCharacterDefaultsEntry(settingsInput, { name: USER_TRACKER_KEY, avatar: null });
     const merged = { ...legacyFallback, ...defaultsFromSettings };
+    const trackerEnabled = merged.trackerEnabled === false ? false : undefined;
     const affection = parseDefaultNumber(merged.affection);
     const trust = parseDefaultNumber(merged.trust);
     const desire = parseDefaultNumber(merged.desire);
@@ -1956,6 +1961,7 @@ function getConfiguredCharacterDefaults(
       }
     }
     return {
+      ...(trackerEnabled === false ? { trackerEnabled: false } : {}),
       ...(affection != null ? { affection } : {}),
       ...(trust != null ? { trust } : {}),
       ...(desire != null ? { desire } : {}),
@@ -1977,6 +1983,7 @@ function getConfiguredCharacterDefaults(
     avatar: character?.avatar,
   });
   const merged = { ...defaultsFromSettings, ...defaultsFromExtensions };
+  const trackerEnabled = merged.trackerEnabled === false ? false : undefined;
   const affection = parseDefaultNumber(merged.affection);
   const trust = parseDefaultNumber(merged.trust);
   const desire = parseDefaultNumber(merged.desire);
@@ -2030,6 +2037,7 @@ function getConfiguredCharacterDefaults(
     }
   }
   return {
+    ...(trackerEnabled === false ? { trackerEnabled: false } : {}),
     ...(affection != null ? { affection } : {}),
     ...(trust != null ? { trust } : {}),
     ...(desire != null ? { desire } : {}),
@@ -2039,6 +2047,14 @@ function getConfiguredCharacterDefaults(
     ...(Object.keys(customStatDefaults).length ? { customStatDefaults } : {}),
     ...(Object.keys(customNonNumericStatDefaults).length ? { customNonNumericStatDefaults } : {}),
   };
+}
+
+function isTrackerEnabledForOwner(
+  context: STContext | null,
+  settingsInput: BetterSimTrackerSettings,
+  name: string,
+): boolean {
+  return getConfiguredCharacterDefaults(context, settingsInput, name).trackerEnabled !== false;
 }
 
 function buildSeededStatisticsForActiveCharacters(
@@ -3008,11 +3024,17 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
   try {
     const activity = resolveActiveCharacterAnalysis(context, activeSettings);
     lastActivityAnalysis = activity;
-    allCharacterNames = activity.allCharacterNames;
+    allCharacterNames = activity.allCharacterNames.filter(name =>
+      isTrackerEnabledForOwner(context, activeSettings, name),
+    );
     if (activeSettings.enableUserTracking && !allCharacterNames.includes(USER_TRACKER_KEY)) {
-      allCharacterNames = [...allCharacterNames, USER_TRACKER_KEY];
+      if (isTrackerEnabledForOwner(context, activeSettings, USER_TRACKER_KEY)) {
+        allCharacterNames = [...allCharacterNames, USER_TRACKER_KEY];
+      }
     }
-    const activeCharacters = userExtraction ? [USER_TRACKER_KEY] : activity.activeCharacters;
+    const activeCharacters = (userExtraction ? [USER_TRACKER_KEY] : activity.activeCharacters).filter(name =>
+      isTrackerEnabledForOwner(context, activeSettings, name),
+    );
     pushTrace("activity.resolve", {
       allCharacterNames,
       activeCharacters,
@@ -3419,11 +3441,16 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
 function refreshFromStoredData(): void {
   const context = getSafeContext();
   if (!context || !settings) return;
+  const activeSettings = settings;
   readPersistedTrackerRecoveries(context);
 
-  allCharacterNames = getAllTrackedCharacterNames(context);
-  if (settings.enableUserTracking && !allCharacterNames.includes(USER_TRACKER_KEY)) {
-    allCharacterNames = [...allCharacterNames, USER_TRACKER_KEY];
+  allCharacterNames = getAllTrackedCharacterNames(context).filter(name =>
+    isTrackerEnabledForOwner(context, activeSettings, name),
+  );
+  if (activeSettings.enableUserTracking && !allCharacterNames.includes(USER_TRACKER_KEY)) {
+    if (isTrackerEnabledForOwner(context, activeSettings, USER_TRACKER_KEY)) {
+      allCharacterNames = [...allCharacterNames, USER_TRACKER_KEY];
+    }
   }
   const lastTrackableIndex = getLastTrackableMessageIndex(context);
 
