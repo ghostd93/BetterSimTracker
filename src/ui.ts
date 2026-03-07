@@ -4044,6 +4044,99 @@ export function renderTracker(
     }
     return null;
   };
+  const cloneTrackerDataForEdit = (data: TrackerData): TrackerData => {
+    const cloneCustomNumeric: TrackerData["customStatistics"] = {};
+    for (const [statId, byOwner] of Object.entries(data.customStatistics ?? {})) {
+      cloneCustomNumeric[statId] = { ...(byOwner ?? {}) };
+    }
+    const cloneCustomNonNumeric: TrackerData["customNonNumericStatistics"] = {};
+    for (const [statId, byOwner] of Object.entries(data.customNonNumericStatistics ?? {})) {
+      const next: Record<string, CustomNonNumericValue> = {};
+      for (const [owner, value] of Object.entries(byOwner ?? {})) {
+        next[owner] = Array.isArray(value) ? [...value] : value;
+      }
+      cloneCustomNonNumeric[statId] = next;
+    }
+    return {
+      timestamp: data.timestamp,
+      activeCharacters: [...(data.activeCharacters ?? [])],
+      statistics: {
+        affection: { ...(data.statistics.affection ?? {}) },
+        trust: { ...(data.statistics.trust ?? {}) },
+        desire: { ...(data.statistics.desire ?? {}) },
+        connection: { ...(data.statistics.connection ?? {}) },
+        mood: { ...(data.statistics.mood ?? {}) },
+        lastThought: { ...(data.statistics.lastThought ?? {}) },
+      },
+      customStatistics: cloneCustomNumeric,
+      customNonNumericStatistics: cloneCustomNonNumeric,
+    };
+  };
+  const buildEffectiveEditModalData = (
+    messageIndex: number,
+    owner: string,
+    data: TrackerData,
+  ): TrackerData => {
+    const out = cloneTrackerDataForEdit(data);
+    const isGlobalOwner = owner === GLOBAL_TRACKER_KEY;
+    const isUserOwner = owner === USER_TRACKER_KEY;
+
+    if (!isGlobalOwner && !isUserOwner) {
+      if (settings.trackAffection && out.statistics.affection?.[owner] === undefined) {
+        const prev = findPreviousDataWithNumericStat(messageIndex, "affection", owner);
+        if (prev) out.statistics.affection[owner] = prev.value;
+      }
+      if (settings.trackTrust && out.statistics.trust?.[owner] === undefined) {
+        const prev = findPreviousDataWithNumericStat(messageIndex, "trust", owner);
+        if (prev) out.statistics.trust[owner] = prev.value;
+      }
+      if (settings.trackDesire && out.statistics.desire?.[owner] === undefined) {
+        const prev = findPreviousDataWithNumericStat(messageIndex, "desire", owner);
+        if (prev) out.statistics.desire[owner] = prev.value;
+      }
+      if (settings.trackConnection && out.statistics.connection?.[owner] === undefined) {
+        const prev = findPreviousDataWithNumericStat(messageIndex, "connection", owner);
+        if (prev) out.statistics.connection[owner] = prev.value;
+      }
+    }
+
+    const nonNumericDefs = getNonNumericStatDefinitions(settings).filter(def => {
+      if (isGlobalOwner) return def.globalScope;
+      if (def.globalScope) return false;
+      return isUserOwner ? def.trackUser : def.trackCharacters;
+    });
+    for (const def of nonNumericDefs) {
+      if (hasNonNumericValue(out, def, owner)) continue;
+      const prev = findPreviousDataWithNonNumericStat(messageIndex, def, owner);
+      if (!prev) continue;
+      const prevByOwner = prev.customNonNumericStatistics?.[def.id];
+      if (!prevByOwner) continue;
+      const sourceOwner = def.globalScope ? GLOBAL_TRACKER_KEY : owner;
+      const prevValue = prevByOwner[sourceOwner];
+      if (prevValue === undefined) continue;
+      const customNonNumeric = out.customNonNumericStatistics ?? {};
+      const byOwner = customNonNumeric[def.id] ?? {};
+      byOwner[sourceOwner] = Array.isArray(prevValue) ? [...prevValue] : prevValue;
+      customNonNumeric[def.id] = byOwner;
+      out.customNonNumericStatistics = customNonNumeric;
+    }
+
+    if (!isGlobalOwner) {
+      if (settings.trackMood && out.statistics.mood?.[owner] === undefined) {
+        const prevMood = findPreviousDataWithMood(messageIndex, owner);
+        if (prevMood?.statistics.mood?.[owner] !== undefined) {
+          out.statistics.mood[owner] = prevMood.statistics.mood[owner];
+        }
+      }
+      if (settings.trackLastThought && out.statistics.lastThought?.[owner] === undefined) {
+        const prevThought = findPreviousDataWithLastThought(messageIndex, owner);
+        if (prevThought?.statistics.lastThought?.[owner] !== undefined) {
+          out.statistics.lastThought[owner] = prevThought.statistics.lastThought[owner];
+        }
+      }
+    }
+    return out;
+  };
   const wanted = new Set(entries.map(entry => String(entry.messageIndex)));
 
   document.querySelectorAll(`.${ROOT_CLASS}`).forEach(node => {
@@ -4162,7 +4255,7 @@ export function renderTracker(
             messageIndex: idx,
             character,
             displayName: resolveDisplayName?.(character),
-            data,
+            data: buildEffectiveEditModalData(idx, character, data),
             settings,
             onSave: onEditStats,
           });
@@ -4277,7 +4370,7 @@ export function renderTracker(
             messageIndex: idx,
             character,
             displayName: resolveDisplayName?.(character),
-            data,
+            data: buildEffectiveEditModalData(idx, character, data),
             settings,
             onSave: onEditStats,
           });

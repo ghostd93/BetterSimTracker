@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.4-dev6] - 2026-03-07
+### Fixed
+- Edit Tracker modal prefill now uses the same effective stat resolution as card rendering (including prior-snapshot fallback for the same owner), preventing card/modal value mismatches.
+
 ## [2.2.4.4-dev5] - 2026-03-07
 ### Fixed
 - Edit Tracker modal now resolves owner-scoped custom stats strictly by the edited owner, preventing Scene/global fallback values from appearing in non-global owner cards.
