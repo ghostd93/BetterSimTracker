@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev23] - 2026-03-07
+### Added
+- Added diagnostics helper module and tests:
+  - `src/runtimeDiagnostics.ts`
+  - `tests/runtimeDiagnostics.test.ts`
+
+### Changed
+- Continued step-2 modularization by moving diagnostics report assembly/filtering logic out of `src/index.ts` into `src/runtimeDiagnostics.ts`.
+- Diagnostics dump flow now uses shared helpers for trace filtering, history sample formatting, and debug-record filtering.
+
 ## [2.2.3.10-dev22] - 2026-03-07
 ### Added
 - Added extractor progress-label helper module and tests:

@@ -66,9 +66,14 @@ import {
   hasNumericCharacters,
   normalizeSummaryProse,
   sanitizeGeneratedSummaryText,
-  stripHiddenReasoningBlocks,
   wrapAsSystemNarrativeText,
 } from "./summaryText";
+import {
+  buildDiagnosticsReport,
+  buildHistorySample,
+  filterDebugRecordForDiagnostics,
+  filterDiagnosticsTrace,
+} from "./runtimeDiagnostics";
 
 declare const __BST_VERSION__: string;
 
@@ -4022,37 +4027,15 @@ function openSettings(): void {
       const settingsProvenance = getSettingsProvenance(activeContext);
       const activeProfileId = getActiveConnectionProfileId(activeContext);
       const resolvedProfileId = resolveConnectionProfileId(currentSettings, activeContext);
-      const historySample = getRecentTrackerHistoryEntries(activeContext, 10).map(entry => ({
-        messageIndex: entry.messageIndex,
-        timestamp: entry.timestamp,
-        activeCharacters: entry.data.activeCharacters,
-        statistics: {
-          affection: entry.data.statistics.affection,
-          trust: entry.data.statistics.trust,
-          desire: entry.data.statistics.desire,
-          connection: entry.data.statistics.connection,
-          mood: entry.data.statistics.mood
-        },
-        customStatistics: entry.data.customStatistics ?? {},
-        customNonNumericStatistics: entry.data.customNonNumericStatistics ?? {}
-      }));
-      const filterGraphTrace = (lines: string[]): string[] => {
-        if (currentSettings.includeGraphInDiagnostics) return lines;
-        return lines.filter(line => !line.includes(" graph.open "));
-      };
-      const filteredLastDebugRecord = (() => {
-        if (!lastDebugRecord) return null;
-        if (currentSettings.includeGraphInDiagnostics) return lastDebugRecord;
-        return {
-          ...lastDebugRecord,
-          trace: filterGraphTrace(lastDebugRecord.trace ?? [])
-        };
-      })();
-      const report = {
+      const historySample = buildHistorySample(getRecentTrackerHistoryEntries(activeContext, 10));
+      const filteredLastDebugRecord = filterDebugRecordForDiagnostics(
+        lastDebugRecord,
+        currentSettings.includeGraphInDiagnostics,
+      );
+      const report = buildDiagnosticsReport({
+        context: activeContext,
+        settings: currentSettings,
         extensionVersion: getReportedExtensionVersion(),
-        timestamp: new Date().toISOString(),
-        scope: activeContext.groupId ? `group:${activeContext.groupId}` : `char:${String(activeContext.characterId ?? "unknown")}`,
-        chatLength: activeContext.chat.length,
         isExtracting,
         runSequence,
         trackerUiState,
@@ -4064,46 +4047,15 @@ function openSettings(): void {
         profileDebug: {
           selectedProfile: currentSettings.connectionProfile,
           resolvedProfileId: resolvedProfileId || null,
-          activeProfileId
+          activeProfileId,
         },
         historySample,
-        requestMeta: filteredLastDebugRecord?.meta?.requests ?? null,
-        settings: {
-          enabled: currentSettings.enabled,
-          debug: currentSettings.debug,
-          includeContextInDiagnostics: currentSettings.includeContextInDiagnostics,
-          includeGraphInDiagnostics: currentSettings.includeGraphInDiagnostics,
-          injectTrackerIntoPrompt: currentSettings.injectTrackerIntoPrompt,
-          injectPromptDepth: currentSettings.injectPromptDepth,
-          injectionPromptMaxChars: currentSettings.injectionPromptMaxChars,
-          summarizationNoteVisibleForAI: currentSettings.summarizationNoteVisibleForAI,
-          injectSummarizationNote: currentSettings.injectSummarizationNote,
-          contextMessages: currentSettings.contextMessages,
-          maxConcurrentCalls: currentSettings.maxConcurrentCalls,
-          maxDeltaPerTurn: currentSettings.maxDeltaPerTurn,
-          maxTokensOverride: currentSettings.maxTokensOverride,
-          truncationLengthOverride: currentSettings.truncationLengthOverride,
-          includeCharacterCardsInPrompt: currentSettings.includeCharacterCardsInPrompt,
-          includeLorebookInExtraction: currentSettings.includeLorebookInExtraction,
-          lorebookExtractionMaxChars: currentSettings.lorebookExtractionMaxChars,
-          autoDetectActive: currentSettings.autoDetectActive,
-          activityLookback: currentSettings.activityLookback,
-          moodSource: currentSettings.moodSource,
-          moodExpressionMap: currentSettings.moodExpressionMap,
-          stExpressionImageZoom: currentSettings.stExpressionImageZoom,
-          stExpressionImagePositionX: currentSettings.stExpressionImagePositionX,
-          stExpressionImagePositionY: currentSettings.stExpressionImagePositionY,
-          strictJsonRepair: currentSettings.strictJsonRepair,
-          maxRetriesPerStat: currentSettings.maxRetriesPerStat,
-          lastThoughtPrivate: currentSettings.lastThoughtPrivate,
-          customStats: currentSettings.customStats
-        },
         activity: lastActivityAnalysis,
         promptInjectionPreview: currentSettings.debug ? getLastInjectedPrompt() : undefined,
-        traceTailMemory: filterGraphTrace(debugTrace.slice(-150)),
-        traceTailPersisted: filterGraphTrace(readTraceLines(activeContext).slice(-300)),
-        lastDebugRecord: filteredLastDebugRecord
-      };
+        traceTailMemory: filterDiagnosticsTrace(debugTrace.slice(-150), currentSettings.includeGraphInDiagnostics),
+        traceTailPersisted: filterDiagnosticsTrace(readTraceLines(activeContext).slice(-300), currentSettings.includeGraphInDiagnostics),
+        debugRecord: filteredLastDebugRecord,
+      });
       console.log("[BetterSimTracker] diagnostics-dump", report);
       const serial = JSON.stringify(report, null, 2);
       void navigator.clipboard?.writeText(serial).then(
