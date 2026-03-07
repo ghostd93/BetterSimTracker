@@ -23,11 +23,13 @@ import type {
 } from "./types";
 import { normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
 import {
+  MAX_CUSTOM_ARRAY_ITEMS,
   normalizeCustomEnumOptions,
   normalizeCustomStatKind,
   normalizeCustomTextMaxLength,
   normalizeNonNumericArrayItems,
 } from "./customStatRuntime";
+import { isCustomStatTrackableForOwnerToggle } from "./ownerStatToggles";
 
 const PANEL_ID = "bst-character-panel";
 const NAME_INPUT_SELECTORS = ["#character_name_pole", "#character_name", "input[name='name']"];
@@ -260,12 +262,6 @@ function clampStat(value: string): number | null {
   const num = Number(value);
   if (Number.isNaN(num)) return null;
   return Math.max(0, Math.min(100, Math.round(num)));
-}
-
-function isCustomStatTrackableForScope(definition: CustomStatDefinition, scope: "character" | "user"): boolean {
-  if (definition.track === false) return false;
-  if (scope === "character") return definition.trackCharacters !== false;
-  return definition.trackUser !== false;
 }
 
 function renderCharacterArrayDefaultRowHtml(id: string, value: string, maxLength: number): string {
@@ -579,6 +575,10 @@ function renderPanel(input: InitInput, force = false): void {
   const customStatDefinitions = Array.isArray(settings.customStats)
     ? settings.customStats as CustomStatDefinition[]
     : [];
+  const statEnabledRaw = defaults.statEnabled && typeof defaults.statEnabled === "object"
+    ? defaults.statEnabled as Record<string, unknown>
+    : {};
+  const isStatEnabled = (id: string): boolean => statEnabledRaw[String(id ?? "").trim().toLowerCase()] !== false;
   const trackAffection = settings.trackAffection !== false;
   const trackTrust = settings.trackTrust !== false;
   const trackDesire = settings.trackDesire !== false;
@@ -599,7 +599,8 @@ function renderPanel(input: InitInput, force = false): void {
     const id = String(definition.id ?? "").trim().toLowerCase();
     const label = String(definition.label ?? "").trim();
     if (!id || !label) return "";
-    const trackableInCharacterDefaults = isCustomStatTrackableForScope(definition, "character");
+    const disabledAttr = isStatEnabled(id) ? "" : "disabled";
+    const trackableInCharacterDefaults = isCustomStatTrackableForOwnerToggle(definition, "character");
     if (!trackableInCharacterDefaults) {
       return `
         <div class="bst-character-help">
@@ -615,7 +616,7 @@ function renderPanel(input: InitInput, force = false): void {
         : "";
       return `
         <label>${escapeHtml(label)} Default
-          <input type="number" min="0" max="100" step="1" data-bst-custom-default-num="${escapeHtml(id)}" value="${escapeHtml(value)}" placeholder="Use stat default">
+          <input type="number" min="0" max="100" step="1" data-bst-custom-default-num="${escapeHtml(id)}" value="${escapeHtml(value)}" placeholder="Use stat default" ${disabledAttr}>
         </label>
       `;
     }
@@ -625,7 +626,7 @@ function renderPanel(input: InitInput, force = false): void {
       const selected = typeof rawValue === "string" && options.includes(rawValue) ? rawValue : "";
       return `
         <label>${escapeHtml(label)} Default
-          <select data-bst-custom-default-enum="${escapeHtml(id)}">
+          <select data-bst-custom-default-enum="${escapeHtml(id)}" ${disabledAttr}>
             <option value="">Use stat default</option>
             ${options.map(option => `<option value="${escapeHtml(option)}" ${selected === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
           </select>
@@ -639,7 +640,7 @@ function renderPanel(input: InitInput, force = false): void {
       const falseLabel = String(definition.booleanFalseLabel ?? "disabled").trim() || "disabled";
       return `
         <label>${escapeHtml(label)} Default
-          <select data-bst-custom-default-bool="${escapeHtml(id)}">
+          <select data-bst-custom-default-bool="${escapeHtml(id)}" ${disabledAttr}>
             <option value="">Use stat default</option>
             <option value="true" ${selected === "true" ? "selected" : ""}>${escapeHtml(trueLabel)}</option>
             <option value="false" ${selected === "false" ? "selected" : ""}>${escapeHtml(falseLabel)}</option>
@@ -650,7 +651,7 @@ function renderPanel(input: InitInput, force = false): void {
     if (kind === "array") {
       const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
       const items = normalizeNonNumericArrayItems(customNonNumericDefaultsRaw[id], maxLength);
-      const rows = (items.length ? items : [""]).slice(0, 20);
+      const rows = (items.length ? items : [""]).slice(0, MAX_CUSTOM_ARRAY_ITEMS);
       const value = items.join("\n");
       return `
         <div class="bst-array-default-editor" data-bst-custom-default-array-editor="${escapeHtml(id)}" data-bst-max-length="${maxLength}">
@@ -659,10 +660,10 @@ function renderPanel(input: InitInput, force = false): void {
             ${rows.map(item => renderCharacterArrayDefaultRowHtml(id, item, maxLength)).join("")}
           </div>
           <div class="bst-array-default-actions">
-            <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="character-default-array-add" data-bst-custom-default-array-add="${escapeHtml(id)}" aria-label="Add item" title="Add item"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
-            <span class="bst-editor-counter" data-bst-custom-default-array-counter="${escapeHtml(id)}">${items.length}/20 items</span>
+            <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="character-default-array-add" data-bst-custom-default-array-add="${escapeHtml(id)}" aria-label="Add item" title="Add item" ${disabledAttr}><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+            <span class="bst-editor-counter" data-bst-custom-default-array-counter="${escapeHtml(id)}">${items.length}/${MAX_CUSTOM_ARRAY_ITEMS} items</span>
           </div>
-          <textarea rows="1" style="display:none" data-bst-custom-default-array="${escapeHtml(id)}" data-bst-max-length="${maxLength}" aria-hidden="true">${escapeHtml(value)}</textarea>
+          <textarea rows="1" style="display:none" data-bst-custom-default-array="${escapeHtml(id)}" data-bst-max-length="${maxLength}" aria-hidden="true" ${disabledAttr}>${escapeHtml(value)}</textarea>
         </div>
       `;
     }
@@ -670,7 +671,7 @@ function renderPanel(input: InitInput, force = false): void {
       const value = toDateTimeInputValue(customNonNumericDefaultsRaw[id]);
       return `
         <label>${escapeHtml(label)} Default
-          <input type="datetime-local" data-bst-custom-default-datetime="${escapeHtml(id)}" value="${escapeHtml(value)}" placeholder="Use stat default">
+          <input type="datetime-local" data-bst-custom-default-datetime="${escapeHtml(id)}" value="${escapeHtml(value)}" placeholder="Use stat default" ${disabledAttr}>
         </label>
       `;
     }
@@ -678,10 +679,45 @@ function renderPanel(input: InitInput, force = false): void {
     const rawValue = String(customNonNumericDefaultsRaw[id] ?? "").trim().replace(/\s+/g, " ");
     return `
       <label>${escapeHtml(label)} Default
-        <input type="text" maxlength="${maxLength}" data-bst-custom-default-text="${escapeHtml(id)}" value="${escapeHtml(rawValue)}" placeholder="Use stat default">
+        <input type="text" maxlength="${maxLength}" data-bst-custom-default-text="${escapeHtml(id)}" value="${escapeHtml(rawValue)}" placeholder="Use stat default" ${disabledAttr}>
       </label>
     `;
   }).filter(Boolean).join("");
+  const builtInStatTogglesHtml = [
+    { id: "affection", label: "Affection", available: trackAffection },
+    { id: "trust", label: "Trust", available: trackTrust },
+    { id: "desire", label: "Desire", available: trackDesire },
+    { id: "connection", label: "Connection", available: trackConnection },
+    { id: "mood", label: "Mood", available: trackMood },
+    { id: "lastThought", label: "Last Thought", available: trackLastThought },
+  ]
+    .filter(item => item.available)
+    .map(item => {
+      const enabled = isStatEnabled(item.id);
+      return `
+        <button type="button" class="bst-custom-stat-toggle bst-custom-stat-toggle-compact ${enabled ? "is-on" : "is-off"}" data-bst-char-stat-toggle="${escapeHtml(item.id)}" aria-pressed="${enabled ? "true" : "false"}">
+          <span class="bst-custom-stat-toggle-pill" aria-hidden="true"></span>
+          <span class="bst-custom-stat-toggle-label">${escapeHtml(item.label)}: ${enabled ? "Enabled" : "Disabled"}</span>
+        </button>
+      `;
+    }).join("");
+  const customStatTogglesHtml = customStatDefinitions
+    .map(definition => {
+      const id = String(definition.id ?? "").trim().toLowerCase();
+      const label = String(definition.label ?? "").trim();
+      if (!id || !label) return "";
+      const trackableInCharacterDefaults = isCustomStatTrackableForOwnerToggle(definition, "character");
+      if (!trackableInCharacterDefaults) return "";
+      const enabled = isStatEnabled(id);
+      return `
+        <button type="button" class="bst-custom-stat-toggle bst-custom-stat-toggle-compact ${enabled ? "is-on" : "is-off"}" data-bst-char-stat-toggle="${escapeHtml(id)}" aria-pressed="${enabled ? "true" : "false"}">
+          <span class="bst-custom-stat-toggle-pill" aria-hidden="true"></span>
+          <span class="bst-custom-stat-toggle-label">${escapeHtml(label)}: ${enabled ? "Enabled" : "Disabled"}</span>
+        </button>
+      `;
+    })
+    .filter(Boolean)
+    .join("");
   const getLiveSettings = (): BetterSimTrackerSettings => input.getSettings() ?? settings;
   const persistSettings = (next: BetterSimTrackerSettings): void => {
     input.setSettings(next);
@@ -696,14 +732,24 @@ function renderPanel(input: InitInput, force = false): void {
   panel.innerHTML = `
     <div class="bst-character-title">BetterSimTracker Defaults</div>
     <div class="bst-character-sub">Per-character defaults and optional mood source overrides.</div>
+    <label class="bst-character-check">
+      <input type="checkbox" data-bst-default-toggle="trackerEnabled" ${defaults.trackerEnabled !== false ? "checked" : ""}>
+      <span>Enable tracker for this character</span>
+    </label>
+    <div class="bst-character-divider">Per-Stat Toggles</div>
+    <div class="bst-character-help">Disable specific stats for this character without changing global stat setup.</div>
+    <div class="bst-character-grid bst-character-grid-single">
+      <div class="bst-character-toggle-group">${builtInStatTogglesHtml || `<div class="bst-character-help">No built-in stats available.</div>`}</div>
+      <div class="bst-character-toggle-group">${customStatTogglesHtml || `<div class="bst-character-help">No character-trackable custom stats.</div>`}</div>
+    </div>
     <div class="bst-character-grid">
-      <label>Affection Default <input type="number" min="0" max="100" step="1" data-bst-default="affection" value="${defaults.affection ?? ""}" ${trackAffection ? "" : "disabled"}></label>
-      <label>Trust Default <input type="number" min="0" max="100" step="1" data-bst-default="trust" value="${defaults.trust ?? ""}" ${trackTrust ? "" : "disabled"}></label>
-      <label>Desire Default <input type="number" min="0" max="100" step="1" data-bst-default="desire" value="${defaults.desire ?? ""}" ${trackDesire ? "" : "disabled"}></label>
-      <label>Connection Default <input type="number" min="0" max="100" step="1" data-bst-default="connection" value="${defaults.connection ?? ""}" ${trackConnection ? "" : "disabled"}></label>
-      <label class="bst-character-wide">Mood Default <input type="text" data-bst-default="mood" value="${defaults.mood ?? ""}" placeholder="Neutral" ${trackMood ? "" : "disabled"}></label>
+      <label>Affection Default <input type="number" min="0" max="100" step="1" data-bst-default="affection" value="${defaults.affection ?? ""}" ${(trackAffection && isStatEnabled("affection")) ? "" : "disabled"}></label>
+      <label>Trust Default <input type="number" min="0" max="100" step="1" data-bst-default="trust" value="${defaults.trust ?? ""}" ${(trackTrust && isStatEnabled("trust")) ? "" : "disabled"}></label>
+      <label>Desire Default <input type="number" min="0" max="100" step="1" data-bst-default="desire" value="${defaults.desire ?? ""}" ${(trackDesire && isStatEnabled("desire")) ? "" : "disabled"}></label>
+      <label>Connection Default <input type="number" min="0" max="100" step="1" data-bst-default="connection" value="${defaults.connection ?? ""}" ${(trackConnection && isStatEnabled("connection")) ? "" : "disabled"}></label>
+      <label class="bst-character-wide">Mood Default <input type="text" data-bst-default="mood" value="${defaults.mood ?? ""}" placeholder="Neutral" ${(trackMood && isStatEnabled("mood")) ? "" : "disabled"}></label>
       <label class="bst-character-wide">Last Thought Default
-        <textarea rows="3" maxlength="${LAST_THOUGHT_DEFAULT_MAX_CHARS}" data-bst-default="lastThought" placeholder="Use stat default" ${trackLastThought ? "" : "disabled"}>${escapeHtml(String(defaults.lastThought ?? ""))}</textarea>
+        <textarea rows="3" maxlength="${LAST_THOUGHT_DEFAULT_MAX_CHARS}" data-bst-default="lastThought" placeholder="Use stat default" ${(trackLastThought && isStatEnabled("lastThought")) ? "" : "disabled"}>${escapeHtml(String(defaults.lastThought ?? ""))}</textarea>
       </label>
       <label class="bst-character-wide">Card Color (optional)
         <div class="bst-color-inputs">
@@ -913,6 +959,49 @@ function renderPanel(input: InitInput, force = false): void {
     });
   });
 
+  panel.querySelectorAll<HTMLInputElement>('[data-bst-default-toggle="trackerEnabled"]').forEach(node => {
+    node.addEventListener("change", () => {
+      const enabled = node.checked;
+      const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
+        const copy = { ...current };
+        if (enabled) {
+          delete copy.trackerEnabled;
+        } else {
+          copy.trackerEnabled = false;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLButtonElement>("[data-bst-char-stat-toggle]").forEach(node => {
+    node.addEventListener("click", () => {
+      const statId = String(node.dataset.bstCharStatToggle ?? "").trim().toLowerCase();
+      if (!statId) return;
+      const enabled = node.classList.contains("is-off");
+      const next = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
+        const copy = { ...current };
+        const existing = copy.statEnabled && typeof copy.statEnabled === "object"
+          ? { ...(copy.statEnabled as Record<string, unknown>) }
+          : {};
+        if (enabled) {
+          delete existing[statId];
+        } else {
+          existing[statId] = false;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.statEnabled;
+        } else {
+          copy.statEnabled = existing as Record<string, boolean>;
+        }
+        return copy;
+      });
+      persistSettings(next);
+      renderPanel(input, true);
+    });
+  });
+
   panel.querySelectorAll<HTMLInputElement>("[data-bst-custom-default-num]").forEach(node => {
     node.addEventListener("change", () => {
       const id = String(node.dataset.bstCustomDefaultNum ?? "").trim().toLowerCase();
@@ -1093,9 +1182,10 @@ function renderPanel(input: InitInput, force = false): void {
       const values = getItemInputs().map(inputNode => inputNode.value);
       const normalized = normalizeNonNumericArrayItems(values, maxLength);
       hiddenNode.value = normalized.join("\n");
-      counterNode.textContent = `${normalized.length}/20 items`;
-      counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");
-      addBtn.disabled = getItemInputs().length >= 20;
+      counterNode.textContent = `${normalized.length}/${MAX_CUSTOM_ARRAY_ITEMS} items`;
+      const warnThreshold = Math.max(1, Math.floor(MAX_CUSTOM_ARRAY_ITEMS * 0.8));
+      counterNode.setAttribute("data-state", normalized.length >= MAX_CUSTOM_ARRAY_ITEMS ? "limit" : normalized.length >= warnThreshold ? "warn" : "ok");
+      addBtn.disabled = getItemInputs().length >= MAX_CUSTOM_ARRAY_ITEMS;
       return normalized;
     };
 
@@ -1105,7 +1195,7 @@ function renderPanel(input: InitInput, force = false): void {
     };
 
     addBtn.addEventListener("click", () => {
-      if (getItemInputs().length >= 20) return;
+      if (getItemInputs().length >= MAX_CUSTOM_ARRAY_ITEMS) return;
       listNode.insertAdjacentHTML("beforeend", renderCharacterArrayDefaultRowHtml(id, "", maxLength));
       syncEditorUi();
     });

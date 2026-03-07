@@ -16,6 +16,23 @@ import {
   moodOptions
 } from "./prompts";
 import { normalizeDateTimeWithMode } from "./dateTime";
+import {
+  enabledBuiltInAndTextStats,
+  enabledCustomStats,
+  groupCustomStatsForSequential,
+} from "./extractorHelpers";
+import {
+  buildProgressApply,
+  buildProgressApplyingDefaults,
+  buildProgressNoExtractionNeeded,
+  buildProgressParse,
+  buildProgressRequest,
+  buildProgressSeedingDefaults,
+  buildProgressUnifiedBatch,
+  formatBuiltInProgressLabel,
+  formatCustomGroupProgressLabel,
+  formatCustomProgressLabel,
+} from "./extractorProgress";
 import type {
   BetterSimTrackerSettings,
   CustomNonNumericValue,
@@ -28,49 +45,6 @@ import type {
   Statistics,
   TrackerData
 } from "./types";
-
-function enabledBuiltInAndTextStats(settings: BetterSimTrackerSettings): StatKey[] {
-  const selected: StatKey[] = [];
-  if (settings.trackAffection) selected.push("affection");
-  if (settings.trackTrust) selected.push("trust");
-  if (settings.trackDesire) selected.push("desire");
-  if (settings.trackConnection) selected.push("connection");
-  if (settings.trackMood) selected.push("mood");
-  if (settings.trackLastThought) selected.push("lastThought");
-  return selected;
-}
-
-function enabledCustomStats(settings: BetterSimTrackerSettings): CustomStatDefinition[] {
-  if (!Array.isArray(settings.customStats)) return [];
-  return settings.customStats.filter(def => Boolean(def.track));
-}
-
-function normalizeSequentialGroupId(value: unknown): string {
-  const raw = String(value ?? "").trim().toLowerCase();
-  if (!raw) return "";
-  return raw.replace(/[^a-z0-9_\-]/g, "_").replace(/_+/g, "_").slice(0, 32);
-}
-
-function groupCustomStatsForSequential(
-  stats: CustomStatDefinition[],
-  enabled: boolean,
-): CustomStatDefinition[][] {
-  if (!stats.length) return [];
-  if (!enabled) return stats.map(stat => [stat]);
-  const groupsById = new Map<string, CustomStatDefinition[]>();
-  const solo: CustomStatDefinition[][] = [];
-  for (const stat of stats) {
-    const key = normalizeSequentialGroupId((stat as { sequentialGroup?: string }).sequentialGroup);
-    if (!key) {
-      solo.push([stat]);
-      continue;
-    }
-    const bucket = groupsById.get(key) ?? [];
-    bucket.push(stat);
-    groupsById.set(key, bucket);
-  }
-  return [...groupsById.values(), ...solo];
-}
 
 function emptyStatistics(): Statistics {
   return {
@@ -234,6 +208,25 @@ function normalizeTextForComparison(value: unknown): string {
     .replace(/\s+/g, " ");
 }
 
+function normalizeDebugText(value: string): string {
+  return String(value ?? "")
+    .replace(/\u2011/g, "-")
+    .replace(/\u2012/g, "-")
+    .replace(/\u2013/g, "-")
+    .replace(/\u2014/g, "-")
+    .replace(/\u2018/g, "'")
+    .replace(/\u2019/g, "'")
+    .replace(/\u201C/g, "\"")
+    .replace(/\u201D/g, "\"")
+    .replace(/â€“/g, "-")
+    .replace(/â€”/g, "-")
+    .replace(/â€‘/g, "-")
+    .replace(/â€™/g, "'")
+    .replace(/â€œ/g, "\"")
+    .replace(/â€/g, "\"")
+    .replace(/Â/g, "");
+}
+
 function resolveScopedStatOwnerKey(statDef: CustomStatDefinition, ownerName: string): string {
   return statDef.globalScope ? GLOBAL_TRACKER_KEY : ownerName;
 }
@@ -275,6 +268,7 @@ export async function extractStatisticsParallel(input: {
   history: TrackerData[];
   isCancelled?: () => boolean;
   onProgress?: (done: number, total: number, label?: string) => void;
+  isOwnerStatEnabled?: (ownerName: string, statId: string) => boolean;
 }): Promise<{
   statistics: Statistics;
   customStatistics: CustomStatistics;
@@ -294,9 +288,14 @@ export async function extractStatisticsParallel(input: {
     hasPriorTrackerData,
     history,
     onProgress,
+    isOwnerStatEnabled,
   } = input;
-  const builtInAndTextStats = enabledBuiltInAndTextStats(settings);
-  const customStats = enabledCustomStats(settings);
+  const builtInAndTextStats = enabledBuiltInAndTextStats(settings).filter(stat =>
+    activeCharacters.some(name => isOwnerStatEnabled?.(name, stat) !== false),
+  );
+  const customStats = enabledCustomStats(settings).filter(stat =>
+    activeCharacters.some(name => isOwnerStatEnabled?.(name, stat.id) !== false),
+  );
   const builtInPrivateStats = builtInAndTextStats.filter(stat => stat === "lastThought" && settings.lastThoughtPrivate);
   const builtInPublicStats = builtInAndTextStats.filter(stat => !builtInPrivateStats.includes(stat));
   const customPrivateStats = customStats.filter(stat => Boolean(stat.privateToOwner));
@@ -438,6 +437,7 @@ export async function extractStatisticsParallel(input: {
         parsed.confidence[name] = value;
       }
       for (const name of activeCharacters) {
+        if (isOwnerStatEnabled?.(name, stat) === false) continue;
         const confidence = parsedOne.confidence[name] ?? 0.8;
         if (stat === "affection" && parsedOne.deltas.affection[name] !== undefined) {
           parsed.deltas.affection[name] = parsedOne.deltas.affection[name];
@@ -483,6 +483,7 @@ export async function extractStatisticsParallel(input: {
       }
       if (stat === "mood") {
         for (const name of activeCharacters) {
+          if (isOwnerStatEnabled?.(name, stat) === false) continue;
           if (output.mood[name] !== undefined) continue;
           const prevMood = String(previousStatistics?.mood?.[name] ?? settings.defaultMood);
           output.mood[name] = prevMood;
@@ -524,6 +525,7 @@ export async function extractStatisticsParallel(input: {
         return;
       }
       for (const name of requestCharacters) {
+        if (isOwnerStatEnabled?.(name, statId) === false) continue;
         const delta = parsedOne.delta[name];
         if (delta === undefined) continue;
         parsed.deltas.custom[statId][name] = delta;
@@ -559,6 +561,7 @@ export async function extractStatisticsParallel(input: {
         return;
       }
       for (const name of requestCharacters) {
+        if (isOwnerStatEnabled?.(name, statId) === false) continue;
         const value = parsedOne.value[name];
         if (value === undefined) continue;
         parsed.deltas.customNonNumeric[statId][name] = value;
@@ -589,6 +592,7 @@ export async function extractStatisticsParallel(input: {
         return;
       }
       for (const name of names) {
+        if (isOwnerStatEnabled?.(name, statId) === false) continue;
         const seedValue = clamp(Number(previousCustomStatistics?.[statId]?.[name] ?? statDef.defaultValue));
         outputCustom[statId][name] = seedValue;
         applied.customStatistics[statId][name] = seedValue;
@@ -649,6 +653,7 @@ export async function extractStatisticsParallel(input: {
         return;
       }
       for (const name of names) {
+        if (isOwnerStatEnabled?.(name, statId) === false) continue;
         let seedValue: CustomNonNumericValue;
         const previous = previousCustomNonNumericStatistics?.[statId]?.[name];
         if (previous !== undefined) {
@@ -781,15 +786,6 @@ export async function extractStatisticsParallel(input: {
       progressDone = Math.min(progressTotal, progressDone + 1);
       onProgress?.(progressDone, progressTotal, label);
     };
-    const formatBuiltInProgressLabel = (statList: StatKey[]): string => {
-      if (statList.length === 1) return `Built-in: ${statList[0]}`;
-      return `Built-ins: ${statList.join(", ")}`;
-    };
-    const formatCustomProgressLabel = (statDef: CustomStatDefinition): string =>
-      `Custom: ${statDef.label || statDef.id}`;
-    const formatCustomGroupProgressLabel = (group: CustomStatDefinition[]): string =>
-      `Custom Group: ${group.map(stat => stat.id).join("+")}`;
-
     const callGenerate = async (
       prompt: string,
       statList: string[],
@@ -800,12 +796,13 @@ export async function extractStatisticsParallel(input: {
       for (let attemptIndex = 0; attemptIndex <= retryDelaysMs.length; attemptIndex += 1) {
         attempts += 1;
         requestSeq += 1;
+        const attemptNo = requestSeq;
         try {
           checkCancelled();
           const response = await generateJson(prompt, settings);
           checkCancelled();
           const type = attemptIndex === 0 ? retryType : `${retryType}_transport_retry_${attemptIndex}`;
-          requestMetas.push({ ...response.meta, statList, attempt: requestSeq, retryType: type });
+          requestMetas.push({ ...response.meta, statList, attempt: attemptNo, retryType: type });
           return response;
         } catch (error) {
           if (isAbortError(error) || input.isCancelled?.()) {
@@ -1017,11 +1014,11 @@ export async function extractStatisticsParallel(input: {
             settings.includeLorebookInExtraction,
           );
       const prompt = applyPromptCharacterAliases(builtPrompt);
-      tickProgress(`Requesting ${progressLabel}`);
+      tickProgress(buildProgressRequest(progressLabel));
       let rawResponse = await callGenerate(prompt, statList, "initial");
       checkCancelled();
       let raw = rawResponse.text;
-      tickProgress(`Parsing ${progressLabel}`);
+      tickProgress(buildProgressParse(progressLabel));
       let parsedOne = parseUnifiedDeltaResponse(raw, requestCharacters, statList, settings.maxDeltaPerTurn, promptCharacterAliases);
       const firstHasValues = hasParsedValues(parsedOne);
       firstParseHadValues = firstParseHadValues && firstHasValues;
@@ -1090,7 +1087,7 @@ export async function extractStatisticsParallel(input: {
           break;
         }
       }
-      tickProgress(`Applying ${progressLabel}`);
+      tickProgress(buildProgressApply(progressLabel));
       return { prompt, raw, parsedOne };
     };
 
@@ -1174,11 +1171,11 @@ export async function extractStatisticsParallel(input: {
           },
         });
       const prompt = applyPromptCharacterAliases(builtPrompt);
-      tickProgress(`Requesting ${progressLabel}`);
+      tickProgress(buildProgressRequest(progressLabel));
       let rawResponse = await callGenerate(prompt, [statId], "initial");
       checkCancelled();
       let raw = rawResponse.text;
-      tickProgress(`Parsing ${progressLabel}`);
+      tickProgress(buildProgressParse(progressLabel));
       let parsedNumeric = kind === "numeric"
         ? parseCustomDeltaResponse(
           raw,
@@ -1240,7 +1237,7 @@ export async function extractStatisticsParallel(input: {
           }
         }
       }
-      tickProgress(`Applying ${progressLabel}`);
+      tickProgress(buildProgressApply(progressLabel));
       return { prompt, raw, parsedNumeric, parsedNonNumeric };
     };
 
@@ -1341,9 +1338,9 @@ export async function extractStatisticsParallel(input: {
 
         const shouldRequestUnifiedAll = batchBuiltInStats.length > 0 || customPlans.some(plan => plan.existing.length > 0);
         if (!shouldRequestUnifiedAll) {
-          tickProgress(`Seeding defaults (${batchLabel})`);
-          tickProgress(`No extraction needed (${batchLabel})`);
-          tickProgress(`Applying defaults (${batchLabel})`);
+          tickProgress(buildProgressSeedingDefaults(batchLabel));
+          tickProgress(buildProgressNoExtractionNeeded(batchLabel));
+          tickProgress(buildProgressApplyingDefaults(batchLabel));
           return;
         }
 
@@ -1375,11 +1372,11 @@ export async function extractStatisticsParallel(input: {
           },
         });
         const prompt = applyPromptCharacterAliases(builtPrompt);
-        tickProgress(`Requesting Unified Batch (${batchLabel})`);
+        tickProgress(buildProgressRequest(buildProgressUnifiedBatch(batchLabel)));
         const response = await callGenerate(prompt, allRequestedStats, "initial");
         checkCancelled();
         let raw = response.text;
-        tickProgress(`Parsing Unified Batch (${batchLabel})`);
+        tickProgress(buildProgressParse(buildProgressUnifiedBatch(batchLabel)));
         let parsedAll = parseUnifiedAllFromRaw(raw);
         const hasAnyCustomValues = Object.values(parsedAll.customNumeric).some(item => hasAnyValues(item.delta))
           || Object.values(parsedAll.customNonNumeric).some(item => hasAnyValues(item.value));
@@ -1398,7 +1395,7 @@ export async function extractStatisticsParallel(input: {
             break;
           }
         }
-        tickProgress(`Applying Unified Batch (${batchLabel})`);
+        tickProgress(buildProgressApply(buildProgressUnifiedBatch(batchLabel)));
         rawBlocks.push({ label: batchLabel, raw });
         promptBlocks.push({ label: batchLabel, prompt });
         for (const stat of batchBuiltInStats) {
@@ -1479,9 +1476,9 @@ export async function extractStatisticsParallel(input: {
           }
           if (!split.existing.length) {
             const label = statDef.label || statDef.id;
-            tickProgress(`Seeding Custom: ${label}`);
-            tickProgress(`No extraction needed (Custom: ${label})`);
-            tickProgress(`Applying Custom: ${label}`);
+            tickProgress(`Seeding ${formatCustomProgressLabel(statDef)}`);
+            tickProgress(buildProgressNoExtractionNeeded(formatCustomProgressLabel(statDef)));
+            tickProgress(buildProgressApply(formatCustomProgressLabel(statDef)));
             return;
           }
           const one = await runOneCustomRequest(statDef, split.existing);
@@ -1511,9 +1508,9 @@ export async function extractStatisticsParallel(input: {
         }
         if (!hasAnyExisting) {
           const label = group.map(stat => stat.label || stat.id).join(", ");
-          tickProgress(`Seeding Custom Group: ${label}`);
-          tickProgress(`No extraction needed (Custom Group: ${label})`);
-          tickProgress(`Applying Custom Group: ${label}`);
+          tickProgress(`Seeding ${formatCustomGroupProgressLabel(group)}`);
+          tickProgress(buildProgressNoExtractionNeeded(formatCustomGroupProgressLabel(group)));
+          tickProgress(buildProgressApply(formatCustomGroupProgressLabel(group)));
           return;
         }
 
@@ -1545,11 +1542,11 @@ export async function extractStatisticsParallel(input: {
         const prompt = applyPromptCharacterAliases(builtPrompt);
         const groupLabel = group.map(stat => stat.id).join("+");
         const groupProgressLabel = formatCustomGroupProgressLabel(group);
-        tickProgress(`Requesting ${groupProgressLabel}`);
+        tickProgress(buildProgressRequest(groupProgressLabel));
         let response = await callGenerate(prompt, statsForRequest, "initial");
         checkCancelled();
         let raw = response.text;
-        tickProgress(`Parsing ${groupProgressLabel}`);
+        tickProgress(buildProgressParse(groupProgressLabel));
         const parseGroup = (rawText: string): {
           numeric: Record<string, ReturnType<typeof parseCustomDeltaResponse>>;
           nonNumeric: Record<string, ReturnType<typeof parseCustomValueResponse>>;
@@ -1612,7 +1609,7 @@ export async function extractStatisticsParallel(input: {
             break;
           }
         }
-        tickProgress(`Applying ${groupProgressLabel}`);
+        tickProgress(buildProgressApply(groupProgressLabel));
         rawBlocks.push({ label: `${labelPrefix}:${groupLabel}`, raw });
         promptBlocks.push({ label: `${labelPrefix}:${groupLabel}`, prompt });
         for (const statDef of group) {
@@ -1661,8 +1658,8 @@ export async function extractStatisticsParallel(input: {
       }
     }
 
-    const rawOutputAggregate = rawBlocks.map(item => `--- ${item.label} ---\n${item.raw}`).join("\n\n");
-    const promptAggregate = promptBlocks.map(item => `--- ${item.label} ---\n${item.prompt}`).join("\n\n");
+    const rawOutputAggregate = rawBlocks.map(item => `--- ${item.label} ---\n${normalizeDebugText(item.raw)}`).join("\n\n");
+    const promptAggregate = promptBlocks.map(item => `--- ${item.label} ---\n${normalizeDebugText(item.prompt)}`).join("\n\n");
 
     debugRecord = {
       rawModelOutput: rawOutputAggregate,

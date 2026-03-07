@@ -6,20 +6,29 @@ import {
   updateCharacterDefaultsEntry,
 } from "./characterDefaults";
 import { fetchExpressionSpritePaths } from "./stExpressionSprites";
+import {
+  closeStExpressionFrameEditor,
+  formatStExpressionFrameSummary,
+  openStExpressionFrameEditor,
+  sanitizeStExpressionFrame,
+} from "./stExpressionFrameEditor";
 import type {
   BetterSimTrackerSettings,
   CustomStatDefinition,
   MoodLabel,
   MoodSource,
+  StExpressionImageOptions,
   STContext,
 } from "./types";
 import { normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
 import {
+  MAX_CUSTOM_ARRAY_ITEMS,
   normalizeCustomEnumOptions,
   normalizeCustomStatKind,
   normalizeCustomTextMaxLength,
   normalizeNonNumericArrayItems,
 } from "./customStatRuntime";
+import { isCustomStatTrackableForOwnerToggle } from "./ownerStatToggles";
 
 const PANEL_ID = "bst-persona-panel";
 const DRAWER_SELECTOR = "#persona-management-button";
@@ -101,6 +110,21 @@ function normalizeMoodLabel(raw: string): MoodLabel | null {
 function normalizeMoodSource(raw: string): MoodSource | null {
   if (raw === "bst_images" || raw === "st_expressions") return raw;
   return null;
+}
+
+function sanitizeStExpressionImageOptions(raw: unknown, fallback: StExpressionImageOptions): StExpressionImageOptions | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Partial<StExpressionImageOptions>;
+  const parsed = sanitizeStExpressionFrame({
+    zoom: Number(obj.zoom),
+    positionX: Number(obj.positionX),
+    positionY: Number(obj.positionY),
+  }, fallback);
+  const sameAsFallback =
+    Math.abs(parsed.zoom - fallback.zoom) < 1e-6 &&
+    Math.abs(parsed.positionX - fallback.positionX) < 1e-6 &&
+    Math.abs(parsed.positionY - fallback.positionY) < 1e-6;
+  return sameAsFallback ? null : parsed;
 }
 
 function slugify(value: string): string {
@@ -435,10 +459,23 @@ function renderPanel(input: InitInput, force = false): void {
   const moodCount = countMoodImages(moodImages);
   const moodSourceOverride = normalizeMoodSource(String(defaults.moodSource ?? ""));
   const effectiveMoodSource = resolveEffectiveMoodSource(settings, defaults);
+  const showStExpressionControls = effectiveMoodSource === "st_expressions";
   const showBstMoodImageControls = effectiveMoodSource === "bst_images";
+  const globalStImageDefaults: StExpressionImageOptions = {
+    zoom: settings.stExpressionImageZoom,
+    positionX: settings.stExpressionImagePositionX,
+    positionY: settings.stExpressionImagePositionY,
+  };
+  const stExpressionImageOptionsOverride = sanitizeStExpressionImageOptions(defaults.stExpressionImageOptions, globalStImageDefaults);
+  const hasStExpressionImageOverride = Boolean(stExpressionImageOptionsOverride);
+  const stExpressionImageOptions = stExpressionImageOptionsOverride ?? globalStImageDefaults;
   const customStatDefinitions = Array.isArray(settings.customStats)
     ? settings.customStats as CustomStatDefinition[]
     : [];
+  const statEnabledRaw = defaults.statEnabled && typeof defaults.statEnabled === "object"
+    ? defaults.statEnabled as Record<string, unknown>
+    : {};
+  const isStatEnabled = (id: string): boolean => statEnabledRaw[String(id ?? "").trim().toLowerCase()] !== false;
   const customNumericDefaultsRaw = defaults.customStatDefaults && typeof defaults.customStatDefaults === "object"
     ? defaults.customStatDefaults as Record<string, unknown>
     : {};
@@ -446,10 +483,11 @@ function renderPanel(input: InitInput, force = false): void {
     ? defaults.customNonNumericStatDefaults as Record<string, unknown>
     : {};
   const userCustomDefaultFieldsHtml = customStatDefinitions.map(definition => {
-    if (definition.track === false || definition.trackUser === false) return "";
+    if (!isCustomStatTrackableForOwnerToggle(definition, "user")) return "";
     const id = String(definition.id ?? "").trim().toLowerCase();
     const label = String(definition.label ?? "").trim();
     if (!id || !label) return "";
+    const disabledAttr = isStatEnabled(id) ? "" : "disabled";
     const kind = normalizeCustomStatKind(definition.kind);
     if (kind === "numeric") {
       const rawValue = customNumericDefaultsRaw[id];
@@ -458,7 +496,7 @@ function renderPanel(input: InitInput, force = false): void {
         : "";
       return `
         <label>${escapeHtml(label)} Default
-          <input type="number" min="0" max="100" step="1" data-bst-persona-custom-default-num="${escapeHtml(id)}" value="${escapeHtml(value)}" placeholder="Use stat default">
+          <input type="number" min="0" max="100" step="1" data-bst-persona-custom-default-num="${escapeHtml(id)}" value="${escapeHtml(value)}" placeholder="Use stat default" ${disabledAttr}>
         </label>
       `;
     }
@@ -468,7 +506,7 @@ function renderPanel(input: InitInput, force = false): void {
       const selected = typeof rawValue === "string" && options.includes(rawValue) ? rawValue : "";
       return `
         <label>${escapeHtml(label)} Default
-          <select data-bst-persona-custom-default-enum="${escapeHtml(id)}">
+          <select data-bst-persona-custom-default-enum="${escapeHtml(id)}" ${disabledAttr}>
             <option value="">Use stat default</option>
             ${options.map(option => `<option value="${escapeHtml(option)}" ${selected === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
           </select>
@@ -482,7 +520,7 @@ function renderPanel(input: InitInput, force = false): void {
       const falseLabel = String(definition.booleanFalseLabel ?? "disabled").trim() || "disabled";
       return `
         <label>${escapeHtml(label)} Default
-          <select data-bst-persona-custom-default-bool="${escapeHtml(id)}">
+          <select data-bst-persona-custom-default-bool="${escapeHtml(id)}" ${disabledAttr}>
             <option value="">Use stat default</option>
             <option value="true" ${selected === "true" ? "selected" : ""}>${escapeHtml(trueLabel)}</option>
             <option value="false" ${selected === "false" ? "selected" : ""}>${escapeHtml(falseLabel)}</option>
@@ -493,7 +531,7 @@ function renderPanel(input: InitInput, force = false): void {
     if (kind === "array") {
       const maxLength = normalizeCustomTextMaxLength(definition.textMaxLength);
       const items = normalizeNonNumericArrayItems(customNonNumericDefaultsRaw[id], maxLength);
-      const rows = (items.length ? items : [""]).slice(0, 20);
+      const rows = (items.length ? items : [""]).slice(0, MAX_CUSTOM_ARRAY_ITEMS);
       return `
         <div class="bst-array-default-editor" data-bst-persona-custom-default-array-editor="${escapeHtml(id)}" data-bst-max-length="${maxLength}">
           <label>${escapeHtml(label)} Default</label>
@@ -501,10 +539,10 @@ function renderPanel(input: InitInput, force = false): void {
             ${rows.map(item => renderPersonaArrayDefaultRowHtml(id, item, maxLength)).join("")}
           </div>
           <div class="bst-array-default-actions">
-            <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="persona-default-array-add" data-bst-persona-custom-default-array-add="${escapeHtml(id)}" aria-label="Add item" title="Add item"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
-            <span class="bst-editor-counter" data-bst-persona-custom-default-array-counter="${escapeHtml(id)}">${items.length}/20 items</span>
+            <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="persona-default-array-add" data-bst-persona-custom-default-array-add="${escapeHtml(id)}" aria-label="Add item" title="Add item" ${disabledAttr}><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+            <span class="bst-editor-counter" data-bst-persona-custom-default-array-counter="${escapeHtml(id)}">${items.length}/${MAX_CUSTOM_ARRAY_ITEMS} items</span>
           </div>
-          <textarea rows="1" style="display:none" data-bst-persona-custom-default-array="${escapeHtml(id)}" data-bst-max-length="${maxLength}" aria-hidden="true">${escapeHtml(items.join("\n"))}</textarea>
+          <textarea rows="1" style="display:none" data-bst-persona-custom-default-array="${escapeHtml(id)}" data-bst-max-length="${maxLength}" aria-hidden="true" ${disabledAttr}>${escapeHtml(items.join("\n"))}</textarea>
         </div>
       `;
     }
@@ -512,7 +550,7 @@ function renderPanel(input: InitInput, force = false): void {
       const value = toDateTimeInputValue(customNonNumericDefaultsRaw[id]);
       return `
         <label>${escapeHtml(label)} Default
-          <input type="datetime-local" data-bst-persona-custom-default-datetime="${escapeHtml(id)}" value="${escapeHtml(value)}" placeholder="Use stat default">
+          <input type="datetime-local" data-bst-persona-custom-default-datetime="${escapeHtml(id)}" value="${escapeHtml(value)}" placeholder="Use stat default" ${disabledAttr}>
         </label>
       `;
     }
@@ -520,10 +558,40 @@ function renderPanel(input: InitInput, force = false): void {
     const rawValue = String(customNonNumericDefaultsRaw[id] ?? "").trim().replace(/\s+/g, " ");
     return `
       <label>${escapeHtml(label)} Default
-        <input type="text" maxlength="${maxLength}" data-bst-persona-custom-default-text="${escapeHtml(id)}" value="${escapeHtml(rawValue)}" placeholder="Use stat default">
+        <input type="text" maxlength="${maxLength}" data-bst-persona-custom-default-text="${escapeHtml(id)}" value="${escapeHtml(rawValue)}" placeholder="Use stat default" ${disabledAttr}>
       </label>
     `;
   }).filter(Boolean).join("");
+  const builtInStatTogglesHtml = [
+    { id: "mood", label: "Mood", available: settings.userTrackMood !== false },
+    { id: "lastThought", label: "Last Thought", available: settings.userTrackLastThought !== false },
+  ]
+    .filter(item => item.available)
+    .map(item => {
+      const enabled = isStatEnabled(item.id);
+      return `
+        <button type="button" class="bst-custom-stat-toggle bst-custom-stat-toggle-compact ${enabled ? "is-on" : "is-off"}" data-bst-persona-stat-toggle="${escapeHtml(item.id)}" aria-pressed="${enabled ? "true" : "false"}">
+          <span class="bst-custom-stat-toggle-pill" aria-hidden="true"></span>
+          <span class="bst-custom-stat-toggle-label">${escapeHtml(item.label)}: ${enabled ? "Enabled" : "Disabled"}</span>
+        </button>
+      `;
+    }).join("");
+  const customStatTogglesHtml = customStatDefinitions
+    .map(definition => {
+      if (!isCustomStatTrackableForOwnerToggle(definition, "user")) return "";
+      const id = String(definition.id ?? "").trim().toLowerCase();
+      const label = String(definition.label ?? "").trim();
+      if (!id || !label) return "";
+      const enabled = isStatEnabled(id);
+      return `
+        <button type="button" class="bst-custom-stat-toggle bst-custom-stat-toggle-compact ${enabled ? "is-on" : "is-off"}" data-bst-persona-stat-toggle="${escapeHtml(id)}" aria-pressed="${enabled ? "true" : "false"}">
+          <span class="bst-custom-stat-toggle-pill" aria-hidden="true"></span>
+          <span class="bst-custom-stat-toggle-label">${escapeHtml(label)}: ${enabled ? "Enabled" : "Disabled"}</span>
+        </button>
+      `;
+    })
+    .filter(Boolean)
+    .join("");
 
   const persistSettings = (next: BetterSimTrackerSettings): void => {
     input.setSettings(next);
@@ -536,6 +604,16 @@ function renderPanel(input: InitInput, force = false): void {
     <div class="bst-character-sub">Per-persona user defaults, mood source override, and BST mood images for the user tracker card.</div>
     <div class="bst-character-help">Active persona: <strong>${escapeHtml(persona.personaName)}</strong></div>
     <div class="bst-character-help">Persona avatar key: <code>${escapeHtml(persona.avatarId || "(missing)")}</code></div>
+    <label class="bst-character-check">
+      <input type="checkbox" data-bst-persona-toggle="trackerEnabled" ${defaults.trackerEnabled !== false ? "checked" : ""}>
+      <span>Enable tracker for this persona</span>
+    </label>
+    <div class="bst-character-divider">Per-Stat Toggles</div>
+    <div class="bst-character-help">Disable specific user-side stats for this persona only.</div>
+    <div class="bst-character-grid bst-character-grid-single">
+      <div class="bst-character-toggle-group">${builtInStatTogglesHtml || `<div class="bst-character-help">No built-in user stats available.</div>`}</div>
+      <div class="bst-character-toggle-group">${customStatTogglesHtml || `<div class="bst-character-help">No user-trackable custom stats.</div>`}</div>
+    </div>
     <div class="bst-character-divider">Mood Source Override</div>
     <div class="bst-character-grid">
       <label class="bst-character-wide">Mood Source
@@ -549,13 +627,34 @@ function renderPanel(input: InitInput, force = false): void {
     <div class="bst-character-help">
       Effective mood source right now: <strong>${effectiveMoodSource === "st_expressions" ? "ST expressions" : "BST mood images"}</strong>.
     </div>
+    <div style="display:${showStExpressionControls ? "grid" : "none"}; gap:8px;">
+      <div class="bst-character-divider">ST Expression Image Options</div>
+      <div class="bst-character-help">
+        Optional per-persona override for ST expression image framing on user cards.
+      </div>
+      <label class="bst-character-check">
+        <input type="checkbox" data-bst-persona-st-image-override ${hasStExpressionImageOverride ? "checked" : ""}>
+        <span>Advanced image options (override global)</span>
+      </label>
+      <div class="bst-character-grid" data-bst-persona-st-image-options style="display:${hasStExpressionImageOverride ? "grid" : "none"};">
+        <div class="bst-character-wide bst-character-st-tools">
+          <button type="button" class="bst-btn bst-btn-soft" data-action="open-persona-st-image-editor">Adjust ST Expression Framing</button>
+          <div class="bst-character-help bst-character-help-compact" data-bst-persona-st-image-summary>
+            Current override: ${formatStExpressionFrameSummary(stExpressionImageOptions)}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="bst-character-help" style="display:${showStExpressionControls ? "none" : "block"};">
+      Switch effective mood source to ST expressions to edit persona ST expression framing.
+    </div>
     <div class="bst-character-divider">Persona Defaults</div>
     <div class="bst-character-help">
       These defaults apply to the user tracker when this persona is active.
     </div>
     <div class="bst-character-grid">
       <label class="bst-character-wide">Mood Default
-        <select data-bst-persona-default="mood" ${settings.userTrackMood ? "" : "disabled"}>
+        <select data-bst-persona-default="mood" ${(settings.userTrackMood && isStatEnabled("mood")) ? "" : "disabled"}>
           <option value="">Use stat default</option>
           ${moodLabels.map(label => {
             const selected = normalizeMoodLabel(String(defaults.mood ?? "")) === label ? "selected" : "";
@@ -564,7 +663,7 @@ function renderPanel(input: InitInput, force = false): void {
         </select>
       </label>
       <label class="bst-character-wide">Last Thought Default
-        <textarea rows="3" maxlength="${LAST_THOUGHT_DEFAULT_MAX_CHARS}" data-bst-persona-default="lastThought" placeholder="Use stat default" ${settings.userTrackLastThought ? "" : "disabled"}>${escapeHtml(String(defaults.lastThought ?? ""))}</textarea>
+        <textarea rows="3" maxlength="${LAST_THOUGHT_DEFAULT_MAX_CHARS}" data-bst-persona-default="lastThought" placeholder="Use stat default" ${(settings.userTrackLastThought && isStatEnabled("lastThought")) ? "" : "disabled"}>${escapeHtml(String(defaults.lastThought ?? ""))}</textarea>
       </label>
     </div>
     ${settings.userTrackMood ? "" : `<div class="bst-character-help">Mood default is unavailable because User Mood tracking is disabled.</div>`}
@@ -662,6 +761,89 @@ function renderPanel(input: InitInput, force = false): void {
     renderPanel(input, true);
   });
 
+  const stImageOverrideToggle = panel.querySelector<HTMLInputElement>("[data-bst-persona-st-image-override]");
+  const stImageOptionsBlock = panel.querySelector<HTMLElement>("[data-bst-persona-st-image-options]");
+  const stImageSummaryNode = panel.querySelector<HTMLElement>("[data-bst-persona-st-image-summary]");
+  const setStImageSummary = (value: StExpressionImageOptions): void => {
+    if (!stImageSummaryNode) return;
+    stImageSummaryNode.textContent = `Current override: ${formatStExpressionFrameSummary(value)}`;
+  };
+  if (hasStExpressionImageOverride) {
+    setStImageSummary(stExpressionImageOptions);
+  }
+  stImageOverrideToggle?.addEventListener("change", () => {
+    const enabled = stImageOverrideToggle.checked;
+    if (stImageOptionsBlock) {
+      stImageOptionsBlock.style.display = enabled ? "grid" : "none";
+    }
+    if (!enabled) {
+      closeStExpressionFrameEditor();
+    }
+    const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+      const copy = { ...current };
+      if (!enabled) {
+        delete copy.stExpressionImageOptions;
+      } else {
+        copy.stExpressionImageOptions = {
+          zoom: globalStImageDefaults.zoom,
+          positionX: globalStImageDefaults.positionX,
+          positionY: globalStImageDefaults.positionY,
+        };
+      }
+      return copy;
+    });
+    persistSettings(next);
+  });
+
+  panel.querySelector('[data-action="open-persona-st-image-editor"]')?.addEventListener("click", async event => {
+    if (!stImageOverrideToggle?.checked) return;
+    const button = event.currentTarget as HTMLButtonElement | null;
+    const originalLabel = button?.textContent ?? "Adjust ST Expression Framing";
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Loading preview...";
+    }
+    const liveSettings = input.getSettings() ?? settings;
+    const liveDefaults = getDefaults(liveSettings, identity);
+    const liveOverride = sanitizeStExpressionImageOptions(liveDefaults.stExpressionImageOptions, globalStImageDefaults);
+    const initialFrame = liveOverride ?? globalStImageDefaults;
+    let previewSpriteUrl: string | null = null;
+    try {
+      const sprites = await fetchExpressionSpritePaths(persona.personaName);
+      previewSpriteUrl = sprites.find(path => typeof path === "string" && path.trim()) ?? null;
+    } catch {
+      previewSpriteUrl = null;
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
+    openStExpressionFrameEditor({
+      title: `${persona.personaName}: ST Expression Framing`,
+      description: previewSpriteUrl
+        ? "Per-persona framing override with this persona's ST expression preview."
+        : "Per-persona framing override used when user card resolves to ST expressions.",
+      initial: initialFrame,
+      fallback: globalStImageDefaults,
+      previewChoices: previewSpriteUrl ? [{ name: persona.personaName, imageUrl: previewSpriteUrl }] : [],
+      selectedPreviewName: persona.personaName,
+      emptyPreviewText: "No ST expressions found for this persona. Add at least one expression sprite and try again.",
+      onChange: nextFrame => {
+        if (!stImageOverrideToggle?.checked) return;
+        const sanitized = sanitizeStExpressionFrame(nextFrame, globalStImageDefaults);
+        setStImageSummary(sanitized);
+        const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+          const copy = { ...current };
+          copy.stExpressionImageOptions = sanitized;
+          return copy;
+        });
+        persistSettings(next);
+      },
+    });
+  });
+
   panel.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-bst-persona-default]").forEach(node => {
     node.addEventListener("change", () => {
       const key = String(node.dataset.bstPersonaDefault ?? "").trim();
@@ -692,6 +874,49 @@ function renderPanel(input: InitInput, force = false): void {
         return copy;
       });
       persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLInputElement>('[data-bst-persona-toggle="trackerEnabled"]').forEach(node => {
+    node.addEventListener("change", () => {
+      const enabled = node.checked;
+      const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+        const copy = { ...current };
+        if (enabled) {
+          delete copy.trackerEnabled;
+        } else {
+          copy.trackerEnabled = false;
+        }
+        return copy;
+      });
+      persistSettings(next);
+    });
+  });
+
+  panel.querySelectorAll<HTMLButtonElement>("[data-bst-persona-stat-toggle]").forEach(node => {
+    node.addEventListener("click", () => {
+      const statId = String(node.dataset.bstPersonaStatToggle ?? "").trim().toLowerCase();
+      if (!statId) return;
+      const enabled = node.classList.contains("is-off");
+      const next = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+        const copy = { ...current };
+        const existing = copy.statEnabled && typeof copy.statEnabled === "object"
+          ? { ...(copy.statEnabled as Record<string, unknown>) }
+          : {};
+        if (enabled) {
+          delete existing[statId];
+        } else {
+          existing[statId] = false;
+        }
+        if (Object.keys(existing).length === 0) {
+          delete copy.statEnabled;
+        } else {
+          copy.statEnabled = existing as Record<string, boolean>;
+        }
+        return copy;
+      });
+      persistSettings(next);
+      renderPanel(input, true);
     });
   });
 
@@ -847,9 +1072,10 @@ function renderPanel(input: InitInput, force = false): void {
       const values = getItemInputs().map(inputNode => inputNode.value);
       const normalized = normalizeNonNumericArrayItems(values, maxLength);
       hiddenNode.value = normalized.join("\n");
-      counterNode.textContent = `${normalized.length}/20 items`;
-      counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");
-      addBtn.disabled = getItemInputs().length >= 20;
+      counterNode.textContent = `${normalized.length}/${MAX_CUSTOM_ARRAY_ITEMS} items`;
+      const warnThreshold = Math.max(1, Math.floor(MAX_CUSTOM_ARRAY_ITEMS * 0.8));
+      counterNode.setAttribute("data-state", normalized.length >= MAX_CUSTOM_ARRAY_ITEMS ? "limit" : normalized.length >= warnThreshold ? "warn" : "ok");
+      addBtn.disabled = getItemInputs().length >= MAX_CUSTOM_ARRAY_ITEMS;
       return normalized;
     };
 
@@ -859,7 +1085,7 @@ function renderPanel(input: InitInput, force = false): void {
     };
 
     addBtn.addEventListener("click", () => {
-      if (getItemInputs().length >= 20) return;
+      if (getItemInputs().length >= MAX_CUSTOM_ARRAY_ITEMS) return;
       listNode.insertAdjacentHTML("beforeend", renderPersonaArrayDefaultRowHtml(id, "", maxLength));
       syncEditorUi();
     });

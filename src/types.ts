@@ -123,6 +123,7 @@ export interface BetterSimTrackerSettings {
   strictJsonRepair: boolean;
   maxRetriesPerStat: number;
   showLastThought: boolean;
+  collapseCardsByDefault: boolean;
   showInactive: boolean;
   inactiveLabel: string;
   sceneCardEnabled: boolean;
@@ -216,6 +217,8 @@ export interface StExpressionImageOptions {
 }
 
 export interface CharacterDefaults {
+  trackerEnabled?: boolean;
+  statEnabled?: Record<string, boolean>;
   affection?: number;
   trust?: number;
   desire?: number;

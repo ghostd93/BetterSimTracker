@@ -4,8 +4,8 @@ import type { CustomNonNumericValue, CustomStatKind, DateTimeMode } from "./type
 export const DEFAULT_CUSTOM_TEXT_MAX_LENGTH = 120;
 export const MIN_CUSTOM_TEXT_MAX_LENGTH = 20;
 export const MAX_CUSTOM_TEXT_MAX_LENGTH = 200;
-export const MAX_CUSTOM_ENUM_OPTIONS = 12;
-export const MAX_CUSTOM_ARRAY_ITEMS = 20;
+export const MAX_CUSTOM_ENUM_OPTIONS = 30;
+export const MAX_CUSTOM_ARRAY_ITEMS = 30;
 
 export function normalizeCustomStatKind(value: unknown): CustomStatKind {
   if (value === "enum_single" || value === "boolean" || value === "text_short" || value === "array" || value === "date_time") {

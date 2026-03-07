@@ -3,7 +3,7 @@ import type { Statistics } from "./types";
 import type { TrackerData } from "./types";
 import { GLOBAL_TRACKER_KEY } from "./constants";
 import { normalizeDateTimeValue } from "./dateTime";
-import { normalizeNonNumericArrayItems } from "./customStatRuntime";
+import { MAX_CUSTOM_ARRAY_ITEMS, MAX_CUSTOM_ENUM_OPTIONS, normalizeNonNumericArrayItems } from "./customStatRuntime";
 
 export const moodOptions = [
   "Happy",
@@ -685,7 +685,7 @@ export function buildUnifiedAllStatsPrompt(input: {
     }
     if (kind === "array") {
       const textMaxLen = Math.max(20, Math.min(200, Math.round(Number(stat.textMaxLength) || 120)));
-      return `- ${stat.id} (array): JSON array of 0..20 short strings; each item max ${textMaxLen} chars; prefer item-level add/remove/edit over full-list rewrites.`;
+      return `- ${stat.id} (array): JSON array of 0..${MAX_CUSTOM_ARRAY_ITEMS} short strings; each item max ${textMaxLen} chars; prefer item-level add/remove/edit over full-list rewrites.`;
     }
     if (kind === "date_time") {
       const mode = stat.dateTimeMode === "structured" ? "structured" : "timestamp";
@@ -1139,7 +1139,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   const statDescription = String(input.statDescription ?? "").trim();
   const statKind = input.statKind;
   const enumOptions = Array.isArray(input.enumOptions)
-    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, 12)
+    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, MAX_CUSTOM_ENUM_OPTIONS)
     : [];
   const textMaxLen = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
   const dateTimeMode = input.dateTimeMode === "structured" ? "structured" : "timestamp";
@@ -1161,7 +1161,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     : statKind === "boolean"
       ? "boolean"
       : statKind === "array"
-        ? `array<=20(item<=${textMaxLen})`
+        ? `array<=${MAX_CUSTOM_ARRAY_ITEMS}(item<=${textMaxLen})`
         : statKind === "date_time"
           ? (dateTimeMode === "structured" ? "datetime-structured=>YYYY-MM-DD HH:mm" : "datetime(YYYY-MM-DD HH:mm)")
           : `text<=${textMaxLen}`;
@@ -1226,7 +1226,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     statKind,
     allowedValues: allowedValuesLiteral,
     textMaxLen: String(textMaxLen),
-    arrayMaxItems: "20",
+    arrayMaxItems: String(MAX_CUSTOM_ARRAY_ITEMS),
     booleanTrueLabel: trueLabel,
     booleanFalseLabel: falseLabel,
     valueSchema,
@@ -1256,7 +1256,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
       statId,
       allowedValues: enumOptions,
       textMaxLen,
-      arrayMaxItems: 20,
+      arrayMaxItems: MAX_CUSTOM_ARRAY_ITEMS,
       dateTimeMode,
       trueLabel,
       falseLabel,
@@ -1292,7 +1292,7 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
   const statDescription = input.statDescription.trim();
   const statKind = input.statKind ?? "numeric";
   const enumOptions = Array.isArray(input.enumOptions)
-    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, 12)
+    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, MAX_CUSTOM_ENUM_OPTIONS)
     : [];
   const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
   const dateTimeMode = input.dateTimeMode === "structured" ? "structured" : "timestamp";
@@ -1330,7 +1330,7 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
     if (statKind === "array") {
       return [
         `- Explicitly say to update only ${statId} value and ignore other stats.`,
-        "- Require JSON array output of short strings (maximum 20 items total).",
+        `- Require JSON array output of short strings (maximum ${MAX_CUSTOM_ARRAY_ITEMS} items total).`,
         `- Require item-level maintenance: add/remove/edit specific ${statId} items based on evidence.`,
         "- Avoid full-list rewrites unless recent context clearly replaces the whole list.",
       ];
@@ -1370,7 +1370,7 @@ export function buildSequentialCustomOverrideGenerationPrompt(input: {
     ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
     ...(statKind === "date_time" ? [`- Date/time mode: ${dateTimeMode}`] : []),
     ...(statKind === "date_time" ? ["- Date/time canonical storage: YYYY-MM-DD HH:mm (24h)"] : []),
-    ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, "- Max items: 20"] : []),
+    ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, `- Max items: ${MAX_CUSTOM_ARRAY_ITEMS}`] : []),
     ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     "",
     "Task:",
@@ -1408,7 +1408,7 @@ export function buildCustomStatDescriptionGenerationPrompt(input: {
   const statKind = input.statKind ?? "numeric";
   const dateTimeMode = input.dateTimeMode === "structured" ? "structured" : "timestamp";
   const enumOptions = Array.isArray(input.enumOptions)
-    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, 12)
+    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, MAX_CUSTOM_ENUM_OPTIONS)
     : [];
   const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
   const trueLabel = String(input.booleanTrueLabel ?? "enabled").trim() || "enabled";
@@ -1431,7 +1431,7 @@ export function buildCustomStatDescriptionGenerationPrompt(input: {
     ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
     ...(statKind === "date_time" ? [`- Date/time mode: ${dateTimeMode}`] : []),
     ...(statKind === "date_time" ? ["- Canonical storage format: YYYY-MM-DD HH:mm (24h)"] : []),
-    ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, "- Max items: 20"] : []),
+    ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, `- Max items: ${MAX_CUSTOM_ARRAY_ITEMS}`] : []),
     ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     "",
     "Task:",
@@ -1539,7 +1539,7 @@ export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
   const statKind = input.statKind ?? "numeric";
   const dateTimeMode = input.dateTimeMode === "structured" ? "structured" : "timestamp";
   const enumOptions = Array.isArray(input.enumOptions)
-    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, 12)
+    ? input.enumOptions.map(item => String(item ?? "").trim()).filter(Boolean).slice(0, MAX_CUSTOM_ENUM_OPTIONS)
     : [];
   const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(input.textMaxLength) || 120)));
   const trueLabel = String(input.booleanTrueLabel ?? "enabled").trim() || "enabled";
@@ -1639,7 +1639,7 @@ export function buildCustomStatBehaviorGuidanceGenerationPrompt(input: {
     ...(statKind === "text_short" ? [`- Text max length: ${textMaxLength}`] : []),
     ...(statKind === "date_time" ? [`- Date/time mode: ${dateTimeMode}`] : []),
     ...(statKind === "date_time" ? ["- Date/time canonical storage: YYYY-MM-DD HH:mm (24h)"] : []),
-    ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, "- Max items: 20"] : []),
+    ...(statKind === "array" ? [`- Item max length: ${textMaxLength}`, `- Max items: ${MAX_CUSTOM_ARRAY_ITEMS}`] : []),
     ...(statKind === "boolean" ? [`- True label: ${trueLabel}`, `- False label: ${falseLabel}`] : []),
     `- Current guidance: ${currentGuidance || "(empty)"}`,
     "",

@@ -32,6 +32,7 @@ import type {
 } from "./types";
 import { normalizeDateTimeValue } from "./dateTime";
 import {
+  MAX_CUSTOM_ARRAY_ITEMS,
   normalizeCustomEnumOptions,
   normalizeCustomNonNumericValue,
   normalizeCustomStatDefaultValue,
@@ -81,6 +82,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   strictJsonRepair: true,
   maxRetriesPerStat: 2,
   showLastThought: true,
+  collapseCardsByDefault: false,
   showInactive: true,
   inactiveLabel: "Off-screen",
   sceneCardEnabled: false,
@@ -209,7 +211,19 @@ export function loadSettings(context: STContext): BetterSimTrackerSettings {
   const bag = (context.extensionSettings ?? {}) as Record<string, unknown>;
   const fromContext = (bag[EXTENSION_KEY] ?? {}) as Partial<BetterSimTrackerSettings>;
   const fromLocal = loadFromLocalStorage();
-  return sanitizeSettings({ ...defaultSettings, ...fromLocal, ...fromContext });
+  const merged = { ...defaultSettings, ...fromLocal, ...fromContext };
+  const contextHasExplicitEnabled = Object.prototype.hasOwnProperty.call(fromContext, "enabled");
+  const localHasExplicitEnabled = Object.prototype.hasOwnProperty.call(fromLocal, "enabled");
+  if (contextHasExplicitEnabled) {
+    merged.enabled = asBool(fromContext.enabled, defaultSettings.enabled);
+  } else if (localHasExplicitEnabled && !Object.keys(fromContext).length) {
+    // Only trust the local fallback for the main toggle when context has no BST settings at all.
+    merged.enabled = asBool(fromLocal.enabled, defaultSettings.enabled);
+  } else {
+    // Avoid stale local fallback silently disabling BST during partial/early context hydration.
+    merged.enabled = defaultSettings.enabled;
+  }
+  return sanitizeSettings(merged);
 }
 
 export function getSettingsProvenance(context: STContext): Record<string, "context" | "local" | "default"> {
@@ -556,7 +570,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     includeLorebookInExtraction,
     lorebookExtractionMaxChars,
     injectPromptDepth: clampInt(input.injectPromptDepth, defaultSettings.injectPromptDepth, 0, 8),
-    injectionPromptMaxChars: clampInt(input.injectionPromptMaxChars, defaultSettings.injectionPromptMaxChars, 500, 30000),
+    injectionPromptMaxChars: clampInt(input.injectionPromptMaxChars, defaultSettings.injectionPromptMaxChars, 500, 100000),
     summarizationNoteVisibleForAI: asBool(input.summarizationNoteVisibleForAI, defaultSettings.summarizationNoteVisibleForAI),
     injectSummarizationNote: asBool(input.injectSummarizationNote, defaultSettings.injectSummarizationNote),
     sequentialExtraction: asBool(input.sequentialExtraction, defaultSettings.sequentialExtraction),
@@ -570,6 +584,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     strictJsonRepair: asBool(input.strictJsonRepair, defaultSettings.strictJsonRepair),
     maxRetriesPerStat: clampInt(input.maxRetriesPerStat, defaultSettings.maxRetriesPerStat, 0, 4),
     showLastThought: asBool(input.showLastThought, defaultSettings.showLastThought),
+    collapseCardsByDefault: asBool(input.collapseCardsByDefault, defaultSettings.collapseCardsByDefault),
     showInactive: asBool(input.showInactive, defaultSettings.showInactive),
     inactiveLabel: asText(input.inactiveLabel, defaultSettings.inactiveLabel).slice(0, 40),
     sceneCardEnabled: asBool(input.sceneCardEnabled, defaultSettings.sceneCardEnabled),
@@ -579,7 +594,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     sceneCardColor: sanitizeHexColor(input.sceneCardColor) ?? defaultSettings.sceneCardColor,
     sceneCardValueColor: sanitizeHexColor(input.sceneCardValueColor) ?? defaultSettings.sceneCardValueColor,
     sceneCardShowWhenEmpty: asBool(input.sceneCardShowWhenEmpty, defaultSettings.sceneCardShowWhenEmpty),
-    sceneCardArrayCollapsedLimit: clampInt(input.sceneCardArrayCollapsedLimit, defaultSettings.sceneCardArrayCollapsedLimit, 1, 20),
+    sceneCardArrayCollapsedLimit: clampInt(input.sceneCardArrayCollapsedLimit, defaultSettings.sceneCardArrayCollapsedLimit, 1, MAX_CUSTOM_ARRAY_ITEMS),
     sceneCardStatOrder: Array.isArray(input.sceneCardStatOrder)
       ? input.sceneCardStatOrder
         .map(item => String(item ?? "").trim().toLowerCase())
@@ -781,7 +796,7 @@ function sanitizeSceneCardStatDisplay(input: unknown): Record<string, SceneCardS
         : clampInt(row.textMaxLength, 80, 10, 400),
       arrayCollapsedLimit: row.arrayCollapsedLimit == null
         ? null
-        : clampInt(row.arrayCollapsedLimit, 4, 1, 20),
+        : clampInt(row.arrayCollapsedLimit, 4, 1, MAX_CUSTOM_ARRAY_ITEMS),
       dateTimeShowWeekday: asBool(row.dateTimeShowWeekday, true),
       dateTimeShowDate: asBool(row.dateTimeShowDate, true),
       dateTimeShowTime: asBool(row.dateTimeShowTime, true),
@@ -953,6 +968,20 @@ function sanitizeCharacterDefaults(
     if (!value || typeof value !== "object") continue;
     const obj = value as Record<string, unknown>;
     const entry: CharacterDefaults = {};
+    if (obj.trackerEnabled !== undefined) entry.trackerEnabled = asBool(obj.trackerEnabled, true);
+    if (obj.statEnabled && typeof obj.statEnabled === "object") {
+      const statEnabled: Record<string, boolean> = {};
+      for (const [statIdRaw, enabledRaw] of Object.entries(obj.statEnabled as Record<string, unknown>)) {
+        const statId = String(statIdRaw ?? "").trim().toLowerCase();
+        if (!statId) continue;
+        if (asBool(enabledRaw, true) === false) {
+          statEnabled[statId] = false;
+        }
+      }
+      if (Object.keys(statEnabled).length) {
+        entry.statEnabled = statEnabled;
+      }
+    }
     if (obj.affection !== undefined) entry.affection = clampInt(obj.affection, defaultSettings.defaultAffection, 0, 100);
     if (obj.trust !== undefined) entry.trust = clampInt(obj.trust, defaultSettings.defaultTrust, 0, 100);
     if (obj.desire !== undefined) entry.desire = clampInt(obj.desire, defaultSettings.defaultDesire, 0, 100);

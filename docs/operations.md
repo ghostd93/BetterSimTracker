@@ -23,6 +23,25 @@ Build artifact:
 
 - `dist/index.js`
 
+## Tests and Coverage
+
+Commands:
+
+```bash
+npm run test
+npm run coverage
+npm run coverage:gate
+```
+
+Notes:
+
+- `npm run test` compiles test TypeScript and executes the Node built-in test runner.
+- `npm run coverage` runs tests with Node's built-in coverage collection.
+- `npm run coverage:gate` enforces minimum coverage thresholds:
+  - lines: `85%`
+  - functions: `85%`
+  - branches: `75%`
+
 ## Branch Model (Current)
 
 - `main`: release branch
@@ -51,7 +70,7 @@ Build artifact:
 2. Bump version fields.
 3. Update changelog.
 4. Update README when user-facing behavior changed.
-5. Build (`npm run build`).
+5. Validate (`npm run test`, `npm run typecheck`, `npm run build`).
 6. Commit in order:
   - feature/code changes
   - version/changelog/readme

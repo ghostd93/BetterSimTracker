@@ -1,5 +1,14 @@
 import { DEFAULT_INJECTION_PROMPT_TEMPLATE } from "./prompts";
 import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
+import { resolveCharacterDefaultsEntry } from "./characterDefaults";
+import {
+  behaviorGuidanceLines,
+  customStatTracksAnyScope,
+  customStatTracksScope,
+  renderNonNumericValue,
+  resolveScopedCustomNonNumericValue,
+  resolveScopedCustomNumericValue,
+} from "./promptInjectionHelpers";
 import type { BetterSimTrackerSettings, STContext, TrackerData } from "./types";
 
 const INJECT_KEY = "bst_relationship_state";
@@ -22,41 +31,83 @@ function numeric(value: unknown): number | null {
   return clamp(n);
 }
 
-function renderNonNumericValue(value: unknown): string | null {
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (Array.isArray(value)) {
-    const items: string[] = [];
-    const seenItems = new Set<string>();
-    for (const item of value) {
-      const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
-      if (!cleaned) continue;
-      const dedupeKey = cleaned.toLowerCase();
-      if (seenItems.has(dedupeKey)) continue;
-      seenItems.add(dedupeKey);
-      items.push(cleaned);
-      if (items.length >= 20) break;
-    }
-    if (!items.length) return null;
-    return `[${items.map(item => `"${item.replace(/"/g, "\\\"")}"`).join(", ")}]`;
-  }
-  if (typeof value !== "string") return null;
-  const text = value.trim().replace(/\s+/g, " ");
-  return text ? `"${text.slice(0, 120)}"` : null;
-}
-
 function normalizeOwnerName(value: string): string {
   return String(value ?? "").trim().toLowerCase();
 }
 
-function behaviorGuidanceLines(value: unknown): string[] {
-  return String(value ?? "")
-    .split("\n")
-    .map(line => line.trim())
-    .filter(Boolean)
-    .slice(0, 8)
-    .map(line => line.replace(/^[-*]\s*/, "").trim())
-    .filter(Boolean)
-    .map(line => `- ${line}`);
+function slugifyDefaultsKey(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase()
+    .slice(0, 40) || "user";
+}
+
+function resolveCurrentPersonaAvatarId(context: STContext | null): string | null {
+  const contextRecord = (context as unknown as Record<string, unknown> | null);
+  const fromContext = contextRecord && typeof contextRecord.user_avatar === "string"
+    ? String(contextRecord.user_avatar).trim()
+    : "";
+  if (fromContext) return fromContext;
+
+  const anyGlobal = globalThis as Record<string, unknown>;
+  const fromGlobal = typeof anyGlobal.user_avatar === "string"
+    ? String(anyGlobal.user_avatar).trim()
+    : "";
+  if (fromGlobal) return fromGlobal;
+
+  const selectedContainer = document.querySelector("#user_avatar_block .avatar-container.selected") as HTMLElement | null;
+  const selectedContainerAvatar = String(selectedContainer?.getAttribute("data-avatar-id") ?? "").trim();
+  if (selectedContainerAvatar) return selectedContainerAvatar;
+
+  const selectedAvatar = document.querySelector("#user_avatar_block .avatar.selected") as HTMLElement | null;
+  const selectedAvatarId = String(selectedAvatar?.getAttribute("data-avatar-id") ?? "").trim();
+  if (selectedAvatarId) return selectedAvatarId;
+
+  return null;
+}
+
+function isOwnerStatEnabled(
+  context: STContext,
+  settings: BetterSimTrackerSettings,
+  ownerName: string,
+  statId: string,
+): boolean {
+  const id = String(statId ?? "").trim().toLowerCase();
+  if (!id) return true;
+  if (ownerName === GLOBAL_TRACKER_KEY) return true;
+
+  if (ownerName === USER_TRACKER_KEY) {
+    const personaAvatarId = resolveCurrentPersonaAvatarId(context);
+    const identity = personaAvatarId
+      ? { name: `persona:${personaAvatarId}`, avatar: `persona:${personaAvatarId}` }
+      : { name: `persona_name:${slugifyDefaultsKey(String(context.name1 ?? "").trim() || "User")}`, avatar: null };
+    const defaultsFromSettings = resolveCharacterDefaultsEntry(settings, identity);
+    const legacyFallback = Object.keys(defaultsFromSettings).length
+      ? {}
+      : resolveCharacterDefaultsEntry(settings, { name: USER_TRACKER_KEY, avatar: null });
+    const merged = { ...legacyFallback, ...defaultsFromSettings } as Record<string, unknown>;
+    const statEnabledRaw = merged.statEnabled && typeof merged.statEnabled === "object"
+      ? merged.statEnabled as Record<string, unknown>
+      : null;
+    if (!statEnabledRaw) return true;
+    return statEnabledRaw[id] !== false;
+  }
+
+  const matchedCharacter = (context.characters ?? []).find(character =>
+    normalizeOwnerName(String(character?.name ?? "")) === normalizeOwnerName(ownerName),
+  );
+  const defaults = resolveCharacterDefaultsEntry(settings, {
+    name: ownerName,
+    avatar: String(matchedCharacter?.avatar ?? "").trim() || null,
+  });
+  const statEnabledRaw = defaults.statEnabled && typeof defaults.statEnabled === "object"
+    ? defaults.statEnabled as Record<string, unknown>
+    : null;
+  if (!statEnabledRaw) return true;
+  return statEnabledRaw[id] !== false;
 }
 
 function resolveInjectionTargetOwner(context: STContext, data: TrackerData): string | null {
@@ -102,88 +153,6 @@ function resolveInjectionTargetOwner(context: STContext, data: TrackerData): str
   return null;
 }
 
-function customStatTracksScope(
-  stat: { track?: boolean; trackCharacters?: boolean; trackUser?: boolean },
-  scope: "character" | "user",
-): boolean {
-  if (scope === "user") {
-    if (stat.trackUser !== undefined) return Boolean(stat.trackUser);
-    return Boolean(stat.track);
-  }
-  if (stat.trackCharacters !== undefined) return Boolean(stat.trackCharacters);
-  return Boolean(stat.track);
-}
-
-function customStatTracksAnyScope(
-  stat: { track?: boolean; trackCharacters?: boolean; trackUser?: boolean },
-): boolean {
-  return customStatTracksScope(stat, "character") || customStatTracksScope(stat, "user");
-}
-
-function resolveScopedCustomNumericValue(
-  data: TrackerData,
-  statId: string,
-  ownerName: string,
-  globalScope?: boolean,
-): number | undefined {
-  const byOwner = data.customStatistics?.[statId];
-  if (!byOwner) return undefined;
-  const legacyFallback = (): number | undefined => {
-    for (const [owner, value] of Object.entries(byOwner)) {
-      if (owner === GLOBAL_TRACKER_KEY) continue;
-      const parsed = Number(value);
-      if (!Number.isNaN(parsed)) return parsed;
-    }
-    return undefined;
-  };
-  if (globalScope) {
-    const globalValue = byOwner[GLOBAL_TRACKER_KEY];
-    if (globalValue !== undefined) return Number(globalValue);
-    const ownerValue = byOwner[ownerName];
-    if (ownerValue !== undefined) return Number(ownerValue);
-    const fallback = legacyFallback();
-    if (fallback !== undefined) return fallback;
-  }
-  const ownerValue = byOwner[ownerName];
-  if (ownerValue !== undefined) return Number(ownerValue);
-  if (!globalScope) {
-    const globalFallback = byOwner[GLOBAL_TRACKER_KEY];
-    if (globalFallback !== undefined) return Number(globalFallback);
-  }
-  return undefined;
-}
-
-function resolveScopedCustomNonNumericValue(
-  data: TrackerData,
-  statId: string,
-  ownerName: string,
-  globalScope?: boolean,
-): unknown {
-  const byOwner = data.customNonNumericStatistics?.[statId];
-  if (!byOwner) return undefined;
-  const legacyFallback = (): unknown => {
-    for (const [owner, value] of Object.entries(byOwner)) {
-      if (owner === GLOBAL_TRACKER_KEY) continue;
-      if (value !== undefined) return value;
-    }
-    return undefined;
-  };
-  if (globalScope) {
-    const globalValue = byOwner[GLOBAL_TRACKER_KEY];
-    if (globalValue !== undefined) return globalValue;
-    const ownerValue = byOwner[ownerName];
-    if (ownerValue !== undefined) return ownerValue;
-    const fallback = legacyFallback();
-    if (fallback !== undefined) return fallback;
-  }
-  const ownerValue = byOwner[ownerName];
-  if (ownerValue !== undefined) return ownerValue;
-  if (!globalScope) {
-    const globalFallback = byOwner[GLOBAL_TRACKER_KEY];
-    if (globalFallback !== undefined) return globalFallback;
-  }
-  return undefined;
-}
 
 function renderTemplate(template: string, values: Record<string, string>): string {
   let output = template;
@@ -229,7 +198,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
   const latestSummaryNote = settings.injectSummarizationNote ? readLatestSummaryNote(context) : "";
   const targetOwner = resolveInjectionTargetOwner(context, data);
   const targetOwnerKey = normalizeOwnerName(targetOwner ?? "");
-  const injectionPromptMaxChars = Math.max(500, Math.min(30000, Math.round(Number(settings.injectionPromptMaxChars) || 6000)));
+  const injectionPromptMaxChars = Math.max(500, Math.min(100000, Math.round(Number(settings.injectionPromptMaxChars) || 6000)));
   const builtInUi = settings.builtInNumericStatUi ?? {
     affection: { showOnCard: true, showInGraph: true, includeInInjection: true },
     trust: { showOnCard: true, showInGraph: true, includeInInjection: true },
@@ -242,7 +211,8 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     .slice(0, 8);
   const allEnabledCustomNumeric = allEnabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
   const allEnabledCustomNonNumeric = allEnabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
-  const buildWithCustom = (customStatCount: number): string => {
+  type InjectionVerbosityMode = "full" | "no_react_rules" | "minimal";
+  const buildWithCustom = (customStatCount: number, verbosity: InjectionVerbosityMode): string => {
     const enabledCustom = allEnabledCustom.slice(0, customStatCount);
     const names = [...data.activeCharacters];
     if (settings.includeUserTrackerInInjection && settings.enableUserTracking) {
@@ -258,18 +228,25 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         names.push(USER_TRACKER_KEY);
       }
     }
-    const hasUserLine = names.includes(USER_TRACKER_KEY);
-    const hasCharacterLine = names.some(name => name !== USER_TRACKER_KEY);
-    const scopedEnabledCustom = enabledCustom.filter(
-      stat =>
-        (!stat.privateToOwner || Boolean(targetOwnerKey)) &&
-        (
-          (hasCharacterLine && customStatTracksScope(stat, "character")) ||
-          (hasUserLine && customStatTracksScope(stat, "user"))
-        ),
-    );
+    const scopedEnabledCustom = enabledCustom.filter(stat => {
+      if (stat.privateToOwner && !targetOwnerKey) return false;
+      if (stat.globalScope) {
+        return isOwnerStatEnabled(context, settings, GLOBAL_TRACKER_KEY, stat.id);
+      }
+      return names.some(name => {
+        const isUser = name === USER_TRACKER_KEY;
+        if (isUser && !customStatTracksScope(stat, "user")) return false;
+        if (!isUser && !customStatTracksScope(stat, "character")) return false;
+        if (!isOwnerStatEnabled(context, settings, name, stat.id)) return false;
+        return true;
+      });
+    });
     const enabledCustomNumeric = scopedEnabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
     const enabledCustomNonNumeric = scopedEnabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
+    const enabledGlobalCustomNumeric = enabledCustomNumeric.filter(stat => Boolean(stat.globalScope));
+    const enabledGlobalCustomNonNumeric = enabledCustomNonNumeric.filter(stat => Boolean(stat.globalScope));
+    const enabledOwnerCustomNumeric = enabledCustomNumeric.filter(stat => !Boolean(stat.globalScope));
+    const enabledOwnerCustomNonNumeric = enabledCustomNonNumeric.filter(stat => !Boolean(stat.globalScope));
     const numericKeys: Array<{
       key: "affection" | "trust" | "desire" | "connection";
       label: string;
@@ -313,30 +290,38 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       const ownerMatch = Boolean(targetOwnerKey) && normalizeOwnerName(name) === targetOwnerKey;
       for (const stat of enabledBuiltIns) {
         if (isUser) continue;
+        if (!isOwnerStatEnabled(context, settings, name, stat.key)) continue;
         const value = numeric(data.statistics[stat.key]?.[name] ?? 50) ?? 50;
         parts.push(`${stat.label} ${value}`);
       }
-      for (const stat of enabledCustomNumeric) {
+      for (const stat of enabledOwnerCustomNumeric) {
         if (stat.privateToOwner && !ownerMatch) continue;
         if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
+        if (!isOwnerStatEnabled(context, settings, name, stat.id)) continue;
         const value = numeric(resolveScopedCustomNumericValue(data, stat.id, name, Boolean(stat.globalScope)) ?? stat.defaultValue) ?? stat.defaultValue;
         parts.push(`${stat.id} ${value}`);
       }
-      for (const stat of enabledCustomNonNumeric) {
+      for (const stat of enabledOwnerCustomNonNumeric) {
         if (stat.privateToOwner && !ownerMatch) continue;
         if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
+        if (!isOwnerStatEnabled(context, settings, name, stat.id)) continue;
         const value = renderNonNumericValue(resolveScopedCustomNonNumericValue(data, stat.id, name, Boolean(stat.globalScope)) ?? stat.defaultValue);
         if (value != null) {
           parts.push(`${stat.id} ${value}`);
         }
       }
       if ((isUser && settings.userTrackMood) || (!isUser && includeMood)) {
-        const mood = String(data.statistics.mood?.[name] ?? "Neutral").trim() || "Neutral";
-        parts.push(`mood ${mood}`);
+        if (!isOwnerStatEnabled(context, settings, name, "mood")) {
+          // skip
+        } else {
+          const mood = String(data.statistics.mood?.[name] ?? "Neutral").trim() || "Neutral";
+          parts.push(`mood ${mood}`);
+        }
       }
       const includeThoughtForLine =
         ((isUser && settings.userTrackLastThought) || (!isUser && settings.trackLastThought)) &&
-        (!settings.lastThoughtPrivate || ownerMatch);
+        (!settings.lastThoughtPrivate || ownerMatch) &&
+        isOwnerStatEnabled(context, settings, name, "lastThought");
       if (includeThoughtForLine) {
         const thought = renderNonNumericValue(data.statistics.lastThought?.[name]);
         if (thought != null) {
@@ -346,6 +331,22 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       if (!parts.length) return "";
       return `- ${displayName}: ${parts.join(", ")}`;
     }).filter(Boolean);
+    const sceneParts: string[] = [];
+    for (const stat of enabledGlobalCustomNumeric) {
+      if (!isOwnerStatEnabled(context, settings, GLOBAL_TRACKER_KEY, stat.id)) continue;
+      const value = numeric(resolveScopedCustomNumericValue(data, stat.id, GLOBAL_TRACKER_KEY, true) ?? stat.defaultValue) ?? stat.defaultValue;
+      sceneParts.push(`${stat.id} ${value}`);
+    }
+    for (const stat of enabledGlobalCustomNonNumeric) {
+      if (!isOwnerStatEnabled(context, settings, GLOBAL_TRACKER_KEY, stat.id)) continue;
+      const value = renderNonNumericValue(resolveScopedCustomNonNumericValue(data, stat.id, GLOBAL_TRACKER_KEY, true) ?? stat.defaultValue);
+      if (value != null) {
+        sceneParts.push(`${stat.id} ${value}`);
+      }
+    }
+    if (sceneParts.length) {
+      lines.push(`- Scene: ${sceneParts.join(", ")}`);
+    }
     if (!lines.length) return "";
 
     const header = [
@@ -369,14 +370,17 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       ...scopedEnabledCustom.map(stat => {
         const label = stat.label?.trim() || stat.id;
         const description = stat.description?.trim();
+        const compactMode = verbosity === "minimal";
         return description
-          ? `- ${stat.id}: ${description}`
+          ? `- ${stat.id}: ${compactMode ? label : description}`
           : `- ${stat.id}: custom stat "${label}"`;
       }),
       ...(includeMood ? ["- mood: immediate emotional tone for this turn"] : []),
       ...(includeLastThoughtByPrivacy ? ["- lastThought: brief internal thought grounded in recent messages"] : []),
     ].join("\n");
-    const behaviorBands = hasAnyNumeric
+    const behaviorBands = verbosity === "minimal"
+      ? ""
+      : hasAnyNumeric
       ? [
           "Behavior bands:",
           "- 0-30 low: guarded, distant, skeptical, defensive, cold, or avoidant",
@@ -431,7 +435,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         : []),
       ...customBehaviorLines,
     ];
-    const reactRules = reactRuleItems.length
+    const reactRules = verbosity === "full" && reactRuleItems.length
       ? ["How to react:", ...reactRuleItems].join("\n")
       : "";
     const priorityRules = [
@@ -439,7 +443,9 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       "- if stats conflict, trust and connection should constrain risky intimacy",
       "- remain consistent with character core personality and scenario",
     ].join("\n");
-    const summarizationNote = includeSummarizationNote
+    const summarizationNote = verbosity === "minimal"
+      ? ""
+      : includeSummarizationNote
       ? ["Summarization note:", `- ${latestSummaryNote}`].join("\n")
       : "";
     const template = settings.promptTemplateInjection || DEFAULT_INJECTION_PROMPT_TEMPLATE;
@@ -461,23 +467,27 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     return `${basePrompt}\n</bst_inject_block>`.trim();
   };
 
-  let customCount = allEnabledCustomNumeric.length + allEnabledCustomNonNumeric.length;
-  while (customCount >= 0) {
-    const prompt = buildWithCustom(customCount);
-    if (prompt.length <= injectionPromptMaxChars) {
-      if (customCount < allEnabledCustom.length) {
-        console.warn("[BetterSimTracker] prompt injection custom stat lines truncated to stay within safe prompt size.", {
-          keptCustomStats: customCount,
-          totalCustomStats: allEnabledCustom.length,
-          maxChars: injectionPromptMaxChars,
-          promptChars: prompt.length
-        });
+  const verbosityOrder: InjectionVerbosityMode[] = ["full", "no_react_rules", "minimal"];
+  for (const verbosity of verbosityOrder) {
+    let customCount = allEnabledCustomNumeric.length + allEnabledCustomNonNumeric.length;
+    while (customCount >= 0) {
+      const prompt = buildWithCustom(customCount, verbosity);
+      if (prompt.length <= injectionPromptMaxChars) {
+        if (customCount < allEnabledCustom.length) {
+          console.warn("[BetterSimTracker] prompt injection custom stat lines truncated to stay within safe prompt size.", {
+            keptCustomStats: customCount,
+            totalCustomStats: allEnabledCustom.length,
+            maxChars: injectionPromptMaxChars,
+            promptChars: prompt.length,
+            verbosity,
+          });
+        }
+        return prompt;
       }
-      return prompt;
+      customCount -= 1;
     }
-    customCount -= 1;
   }
-  return buildWithCustom(0).slice(0, injectionPromptMaxChars).trim();
+  return buildWithCustom(0, "minimal").slice(0, injectionPromptMaxChars).trim();
 }
 
 type ScriptModule = {
@@ -548,3 +558,8 @@ export async function syncPromptInjection(input: {
 export function getLastInjectedPrompt(): string {
   return lastInjectedPrompt;
 }
+
+export const __testables = {
+  buildPrompt,
+  isOwnerStatEnabled,
+};
