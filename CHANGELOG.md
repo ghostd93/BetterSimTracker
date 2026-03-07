@@ -2,6 +2,18 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev17] - 2026-03-07
+### Added
+- Added per-stat owner-level toggles in defaults panels:
+  - Character Defaults: built-ins + character-trackable custom stats
+  - Persona Defaults: user built-ins + user-trackable custom stats
+- Added compact toggle-pill variant for defaults panels to match Custom Stats toggle style with reduced visual size.
+
+### Changed
+- Defaults panel inputs for a stat are now disabled automatically when that stat is toggled off for that owner.
+- Extraction now skips disabled owner/stat pairs and excludes stats with no enabled owners in the current run.
+- Card rendering now hides stats disabled for a specific owner.
+
 ## [2.2.3.10-dev16] - 2026-03-07
 ### Added
 - New global Display toggle: `Collapse Cards By Default`.

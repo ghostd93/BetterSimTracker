@@ -1549,6 +1549,9 @@ function queueRender(): void {
     }, characterName => {
       const liveContext = getSafeContext();
       return isTrackerEnabledForOwner(liveContext, settings!, characterName);
+    }, (characterName, statId) => {
+      const liveContext = getSafeContext();
+      return isOwnerStatEnabled(liveContext, settings!, characterName, statId);
     }, characterName => {
       const context = getSafeContext();
       if (!context || !settings) return;
@@ -1891,6 +1894,7 @@ function getConfiguredCharacterDefaults(
   name: string,
 ): {
   trackerEnabled?: boolean;
+  statEnabled?: Record<string, boolean>;
   affection?: number;
   trust?: number;
   desire?: number;
@@ -1908,6 +1912,17 @@ function getConfiguredCharacterDefaults(
       : resolveCharacterDefaultsEntry(settingsInput, { name: USER_TRACKER_KEY, avatar: null });
     const merged = { ...legacyFallback, ...defaultsFromSettings };
     const trackerEnabled = merged.trackerEnabled === false ? false : undefined;
+    const statEnabledRaw = merged.statEnabled && typeof merged.statEnabled === "object"
+      ? merged.statEnabled as Record<string, unknown>
+      : null;
+    const statEnabled: Record<string, boolean> = {};
+    if (statEnabledRaw) {
+      for (const [rawId, rawValue] of Object.entries(statEnabledRaw)) {
+        const id = String(rawId ?? "").trim().toLowerCase();
+        if (!id) continue;
+        if (rawValue === false) statEnabled[id] = false;
+      }
+    }
     const affection = parseDefaultNumber(merged.affection);
     const trust = parseDefaultNumber(merged.trust);
     const desire = parseDefaultNumber(merged.desire);
@@ -1962,6 +1977,7 @@ function getConfiguredCharacterDefaults(
     }
     return {
       ...(trackerEnabled === false ? { trackerEnabled: false } : {}),
+      ...(Object.keys(statEnabled).length ? { statEnabled } : {}),
       ...(affection != null ? { affection } : {}),
       ...(trust != null ? { trust } : {}),
       ...(desire != null ? { desire } : {}),
@@ -1984,6 +2000,17 @@ function getConfiguredCharacterDefaults(
   });
   const merged = { ...defaultsFromSettings, ...defaultsFromExtensions };
   const trackerEnabled = merged.trackerEnabled === false ? false : undefined;
+  const statEnabledRaw = merged.statEnabled && typeof merged.statEnabled === "object"
+    ? merged.statEnabled as Record<string, unknown>
+    : null;
+  const statEnabled: Record<string, boolean> = {};
+  if (statEnabledRaw) {
+    for (const [rawId, rawValue] of Object.entries(statEnabledRaw)) {
+      const id = String(rawId ?? "").trim().toLowerCase();
+      if (!id) continue;
+      if (rawValue === false) statEnabled[id] = false;
+    }
+  }
   const affection = parseDefaultNumber(merged.affection);
   const trust = parseDefaultNumber(merged.trust);
   const desire = parseDefaultNumber(merged.desire);
@@ -2038,6 +2065,7 @@ function getConfiguredCharacterDefaults(
   }
   return {
     ...(trackerEnabled === false ? { trackerEnabled: false } : {}),
+    ...(Object.keys(statEnabled).length ? { statEnabled } : {}),
     ...(affection != null ? { affection } : {}),
     ...(trust != null ? { trust } : {}),
     ...(desire != null ? { desire } : {}),
@@ -2055,6 +2083,18 @@ function isTrackerEnabledForOwner(
   name: string,
 ): boolean {
   return getConfiguredCharacterDefaults(context, settingsInput, name).trackerEnabled !== false;
+}
+
+function isOwnerStatEnabled(
+  context: STContext | null,
+  settingsInput: BetterSimTrackerSettings,
+  ownerName: string,
+  statId: string,
+): boolean {
+  const id = String(statId ?? "").trim().toLowerCase();
+  if (!id) return true;
+  const configured = getConfiguredCharacterDefaults(context, settingsInput, ownerName);
+  return configured.statEnabled?.[id] !== false;
 }
 
 function buildSeededStatisticsForActiveCharacters(
@@ -3291,6 +3331,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       previousCustomNonNumericStatistics: previousSeededCustomNonNumericStatistics,
       hasPriorTrackerData: Boolean(previousEntry?.data),
       history: seededHistory,
+      isOwnerStatEnabled: (ownerName, statId) => isOwnerStatEnabled(context, runScopedSettings, ownerName, statId),
       isCancelled: () => cancelledExtractionRuns.has(runId),
       onProgress: (done, total, label) => {
         if (!isExtracting || activeExtractionRunId !== runId) {

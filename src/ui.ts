@@ -2836,6 +2836,31 @@ export function ensureStyles(): void {
   font-size: 12px;
   font-weight: 600;
 }
+.bst-custom-stat-toggle.bst-custom-stat-toggle-compact {
+  min-height: 26px;
+  padding: 2px 8px;
+  gap: 6px;
+}
+.bst-custom-stat-toggle.bst-custom-stat-toggle-compact .bst-custom-stat-toggle-pill {
+  width: 28px;
+  height: 15px;
+}
+.bst-custom-stat-toggle.bst-custom-stat-toggle-compact .bst-custom-stat-toggle-pill::after {
+  width: 11px;
+  height: 11px;
+}
+.bst-custom-stat-toggle.bst-custom-stat-toggle-compact.is-on .bst-custom-stat-toggle-pill::after {
+  transform: translateX(13px);
+}
+.bst-custom-stat-toggle.bst-custom-stat-toggle-compact .bst-custom-stat-toggle-label {
+  font-size: 11px;
+  font-weight: 600;
+}
+.bst-character-toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 .bst-custom-stat-empty {
   border: 1px dashed rgba(255,255,255,0.2);
   border-radius: 10px;
@@ -3926,6 +3951,7 @@ export function renderTracker(
   resolveDisplayName?: (characterName: string) => string,
   resolveCharacterAvatar?: (characterName: string) => string | null,
   isTrackerEnabled?: (characterName: string) => boolean,
+  isOwnerStatEnabled?: (characterName: string, statId: string) => boolean,
   onOpenGraph?: (characterName: string) => void,
   onRetrackMessage?: (messageIndex: number) => void,
   onSendSummaryMessage?: (messageIndex: number) => void,
@@ -4397,12 +4423,14 @@ export function renderTracker(
       return resolveNonNumericValue(data, def, name);
     };
     const getEffectiveMoodText = (name: string): string => {
+      if (isOwnerStatEnabled?.(name, "mood") === false) return "";
       if (data.statistics.mood?.[name] !== undefined) return String(data.statistics.mood?.[name] ?? "");
       const previous = findPreviousDataWithMood(entry.messageIndex, name);
       if (previous?.statistics.mood?.[name] !== undefined) return String(previous.statistics.mood?.[name] ?? "");
       return "";
     };
     const getEffectiveLastThoughtText = (name: string): string => {
+      if (isOwnerStatEnabled?.(name, "lastthought") === false) return "";
       if (data.statistics.lastThought?.[name] !== undefined) return String(data.statistics.lastThought?.[name] ?? "");
       const previous = findPreviousDataWithLastThought(entry.messageIndex, name);
       if (previous?.statistics.lastThought?.[name] !== undefined) return String(previous.statistics.lastThought?.[name] ?? "");
@@ -4479,13 +4507,16 @@ export function renderTracker(
       const moodLookupName = isUserCard ? displayName : name;
       const characterAvatar = resolveCharacterAvatar?.(name) ?? undefined;
       const baseEnabledNumeric = getNumericStatsForCharacter(data, name, settings);
-      const baseEnabledNonNumeric = ownerCardNonNumericDefs.filter(def => isUserCard ? def.trackUser : def.trackCharacters);
+      const baseEnabledNonNumeric = ownerCardNonNumericDefs.filter(def => (isUserCard ? def.trackUser : def.trackCharacters));
+      const ownerStatEnabled = (statId: string): boolean => isOwnerStatEnabled?.(name, statId) !== false;
+      const baseEnabledNumericScoped = baseEnabledNumeric.filter(def => ownerStatEnabled(String(def.key)));
+      const baseEnabledNonNumericScoped = baseEnabledNonNumeric.filter(def => ownerStatEnabled(String(def.id)));
       const statOrderMap = new Map((settings.characterCardStatOrder ?? []).map((id, index) => [String(id ?? "").trim().toLowerCase(), index]));
-      const numericFallbackOrder = new Map(baseEnabledNumeric.map((def, index) => [String(def.key).trim().toLowerCase(), index]));
-      const nonNumericFallbackOrder = new Map(baseEnabledNonNumeric.map((def, index) => [String(def.id).trim().toLowerCase(), index]));
+      const numericFallbackOrder = new Map(baseEnabledNumericScoped.map((def, index) => [String(def.key).trim().toLowerCase(), index]));
+      const nonNumericFallbackOrder = new Map(baseEnabledNonNumericScoped.map((def, index) => [String(def.id).trim().toLowerCase(), index]));
       const enabledNumeric = isUserCard
-        ? baseEnabledNumeric
-        : [...baseEnabledNumeric].sort((a, b) => {
+        ? baseEnabledNumericScoped
+        : [...baseEnabledNumericScoped].sort((a, b) => {
           const aId = String(a.key).trim().toLowerCase();
           const bId = String(b.key).trim().toLowerCase();
           const aOrder = statOrderMap.get(aId);
@@ -4496,8 +4527,8 @@ export function renderTracker(
           return (numericFallbackOrder.get(aId) ?? 0) - (numericFallbackOrder.get(bId) ?? 0);
         });
       const enabledNonNumeric = isUserCard
-        ? baseEnabledNonNumeric
-        : [...baseEnabledNonNumeric].sort((a, b) => {
+        ? baseEnabledNonNumericScoped
+        : [...baseEnabledNonNumericScoped].sort((a, b) => {
           const aId = String(a.id).trim().toLowerCase();
           const bId = String(b.id).trim().toLowerCase();
           const aOrder = statOrderMap.get(aId);

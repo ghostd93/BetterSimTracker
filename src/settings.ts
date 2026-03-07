@@ -968,6 +968,19 @@ function sanitizeCharacterDefaults(
     const obj = value as Record<string, unknown>;
     const entry: CharacterDefaults = {};
     if (obj.trackerEnabled !== undefined) entry.trackerEnabled = asBool(obj.trackerEnabled, true);
+    if (obj.statEnabled && typeof obj.statEnabled === "object") {
+      const statEnabled: Record<string, boolean> = {};
+      for (const [statIdRaw, enabledRaw] of Object.entries(obj.statEnabled as Record<string, unknown>)) {
+        const statId = String(statIdRaw ?? "").trim().toLowerCase();
+        if (!statId) continue;
+        if (asBool(enabledRaw, true) === false) {
+          statEnabled[statId] = false;
+        }
+      }
+      if (Object.keys(statEnabled).length) {
+        entry.statEnabled = statEnabled;
+      }
+    }
     if (obj.affection !== undefined) entry.affection = clampInt(obj.affection, defaultSettings.defaultAffection, 0, 100);
     if (obj.trust !== undefined) entry.trust = clampInt(obj.trust, defaultSettings.defaultTrust, 0, 100);
     if (obj.desire !== undefined) entry.desire = clampInt(obj.desire, defaultSettings.defaultDesire, 0, 100);

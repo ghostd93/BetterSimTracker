@@ -225,6 +225,7 @@ test("sanitizeSettings supports collapseCardsByDefault and trackerEnabled in cha
     characterDefaults: {
       Seraphina: {
         trackerEnabled: false,
+        statEnabled: { affection: false, pose: false },
         customNonNumericStatDefaults: {
           pose: "Standing by the bed",
         },
@@ -234,6 +235,8 @@ test("sanitizeSettings supports collapseCardsByDefault and trackerEnabled in cha
 
   assert.equal(sanitized.collapseCardsByDefault, true);
   assert.equal(sanitized.characterDefaults.Seraphina?.trackerEnabled, false);
+  assert.equal(sanitized.characterDefaults.Seraphina?.statEnabled?.affection, false);
+  assert.equal(sanitized.characterDefaults.Seraphina?.statEnabled?.pose, false);
   assert.equal(
     sanitized.characterDefaults.Seraphina?.customNonNumericStatDefaults?.pose,
     "Standing by the bed",

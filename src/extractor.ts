@@ -256,6 +256,7 @@ export async function extractStatisticsParallel(input: {
   history: TrackerData[];
   isCancelled?: () => boolean;
   onProgress?: (done: number, total: number, label?: string) => void;
+  isOwnerStatEnabled?: (ownerName: string, statId: string) => boolean;
 }): Promise<{
   statistics: Statistics;
   customStatistics: CustomStatistics;
@@ -275,9 +276,14 @@ export async function extractStatisticsParallel(input: {
     hasPriorTrackerData,
     history,
     onProgress,
+    isOwnerStatEnabled,
   } = input;
-  const builtInAndTextStats = enabledBuiltInAndTextStats(settings);
-  const customStats = enabledCustomStats(settings);
+  const builtInAndTextStats = enabledBuiltInAndTextStats(settings).filter(stat =>
+    activeCharacters.some(name => isOwnerStatEnabled?.(name, stat) !== false),
+  );
+  const customStats = enabledCustomStats(settings).filter(stat =>
+    activeCharacters.some(name => isOwnerStatEnabled?.(name, stat.id) !== false),
+  );
   const builtInPrivateStats = builtInAndTextStats.filter(stat => stat === "lastThought" && settings.lastThoughtPrivate);
   const builtInPublicStats = builtInAndTextStats.filter(stat => !builtInPrivateStats.includes(stat));
   const customPrivateStats = customStats.filter(stat => Boolean(stat.privateToOwner));
@@ -419,6 +425,7 @@ export async function extractStatisticsParallel(input: {
         parsed.confidence[name] = value;
       }
       for (const name of activeCharacters) {
+        if (isOwnerStatEnabled?.(name, stat) === false) continue;
         const confidence = parsedOne.confidence[name] ?? 0.8;
         if (stat === "affection" && parsedOne.deltas.affection[name] !== undefined) {
           parsed.deltas.affection[name] = parsedOne.deltas.affection[name];
@@ -464,6 +471,7 @@ export async function extractStatisticsParallel(input: {
       }
       if (stat === "mood") {
         for (const name of activeCharacters) {
+          if (isOwnerStatEnabled?.(name, stat) === false) continue;
           if (output.mood[name] !== undefined) continue;
           const prevMood = String(previousStatistics?.mood?.[name] ?? settings.defaultMood);
           output.mood[name] = prevMood;
@@ -505,6 +513,7 @@ export async function extractStatisticsParallel(input: {
         return;
       }
       for (const name of requestCharacters) {
+        if (isOwnerStatEnabled?.(name, statId) === false) continue;
         const delta = parsedOne.delta[name];
         if (delta === undefined) continue;
         parsed.deltas.custom[statId][name] = delta;
@@ -540,6 +549,7 @@ export async function extractStatisticsParallel(input: {
         return;
       }
       for (const name of requestCharacters) {
+        if (isOwnerStatEnabled?.(name, statId) === false) continue;
         const value = parsedOne.value[name];
         if (value === undefined) continue;
         parsed.deltas.customNonNumeric[statId][name] = value;
@@ -570,6 +580,7 @@ export async function extractStatisticsParallel(input: {
         return;
       }
       for (const name of names) {
+        if (isOwnerStatEnabled?.(name, statId) === false) continue;
         const seedValue = clamp(Number(previousCustomStatistics?.[statId]?.[name] ?? statDef.defaultValue));
         outputCustom[statId][name] = seedValue;
         applied.customStatistics[statId][name] = seedValue;
@@ -630,6 +641,7 @@ export async function extractStatisticsParallel(input: {
         return;
       }
       for (const name of names) {
+        if (isOwnerStatEnabled?.(name, statId) === false) continue;
         let seedValue: CustomNonNumericValue;
         const previous = previousCustomNonNumericStatistics?.[statId]?.[name];
         if (previous !== undefined) {

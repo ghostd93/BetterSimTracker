@@ -218,6 +218,7 @@ export interface StExpressionImageOptions {
 
 export interface CharacterDefaults {
   trackerEnabled?: boolean;
+  statEnabled?: Record<string, boolean>;
   affection?: number;
   trust?: number;
   desire?: number;
