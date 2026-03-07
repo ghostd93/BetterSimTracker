@@ -28,6 +28,7 @@ import {
   normalizeCustomTextMaxLength,
   normalizeNonNumericArrayItems,
 } from "./customStatRuntime";
+import { isCustomStatTrackableForOwnerToggle } from "./ownerStatToggles";
 
 const PANEL_ID = "bst-character-panel";
 const NAME_INPUT_SELECTORS = ["#character_name_pole", "#character_name", "input[name='name']"];
@@ -260,12 +261,6 @@ function clampStat(value: string): number | null {
   const num = Number(value);
   if (Number.isNaN(num)) return null;
   return Math.max(0, Math.min(100, Math.round(num)));
-}
-
-function isCustomStatTrackableForScope(definition: CustomStatDefinition, scope: "character" | "user"): boolean {
-  if (definition.track === false) return false;
-  if (scope === "character") return definition.trackCharacters !== false;
-  return definition.trackUser !== false;
 }
 
 function renderCharacterArrayDefaultRowHtml(id: string, value: string, maxLength: number): string {
@@ -604,7 +599,7 @@ function renderPanel(input: InitInput, force = false): void {
     const label = String(definition.label ?? "").trim();
     if (!id || !label) return "";
     const disabledAttr = isStatEnabled(id) ? "" : "disabled";
-    const trackableInCharacterDefaults = isCustomStatTrackableForScope(definition, "character");
+    const trackableInCharacterDefaults = isCustomStatTrackableForOwnerToggle(definition, "character");
     if (!trackableInCharacterDefaults) {
       return `
         <div class="bst-character-help">
@@ -710,7 +705,7 @@ function renderPanel(input: InitInput, force = false): void {
       const id = String(definition.id ?? "").trim().toLowerCase();
       const label = String(definition.label ?? "").trim();
       if (!id || !label) return "";
-      const trackableInCharacterDefaults = isCustomStatTrackableForScope(definition, "character");
+      const trackableInCharacterDefaults = isCustomStatTrackableForOwnerToggle(definition, "character");
       if (!trackableInCharacterDefaults) return "";
       const enabled = isStatEnabled(id);
       return `

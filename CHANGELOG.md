@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev19] - 2026-03-07
+### Changed
+- Per-owner stat toggles in Character/Persona defaults now list only owner-scoped stats (global stats are excluded).
+
+### Fixed
+- Prompt injection now respects owner-level stat toggles for both built-in and custom stats, so disabled stats are not injected for that specific character/persona.
+
 ## [2.2.3.10-dev18] - 2026-03-07
 ### Added
 - Added a dedicated collapse/expand button for Scene cards.

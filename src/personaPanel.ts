@@ -27,6 +27,7 @@ import {
   normalizeCustomTextMaxLength,
   normalizeNonNumericArrayItems,
 } from "./customStatRuntime";
+import { isCustomStatTrackableForOwnerToggle } from "./ownerStatToggles";
 
 const PANEL_ID = "bst-persona-panel";
 const DRAWER_SELECTOR = "#persona-management-button";
@@ -481,7 +482,7 @@ function renderPanel(input: InitInput, force = false): void {
     ? defaults.customNonNumericStatDefaults as Record<string, unknown>
     : {};
   const userCustomDefaultFieldsHtml = customStatDefinitions.map(definition => {
-    if (definition.track === false || definition.trackUser === false) return "";
+    if (!isCustomStatTrackableForOwnerToggle(definition, "user")) return "";
     const id = String(definition.id ?? "").trim().toLowerCase();
     const label = String(definition.label ?? "").trim();
     if (!id || !label) return "";
@@ -576,7 +577,7 @@ function renderPanel(input: InitInput, force = false): void {
     }).join("");
   const customStatTogglesHtml = customStatDefinitions
     .map(definition => {
-      if (definition.track === false || definition.trackUser === false) return "";
+      if (!isCustomStatTrackableForOwnerToggle(definition, "user")) return "";
       const id = String(definition.id ?? "").trim().toLowerCase();
       const label = String(definition.label ?? "").trim();
       if (!id || !label) return "";
