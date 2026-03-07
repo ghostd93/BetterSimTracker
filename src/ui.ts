@@ -5070,12 +5070,6 @@ export function removeTrackerUI(): void {
   closeGraphModal();
 }
 
-function statValue(entry: TrackerData, statKey: string, character: string, fallback: number, globalScope = false): number {
-  const raw = getNumericRawValue(entry, statKey, character, globalScope);
-  if (raw === undefined || Number.isNaN(raw)) return fallback;
-  return Math.max(0, Math.min(100, raw));
-}
-
 function hasCharacterSnapshot(entry: TrackerData, character: string): boolean {
   for (const statKey of BUILT_IN_NUMERIC_STAT_KEYS) {
     if (hasNumericValue(entry, statKey, character)) return true;
@@ -5094,24 +5088,5 @@ function hasCharacterSnapshot(entry: TrackerData, character: string): boolean {
     entry.statistics.mood?.[character] !== undefined ||
     entry.statistics.lastThought?.[character] !== undefined
   );
-}
-
-export function hasNumericSnapshot(entry: TrackerData, character: string, defs: UiNumericStatDefinition[]): boolean {
-  for (const def of defs) {
-    if (hasNumericValue(entry, def.key, character, def.globalScope)) return true;
-  }
-  return false;
-}
-
-export function buildStatSeries(
-  timeline: TrackerData[],
-  character: string,
-  def: UiNumericStatDefinition,
-): number[] {
-  let carry = Math.max(0, Math.min(100, Math.round(def.defaultValue)));
-  return timeline.map(item => {
-    carry = statValue(item, def.key, character, carry, def.globalScope);
-    return carry;
-  });
 }
 

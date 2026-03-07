@@ -1,10 +1,9 @@
 import type { BetterSimTrackerSettings, TrackerData } from "./types";
 import {
-  buildStatSeries,
   ensureStyles,
   getNumericStatsForHistory,
-  hasNumericSnapshot,
 } from "./ui";
+import { buildStatSeries, hasNumericSnapshot } from "./graphTimeline";
 import {
   buildLastPointCircle,
   buildPointCircles,

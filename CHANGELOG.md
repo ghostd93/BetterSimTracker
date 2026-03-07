@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev21] - 2026-03-07
+### Added
+- Added dedicated graph timeline helper module and tests:
+  - `src/graphTimeline.ts`
+  - `tests/graphTimeline.test.ts`
+
+### Changed
+- Continued step-2 modularization by moving graph timeline value-carry/snapshot helpers out of `src/ui.ts` and wiring `graphModal` to use the new module.
+
 ## [2.2.3.10-dev20] - 2026-03-07
 ### Changed
 - Continued step-2 modularization by extracting graph preference persistence into `src/graphPreferences.ts` and wiring graph consumers to use it.
