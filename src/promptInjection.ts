@@ -230,6 +230,9 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     }
     const scopedEnabledCustom = enabledCustom.filter(stat => {
       if (stat.privateToOwner && !targetOwnerKey) return false;
+      if (stat.globalScope) {
+        return isOwnerStatEnabled(context, settings, GLOBAL_TRACKER_KEY, stat.id);
+      }
       return names.some(name => {
         const isUser = name === USER_TRACKER_KEY;
         if (isUser && !customStatTracksScope(stat, "user")) return false;
@@ -240,6 +243,10 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     });
     const enabledCustomNumeric = scopedEnabledCustom.filter(stat => (stat.kind ?? "numeric") === "numeric");
     const enabledCustomNonNumeric = scopedEnabledCustom.filter(stat => (stat.kind ?? "numeric") !== "numeric");
+    const enabledGlobalCustomNumeric = enabledCustomNumeric.filter(stat => Boolean(stat.globalScope));
+    const enabledGlobalCustomNonNumeric = enabledCustomNonNumeric.filter(stat => Boolean(stat.globalScope));
+    const enabledOwnerCustomNumeric = enabledCustomNumeric.filter(stat => !Boolean(stat.globalScope));
+    const enabledOwnerCustomNonNumeric = enabledCustomNonNumeric.filter(stat => !Boolean(stat.globalScope));
     const numericKeys: Array<{
       key: "affection" | "trust" | "desire" | "connection";
       label: string;
@@ -287,14 +294,14 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         const value = numeric(data.statistics[stat.key]?.[name] ?? 50) ?? 50;
         parts.push(`${stat.label} ${value}`);
       }
-      for (const stat of enabledCustomNumeric) {
+      for (const stat of enabledOwnerCustomNumeric) {
         if (stat.privateToOwner && !ownerMatch) continue;
         if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
         if (!isOwnerStatEnabled(context, settings, name, stat.id)) continue;
         const value = numeric(resolveScopedCustomNumericValue(data, stat.id, name, Boolean(stat.globalScope)) ?? stat.defaultValue) ?? stat.defaultValue;
         parts.push(`${stat.id} ${value}`);
       }
-      for (const stat of enabledCustomNonNumeric) {
+      for (const stat of enabledOwnerCustomNonNumeric) {
         if (stat.privateToOwner && !ownerMatch) continue;
         if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
         if (!isOwnerStatEnabled(context, settings, name, stat.id)) continue;
@@ -324,6 +331,22 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       if (!parts.length) return "";
       return `- ${displayName}: ${parts.join(", ")}`;
     }).filter(Boolean);
+    const sceneParts: string[] = [];
+    for (const stat of enabledGlobalCustomNumeric) {
+      if (!isOwnerStatEnabled(context, settings, GLOBAL_TRACKER_KEY, stat.id)) continue;
+      const value = numeric(resolveScopedCustomNumericValue(data, stat.id, GLOBAL_TRACKER_KEY, true) ?? stat.defaultValue) ?? stat.defaultValue;
+      sceneParts.push(`${stat.id} ${value}`);
+    }
+    for (const stat of enabledGlobalCustomNonNumeric) {
+      if (!isOwnerStatEnabled(context, settings, GLOBAL_TRACKER_KEY, stat.id)) continue;
+      const value = renderNonNumericValue(resolveScopedCustomNonNumericValue(data, stat.id, GLOBAL_TRACKER_KEY, true) ?? stat.defaultValue);
+      if (value != null) {
+        sceneParts.push(`${stat.id} ${value}`);
+      }
+    }
+    if (sceneParts.length) {
+      lines.push(`- Scene: ${sceneParts.join(", ")}`);
+    }
     if (!lines.length) return "";
 
     const header = [
@@ -537,5 +560,6 @@ export function getLastInjectedPrompt(): string {
 }
 
 export const __testables = {
+  buildPrompt,
   isOwnerStatEnabled,
 };

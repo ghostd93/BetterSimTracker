@@ -2,6 +2,17 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev25] - 2026-03-07
+### Changed
+- Prompt injection now emits global custom stats as dedicated `Scene` lines from global scope, independent of character/user owner lines.
+
+### Fixed
+- Fixed a regression where global custom stats (for example `characters_in_scene`, `scene_date_time`) could be omitted from the hidden injection block even when enabled for injection.
+
+### Added
+- Added regression tests for prompt injection global-stat behavior:
+  - `tests/promptInjection.test.ts`
+
 ## [2.2.3.10-dev24] - 2026-03-07
 ### Added
 - Added runtime event helper module and tests:
