@@ -15,6 +15,20 @@ import type { BetterSimTrackerSettings, STContext, TrackerData } from "./types";
 const INJECT_KEY = "bst_relationship_state";
 const SUMMARY_NOTE_MODEL = "bettersimtracker.summary";
 let lastInjectedPrompt = "";
+let lastInjectedPromptDebug: Record<string, unknown> | null = null;
+
+function extractOwnerLinesFromPrompt(prompt: string): string[] {
+  const raw = String(prompt ?? "");
+  const match = raw.match(/<BST_TRACKER_STATE>\n?([\s\S]*?)\n?<\/BST_TRACKER_STATE>/i)
+    ?? raw.match(/<BST_PUBLIC_STATE_STATS>\n?([\s\S]*?)\n?<\/BST_PUBLIC_STATE_STATS>/i)
+    ?? raw.match(/<BST_OWNER_STATE_STATS>\n?([\s\S]*?)\n?<\/BST_OWNER_STATE_STATS>/i)
+    ?? raw.match(/<BST_OWNER_STATE_LINES>\n?([\s\S]*?)\n?<\/BST_OWNER_STATE_LINES>/i);
+  if (!match) return [];
+  return String(match[1] ?? "")
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line.startsWith("- "));
+}
 
 function clamp(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -34,6 +48,17 @@ function numeric(value: unknown): number | null {
 
 function normalizeOwnerName(value: string): string {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function isReservedSystemOwnerName(value: string): boolean {
+  const normalized = normalizeOwnerName(value);
+  if (!normalized) return true;
+  return (
+    normalized === "sillytavern system" ||
+    normalized === "system" ||
+    normalized === "assistant" ||
+    normalized === "narrator"
+  );
 }
 
 function slugifyDefaultsKey(value: string): string {
@@ -244,6 +269,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         if (name === USER_TRACKER_KEY) return allowUserInjection;
         return targetOwner ? name === targetOwner : true;
       });
+    const filteredScopedNames = scopedNames.filter(name => !isReservedSystemOwnerName(name));
     if (allowUserInjection) {
       const hasUserMood = settings.userTrackMood && data.statistics.mood?.[USER_TRACKER_KEY] !== undefined;
       const hasUserLastThought = settings.userTrackLastThought && String(data.statistics.lastThought?.[USER_TRACKER_KEY] ?? "").trim().length > 0;
@@ -253,8 +279,8 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
           ? resolveScopedCustomNumericValue(data, stat.id, USER_TRACKER_KEY, Boolean(stat.globalScope)) !== undefined
           : resolveScopedCustomNonNumericValue(data, stat.id, USER_TRACKER_KEY, Boolean(stat.globalScope)) !== undefined)
       );
-      if ((hasUserMood || hasUserLastThought || hasUserCustom) && !scopedNames.includes(USER_TRACKER_KEY)) {
-        scopedNames.push(USER_TRACKER_KEY);
+      if ((hasUserMood || hasUserLastThought || hasUserCustom) && !filteredScopedNames.includes(USER_TRACKER_KEY)) {
+        filteredScopedNames.push(USER_TRACKER_KEY);
       }
     }
     const scopedEnabledCustom = enabledCustom.filter(stat => {
@@ -262,7 +288,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       if (stat.globalScope) {
         return isOwnerStatEnabled(context, settings, GLOBAL_TRACKER_KEY, stat.id);
       }
-      return scopedNames.some(name => {
+      return filteredScopedNames.some(name => {
         const isUser = name === USER_TRACKER_KEY;
         if (isUser && !customStatTracksScope(stat, "user")) return false;
         if (!isUser && !customStatTracksScope(stat, "character")) return false;
@@ -312,7 +338,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     const includeSummarizationNote = Boolean(latestSummaryNote);
     if (!hasAnyNumeric && !hasAnyNonNumeric && !includeMood && !includeSummarizationNote) return "";
 
-    const lines = scopedNames.map(name => {
+    const lines = filteredScopedNames.map(name => {
       const isUser = name === USER_TRACKER_KEY;
       const displayName = isUser ? (String(context.name1 ?? "").trim() || "User") : name;
       const parts: string[] = [];
@@ -320,31 +346,37 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       for (const stat of enabledBuiltIns) {
         if (isUser) continue;
         if (!isOwnerStatEnabled(context, settings, name, stat.key)) continue;
-        const value = numeric(data.statistics[stat.key]?.[name] ?? 50) ?? 50;
-        parts.push(`${stat.label} ${value}`);
+        const rawValue = data.statistics[stat.key]?.[name];
+        const value = numeric(rawValue);
+        if (value == null) continue;
+        parts.push(`${stat.label}=${value}`);
       }
       for (const stat of enabledOwnerCustomNumeric) {
         if (stat.privateToOwner && !ownerMatch) continue;
         if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
         if (!isOwnerStatEnabled(context, settings, name, stat.id)) continue;
-        const value = numeric(resolveScopedCustomNumericValue(data, stat.id, name, Boolean(stat.globalScope)) ?? stat.defaultValue) ?? stat.defaultValue;
-        parts.push(`${stat.id} ${value}`);
+        const value = numeric(resolveScopedCustomNumericValue(data, stat.id, name, Boolean(stat.globalScope)));
+        if (value == null) continue;
+        parts.push(`${stat.id}=${value}`);
       }
       for (const stat of enabledOwnerCustomNonNumeric) {
         if (stat.privateToOwner && !ownerMatch) continue;
         if (!customStatTracksScope(stat, isUser ? "user" : "character")) continue;
         if (!isOwnerStatEnabled(context, settings, name, stat.id)) continue;
-        const value = renderNonNumericValue(resolveScopedCustomNonNumericValue(data, stat.id, name, Boolean(stat.globalScope)) ?? stat.defaultValue);
+        const value = renderNonNumericValue(resolveScopedCustomNonNumericValue(data, stat.id, name, Boolean(stat.globalScope)));
         if (value != null) {
-          parts.push(`${stat.id} ${value}`);
+          parts.push(`${stat.id}=${value}`);
         }
       }
       if ((isUser && settings.userTrackMood) || (!isUser && includeMood)) {
         if (!isOwnerStatEnabled(context, settings, name, "mood")) {
           // skip
         } else {
-          const mood = String(data.statistics.mood?.[name] ?? "Neutral").trim() || "Neutral";
-          parts.push(`mood ${mood}`);
+          const rawMood = data.statistics.mood?.[name];
+          const mood = String(rawMood ?? "").trim();
+          if (mood) {
+            parts.push(`mood=${mood}`);
+          }
         }
       }
       const includeThoughtForLine =
@@ -354,27 +386,28 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       if (includeThoughtForLine) {
         const thought = renderNonNumericValue(data.statistics.lastThought?.[name]);
         if (thought != null) {
-          parts.push(`lastThought ${thought}`);
+          parts.push(`lastThought=${thought}`);
         }
       }
       if (!parts.length) return "";
-      return `- ${displayName}: ${parts.join(", ")}`;
+      return `- ${displayName}: ${parts.join("; ")}`;
     }).filter(Boolean);
     const sceneParts: string[] = [];
     for (const stat of enabledGlobalCustomNumeric) {
       if (!isOwnerStatEnabled(context, settings, GLOBAL_TRACKER_KEY, stat.id)) continue;
-      const value = numeric(resolveScopedCustomNumericValue(data, stat.id, GLOBAL_TRACKER_KEY, true) ?? stat.defaultValue) ?? stat.defaultValue;
-      sceneParts.push(`${stat.id} ${value}`);
+      const value = numeric(resolveScopedCustomNumericValue(data, stat.id, GLOBAL_TRACKER_KEY, true));
+      if (value == null) continue;
+      sceneParts.push(`${stat.id}=${value}`);
     }
     for (const stat of enabledGlobalCustomNonNumeric) {
       if (!isOwnerStatEnabled(context, settings, GLOBAL_TRACKER_KEY, stat.id)) continue;
-      const value = renderNonNumericValue(resolveScopedCustomNonNumericValue(data, stat.id, GLOBAL_TRACKER_KEY, true) ?? stat.defaultValue);
+      const value = renderNonNumericValue(resolveScopedCustomNonNumericValue(data, stat.id, GLOBAL_TRACKER_KEY, true));
       if (value != null) {
-        sceneParts.push(`${stat.id} ${value}`);
+        sceneParts.push(`${stat.id}=${value}`);
       }
     }
     if (sceneParts.length) {
-      lines.push(`- Scene: ${sceneParts.join(", ")}`);
+      lines.push(`- Scene: ${sceneParts.join("; ")}`);
     }
     if (!lines.length) return "";
 
@@ -476,7 +509,13 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       "- remain consistent with character core personality and scenario",
     ].join("\n");
     const priorityRules = bstTagBlock("BST_PRIORITY_RULES", priorityRulesRaw);
-    const ownerStateLines = bstTagBlock("BST_OWNER_STATE_LINES", lines.join("\n"));
+    const ownerStats = lines.join("\n");
+    const ownerStateLines = [
+      bstTagBlock("BST_TRACKER_STATE", ownerStats),
+      bstTagBlock("BST_PUBLIC_STATE_STATS", ownerStats),
+      bstTagBlock("BST_OWNER_STATE_STATS", ownerStats),
+      bstTagBlock("BST_OWNER_STATE_LINES", ownerStats),
+    ].join("\n");
     const summarizationNoteRaw = verbosity === "minimal"
       ? ""
       : includeSummarizationNote
@@ -550,6 +589,7 @@ export async function clearPromptInjection(): Promise<void> {
   const types = module?.extension_prompt_types ?? {};
   const inChat = Number(types.IN_CHAT ?? 3);
   lastInjectedPrompt = "";
+  lastInjectedPromptDebug = null;
   setExtensionPrompt(INJECT_KEY, "", inChat, 0, false);
 }
 
@@ -571,6 +611,7 @@ export async function syncPromptInjection(input: {
 
   if (!settings.enabled || !data) {
     lastInjectedPrompt = "";
+    lastInjectedPromptDebug = null;
     setExtensionPrompt(INJECT_KEY, "", inChat, depth, false, systemRole);
     return;
   }
@@ -578,6 +619,13 @@ export async function syncPromptInjection(input: {
   const mergedData = buildMergedPromptMacroData(context, data) ?? data;
   const prompt = buildPrompt(mergedData, settings, context);
   lastInjectedPrompt = prompt;
+  const ownerLines = extractOwnerLinesFromPrompt(prompt);
+  lastInjectedPromptDebug = {
+    targetOwner: resolveInjectionTargetOwner(context, mergedData),
+    rawActiveCharacters: [...mergedData.activeCharacters],
+    ownerLines,
+    reservedOwnerLineDetected: ownerLines.some(line => /silly\s*tavern\s*system|sillytavern\s*system|^\-\s*system\b/i.test(line)),
+  };
   if (!settings.injectTrackerIntoPrompt) {
     setExtensionPrompt(INJECT_KEY, "", inChat, depth, false, systemRole);
     return;
@@ -588,6 +636,10 @@ export async function syncPromptInjection(input: {
 
 export function getLastInjectedPrompt(): string {
   return lastInjectedPrompt;
+}
+
+export function getLastInjectedPromptDebug(): Record<string, unknown> | null {
+  return lastInjectedPromptDebug;
 }
 
 export const __testables = {

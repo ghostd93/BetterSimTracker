@@ -251,6 +251,7 @@ test("buildDiagnosticsReport produces expected core fields", () => {
       generationType: "normal",
     },
     promptInjectionLatestDataMessage: "<bst_inject_block>...</bst_inject_block>",
+    promptInjectionDebugMeta: { targetOwner: "Seraphina" },
     traceTailMemory: ["a"],
     traceTailPersisted: ["b"],
     debugRecord: null,

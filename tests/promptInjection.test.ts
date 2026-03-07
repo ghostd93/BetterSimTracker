@@ -92,7 +92,7 @@ test("buildPrompt includes global custom stats in a dedicated Scene line", () =>
   assert.match(prompt, /<BST_PRIORITY_RULES>/);
   assert.match(prompt, /<BST_OWNER_STATE_LINES>/);
   assert.match(prompt, /<BST_SUMMARIZATION_NOTE>/);
-  assert.match(prompt, /- Scene: scene_date_time "2026-03-07 20:05"/);
+  assert.match(prompt, /- Scene: scene_date_time="2026-03-07 20:05"/);
 });
 
 test("buildPrompt includes global custom stats even when there are no owner lines", () => {
@@ -126,7 +126,7 @@ test("buildPrompt includes global custom stats even when there are no owner line
   const context = makeContext({ name2: "", characterId: -1, characters: [] });
 
   const prompt = __testables.buildPrompt(data, settings, context);
-  assert.match(prompt, /- Scene: scene_location "Forest cottage"/);
+  assert.match(prompt, /- Scene: scene_location="Forest cottage"/);
 });
 
 test("buildPrompt excludes global custom stats when includeInInjection is disabled", () => {
@@ -290,4 +290,32 @@ test("buildPrompt does not render user owner line when includeUserTrackerInInjec
   const prompt = __testables.buildPrompt(data, settings, context);
   assert.match(prompt, /- Seraphina:/);
   assert.doesNotMatch(prompt, /- User:/);
+});
+
+test("buildPrompt filters reserved system owner names and avoids fake fallback values", () => {
+  const settings = makeSettings({
+    trackAffection: true,
+    trackTrust: true,
+    trackDesire: true,
+    trackConnection: true,
+    trackMood: true,
+  });
+  const data = makeTracker({
+    activeCharacters: ["SillyTavern System", "Seraphina"],
+    statistics: {
+      affection: { Seraphina: 12 },
+      trust: { Seraphina: 18 },
+      desire: { Seraphina: 2 },
+      connection: { Seraphina: 15 },
+      mood: { Seraphina: "Hopeful" },
+      lastThought: {},
+    },
+  });
+  const context = makeContext({ name2: "Seraphina", characterId: 0, groupId: "" });
+
+  const prompt = __testables.buildPrompt(data, settings, context);
+  assert.doesNotMatch(prompt, /SillyTavern System/i);
+  assert.doesNotMatch(prompt, /affection=50/);
+  assert.match(prompt, /- Seraphina:/);
+  assert.match(prompt, /affection=12/);
 });

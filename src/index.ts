@@ -3,7 +3,7 @@ import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
 import { isTrackableAiMessage, isTrackableMessage, isTrackableUserMessage } from "./messageFilter";
-import { clearPromptInjection, getLastInjectedPrompt } from "./promptInjection";
+import { clearPromptInjection, getLastInjectedPrompt, getLastInjectedPromptDebug } from "./promptInjection";
 import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
 import {
   buildTrackerSummaryGenerationPrompt,
@@ -4125,6 +4125,7 @@ function openSettings(): void {
         promptInjectionPreview: currentSettings.debug ? getLastInjectedPrompt() : undefined,
         promptInjectionLastMessage: currentSettings.debug ? lastMessagePromptSnapshot : null,
         promptInjectionLatestDataMessage: currentSettings.debug ? latestDataPrompt : null,
+        promptInjectionDebugMeta: currentSettings.debug ? getLastInjectedPromptDebug() : null,
         traceTailMemory: filterDiagnosticsTrace(debugTrace.slice(-150), currentSettings.includeGraphInDiagnostics),
         traceTailPersisted: filterDiagnosticsTrace(readTraceLines(activeContext).slice(-300), currentSettings.includeGraphInDiagnostics),
         debugRecord: filteredLastDebugRecord,
