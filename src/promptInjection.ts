@@ -198,7 +198,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
   const latestSummaryNote = settings.injectSummarizationNote ? readLatestSummaryNote(context) : "";
   const targetOwner = resolveInjectionTargetOwner(context, data);
   const targetOwnerKey = normalizeOwnerName(targetOwner ?? "");
-  const injectionPromptMaxChars = Math.max(500, Math.min(30000, Math.round(Number(settings.injectionPromptMaxChars) || 6000)));
+  const injectionPromptMaxChars = Math.max(500, Math.min(100000, Math.round(Number(settings.injectionPromptMaxChars) || 6000)));
   const builtInUi = settings.builtInNumericStatUi ?? {
     affection: { showOnCard: true, showInGraph: true, includeInInjection: true },
     trust: { showOnCard: true, showInGraph: true, includeInInjection: true },

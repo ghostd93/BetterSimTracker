@@ -2,6 +2,18 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev26] - 2026-03-07
+### Changed
+- Increased custom enum option cap from 12 to 30.
+- Increased custom array item cap from 20 to 30 across runtime normalization, wizard/editors, defaults panels, and prompt contracts.
+- Increased `Injection Prompt Max Chars` upper bound from 30,000 to 100,000.
+
+### Fixed
+- Aligned array/enum limits consistently across settings UI, prompt builders, and sanitization to avoid cap mismatches.
+
+### Added
+- Extended regression expectations in settings/custom-stat tests for new caps.
+
 ## [2.2.3.10-dev25] - 2026-03-07
 ### Changed
 - Prompt injection now emits global custom stats as dedicated `Scene` lines from global scope, independent of character/user owner lines.

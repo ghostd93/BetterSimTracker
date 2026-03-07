@@ -44,6 +44,8 @@ import {
 import { fetchFirstExpressionSprite } from "./stExpressionSprites";
 import {
   hasScriptLikeContent,
+  MAX_CUSTOM_ARRAY_ITEMS,
+  MAX_CUSTOM_ENUM_OPTIONS,
   normalizeCustomEnumOptions,
   normalizeCustomStatKind,
   normalizeNonNumericArrayItems,
@@ -152,7 +154,7 @@ export function openSettingsModal(input: {
           ? Math.max(10, Math.min(400, Math.round(row.textMaxLength)))
           : null,
         arrayCollapsedLimit: typeof row.arrayCollapsedLimit === "number" && Number.isFinite(row.arrayCollapsedLimit)
-          ? Math.max(1, Math.min(20, Math.round(row.arrayCollapsedLimit)))
+          ? Math.max(1, Math.min(MAX_CUSTOM_ARRAY_ITEMS, Math.round(row.arrayCollapsedLimit)))
           : null,
         dateTimeShowWeekday: Boolean(row.dateTimeShowWeekday ?? true),
         dateTimeShowDate: Boolean(row.dateTimeShowDate ?? true),
@@ -249,7 +251,7 @@ export function openSettingsModal(input: {
 
         <div class="bst-section-divider">Injection Settings</div>
         <label data-bst-row="injectPromptDepth">Injection Depth <select data-k="injectPromptDepth"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></label>
-        <label data-bst-row="injectionPromptMaxChars">Injection Prompt Max Chars <input data-k="injectionPromptMaxChars" type="number" min="500" max="30000"></label>
+        <label data-bst-row="injectionPromptMaxChars">Injection Prompt Max Chars <input data-k="injectionPromptMaxChars" type="number" min="500" max="100000"></label>
         <div class="bst-check-grid">
           <label class="bst-check"><input data-k="injectTrackerIntoPrompt" type="checkbox">Inject Tracker Into Prompt</label>
           <label class="bst-check"><input data-k="summarizationNoteVisibleForAI" type="checkbox">Summarization Note Visible for AI (future notes)</label>
@@ -1338,7 +1340,7 @@ export function openSettingsModal(input: {
         const bounded = Math.max(20, Math.min(200, Math.round(maxLen || 120)));
         const items = normalizeNonNumericArrayItems(draft.defaultValue, bounded);
         if (items.length > 20) {
-          errors.push("Array default supports up to 20 items.");
+          errors.push(`Array default supports up to ${MAX_CUSTOM_ARRAY_ITEMS} items.`);
         }
         if (items.some(item => item.length > bounded)) {
           errors.push("One or more array items exceed max length.");
@@ -1514,7 +1516,7 @@ export function openSettingsModal(input: {
     const track = explicitTrack == null ? (trackCharacters || trackUser) : explicitTrack;
     const textMaxLength = Math.max(20, Math.min(200, Math.round(Number(candidate.textMaxLength) || 120)));
     const enumOptions = kind === "enum_single"
-      ? normalizeCustomEnumOptions(candidate.enumOptions).slice(0, 12)
+      ? normalizeCustomEnumOptions(candidate.enumOptions).slice(0, MAX_CUSTOM_ENUM_OPTIONS)
       : undefined;
     if (kind === "enum_single" && (!enumOptions || enumOptions.length < 2)) {
       return { stat: null, warning: `Skipped "${label}": enum requires at least 2 options.` };
@@ -2196,7 +2198,7 @@ export function openSettingsModal(input: {
           <div class="bst-scene-stat-editor-group" data-scene-opt-row="arrayLimit">
             <div class="bst-scene-stat-editor-group-title">Array Handling</div>
             <label>Array Collapse Limit (1-20)
-              <input type="number" min="1" max="20" data-scene-opt="arrayCollapsedLimit" value="${current.arrayCollapsedLimit == null ? "" : String(current.arrayCollapsedLimit)}" placeholder="Use Scene Card default">
+              <input type="number" min="1" max="${MAX_CUSTOM_ARRAY_ITEMS}" data-scene-opt="arrayCollapsedLimit" value="${current.arrayCollapsedLimit == null ? "" : String(current.arrayCollapsedLimit)}" placeholder="Use Scene Card default">
             </label>
           </div>
           <div class="bst-scene-stat-editor-group" data-scene-opt-row="dateTimeFormat"${isDateTime ? "" : " style=\"display:none;\""}>
@@ -2907,7 +2909,7 @@ export function openSettingsModal(input: {
 
     const updateArrayEditorCounter = (count: number): void => {
       if (!arrayDefaultsCounterNode) return;
-      arrayDefaultsCounterNode.textContent = `${count}/20 items`;
+      arrayDefaultsCounterNode.textContent = `${count}/${MAX_CUSTOM_ARRAY_ITEMS} items`;
       const state = count >= 20 ? "limit" : count >= 16 ? "warn" : "ok";
       arrayDefaultsCounterNode.setAttribute("data-state", state);
     };
@@ -2927,8 +2929,9 @@ export function openSettingsModal(input: {
 
     const updateEnumEditorCounter = (count: number): void => {
       if (!enumOptionsCounterNode) return;
-      enumOptionsCounterNode.textContent = `${count}/12 options`;
-      const state = count >= 12 ? "limit" : count >= 10 ? "warn" : "ok";
+      enumOptionsCounterNode.textContent = `${count}/${MAX_CUSTOM_ENUM_OPTIONS} options`;
+      const warnAt = Math.max(2, MAX_CUSTOM_ENUM_OPTIONS - 2);
+      const state = count >= MAX_CUSTOM_ENUM_OPTIONS ? "limit" : count >= warnAt ? "warn" : "ok";
       enumOptionsCounterNode.setAttribute("data-state", state);
     };
 
@@ -2960,7 +2963,7 @@ export function openSettingsModal(input: {
       const maxLen = getArrayEditorItemMaxLength();
       const sourceValue = draft.kind === "array" ? draft.defaultValue : "";
       const items = normalizeNonNumericArrayItems(sourceValue, maxLen);
-      const rows = (items.length ? items : [""]).slice(0, 20);
+      const rows = (items.length ? items : [""]).slice(0, MAX_CUSTOM_ARRAY_ITEMS);
       arrayDefaultsListNode.innerHTML = rows.map(value => arrayEditorRowHtml(value, maxLen)).join("");
       syncArrayEditorToHiddenField();
     };
@@ -2968,7 +2971,7 @@ export function openSettingsModal(input: {
     const renderEnumEditorFromDraft = (): void => {
       if (!enumOptionsListNode) return;
       const options = normalizeCustomEnumOptions(draft.enumOptionsText.split(/\r?\n/));
-      const rows = (options.length ? options : ["", ""]).slice(0, 12);
+      const rows = (options.length ? options : ["", ""]).slice(0, MAX_CUSTOM_ENUM_OPTIONS);
       while (rows.length < 2) rows.push("");
       enumOptionsListNode.innerHTML = rows.map(value => enumEditorRowHtml(value)).join("");
       syncEnumEditorToHiddenField();
@@ -3141,7 +3144,7 @@ export function openSettingsModal(input: {
         } else if (kind === "boolean") {
           valueHelpNode.textContent = "Boolean stats store true/false (no delta, no graph).";
         } else if (kind === "array") {
-          valueHelpNode.textContent = "Array stats store up to 20 short items and should be updated incrementally (add/remove/edit items).";
+          valueHelpNode.textContent = `Array stats store up to ${MAX_CUSTOM_ARRAY_ITEMS} short items and should be updated incrementally (add/remove/edit items).`;
         } else if (kind === "date_time") {
           valueHelpNode.textContent = draft.dateTimeMode === "structured"
             ? "Structured mode accepts semantic datetime updates and normalizes to YYYY-MM-DD HH:mm (no delta, no graph)."
@@ -3995,7 +3998,7 @@ export function openSettingsModal(input: {
       confidenceDampening: readNumber("confidenceDampening", input.settings.confidenceDampening, 0, 1),
       moodStickiness: readNumber("moodStickiness", input.settings.moodStickiness, 0, 1),
       injectTrackerIntoPrompt: readBool("injectTrackerIntoPrompt", input.settings.injectTrackerIntoPrompt),
-      injectionPromptMaxChars: readNumber("injectionPromptMaxChars", input.settings.injectionPromptMaxChars, 500, 30000),
+      injectionPromptMaxChars: readNumber("injectionPromptMaxChars", input.settings.injectionPromptMaxChars, 500, 100000),
       summarizationNoteVisibleForAI: readBool("summarizationNoteVisibleForAI", input.settings.summarizationNoteVisibleForAI),
       injectSummarizationNote: readBool("injectSummarizationNote", input.settings.injectSummarizationNote),
       autoDetectActive: readBool("autoDetectActive", input.settings.autoDetectActive),

@@ -63,6 +63,7 @@ import {
   smoothSeries,
 } from "./graphSeries";
 import {
+  MAX_CUSTOM_ARRAY_ITEMS,
   normalizeCustomEnumOptions,
   normalizeCustomStatDefaultValue,
   normalizeCustomStatKind,
@@ -4904,7 +4905,7 @@ export function renderTracker(
             }
             if (def.kind === "array") {
               const items = Array.isArray(resolved) ? resolved : normalizeNonNumericArrayItems(resolved, def.textMaxLength);
-              const arrayLimit = Math.max(1, Math.min(20, display?.arrayCollapsedLimit ?? settings.sceneCardArrayCollapsedLimit));
+              const arrayLimit = Math.max(1, Math.min(MAX_CUSTOM_ARRAY_ITEMS, display?.arrayCollapsedLimit ?? settings.sceneCardArrayCollapsedLimit));
               const sceneArrayKey = `arrscene:${entry.messageIndex}:${def.id}`;
               const expanded = expandedArrayValueKeys.has(sceneArrayKey);
               const hasOverflow = items.length > arrayLimit;

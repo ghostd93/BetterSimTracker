@@ -32,6 +32,7 @@ import type {
 } from "./types";
 import { normalizeDateTimeValue } from "./dateTime";
 import {
+  MAX_CUSTOM_ARRAY_ITEMS,
   normalizeCustomEnumOptions,
   normalizeCustomNonNumericValue,
   normalizeCustomStatDefaultValue,
@@ -569,7 +570,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     includeLorebookInExtraction,
     lorebookExtractionMaxChars,
     injectPromptDepth: clampInt(input.injectPromptDepth, defaultSettings.injectPromptDepth, 0, 8),
-    injectionPromptMaxChars: clampInt(input.injectionPromptMaxChars, defaultSettings.injectionPromptMaxChars, 500, 30000),
+    injectionPromptMaxChars: clampInt(input.injectionPromptMaxChars, defaultSettings.injectionPromptMaxChars, 500, 100000),
     summarizationNoteVisibleForAI: asBool(input.summarizationNoteVisibleForAI, defaultSettings.summarizationNoteVisibleForAI),
     injectSummarizationNote: asBool(input.injectSummarizationNote, defaultSettings.injectSummarizationNote),
     sequentialExtraction: asBool(input.sequentialExtraction, defaultSettings.sequentialExtraction),
@@ -795,7 +796,7 @@ function sanitizeSceneCardStatDisplay(input: unknown): Record<string, SceneCardS
         : clampInt(row.textMaxLength, 80, 10, 400),
       arrayCollapsedLimit: row.arrayCollapsedLimit == null
         ? null
-        : clampInt(row.arrayCollapsedLimit, 4, 1, 20),
+        : clampInt(row.arrayCollapsedLimit, 4, 1, MAX_CUSTOM_ARRAY_ITEMS),
       dateTimeShowWeekday: asBool(row.dateTimeShowWeekday, true),
       dateTimeShowDate: asBool(row.dateTimeShowDate, true),
       dateTimeShowTime: asBool(row.dateTimeShowTime, true),

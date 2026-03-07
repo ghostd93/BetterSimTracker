@@ -92,7 +92,7 @@ Kind-specific fields:
 - `enum_single`: `defaultValue`, `enumOptions[]`
 - `boolean`: `defaultValue`, `booleanTrueLabel`, `booleanFalseLabel`
 - `text_short`: `defaultValue`, `textMaxLength`
-- `array`: `defaultValue` (`string[]`), `textMaxLength` (per-item limit), max `20` items
+- `array`: `defaultValue` (`string[]`), `textMaxLength` (per-item limit), max `30` items
 - `date_time`: `defaultValue` (timestamp string), `dateTimeMode` (`timestamp`/`structured`)
 
 ## Persistence Surfaces

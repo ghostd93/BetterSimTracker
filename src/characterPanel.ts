@@ -23,6 +23,7 @@ import type {
 } from "./types";
 import { normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
 import {
+  MAX_CUSTOM_ARRAY_ITEMS,
   normalizeCustomEnumOptions,
   normalizeCustomStatKind,
   normalizeCustomTextMaxLength,
@@ -650,7 +651,7 @@ function renderPanel(input: InitInput, force = false): void {
     if (kind === "array") {
       const maxLength = Math.max(20, Math.min(200, Math.round(Number(definition.textMaxLength) || 120)));
       const items = normalizeNonNumericArrayItems(customNonNumericDefaultsRaw[id], maxLength);
-      const rows = (items.length ? items : [""]).slice(0, 20);
+      const rows = (items.length ? items : [""]).slice(0, MAX_CUSTOM_ARRAY_ITEMS);
       const value = items.join("\n");
       return `
         <div class="bst-array-default-editor" data-bst-custom-default-array-editor="${escapeHtml(id)}" data-bst-max-length="${maxLength}">
@@ -660,7 +661,7 @@ function renderPanel(input: InitInput, force = false): void {
           </div>
           <div class="bst-array-default-actions">
             <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="character-default-array-add" data-bst-custom-default-array-add="${escapeHtml(id)}" aria-label="Add item" title="Add item" ${disabledAttr}><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
-            <span class="bst-editor-counter" data-bst-custom-default-array-counter="${escapeHtml(id)}">${items.length}/20 items</span>
+            <span class="bst-editor-counter" data-bst-custom-default-array-counter="${escapeHtml(id)}">${items.length}/${MAX_CUSTOM_ARRAY_ITEMS} items</span>
           </div>
           <textarea rows="1" style="display:none" data-bst-custom-default-array="${escapeHtml(id)}" data-bst-max-length="${maxLength}" aria-hidden="true" ${disabledAttr}>${escapeHtml(value)}</textarea>
         </div>
@@ -1181,7 +1182,7 @@ function renderPanel(input: InitInput, force = false): void {
       const values = getItemInputs().map(inputNode => inputNode.value);
       const normalized = normalizeNonNumericArrayItems(values, maxLength);
       hiddenNode.value = normalized.join("\n");
-      counterNode.textContent = `${normalized.length}/20 items`;
+      counterNode.textContent = `${normalized.length}/${MAX_CUSTOM_ARRAY_ITEMS} items`;
       counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");
       addBtn.disabled = getItemInputs().length >= 20;
       return normalized;

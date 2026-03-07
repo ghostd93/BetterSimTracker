@@ -1,7 +1,7 @@
 import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
 import { getAllNumericStatDefinitions } from "./statRegistry";
 import { normalizeDateTimeValue, toDateTimeInputValue } from "./dateTime";
-import { normalizeNonNumericArrayItems, resolveEnumOption } from "./customStatRuntime";
+import { MAX_CUSTOM_ARRAY_ITEMS, normalizeNonNumericArrayItems, resolveEnumOption } from "./customStatRuntime";
 import type { BetterSimTrackerSettings, TrackerData } from "./types";
 import {
   EDIT_STATS_BACKDROP_CLASS,
@@ -153,7 +153,7 @@ export function openEditStatsModal(input: {
     if (def.kind === "array") {
       const items = Array.isArray(currentValue) ? currentValue : normalizeNonNumericArrayItems(currentValue, def.textMaxLength);
       const value = items.join("\n");
-      const rows = (items.length ? items : [""]).slice(0, 20);
+      const rows = (items.length ? items : [""]).slice(0, MAX_CUSTOM_ARRAY_ITEMS);
       const safeId = escapeHtml(def.id);
       return `
         <div class="bst-edit-field bst-array-default-editor" data-bst-edit-array-editor="${safeId}" data-bst-max-length="${def.textMaxLength}">
@@ -168,10 +168,10 @@ export function openEditStatsModal(input: {
           </div>
           <div class="bst-array-default-actions">
             <button type="button" class="bst-btn bst-btn-soft bst-icon-btn" data-action="edit-array-add" data-bst-edit-array-add="${safeId}" aria-label="Add item" title="Add item"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
-            <span class="bst-editor-counter" data-bst-edit-array-counter="${safeId}">${items.length}/20 items</span>
+            <span class="bst-editor-counter" data-bst-edit-array-counter="${safeId}">${items.length}/${MAX_CUSTOM_ARRAY_ITEMS} items</span>
           </div>
           <div class="bst-edit-array-status" data-bst-edit-array-status="${safeId}" style="display:none;"></div>
-          <textarea rows="1" style="display:none" data-bst-edit-non-numeric="${safeId}" data-bst-edit-kind="array" placeholder="One item per line, up to 20 items.">${escapeHtml(value)}</textarea>
+          <textarea rows="1" style="display:none" data-bst-edit-non-numeric="${safeId}" data-bst-edit-kind="array" placeholder="One item per line, up to ${MAX_CUSTOM_ARRAY_ITEMS} items.">${escapeHtml(value)}</textarea>
         </div>
       `;
     }
@@ -339,14 +339,14 @@ export function openEditStatsModal(input: {
       const hadTooLong = rawNonEmpty.some(value => value.length > maxLength);
       const hitLimit = rawNonEmpty.length > 20;
       hiddenNode.value = normalized.join("\n");
-      counterNode.textContent = `${normalized.length}/20 items`;
+      counterNode.textContent = `${normalized.length}/${MAX_CUSTOM_ARRAY_ITEMS} items`;
       counterNode.setAttribute("data-state", normalized.length >= 20 ? "limit" : normalized.length >= 16 ? "warn" : "ok");
       addBtn.disabled = getItemInputs().length >= 20;
       if (statusNode) {
         const messages: string[] = [];
         if (hadTooLong) messages.push(`Items longer than ${maxLength} chars were trimmed.`);
         if (uniqueRawNonEmpty > normalized.length) messages.push("Duplicate/empty items were normalized.");
-        if (hitLimit) messages.push("Only first 20 items are kept.");
+        if (hitLimit) messages.push(`Only first ${MAX_CUSTOM_ARRAY_ITEMS} items are kept.`);
         statusNode.textContent = messages.join(" ");
         statusNode.style.display = messages.length ? "block" : "none";
       }

@@ -61,6 +61,7 @@ function makeContext(extensionSettings?: Record<string, unknown>): STContext {
 test("sanitizeSettings normalizes custom stats, defaults, and scene card display settings", () => {
   const sanitized = sanitizeSettings({
     sceneCardLayout: "rows",
+    injectionPromptMaxChars: 200000,
     customStats: [
       {
         id: "Clothes",
@@ -118,9 +119,10 @@ test("sanitizeSettings normalizes custom stats, defaults, and scene card display
   assert.equal(sanitized.customStats[1].trackUser, true);
   assert.equal(sanitized.customStats[1].privateToOwner, false);
   assert.equal(sanitized.customStats[1].dateTimeMode, "structured");
+  assert.equal(sanitized.injectionPromptMaxChars, 100000);
   assert.equal(sanitized.sceneCardStatDisplay.scene_date_time.colorOverride, "#aabbcc");
   assert.equal(sanitized.sceneCardStatDisplay.scene_date_time.textMaxLength, 400);
-  assert.equal(sanitized.sceneCardStatDisplay.scene_date_time.arrayCollapsedLimit, 20);
+  assert.equal(sanitized.sceneCardStatDisplay.scene_date_time.arrayCollapsedLimit, 30);
   assert.deepEqual(
     sanitized.sceneCardStatDisplay.scene_date_time.dateTimePartOrder,
     ["phase", "date", "weekday", "time"],

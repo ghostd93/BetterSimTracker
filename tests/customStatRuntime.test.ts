@@ -44,7 +44,7 @@ test("normalizeCustomEnumOptions deduplicates and strips unsafe values", () => {
 });
 
 test("normalizeCustomEnumOptions respects option cap", () => {
-  const options = normalizeCustomEnumOptions(Array.from({ length: 20 }, (_, i) => `v${i}`));
+  const options = normalizeCustomEnumOptions(Array.from({ length: 80 }, (_, i) => `v${i}`));
   assert.equal(options.length, MAX_CUSTOM_ENUM_OPTIONS);
 });
 
