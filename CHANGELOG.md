@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.4-dev1] - 2026-03-07
+### Fixed
+- Injection owner-line scoping in 1:1 chats now targets the current chat character, preventing unrelated active owners from appearing in the injected state block.
+- Owner default resolution for injection now prefers the active `characterId` match before name fallback, reducing duplicate-name ambiguity.
+- Injection generation now uses merged tracker baseline state before prompt render, improving owner-line continuity when the latest snapshot is partial.
+
 ## [2.2.4.4] - 2026-03-07
 ### Changed
 - Moved `BST_*` wrappers to runtime macro payload assembly in prompt injection, so custom injection templates cannot remove tagged BST sections.

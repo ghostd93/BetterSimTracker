@@ -1,6 +1,7 @@
 import { DEFAULT_INJECTION_PROMPT_TEMPLATE } from "./prompts";
 import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
 import { resolveCharacterDefaultsEntry } from "./characterDefaults";
+import { buildMergedPromptMacroData } from "./runtimeState";
 import {
   behaviorGuidanceLines,
   customStatTracksAnyScope,
@@ -58,6 +59,8 @@ function resolveCurrentPersonaAvatarId(context: STContext | null): string | null
     : "";
   if (fromGlobal) return fromGlobal;
 
+  if (typeof document === "undefined") return null;
+
   const selectedContainer = document.querySelector("#user_avatar_block .avatar-container.selected") as HTMLElement | null;
   const selectedContainerAvatar = String(selectedContainer?.getAttribute("data-avatar-id") ?? "").trim();
   if (selectedContainerAvatar) return selectedContainerAvatar;
@@ -96,7 +99,17 @@ function isOwnerStatEnabled(
     return statEnabledRaw[id] !== false;
   }
 
-  const matchedCharacter = (context.characters ?? []).find(character =>
+  const contextCharacters = Array.isArray(context.characters) ? context.characters : [];
+  const contextCharacterId = Number(context.characterId);
+  const inGroup = Boolean(String(context.groupId ?? "").trim());
+  const matchedFromId = !inGroup
+    && Number.isFinite(contextCharacterId)
+    && contextCharacterId >= 0
+    && contextCharacters[contextCharacterId]
+    && normalizeOwnerName(String(contextCharacters[contextCharacterId]?.name ?? "")) === normalizeOwnerName(ownerName)
+    ? contextCharacters[contextCharacterId]
+    : null;
+  const matchedCharacter = matchedFromId ?? contextCharacters.find(character =>
     normalizeOwnerName(String(character?.name ?? "")) === normalizeOwnerName(ownerName),
   );
   const defaults = resolveCharacterDefaultsEntry(settings, {
@@ -219,8 +232,19 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
   type InjectionVerbosityMode = "full" | "no_react_rules" | "minimal";
   const buildWithCustom = (customStatCount: number, verbosity: InjectionVerbosityMode): string => {
     const enabledCustom = allEnabledCustom.slice(0, customStatCount);
+    const allowUserInjection = Boolean(settings.includeUserTrackerInInjection && settings.enableUserTracking);
     const names = [...data.activeCharacters];
-    if (settings.includeUserTrackerInInjection && settings.enableUserTracking) {
+    if (targetOwner && targetOwner !== USER_TRACKER_KEY && !names.includes(targetOwner)) {
+      names.push(targetOwner);
+    }
+    const inGroup = Boolean(String(context.groupId ?? "").trim());
+    const scopedNames = inGroup
+      ? names.filter(name => allowUserInjection || name !== USER_TRACKER_KEY)
+      : names.filter(name => {
+        if (name === USER_TRACKER_KEY) return allowUserInjection;
+        return targetOwner ? name === targetOwner : true;
+      });
+    if (allowUserInjection) {
       const hasUserMood = settings.userTrackMood && data.statistics.mood?.[USER_TRACKER_KEY] !== undefined;
       const hasUserLastThought = settings.userTrackLastThought && String(data.statistics.lastThought?.[USER_TRACKER_KEY] ?? "").trim().length > 0;
       const hasUserCustom = enabledCustom.some(stat =>
@@ -229,8 +253,8 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
           ? resolveScopedCustomNumericValue(data, stat.id, USER_TRACKER_KEY, Boolean(stat.globalScope)) !== undefined
           : resolveScopedCustomNonNumericValue(data, stat.id, USER_TRACKER_KEY, Boolean(stat.globalScope)) !== undefined)
       );
-      if ((hasUserMood || hasUserLastThought || hasUserCustom) && !names.includes(USER_TRACKER_KEY)) {
-        names.push(USER_TRACKER_KEY);
+      if ((hasUserMood || hasUserLastThought || hasUserCustom) && !scopedNames.includes(USER_TRACKER_KEY)) {
+        scopedNames.push(USER_TRACKER_KEY);
       }
     }
     const scopedEnabledCustom = enabledCustom.filter(stat => {
@@ -238,7 +262,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       if (stat.globalScope) {
         return isOwnerStatEnabled(context, settings, GLOBAL_TRACKER_KEY, stat.id);
       }
-      return names.some(name => {
+      return scopedNames.some(name => {
         const isUser = name === USER_TRACKER_KEY;
         if (isUser && !customStatTracksScope(stat, "user")) return false;
         if (!isUser && !customStatTracksScope(stat, "character")) return false;
@@ -288,7 +312,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
     const includeSummarizationNote = Boolean(latestSummaryNote);
     if (!hasAnyNumeric && !hasAnyNonNumeric && !includeMood && !includeSummarizationNote) return "";
 
-    const lines = names.map(name => {
+    const lines = scopedNames.map(name => {
       const isUser = name === USER_TRACKER_KEY;
       const displayName = isUser ? (String(context.name1 ?? "").trim() || "User") : name;
       const parts: string[] = [];
@@ -551,7 +575,8 @@ export async function syncPromptInjection(input: {
     return;
   }
 
-  const prompt = buildPrompt(data, settings, context);
+  const mergedData = buildMergedPromptMacroData(context, data) ?? data;
+  const prompt = buildPrompt(mergedData, settings, context);
   lastInjectedPrompt = prompt;
   if (!settings.injectTrackerIntoPrompt) {
     setExtensionPrompt(INJECT_KEY, "", inChat, depth, false, systemRole);
