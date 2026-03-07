@@ -50,29 +50,17 @@ export const DEFAULT_UNIFIED_PROMPT_INSTRUCTION = [
 export const DEFAULT_INJECTION_PROMPT_TEMPLATE = [
   "{{header}}",
   "",
-  "<BST_STAT_SEMANTICS>",
   "{{statSemantics}}",
-  "</BST_STAT_SEMANTICS>",
   "",
-  "<BST_BEHAVIOR_BANDS>",
   "{{behaviorBands}}",
-  "</BST_BEHAVIOR_BANDS>",
   "",
-  "<BST_REACT_RULES>",
   "{{reactRules}}",
-  "</BST_REACT_RULES>",
   "",
-  "<BST_PRIORITY_RULES>",
   "{{priorityRules}}",
-  "</BST_PRIORITY_RULES>",
   "",
-  "<BST_OWNER_STATE_LINES>",
   "{{lines}}",
-  "</BST_OWNER_STATE_LINES>",
   "",
-  "<BST_SUMMARIZATION_NOTE>",
   "{{summarizationNote}}",
-  "</BST_SUMMARIZATION_NOTE>",
 ].join("\n");
 
 export const UNIFIED_PROMPT_PROTOCOL = `Numeric stats to update ({{numericStats}}):
@@ -532,18 +520,30 @@ export function buildUnifiedPrompt(
     includeLorebookInExtraction,
   );
   const protocol = protocolTemplate?.trim() ? protocolTemplate : UNIFIED_PROMPT_PROTOCOL;
+  const criticalInstruction = bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only.");
+  const envelopeBlock = bstTagBlock("BST_ENVELOPE", "{{envelope}}");
+  const currentStateBlock = bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}");
+  const recentSnapshotsBlock = bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}");
+  const taskBlock = bstTagBlock("BST_TASK", "{{instruction}}");
+  const outputProtocolBlock = bstTagBlock("BST_OUTPUT_PROTOCOL", protocol);
   const assembled = [
     MAIN_PROMPT,
     "",
-    bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only."),
-    bstTagBlock("BST_ENVELOPE", "{{envelope}}"),
-    bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}"),
-    bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}"),
-    bstTagBlock("BST_TASK", "{{instruction}}"),
+    "{{criticalInstruction}}",
+    "{{envelopeBlock}}",
+    "{{currentStateBlock}}",
+    "{{recentSnapshotsBlock}}",
+    "{{taskBlock}}",
     "",
-    bstTagBlock("BST_OUTPUT_PROTOCOL", protocol),
+    "{{outputProtocolBlock}}",
   ].join("\n");
   return renderTemplate(assembled, {
+    criticalInstruction,
+    envelopeBlock,
+    currentStateBlock,
+    recentSnapshotsBlock,
+    taskBlock,
+    outputProtocolBlock,
     envelope,
     user: userName,
     userName,
@@ -752,21 +752,35 @@ export function buildUnifiedAllStatsPrompt(input: {
   const assembled = [
     MAIN_PROMPT,
     "",
-    bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only."),
-    bstTagBlock("BST_ENVELOPE", "{{envelope}}"),
-    bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}"),
-    bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}"),
-    bstTagBlock("BST_TASK", [
+    "{{criticalInstruction}}",
+    "{{envelopeBlock}}",
+    "{{currentStateBlock}}",
+    "{{recentSnapshotsBlock}}",
+    "{{taskBlock}}",
+    "",
+    "{{outputProtocolBlock}}",
+  ].join("\n");
+
+  const taskContent = [
       "{{instruction}}",
       "- Update built-in and custom stats in this single response.",
       "- For custom numeric stats, use `delta.<statId>`.",
       "- For custom non-numeric stats, use `value.<statId>`.",
-    ].join("\n")),
-    "",
-    bstTagBlock("BST_OUTPUT_PROTOCOL", protocol),
-  ].join("\n");
+    ].join("\n");
+  const criticalInstruction = bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only.");
+  const envelopeBlock = bstTagBlock("BST_ENVELOPE", "{{envelope}}");
+  const currentStateBlock = bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}");
+  const recentSnapshotsBlock = bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}");
+  const taskBlock = bstTagBlock("BST_TASK", taskContent);
+  const outputProtocolBlock = bstTagBlock("BST_OUTPUT_PROTOCOL", protocol);
 
   return renderTemplate(assembled, {
+    criticalInstruction,
+    envelopeBlock,
+    currentStateBlock,
+    recentSnapshotsBlock,
+    taskBlock,
+    outputProtocolBlock,
     envelope,
     user: input.userName,
     userName: input.userName,
@@ -842,18 +856,30 @@ export function buildSequentialPrompt(
       ? LAST_THOUGHT_PROMPT_PROTOCOL
       : NUMERIC_PROMPT_PROTOCOL(stat);
   const protocol = protocolTemplate?.trim() ? protocolTemplate : defaultProtocol;
+  const criticalInstruction = bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only.");
+  const envelopeBlock = bstTagBlock("BST_ENVELOPE", "{{envelope}}");
+  const currentStateBlock = bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}");
+  const recentSnapshotsBlock = bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}");
+  const taskBlock = bstTagBlock("BST_TASK", "{{instruction}}");
+  const outputProtocolBlock = bstTagBlock("BST_OUTPUT_PROTOCOL", protocol);
   const assembled = [
     MAIN_PROMPT,
     "",
-    bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only."),
-    bstTagBlock("BST_ENVELOPE", "{{envelope}}"),
-    bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}"),
-    bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}"),
-    bstTagBlock("BST_TASK", "{{instruction}}"),
+    "{{criticalInstruction}}",
+    "{{envelopeBlock}}",
+    "{{currentStateBlock}}",
+    "{{recentSnapshotsBlock}}",
+    "{{taskBlock}}",
     "",
-    bstTagBlock("BST_OUTPUT_PROTOCOL", protocol),
+    "{{outputProtocolBlock}}",
   ].join("\n");
   return renderTemplate(assembled, {
+    criticalInstruction,
+    envelopeBlock,
+    currentStateBlock,
+    recentSnapshotsBlock,
+    taskBlock,
+    outputProtocolBlock,
     envelope,
     user: userName,
     userName,
@@ -950,19 +976,31 @@ export function buildSequentialCustomNumericPrompt(input: {
   );
 
   const protocol = input.protocolTemplate?.trim() || NUMERIC_PROMPT_PROTOCOL(statId);
+  const criticalInstruction = bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only.");
+  const envelopeBlock = bstTagBlock("BST_ENVELOPE", "{{envelope}}");
+  const currentStateBlock = bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}");
+  const recentSnapshotsBlock = bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}");
+  const taskBlock = bstTagBlock("BST_TASK", "{{instruction}}");
+  const outputProtocolBlock = bstTagBlock("BST_OUTPUT_PROTOCOL", protocol);
   const assembled = [
     MAIN_PROMPT,
     "",
-    bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only."),
-    bstTagBlock("BST_ENVELOPE", "{{envelope}}"),
-    bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}"),
-    bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}"),
-    bstTagBlock("BST_TASK", "{{instruction}}"),
+    "{{criticalInstruction}}",
+    "{{envelopeBlock}}",
+    "{{currentStateBlock}}",
+    "{{recentSnapshotsBlock}}",
+    "{{taskBlock}}",
     "",
-    bstTagBlock("BST_OUTPUT_PROTOCOL", protocol),
+    "{{outputProtocolBlock}}",
   ].join("\n");
 
   return renderTemplate(assembled, {
+    criticalInstruction,
+    envelopeBlock,
+    currentStateBlock,
+    recentSnapshotsBlock,
+    taskBlock,
+    outputProtocolBlock,
     envelope,
     user: input.userName,
     userName: input.userName,
@@ -1239,29 +1277,41 @@ export function buildSequentialCustomNonNumericPrompt(input: {
     Boolean(input.includeLorebookInExtraction),
   );
 
+  const protocolBlock = bstTagBlock("BST_OUTPUT_PROTOCOL", customNonNumericProtocol({
+    kind: statKind,
+    statId,
+    allowedValues: enumOptions,
+    textMaxLen,
+    arrayMaxItems: MAX_CUSTOM_ARRAY_ITEMS,
+    dateTimeMode,
+    trueLabel,
+    falseLabel,
+    template: input.protocolTemplate,
+  }));
+  const criticalInstruction = bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only.");
+  const envelopeBlock = bstTagBlock("BST_ENVELOPE", "{{envelope}}");
+  const currentStateBlock = bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}");
+  const recentSnapshotsBlock = bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}");
+  const taskBlock = bstTagBlock("BST_TASK", "{{instruction}}");
   const assembled = [
     MAIN_PROMPT,
     "",
-    bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only."),
-    bstTagBlock("BST_ENVELOPE", "{{envelope}}"),
-    bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}"),
-    bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}"),
-    bstTagBlock("BST_TASK", "{{instruction}}"),
+    "{{criticalInstruction}}",
+    "{{envelopeBlock}}",
+    "{{currentStateBlock}}",
+    "{{recentSnapshotsBlock}}",
+    "{{taskBlock}}",
     "",
-    bstTagBlock("BST_OUTPUT_PROTOCOL", customNonNumericProtocol({
-      kind: statKind,
-      statId,
-      allowedValues: enumOptions,
-      textMaxLen,
-      arrayMaxItems: MAX_CUSTOM_ARRAY_ITEMS,
-      dateTimeMode,
-      trueLabel,
-      falseLabel,
-      template: input.protocolTemplate,
-    })),
+    "{{outputProtocolBlock}}",
   ].join("\n");
 
   return renderTemplate(assembled, {
+    criticalInstruction,
+    envelopeBlock,
+    currentStateBlock,
+    recentSnapshotsBlock,
+    taskBlock,
+    outputProtocolBlock: protocolBlock,
     envelope,
     user: input.userName,
     userName: input.userName,

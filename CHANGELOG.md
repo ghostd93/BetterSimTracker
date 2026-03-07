@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.3-dev2] - 2026-03-07
+### Changed
+- Moved `BST_*` wrappers to runtime macro payload assembly in prompt injection, so custom injection templates cannot remove tagged BST sections.
+- Applied the same runtime-wrapped `BST_*` block pattern across extraction prompt builders (unified + sequential + custom stats).
+- Simplified default injection template to plain placeholders, with tags now provided by wrapped macro values at render time.
+
+### Fixed
+- Custom injection templates now keep tagged BST semantics/rules/state blocks instead of losing them when users override the template layout.
+
 ## [2.2.4.3-dev1] - 2026-03-07
 ### Changed
 - Added explicit `BST_*` tagged sections to extraction prompts in unified and sequential builders to make BST instructions easier for models to prioritize consistently.

@@ -162,6 +162,11 @@ function renderTemplate(template: string, values: Record<string, string>): strin
   return output;
 }
 
+function bstTagBlock(tag: string, content: string): string {
+  const inner = String(content ?? "").trim();
+  return [`<${tag}>`, inner, `</${tag}>`].join("\n");
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;
   return value as Record<string, unknown>;
@@ -360,7 +365,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       "Use this state to keep character behavior coherent with current relationship progression.",
       "Treat as soft state: do not quote numbers directly; express them through tone, wording, initiative, boundaries, and choices.",
     ].join("\n");
-    const statSemantics = [
+    const statSemanticsRaw = [
       ...enabledBuiltIns.map(stat => {
         if (stat.key === "affection") return "- affection: emotional warmth, fondness, care toward the user";
         if (stat.key === "trust") return "- trust: perceived safety/reliability; willingness to be vulnerable";
@@ -378,7 +383,8 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
       ...(includeMood ? ["- mood: immediate emotional tone for this turn"] : []),
       ...(includeLastThoughtByPrivacy ? ["- lastThought: brief internal thought grounded in recent messages"] : []),
     ].join("\n");
-    const behaviorBands = verbosity === "minimal"
+    const statSemantics = bstTagBlock("BST_STAT_SEMANTICS", statSemanticsRaw);
+    const behaviorBandsRaw = verbosity === "minimal"
       ? ""
       : hasAnyNumeric
       ? [
@@ -388,6 +394,7 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
           "- 61-100 high: warm, open, engaged, proactive, intimate (where appropriate)",
         ].join("\n")
       : "";
+    const behaviorBands = bstTagBlock("BST_BEHAVIOR_BANDS", behaviorBandsRaw);
     const customBehaviorLines = scopedEnabledCustom.flatMap(stat => {
       const guidance = String(stat.behaviorGuidance ?? "").trim();
       if (!guidance) return [];
@@ -435,36 +442,35 @@ function buildPrompt(data: TrackerData, settings: BetterSimTrackerSettings, cont
         : []),
       ...customBehaviorLines,
     ];
-    const reactRules = verbosity === "full" && reactRuleItems.length
+    const reactRulesRaw = verbosity === "full" && reactRuleItems.length
       ? ["How to react:", ...reactRuleItems].join("\n")
       : "";
-    const priorityRules = [
+    const reactRules = bstTagBlock("BST_REACT_RULES", reactRulesRaw);
+    const priorityRulesRaw = [
       "- mood modulates delivery now; relationship stats define longer-term pattern",
       "- if stats conflict, trust and connection should constrain risky intimacy",
       "- remain consistent with character core personality and scenario",
     ].join("\n");
-    const summarizationNote = verbosity === "minimal"
+    const priorityRules = bstTagBlock("BST_PRIORITY_RULES", priorityRulesRaw);
+    const ownerStateLines = bstTagBlock("BST_OWNER_STATE_LINES", lines.join("\n"));
+    const summarizationNoteRaw = verbosity === "minimal"
       ? ""
       : includeSummarizationNote
       ? ["Summarization note:", `- ${latestSummaryNote}`].join("\n")
       : "";
+    const summarizationNote = bstTagBlock("BST_SUMMARIZATION_NOTE", summarizationNoteRaw);
     const template = settings.promptTemplateInjection || DEFAULT_INJECTION_PROMPT_TEMPLATE;
-    const hasSummaryPlaceholder = template.includes("{{summarizationNote}}");
     const rendered = renderTemplate(template, {
       header,
       statSemantics,
       behaviorBands,
       reactRules,
       priorityRules,
-      lines: lines.join("\n"),
+      lines: ownerStateLines,
       summarizationNote,
       lorebookContext: "",
     }).trim();
-
-    const basePrompt = (!summarizationNote || hasSummaryPlaceholder)
-      ? rendered
-      : [rendered, summarizationNote].filter(Boolean).join("\n\n").trim();
-    return `${basePrompt}\n</bst_inject_block>`.trim();
+    return `${rendered}\n</bst_inject_block>`.trim();
   };
 
   const verbosityOrder: InjectionVerbosityMode[] = ["full", "no_react_rules", "minimal"];

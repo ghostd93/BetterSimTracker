@@ -160,3 +160,49 @@ test("buildPrompt excludes global custom stats when includeInInjection is disabl
   const prompt = __testables.buildPrompt(data, settings, makeContext());
   assert.equal(prompt, "");
 });
+
+test("buildPrompt keeps BST tags when using custom injection template", () => {
+  const settings = makeSettings({
+    promptTemplateInjection: [
+      "{{header}}",
+      "{{statSemantics}}",
+      "{{behaviorBands}}",
+      "{{reactRules}}",
+      "{{priorityRules}}",
+      "{{lines}}",
+      "{{summarizationNote}}",
+    ].join("\n"),
+    customStats: [
+      {
+        id: "scene_date_time",
+        kind: "date_time",
+        label: "Scene Date/Time",
+        defaultValue: "2026-03-07 20:00",
+        dateTimeMode: "timestamp",
+        track: true,
+        trackCharacters: true,
+        trackUser: true,
+        globalScope: true,
+        privateToOwner: false,
+        showOnCard: true,
+        showInGraph: false,
+        includeInInjection: true,
+      },
+    ],
+  });
+  const data = makeTracker({
+    customNonNumericStatistics: {
+      scene_date_time: {
+        [GLOBAL_TRACKER_KEY]: "2026-03-07 20:05",
+      },
+    },
+  });
+
+  const prompt = __testables.buildPrompt(data, settings, makeContext());
+  assert.match(prompt, /<BST_STAT_SEMANTICS>/);
+  assert.match(prompt, /<BST_BEHAVIOR_BANDS>/);
+  assert.match(prompt, /<BST_REACT_RULES>/);
+  assert.match(prompt, /<BST_PRIORITY_RULES>/);
+  assert.match(prompt, /<BST_OWNER_STATE_LINES>/);
+  assert.match(prompt, /<BST_SUMMARIZATION_NOTE>/);
+});
