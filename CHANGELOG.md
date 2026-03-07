@@ -2,7 +2,7 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.4.3-dev2] - 2026-03-07
+## [2.2.4.4] - 2026-03-07
 ### Changed
 - Moved `BST_*` wrappers to runtime macro payload assembly in prompt injection, so custom injection templates cannot remove tagged BST sections.
 - Applied the same runtime-wrapped `BST_*` block pattern across extraction prompt builders (unified + sequential + custom stats).
@@ -10,14 +10,8 @@ All notable changes to BetterSimTracker are documented here.
 
 ### Fixed
 - Custom injection templates now keep tagged BST semantics/rules/state blocks instead of losing them when users override the template layout.
-
-## [2.2.4.3-dev1] - 2026-03-07
-### Changed
-- Added explicit `BST_*` tagged sections to extraction prompts in unified and sequential builders to make BST instructions easier for models to prioritize consistently.
-- Injection template now wraps semantics/rules/state segments in explicit `BST_*` tags for clearer prompt structure.
-
-### Fixed
-- Sequential custom numeric extraction prompts now use the same tagged structure as other extraction modes (previously remained on legacy untagged layout).
+- Sequential custom numeric extraction prompts now use the same tagged structure as other extraction modes.
+- In 1:1 chats, duplicate-name character card context is now scoped to the current `characterId` avatar, preventing unrelated same-name cards from being injected.
 
 ## [2.2.4.3] - 2026-03-07
 ### Changed
