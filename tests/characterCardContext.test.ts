@@ -34,6 +34,23 @@ test("buildCharacterCardsContext can target by avatar token", () => {
   assert.doesNotMatch(rendered, /chloe_a\.png/);
 });
 
+test("buildCharacterCardsContext in 1:1 chat scopes duplicate names to current characterId avatar", () => {
+  const context = {
+    characterId: 0,
+    groupId: "",
+    characters: [
+      { name: "Chloe", avatar: "chloe_a.png", description: "Variant A description." },
+      { name: "Chloe", avatar: "chloe_b.png", description: "Variant B description." },
+    ],
+  } as any;
+
+  const rendered = buildCharacterCardsContext(context, ["Chloe"]);
+  assert.match(rendered, /Character Card - Chloe \[chloe_a\.png\]/);
+  assert.match(rendered, /Variant A description\./);
+  assert.doesNotMatch(rendered, /chloe_b\.png/);
+  assert.doesNotMatch(rendered, /Variant B description\./);
+});
+
 test("buildCharacterCardsContext skips cards without descriptive fields", () => {
   const context = {
     characters: [

@@ -29,6 +29,16 @@ export function buildCharacterCardsContext(context: STContext, activeCharacters:
   const allCharacters = Array.isArray(context?.characters) ? context.characters : [];
   if (!allCharacters.length) return "";
 
+  const inGroup = Boolean(String(context?.groupId ?? "").trim());
+  const focusedCharacterId = Number(context?.characterId);
+  const focusedCharacter = !inGroup
+    && Number.isFinite(focusedCharacterId)
+    && focusedCharacterId >= 0
+    && allCharacters[focusedCharacterId]
+    ? allCharacters[focusedCharacterId]
+    : null;
+  const focusedAvatar = normalizeToken(focusedCharacter?.avatar);
+
   const activeNameKeys = new Set<string>();
   const activeAvatarKeys = new Set<string>();
   for (const token of activeCharacters) {
@@ -52,6 +62,8 @@ export function buildCharacterCardsContext(context: STContext, activeCharacters:
     const nameKey = normalizeNameKey(character?.name);
     const avatarKey = normalizeToken(character?.avatar);
     if (!nameKey && !avatarKey) continue;
+
+    if (focusedAvatar && avatarKey !== focusedAvatar) continue;
 
     const isActiveByAvatar = avatarKey ? activeAvatarKeys.has(avatarKey) : false;
     const isActiveByName = nameKey ? activeNameKeys.has(nameKey) : false;
