@@ -4,6 +4,15 @@ BetterSimTracker is a SillyTavern extension for relationship/state tracking in r
 
 It tracks character relationship stats over time, stores them per AI message, visualizes progression, and can inject the current relationship state into prompts to keep behavior more coherent.
 
+## TL;DR (Current State)
+
+- Stable per-message tracker cards for AI and user messages, with retrack/recovery/edit flows.
+- Supports built-in stats + advanced custom stats (`numeric`, `text_short`, `enum_single`, `boolean`, `array`, `date_time`).
+- Works in both extraction modes (`unified` and `sequential`), including grouped sequential custom stats.
+- Includes Scene Card support for global stats, owner-scoped/private stats, and macro support (`{{bst_injection}}`, `{{bst_stat_*}}`).
+- Manual mode is available via `Auto-Generate Tracker` toggle (with in-chat `Generate Tracker` entry points).
+- Character/persona defaults, mood-image integrations (BST + ST expressions), graphing, and diagnostics are built-in.
+
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/dogzera)
 
 ## Key Features
