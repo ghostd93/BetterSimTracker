@@ -83,6 +83,7 @@ import {
 } from "./runtimeEventHelpers";
 import { isManualExtractionReason } from "./extractorHelpers";
 import { buildCharacterCardsContext } from "./characterCardContext";
+import { computeManualPlaceholderMessageIndices } from "./renderQueueHelpers";
 
 declare const __BST_VERSION__: string;
 
@@ -1403,6 +1404,26 @@ function queueRender(): void {
         if (!isRenderableTrackerIndex(context, messageIndex)) continue;
         if (entries.some(entry => entry.messageIndex === messageIndex)) continue;
         entries.push({ messageIndex, data: null, recovery });
+      }
+
+      const existingIndices = new Set(entries.map(entry => entry.messageIndex));
+      const manualPlaceholderIndices = computeManualPlaceholderMessageIndices(
+        context,
+        existingIndices,
+        settings.autoGenerateTracker,
+        (ctx, messageIndex) => isRenderableTrackerIndex(ctx, messageIndex),
+      );
+      for (const messageIndex of manualPlaceholderIndices) {
+        entries.push({
+          messageIndex,
+          data: null,
+          recovery: {
+            kind: "stopped",
+            title: "Tracker not generated",
+            detail: "Auto-generation is disabled for this chat. Generate tracker manually for this message.",
+            actionLabel: "Generate Tracker",
+          },
+        });
       }
       if (recoveryMapMutated) {
         persistTrackerRecoveries(context);

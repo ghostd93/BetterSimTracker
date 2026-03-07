@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4-dev3] - 2026-03-07
+### Fixed
+- When `Auto-Generate Tracker` is disabled and a message has no tracker snapshot yet, BST now renders a visible manual placeholder with `Generate Tracker` so manual mode always has an in-chat entry point.
+
 ## [2.2.4-dev2] - 2026-03-07
 ### Changed
 - Character-card extraction context now resolves duplicate-name characters by avatar identity to avoid same-name overwrite collisions.
