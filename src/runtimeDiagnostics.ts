@@ -33,6 +33,14 @@ type TrackerUiStateLike = {
   stepLabel?: string | null;
 };
 
+type PromptInjectionLastMessageSnapshot = {
+  messageIndex: number;
+  prompt: string;
+  capturedAt: number;
+  targetIndex: number | null;
+  generationType: string;
+} | null;
+
 export function filterDiagnosticsTrace(lines: string[], includeGraphInDiagnostics: boolean): string[] {
   if (includeGraphInDiagnostics) return lines;
   return lines.filter(line => !line.includes(" graph.open "));
@@ -91,6 +99,9 @@ export function buildDiagnosticsReport(input: {
   historySample: ReturnType<typeof buildHistorySample>;
   activity: ActivityAnalysis;
   promptInjectionPreview: string | undefined;
+  promptInjectionLastMessage: PromptInjectionLastMessageSnapshot;
+  promptInjectionLatestDataMessage: string | null;
+  promptInjectionDebugMeta: Record<string, unknown> | null;
   traceTailMemory: string[];
   traceTailPersisted: string[];
   debugRecord: DeltaDebugRecord | null;
@@ -144,6 +155,9 @@ export function buildDiagnosticsReport(input: {
     },
     activity: input.activity,
     promptInjectionPreview: input.promptInjectionPreview,
+    promptInjectionLastMessage: input.promptInjectionLastMessage,
+    promptInjectionLatestDataMessage: input.promptInjectionLatestDataMessage,
+    promptInjectionDebugMeta: input.promptInjectionDebugMeta,
     traceTailMemory: input.traceTailMemory,
     traceTailPersisted: input.traceTailPersisted,
     lastDebugRecord: input.debugRecord,

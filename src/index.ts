@@ -3,7 +3,7 @@ import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
 import { isTrackableAiMessage, isTrackableMessage, isTrackableUserMessage } from "./messageFilter";
-import { clearPromptInjection, getLastInjectedPrompt } from "./promptInjection";
+import { clearPromptInjection, getLastInjectedPrompt, getLastInjectedPromptDebug } from "./promptInjection";
 import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
 import {
   buildTrackerSummaryGenerationPrompt,
@@ -123,6 +123,21 @@ let userTurnGatePendingIntent: CapturedGenerationIntent | null = null;
 let userTurnGateStopTimer: number | null = null;
 let userTurnGateReplayAttempts = 0;
 let chatGenerationIntent: CapturedGenerationIntent | null = null;
+type PromptInjectionGenerationSnapshot = {
+  prompt: string;
+  capturedAt: number;
+  targetIndex: number | null;
+  generationType: string;
+};
+type PromptInjectionMessageSnapshot = {
+  messageIndex: number;
+  prompt: string;
+  capturedAt: number;
+  targetIndex: number | null;
+  generationType: string;
+};
+let pendingGenerationInjectionSnapshot: PromptInjectionGenerationSnapshot | null = null;
+let lastMessageInjectionSnapshot: PromptInjectionMessageSnapshot | null = null;
 let slashCommandsRegistered = false;
 const registeredEventSources = new WeakSet<object>();
 let activeExtractionRunId: number | null = null;
@@ -154,6 +169,38 @@ function getPreferredCharacterOwner(data: TrackerData): string | null {
 
 function refreshPromptMacroData(context: STContext): void {
   latestPromptMacroData = buildMergedPromptMacroData(context, latestData);
+}
+
+function snapshotInjectionForGeneration(targetIndex: number | null, generationType: string): void {
+  const prompt = getLastInjectedPrompt();
+  pendingGenerationInjectionSnapshot = {
+    prompt,
+    capturedAt: Date.now(),
+    targetIndex,
+    generationType,
+  };
+  pushTrace("prompt.inject.snapshot", {
+    targetIndex,
+    generationType,
+    promptChars: prompt.length,
+  });
+}
+
+function bindInjectionSnapshotToLatestAiMessage(context: STContext): void {
+  if (!pendingGenerationInjectionSnapshot) return;
+  const messageIndex = getLastAiMessageIndex(context);
+  if (messageIndex == null) return;
+  lastMessageInjectionSnapshot = {
+    messageIndex,
+    ...pendingGenerationInjectionSnapshot,
+  };
+  pushTrace("prompt.inject.bound", {
+    messageIndex,
+    targetIndex: pendingGenerationInjectionSnapshot.targetIndex,
+    generationType: pendingGenerationInjectionSnapshot.generationType,
+    promptChars: pendingGenerationInjectionSnapshot.prompt.length,
+  });
+  pendingGenerationInjectionSnapshot = null;
 }
 
 function collectSummaryCharacters(data: TrackerData): string[] {
@@ -3534,11 +3581,13 @@ function registerEvents(context: STContext): void {
       const dryRun = Boolean(isDryRun);
       const intent = buildCapturedGenerationIntent(type, options, dryRun);
       if (dryRun || type === "quiet") {
+        pendingGenerationInjectionSnapshot = null;
         chatGenerationIntent = null;
         pushTrace("event.generation_started_ignored", { reason: dryRun ? "dry_run" : "quiet_generation", type, dryRun });
         return;
       }
       if (isExtracting && !userTurnGateActive) {
+        pendingGenerationInjectionSnapshot = null;
         chatGenerationIntent = null;
         pushTrace("event.generation_started_ignored", { reason: "tracker_extraction_in_progress", type });
         return;
@@ -3555,6 +3604,7 @@ function registerEvents(context: STContext): void {
       const targetIndex = type === "swipe"
         ? (getLastAiMessageIndex(context) ?? baseTargetIndex)
         : baseTargetIndex;
+      snapshotInjectionForGeneration(targetIndex, type);
       if (userTurnGateActive && intent) {
         userTurnGatePendingIntent = cloneCapturedGenerationIntent(intent);
         userTurnGateReplayAttempts = 0;
@@ -3575,6 +3625,7 @@ function registerEvents(context: STContext): void {
         return;
       }
       if (isExtracting) {
+        pendingGenerationInjectionSnapshot = null;
         pushTrace("event.generation_started_ignored", { reason: "tracker_extraction_in_progress", type });
         return;
       }
@@ -3596,9 +3647,11 @@ function registerEvents(context: STContext): void {
         pendingLateRenderExtraction = false;
         pendingLateRenderStartLastAiIndex = null;
         clearLateRenderPollTimer();
+        pendingGenerationInjectionSnapshot = null;
         pushTrace("event.generation_ended_user_gate", { reason: "tracker_extraction_in_progress" });
         return;
       }
+      pendingGenerationInjectionSnapshot = null;
       pushTrace("event.generation_ended_ignored", { reason: "tracker_extraction_in_progress" });
       return;
     }
@@ -3609,6 +3662,7 @@ function registerEvents(context: STContext): void {
         pendingLateRenderStartLastAiIndex = null;
         clearLateRenderPollTimer();
       }
+      pendingGenerationInjectionSnapshot = null;
       pushTrace("event.generation_ended_ignored", { reason: "non_chat_or_quiet_generation" });
       if (trackerUiState.phase === "generating") {
         pushTrace("ui.generating.clear", {
@@ -3624,6 +3678,7 @@ function registerEvents(context: STContext): void {
     if (!chatGenerationSawCharacterRender) {
       chatGenerationInFlight = false;
       chatGenerationIntent = null;
+      pendingGenerationInjectionSnapshot = null;
       if (userTurnGateActive) {
         pendingLateRenderExtraction = false;
         pendingLateRenderStartLastAiIndex = null;
@@ -3647,6 +3702,7 @@ function registerEvents(context: STContext): void {
     pendingLateRenderExtraction = false;
     pendingLateRenderStartLastAiIndex = null;
     clearLateRenderPollTimer();
+    bindInjectionSnapshotToLatestAiMessage(context);
     pushTrace("event.generation_ended");
     if (swipeGenerationActive) {
       swipeGenerationActive = false;
@@ -3680,6 +3736,8 @@ function registerEvents(context: STContext): void {
     pendingLateRenderExtraction = false;
     pendingLateRenderStartLastAiIndex = null;
     clearLateRenderPollTimer();
+    pendingGenerationInjectionSnapshot = null;
+    lastMessageInjectionSnapshot = null;
     autoBootstrapExtractionKey = null;
     resetUserTurnGate("chat_changed");
     lastActivatedLorebookEntries = [];
@@ -3708,6 +3766,7 @@ function registerEvents(context: STContext): void {
           (chatGenerationStartLastAiIndex == null || currentLastAi > chatGenerationStartLastAiIndex)
         ) {
           chatGenerationSawCharacterRender = true;
+          bindInjectionSnapshotToLatestAiMessage(context);
           pushTrace("event.character_message_rendered_marked_new_ai", {
             currentLastAi,
             startLastAiIndex: chatGenerationStartLastAiIndex
@@ -3800,6 +3859,8 @@ function registerEvents(context: STContext): void {
       pendingLateRenderExtraction = false;
       pendingLateRenderStartLastAiIndex = null;
       clearLateRenderPollTimer();
+      pendingGenerationInjectionSnapshot = null;
+      lastMessageInjectionSnapshot = null;
       autoBootstrapExtractionKey = null;
       resetUserTurnGate("chat_loaded");
       lastActivatedLorebookEntries = [];
@@ -3840,6 +3901,7 @@ function registerEvents(context: STContext): void {
       pendingLateRenderExtraction = false;
       pendingLateRenderStartLastAiIndex = null;
       clearLateRenderPollTimer();
+      pendingGenerationInjectionSnapshot = null;
       resetUserTurnGate("message_deleted");
       clearPendingSwipeExtraction();
       pushTrace("event.message_deleted");
@@ -3857,6 +3919,8 @@ function registerEvents(context: STContext): void {
       pendingLateRenderExtraction = false;
       pendingLateRenderStartLastAiIndex = null;
       clearLateRenderPollTimer();
+      pendingGenerationInjectionSnapshot = null;
+      lastMessageInjectionSnapshot = null;
       autoBootstrapExtractionKey = null;
       resetUserTurnGate("chat_deleted");
       lastActivatedLorebookEntries = [];
@@ -4026,6 +4090,19 @@ function openSettings(): void {
         lastDebugRecord,
         currentSettings.includeGraphInDiagnostics,
       );
+      const lastMessagePromptSnapshot =
+        lastMessageInjectionSnapshot &&
+        Number.isInteger(lastMessageInjectionSnapshot.messageIndex) &&
+        lastMessageInjectionSnapshot.messageIndex >= 0 &&
+        lastMessageInjectionSnapshot.messageIndex < activeContext.chat.length
+          ? lastMessageInjectionSnapshot
+          : null;
+      const latestDataPrompt =
+        lastMessagePromptSnapshot &&
+        latestDataMessageIndex != null &&
+        lastMessagePromptSnapshot.messageIndex === latestDataMessageIndex
+          ? lastMessagePromptSnapshot.prompt
+          : null;
       const report = buildDiagnosticsReport({
         context: activeContext,
         settings: currentSettings,
@@ -4046,6 +4123,9 @@ function openSettings(): void {
         historySample,
         activity: lastActivityAnalysis,
         promptInjectionPreview: currentSettings.debug ? getLastInjectedPrompt() : undefined,
+        promptInjectionLastMessage: currentSettings.debug ? lastMessagePromptSnapshot : null,
+        promptInjectionLatestDataMessage: currentSettings.debug ? latestDataPrompt : null,
+        promptInjectionDebugMeta: currentSettings.debug ? getLastInjectedPromptDebug() : null,
         traceTailMemory: filterDiagnosticsTrace(debugTrace.slice(-150), currentSettings.includeGraphInDiagnostics),
         traceTailPersisted: filterDiagnosticsTrace(readTraceLines(activeContext).slice(-300), currentSettings.includeGraphInDiagnostics),
         debugRecord: filteredLastDebugRecord,
@@ -4135,6 +4215,8 @@ function clearCurrentChat(): void {
   latestDataMessageIndex = null;
   latestPromptMacroData = null;
   lastDebugRecord = null;
+  pendingGenerationInjectionSnapshot = null;
+  lastMessageInjectionSnapshot = null;
   trackerUiState = { phase: "idle", done: 0, total: 0, messageIndex: null };
   activeContext.saveChatDebounced?.();
   void activeContext.saveChat?.();

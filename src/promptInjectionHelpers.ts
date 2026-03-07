@@ -1,13 +1,26 @@
 import { GLOBAL_TRACKER_KEY } from "./constants";
 import type { TrackerData } from "./types";
 
+const MAX_INJECT_NON_NUMERIC_TEXT = 120;
+
+function truncateForInjection(value: string, max = MAX_INJECT_NON_NUMERIC_TEXT): string {
+  const text = String(value ?? "").trim().replace(/\s+/g, " ");
+  if (!text) return "";
+  if (text.length <= max) return text;
+  const hard = text.slice(0, Math.max(1, max - 1)).trimEnd();
+  const lastSpace = hard.lastIndexOf(" ");
+  const safe = lastSpace >= Math.floor(max * 0.6) ? hard.slice(0, lastSpace).trimEnd() : hard;
+  const out = safe || hard;
+  return `${out}…`;
+}
+
 export function renderNonNumericValue(value: unknown): string | null {
   if (typeof value === "boolean") return value ? "true" : "false";
   if (Array.isArray(value)) {
     const items: string[] = [];
     const seenItems = new Set<string>();
     for (const item of value) {
-      const cleaned = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
+      const cleaned = truncateForInjection(String(item ?? ""));
       if (!cleaned) continue;
       const dedupeKey = cleaned.toLowerCase();
       if (seenItems.has(dedupeKey)) continue;
@@ -19,8 +32,8 @@ export function renderNonNumericValue(value: unknown): string | null {
     return `[${items.map(item => `"${item.replace(/"/g, "\\\"")}"`).join(", ")}]`;
   }
   if (typeof value !== "string") return null;
-  const text = value.trim().replace(/\s+/g, " ");
-  return text ? `"${text.slice(0, 120)}"` : null;
+  const text = truncateForInjection(value);
+  return text ? `"${text}"` : null;
 }
 
 export function behaviorGuidanceLines(value: unknown): string[] {

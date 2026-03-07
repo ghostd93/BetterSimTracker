@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { GLOBAL_TRACKER_KEY } from "../src/constants";
+import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "../src/constants";
 import { __testables } from "../src/promptInjection";
 import { defaultSettings } from "../src/settings";
 import type { BetterSimTrackerSettings, STContext, TrackerData } from "../src/types";
@@ -90,9 +90,12 @@ test("buildPrompt includes global custom stats in a dedicated Scene line", () =>
   assert.match(prompt, /<BST_BEHAVIOR_BANDS>/);
   assert.match(prompt, /<BST_REACT_RULES>/);
   assert.match(prompt, /<BST_PRIORITY_RULES>/);
-  assert.match(prompt, /<BST_OWNER_STATE_LINES>/);
+  assert.match(prompt, /<BST_TRACKER_STATE>/);
+  assert.doesNotMatch(prompt, /<BST_PUBLIC_STATE_STATS>/);
+  assert.doesNotMatch(prompt, /<BST_OWNER_STATE_STATS>/);
+  assert.doesNotMatch(prompt, /<BST_OWNER_STATE_LINES>/);
   assert.match(prompt, /<BST_SUMMARIZATION_NOTE>/);
-  assert.match(prompt, /- Scene: scene_date_time "2026-03-07 20:05"/);
+  assert.match(prompt, /- Scene: scene_date_time="2026-03-07 20:05"/);
 });
 
 test("buildPrompt includes global custom stats even when there are no owner lines", () => {
@@ -126,7 +129,7 @@ test("buildPrompt includes global custom stats even when there are no owner line
   const context = makeContext({ name2: "", characterId: -1, characters: [] });
 
   const prompt = __testables.buildPrompt(data, settings, context);
-  assert.match(prompt, /- Scene: scene_location "Forest cottage"/);
+  assert.match(prompt, /- Scene: scene_location="Forest cottage"/);
 });
 
 test("buildPrompt excludes global custom stats when includeInInjection is disabled", () => {
@@ -203,6 +206,122 @@ test("buildPrompt keeps BST tags when using custom injection template", () => {
   assert.match(prompt, /<BST_BEHAVIOR_BANDS>/);
   assert.match(prompt, /<BST_REACT_RULES>/);
   assert.match(prompt, /<BST_PRIORITY_RULES>/);
-  assert.match(prompt, /<BST_OWNER_STATE_LINES>/);
+  assert.match(prompt, /<BST_TRACKER_STATE>/);
+  assert.doesNotMatch(prompt, /<BST_PUBLIC_STATE_STATS>/);
+  assert.doesNotMatch(prompt, /<BST_OWNER_STATE_STATS>/);
+  assert.doesNotMatch(prompt, /<BST_OWNER_STATE_LINES>/);
   assert.match(prompt, /<BST_SUMMARIZATION_NOTE>/);
+});
+
+test("buildPrompt includes target character owner line even when active list is partial", () => {
+  const settings = makeSettings({
+    trackMood: true,
+  });
+  const data = makeTracker({
+    activeCharacters: [USER_TRACKER_KEY],
+    statistics: {
+      affection: {},
+      trust: {},
+      desire: {},
+      connection: {},
+      mood: { Seraphina: "Hopeful" },
+      lastThought: {},
+    },
+  });
+  const context = makeContext({
+    name2: "Seraphina",
+    characterId: 0,
+  });
+
+  const prompt = __testables.buildPrompt(data, settings, context);
+  assert.match(prompt, /- Seraphina:/);
+});
+
+test("buildPrompt in 1:1 chat scopes owner lines to current target owner", () => {
+  const settings = makeSettings({
+    trackMood: true,
+    includeUserTrackerInInjection: false,
+    enableUserTracking: false,
+  });
+  const data = makeTracker({
+    activeCharacters: ["Seraphina", "Billie"],
+    statistics: {
+      affection: {},
+      trust: {},
+      desire: {},
+      connection: {},
+      mood: { Seraphina: "Hopeful", Billie: "Neutral" },
+      lastThought: {},
+    },
+  });
+  const context = makeContext({
+    characterId: 0,
+    name2: "Seraphina",
+    groupId: "",
+    characters: [
+      { name: "Seraphina", avatar: "seraphina.png" },
+      { name: "Billie", avatar: "billie.png" },
+    ],
+  });
+
+  const prompt = __testables.buildPrompt(data, settings, context);
+  assert.match(prompt, /- Seraphina:/);
+  assert.doesNotMatch(prompt, /- Billie:/);
+});
+
+test("buildPrompt does not render user owner line when includeUserTrackerInInjection is off", () => {
+  const settings = makeSettings({
+    trackMood: true,
+    includeUserTrackerInInjection: false,
+    enableUserTracking: true,
+    userTrackMood: true,
+  });
+  const data = makeTracker({
+    activeCharacters: [USER_TRACKER_KEY, "Seraphina"],
+    statistics: {
+      affection: {},
+      trust: {},
+      desire: {},
+      connection: {},
+      mood: { [USER_TRACKER_KEY]: "Neutral", Seraphina: "Hopeful" },
+      lastThought: {},
+    },
+  });
+  const context = makeContext({
+    characterId: 0,
+    name2: "Seraphina",
+    groupId: "",
+  });
+
+  const prompt = __testables.buildPrompt(data, settings, context);
+  assert.match(prompt, /- Seraphina:/);
+  assert.doesNotMatch(prompt, /- User:/);
+});
+
+test("buildPrompt filters reserved system owner names and avoids fake fallback values", () => {
+  const settings = makeSettings({
+    trackAffection: true,
+    trackTrust: true,
+    trackDesire: true,
+    trackConnection: true,
+    trackMood: true,
+  });
+  const data = makeTracker({
+    activeCharacters: ["SillyTavern System", "Seraphina"],
+    statistics: {
+      affection: { Seraphina: 12 },
+      trust: { Seraphina: 18 },
+      desire: { Seraphina: 2 },
+      connection: { Seraphina: 15 },
+      mood: { Seraphina: "Hopeful" },
+      lastThought: {},
+    },
+  });
+  const context = makeContext({ name2: "Seraphina", characterId: 0, groupId: "" });
+
+  const prompt = __testables.buildPrompt(data, settings, context);
+  assert.doesNotMatch(prompt, /SillyTavern System/i);
+  assert.doesNotMatch(prompt, /affection=50/);
+  assert.match(prompt, /- Seraphina:/);
+  assert.match(prompt, /affection=12/);
 });

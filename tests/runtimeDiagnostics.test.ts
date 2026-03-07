@@ -243,6 +243,15 @@ test("buildDiagnosticsReport produces expected core fields", () => {
     historySample: buildHistorySample([{ messageIndex: 2, timestamp: 123456, data: makeTracker(123456) }]),
     activity: null,
     promptInjectionPreview: "preview",
+    promptInjectionLastMessage: {
+      messageIndex: 2,
+      prompt: "<bst_inject_block>...</bst_inject_block>",
+      capturedAt: 1772800000000,
+      targetIndex: 2,
+      generationType: "normal",
+    },
+    promptInjectionLatestDataMessage: "<bst_inject_block>...</bst_inject_block>",
+    promptInjectionDebugMeta: { targetOwner: "Seraphina" },
     traceTailMemory: ["a"],
     traceTailPersisted: ["b"],
     debugRecord: null,
@@ -250,4 +259,12 @@ test("buildDiagnosticsReport produces expected core fields", () => {
   assert.equal(report.scope, "char:1");
   assert.equal(report.chatLength, 2);
   assert.equal(report.extensionVersion, "2.2.3.10-dev23");
+  assert.equal(
+    (report.promptInjectionLastMessage as { messageIndex: number }).messageIndex,
+    2,
+  );
+  assert.equal(
+    report.promptInjectionLatestDataMessage,
+    "<bst_inject_block>...</bst_inject_block>",
+  );
 });
