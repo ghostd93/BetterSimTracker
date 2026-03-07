@@ -2,6 +2,19 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.3.10-dev22] - 2026-03-07
+### Added
+- Added extractor progress-label helper module and tests:
+  - `src/extractorProgress.ts`
+  - `tests/extractorProgress.test.ts`
+- Added summary-text helper module and tests:
+  - `src/summaryText.ts`
+  - `tests/summaryText.test.ts`
+
+### Changed
+- Continued step-2 modularization by moving summary text sanitization/normalization helpers from `src/index.ts` to `src/summaryText.ts`.
+- Continued step-2 modularization by routing extractor progress labels through the shared `src/extractorProgress.ts` helpers for more consistent status strings.
+
 ## [2.2.3.10-dev21] - 2026-03-07
 ### Added
 - Added dedicated graph timeline helper module and tests:

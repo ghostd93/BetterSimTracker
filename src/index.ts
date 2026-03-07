@@ -61,6 +61,14 @@ import {
 import { buildMergedPromptMacroData, resolveLatestStoredTrackerData } from "./runtimeState";
 import { syncBstMacros } from "./runtimeMacros";
 import { createPromptRefreshController } from "./runtimePromptSync";
+import {
+  countSummarySentences,
+  hasNumericCharacters,
+  normalizeSummaryProse,
+  sanitizeGeneratedSummaryText,
+  stripHiddenReasoningBlocks,
+  wrapAsSystemNarrativeText,
+} from "./summaryText";
 
 declare const __BST_VERSION__: string;
 
@@ -164,79 +172,6 @@ function collectSummaryCharacters(data: TrackerData): string[] {
     addKeys(statValues as Record<string, unknown>);
   }
   return Array.from(names).sort((a, b) => a.localeCompare(b));
-}
-
-function stripHiddenReasoningBlocks(raw: string): string {
-  return String(raw ?? "")
-    .replace(/\r\n/g, "\n")
-    .replace(/<\s*(think|analysis|reasoning)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
-    .replace(/<\s*\/?\s*(think|analysis|reasoning)[^>]*>/gi, "")
-    .trim();
-}
-
-function sanitizeGeneratedSummaryText(raw: string): string {
-  let text = stripHiddenReasoningBlocks(raw);
-  if (!text) return "";
-
-  const fencedBlock = text.match(/^```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```$/);
-  if (fencedBlock?.[1]) {
-    text = fencedBlock[1].trim();
-  }
-
-  text = text
-    .replace(/^summary\s*[:\-]\s*/i, "")
-    .replace(/^system\s*summary\s*[:\-]\s*/i, "")
-    .replace(/^["'`]+/, "")
-    .replace(/["'`]+$/, "")
-    .trim();
-
-  return text.slice(0, 1200).trim();
-}
-
-function normalizeSummaryProse(text: string): string {
-  let prose = String(text ?? "").replace(/\r\n/g, "\n").trim();
-  if (!prose) return "";
-
-  // Remove line-based markdown/list artifacts, then flatten to prose.
-  prose = prose
-    .split("\n")
-    .map(line => line.trim().replace(/^[-*]\s+/, ""))
-    .filter(Boolean)
-    .join(" ");
-
-  // Remove common structured wrappers.
-  prose = prose
-    .replace(/^["'`]+/, "")
-    .replace(/["'`]+$/, "")
-    .replace(/^\{[\s\S]*\}$/m, "")
-    .trim();
-
-  // Keep plain prose formatting.
-  prose = prose
-    .replace(/\s+/g, " ")
-    .replace(/\s+([,.;!?])/g, "$1")
-    .replace(/[ \t]+/g, " ")
-    .trim();
-
-  if (!prose) return "";
-  if (!/[.!?]$/.test(prose)) {
-    prose = `${prose}.`;
-  }
-  return prose.slice(0, 1000).trim();
-}
-
-function wrapAsSystemNarrativeText(text: string): string {
-  const cleaned = text.replace(/^\*+/, "").replace(/\*+$/, "").trim();
-  return `*${cleaned}*`;
-}
-
-function hasNumericCharacters(text: string): boolean {
-  return /\d/.test(text);
-}
-
-function countSummarySentences(text: string): number {
-  const matches = String(text ?? "").match(/[.!?]+(?:\s|$)/g);
-  return matches?.length ?? 0;
 }
 
 function describeLorebookPayload(payload: unknown): string {
