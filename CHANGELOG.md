@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.3-dev1] - 2026-03-07
+### Changed
+- Added explicit `BST_*` tagged sections to extraction prompts in unified and sequential builders to make BST instructions easier for models to prioritize consistently.
+- Injection template now wraps semantics/rules/state segments in explicit `BST_*` tags for clearer prompt structure.
+
+### Fixed
+- Sequential custom numeric extraction prompts now use the same tagged structure as other extraction modes (previously remained on legacy untagged layout).
+
 ## [2.2.4.3] - 2026-03-07
 ### Changed
 - Character stat macros now use collision-safe slugs (avatar-first with deterministic suffixes) so duplicate character names no longer overwrite each other.

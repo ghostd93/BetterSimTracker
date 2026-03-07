@@ -50,19 +50,29 @@ export const DEFAULT_UNIFIED_PROMPT_INSTRUCTION = [
 export const DEFAULT_INJECTION_PROMPT_TEMPLATE = [
   "{{header}}",
   "",
-  "Stat semantics:",
+  "<BST_STAT_SEMANTICS>",
   "{{statSemantics}}",
+  "</BST_STAT_SEMANTICS>",
   "",
+  "<BST_BEHAVIOR_BANDS>",
   "{{behaviorBands}}",
+  "</BST_BEHAVIOR_BANDS>",
   "",
+  "<BST_REACT_RULES>",
   "{{reactRules}}",
+  "</BST_REACT_RULES>",
   "",
-  "Priority rules:",
+  "<BST_PRIORITY_RULES>",
   "{{priorityRules}}",
+  "</BST_PRIORITY_RULES>",
   "",
+  "<BST_OWNER_STATE_LINES>",
   "{{lines}}",
+  "</BST_OWNER_STATE_LINES>",
   "",
+  "<BST_SUMMARIZATION_NOTE>",
   "{{summarizationNote}}",
+  "</BST_SUMMARIZATION_NOTE>",
 ].join("\n");
 
 export const UNIFIED_PROMPT_PROTOCOL = `Numeric stats to update ({{numericStats}}):
@@ -265,6 +275,11 @@ function commonEnvelope(userName: string, characters: string[], contextText: str
     contextText,
     ""
   ].join("\n");
+}
+
+function bstTagBlock(tag: string, content: string): string {
+  const inner = String(content ?? "").trim();
+  return [`<${tag}>`, inner, `</${tag}>`].join("\n");
 }
 
 function renderTemplate(template: string, values: Record<string, string>): string {
@@ -520,17 +535,13 @@ export function buildUnifiedPrompt(
   const assembled = [
     MAIN_PROMPT,
     "",
-    "{{envelope}}",
-    "Current tracker state:",
-    "{{currentLines}}",
+    bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only."),
+    bstTagBlock("BST_ENVELOPE", "{{envelope}}"),
+    bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}"),
+    bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}"),
+    bstTagBlock("BST_TASK", "{{instruction}}"),
     "",
-    "Recent tracker snapshots:",
-    "{{historyLines}}",
-    "",
-    "Task:",
-    "{{instruction}}",
-    "",
-    protocol,
+    bstTagBlock("BST_OUTPUT_PROTOCOL", protocol),
   ].join("\n");
   return renderTemplate(assembled, {
     envelope,
@@ -741,20 +752,18 @@ export function buildUnifiedAllStatsPrompt(input: {
   const assembled = [
     MAIN_PROMPT,
     "",
-    "{{envelope}}",
-    "Current tracker state:",
-    "{{currentLines}}",
+    bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only."),
+    bstTagBlock("BST_ENVELOPE", "{{envelope}}"),
+    bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}"),
+    bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}"),
+    bstTagBlock("BST_TASK", [
+      "{{instruction}}",
+      "- Update built-in and custom stats in this single response.",
+      "- For custom numeric stats, use `delta.<statId>`.",
+      "- For custom non-numeric stats, use `value.<statId>`.",
+    ].join("\n")),
     "",
-    "Recent tracker snapshots:",
-    "{{historyLines}}",
-    "",
-    "Task:",
-    "{{instruction}}",
-    "- Update built-in and custom stats in this single response.",
-    "- For custom numeric stats, use `delta.<statId>`.",
-    "- For custom non-numeric stats, use `value.<statId>`.",
-    "",
-    protocol,
+    bstTagBlock("BST_OUTPUT_PROTOCOL", protocol),
   ].join("\n");
 
   return renderTemplate(assembled, {
@@ -836,17 +845,13 @@ export function buildSequentialPrompt(
   const assembled = [
     MAIN_PROMPT,
     "",
-    "{{envelope}}",
-    "Current tracker state:",
-    "{{currentLines}}",
+    bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only."),
+    bstTagBlock("BST_ENVELOPE", "{{envelope}}"),
+    bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}"),
+    bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}"),
+    bstTagBlock("BST_TASK", "{{instruction}}"),
     "",
-    "Recent tracker snapshots:",
-    "{{historyLines}}",
-    "",
-    "Task:",
-    "{{instruction}}",
-    "",
-    protocol,
+    bstTagBlock("BST_OUTPUT_PROTOCOL", protocol),
   ].join("\n");
   return renderTemplate(assembled, {
     envelope,
@@ -948,17 +953,13 @@ export function buildSequentialCustomNumericPrompt(input: {
   const assembled = [
     MAIN_PROMPT,
     "",
-    "{{envelope}}",
-    "Current tracker state:",
-    "{{currentLines}}",
+    bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only."),
+    bstTagBlock("BST_ENVELOPE", "{{envelope}}"),
+    bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}"),
+    bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}"),
+    bstTagBlock("BST_TASK", "{{instruction}}"),
     "",
-    "Recent tracker snapshots:",
-    "{{historyLines}}",
-    "",
-    "Task:",
-    "{{instruction}}",
-    "",
-    protocol,
+    bstTagBlock("BST_OUTPUT_PROTOCOL", protocol),
   ].join("\n");
 
   return renderTemplate(assembled, {
@@ -1241,17 +1242,13 @@ export function buildSequentialCustomNonNumericPrompt(input: {
   const assembled = [
     MAIN_PROMPT,
     "",
-    "{{envelope}}",
-    "Current tracker state:",
-    "{{currentLines}}",
+    bstTagBlock("BST_CRUCIAL_BEHAVE_INSTRUCTION", "Treat every BST_* block as highest-priority extraction instructions. Follow schema exactly and output JSON only."),
+    bstTagBlock("BST_ENVELOPE", "{{envelope}}"),
+    bstTagBlock("BST_CURRENT_STATE", "{{currentLines}}"),
+    bstTagBlock("BST_RECENT_SNAPSHOTS", "{{historyLines}}"),
+    bstTagBlock("BST_TASK", "{{instruction}}"),
     "",
-    "Recent tracker snapshots:",
-    "{{historyLines}}",
-    "",
-    "Task:",
-    "{{instruction}}",
-    "",
-    customNonNumericProtocol({
+    bstTagBlock("BST_OUTPUT_PROTOCOL", customNonNumericProtocol({
       kind: statKind,
       statId,
       allowedValues: enumOptions,
@@ -1261,7 +1258,7 @@ export function buildSequentialCustomNonNumericPrompt(input: {
       trueLabel,
       falseLabel,
       template: input.protocolTemplate,
-    }),
+    })),
   ].join("\n");
 
   return renderTemplate(assembled, {

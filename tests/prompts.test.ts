@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildSequentialCustomNumericPrompt,
   buildSequentialCustomNonNumericPrompt,
   buildSequentialPrompt,
   buildTrackerSummaryGenerationPrompt,
@@ -55,7 +56,12 @@ test("buildUnifiedPrompt includes current state, history, instruction, and proto
     12,
   );
 
-  assert.match(prompt, /Current tracker state:/);
+  assert.match(prompt, /<BST_CRUCIAL_BEHAVE_INSTRUCTION>/);
+  assert.match(prompt, /<BST_ENVELOPE>/);
+  assert.match(prompt, /<BST_CURRENT_STATE>/);
+  assert.match(prompt, /<BST_RECENT_SNAPSHOTS>/);
+  assert.match(prompt, /<BST_TASK>/);
+  assert.match(prompt, /<BST_OUTPUT_PROTOCOL>/);
   assert.match(prompt, /affection=61/);
   assert.match(prompt, /mood=Hopeful/);
   assert.match(prompt, /Snapshot 1/);
@@ -124,6 +130,8 @@ test("buildUnifiedAllStatsPrompt includes custom numeric and non-numeric values"
 
   assert.match(prompt, /satisfaction=72/);
   assert.match(prompt, /clothes=\["black sundress","sandals"\]/);
+  assert.match(prompt, /<BST_CRUCIAL_BEHAVE_INSTRUCTION>/);
+  assert.match(prompt, /<BST_OUTPUT_PROTOCOL>/);
   assert.match(prompt, /For custom numeric stats, use `delta\.<statId>`\./);
   assert.match(prompt, /For custom non-numeric stats, use `value\.<statId>`\./);
   assert.match(prompt, /Custom non-numeric stats to update \(clothes\):/);
@@ -160,8 +168,45 @@ test("buildSequentialPrompt respects built-in tracking and source priority wordi
   );
 
   assert.doesNotMatch(prompt, /affection=55/);
+  assert.match(prompt, /<BST_CRUCIAL_BEHAVE_INSTRUCTION>/);
+  assert.match(prompt, /<BST_OUTPUT_PROTOCOL>/);
   assert.match(prompt, /trust=42/);
   assert.match(prompt, /Use recent messages first; use lorebook only to disambiguate when context is unclear\./);
+});
+
+test("buildSequentialCustomNumericPrompt includes BST tagged extraction sections", () => {
+  const prompt = buildSequentialCustomNumericPrompt({
+    statId: "satisfaction",
+    statLabel: "Satisfaction",
+    statDescription: "General satisfaction.",
+    statDefault: 50,
+    maxDeltaPerTurn: 9,
+    userName: "User",
+    characters: ["Seraphina"],
+    contextText: "Recent lines",
+    current: {
+      affection: {},
+      trust: {},
+      desire: {},
+      connection: {},
+      mood: {},
+      lastThought: {},
+    },
+    currentCustom: {
+      satisfaction: { Seraphina: 64 },
+    },
+    history: [],
+    includeCharacterCardsInPrompt: true,
+    includeLorebookInExtraction: true,
+  });
+
+  assert.match(prompt, /<BST_CRUCIAL_BEHAVE_INSTRUCTION>/);
+  assert.match(prompt, /<BST_ENVELOPE>/);
+  assert.match(prompt, /<BST_CURRENT_STATE>/);
+  assert.match(prompt, /<BST_RECENT_SNAPSHOTS>/);
+  assert.match(prompt, /<BST_TASK>/);
+  assert.match(prompt, /<BST_OUTPUT_PROTOCOL>/);
+  assert.match(prompt, /satisfaction=64/);
 });
 
 test("buildSequentialCustomNonNumericPrompt includes scoped values and mode-aware schema", () => {
@@ -193,6 +238,8 @@ test("buildSequentialCustomNonNumericPrompt includes scoped values and mode-awar
   });
 
   assert.match(prompt, /scene_date_time="2026-03-06 20:05"/);
+  assert.match(prompt, /<BST_CRUCIAL_BEHAVE_INSTRUCTION>/);
+  assert.match(prompt, /<BST_OUTPUT_PROTOCOL>/);
   assert.match(prompt, /structured datetime intent/);
   assert.match(prompt, /use character cards and lorebook only to disambiguate when context is unclear\./);
 });

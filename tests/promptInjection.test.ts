@@ -86,6 +86,12 @@ test("buildPrompt includes global custom stats in a dedicated Scene line", () =>
   });
 
   const prompt = __testables.buildPrompt(data, settings, makeContext());
+  assert.match(prompt, /<BST_STAT_SEMANTICS>/);
+  assert.match(prompt, /<BST_BEHAVIOR_BANDS>/);
+  assert.match(prompt, /<BST_REACT_RULES>/);
+  assert.match(prompt, /<BST_PRIORITY_RULES>/);
+  assert.match(prompt, /<BST_OWNER_STATE_LINES>/);
+  assert.match(prompt, /<BST_SUMMARIZATION_NOTE>/);
   assert.match(prompt, /- Scene: scene_date_time "2026-03-07 20:05"/);
 });
 
