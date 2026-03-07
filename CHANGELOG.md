@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.4-dev2] - 2026-03-07
+### Changed
+- Injection state block now uses `BST_TRACKER_STATE` as the primary state tag, while keeping legacy aliases for compatibility.
+- `BST_TRACKER_STATE` entries are now serialized in clearer `key=value; ...` format for better model parsing stability.
+
+### Fixed
+- Removed synthetic fallback owner values from injection state lines; injected owner stats now include only real tracked values.
+- Filtered reserved system owners (for example `SillyTavern System`) out of injection state lines.
+- Added explicit injection debug metadata to diagnostics dumps (`promptInjectionDebugMeta`) so owner selection/state-line issues can be traced from one report.
+
 ## [2.2.4.4-dev1] - 2026-03-07
 ### Fixed
 - Injection owner-line scoping in 1:1 chats now targets the current chat character, preventing unrelated active owners from appearing in the injected state block.
