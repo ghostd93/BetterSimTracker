@@ -2,43 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.4.4-dev6] - 2026-03-07
-### Fixed
-- Edit Tracker modal prefill now uses the same effective stat resolution as card rendering (including prior-snapshot fallback for the same owner), preventing card/modal value mismatches.
-
-## [2.2.4.4-dev5] - 2026-03-07
-### Fixed
-- Edit Tracker modal now resolves owner-scoped custom stats strictly by the edited owner, preventing Scene/global fallback values from appearing in non-global owner cards.
-- Added regression tests for edit-modal owner/global value resolution to prevent owner-scoping regressions.
-
-## [2.2.4.4-dev4] - 2026-03-07
-### Fixed
-- Injection non-numeric text serialization now truncates at safe word boundaries with ellipsis instead of hard character cuts, improving readability and model context quality in `BST_TRACKER_STATE`.
-
-## [2.2.4.4-dev3] - 2026-03-07
+## [2.2.4.5] - 2026-03-07
 ### Changed
-- Injection state output now emits only one canonical stats block tag: `BST_TRACKER_STATE`.
-- Injection diagnostics owner-line extraction now reads only `BST_TRACKER_STATE` (legacy alias parsing removed).
+- Injection state payload is now standardized under one canonical block: `BST_TRACKER_STATE`.
+- Injection diagnostics were expanded with explicit owner/selection metadata to make real injected state easier to verify from debug dumps.
 
 ### Fixed
-- Fixed injection target owner resolution to prefer non-user, non-system character candidates before falling back to user.
-- Fixed 1:1 injection cases where character stats (for example Chloe) could be dropped when context candidate order included a user alias first.
-
-## [2.2.4.4-dev2] - 2026-03-07
-### Changed
-- Injection state block now uses `BST_TRACKER_STATE` as the primary state tag, while keeping legacy aliases for compatibility.
-- `BST_TRACKER_STATE` entries are now serialized in clearer `key=value; ...` format for better model parsing stability.
-
-### Fixed
-- Removed synthetic fallback owner values from injection state lines; injected owner stats now include only real tracked values.
-- Filtered reserved system owners (for example `SillyTavern System`) out of injection state lines.
-- Added explicit injection debug metadata to diagnostics dumps (`promptInjectionDebugMeta`) so owner selection/state-line issues can be traced from one report.
-
-## [2.2.4.4-dev1] - 2026-03-07
-### Fixed
-- Injection owner-line scoping in 1:1 chats now targets the current chat character, preventing unrelated active owners from appearing in the injected state block.
-- Owner default resolution for injection now prefers the active `characterId` match before name fallback, reducing duplicate-name ambiguity.
-- Injection generation now uses merged tracker baseline state before prompt render, improving owner-line continuity when the latest snapshot is partial.
+- Fixed 1:1 injection owner targeting so active character stats are not dropped when user aliases are present in candidate order.
+- Fixed duplicate/reserved owner leakage in injection (including system owners), ensuring only valid tracked owners are emitted.
+- Improved non-numeric injection serialization stability (word-safe truncation) to avoid malformed partial values in prompt state.
+- Edit Tracker modal prefill now uses the same effective fallback resolution as card rendering, eliminating card/modal value mismatches.
 
 ## [2.2.4.4] - 2026-03-07
 ### Changed
