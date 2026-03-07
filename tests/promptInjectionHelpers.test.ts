@@ -36,6 +36,14 @@ test("renderNonNumericValue formats booleans, arrays, and strings", () => {
   assert.equal(renderNonNumericValue([]), null);
 });
 
+test("renderNonNumericValue truncates long text safely with ellipsis", () => {
+  const long = "Curvy chubby build with voluptuous figure thick soft thighs humongous wide hips huge breasts soft rounded face with purple eyes and vibrant red hair";
+  const rendered = renderNonNumericValue(long);
+  assert.ok(rendered && rendered.startsWith("\"") && rendered.endsWith("\""));
+  assert.match(String(rendered), /…\"$/);
+  assert.doesNotMatch(String(rendered), /with \"$/);
+});
+
 test("behaviorGuidanceLines normalizes bullets and keeps bounded count", () => {
   const lines = behaviorGuidanceLines("- first\n* second\n \nthird");
   assert.deepEqual(lines, ["- first", "- second", "- third"]);

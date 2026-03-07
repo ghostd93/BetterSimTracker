@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.4-dev4] - 2026-03-07
+### Fixed
+- Injection non-numeric text serialization now truncates at safe word boundaries with ellipsis instead of hard character cuts, improving readability and model context quality in `BST_TRACKER_STATE`.
+
 ## [2.2.4.4-dev3] - 2026-03-07
 ### Changed
 - Injection state output now emits only one canonical stats block tag: `BST_TRACKER_STATE`.
