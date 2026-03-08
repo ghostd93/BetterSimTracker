@@ -40,6 +40,10 @@ import {
   normalizeCustomTextMaxLength,
   normalizeDateTimeMode,
 } from "./customStatRuntime";
+import {
+  createDefaultCardVisualEditorSettings,
+  sanitizeCardVisualEditorSettings,
+} from "./cardVisualEditor";
 
 const DEFAULT_MOOD_EXPRESSION_MAP: Record<MoodLabel, string> = {
   "Happy": "joy",
@@ -96,6 +100,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   sceneCardStatOrder: [],
   sceneCardStatDisplay: {},
   characterCardStatOrder: [],
+  cardVisualEditor: createDefaultCardVisualEditorSettings(),
   autoDetectActive: true,
   autoGenerateTracker: true,
   regenerateOnMessageEdit: true,
@@ -560,6 +565,31 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     0,
     12000,
   );
+  const accentColor = asText(input.accentColor, defaultSettings.accentColor);
+  const userCardColor = sanitizeHexColor(input.userCardColor) ?? defaultSettings.userCardColor;
+  const cardOpacity = clampNumber(input.cardOpacity, defaultSettings.cardOpacity, 0.1, 1);
+  const borderRadius = clampInt(input.borderRadius, defaultSettings.borderRadius, 0, 32);
+  const fontSize = clampInt(input.fontSize, defaultSettings.fontSize, 10, 22);
+  const sceneCardLayout = sanitizeSceneCardLayout(input.sceneCardLayout, defaultSettings.sceneCardLayout);
+  const sceneCardColor = sanitizeHexColor(input.sceneCardColor) ?? defaultSettings.sceneCardColor;
+  const sceneCardValueColor = sanitizeHexColor(input.sceneCardValueColor) ?? defaultSettings.sceneCardValueColor;
+  const sceneCardArrayCollapsedLimit = clampInt(
+    input.sceneCardArrayCollapsedLimit,
+    defaultSettings.sceneCardArrayCollapsedLimit,
+    1,
+    MAX_CUSTOM_ARRAY_ITEMS,
+  );
+  const cardVisualEditor = sanitizeCardVisualEditorSettings(input.cardVisualEditor, {
+    accentColor,
+    userCardColor,
+    sceneCardColor,
+    sceneCardValueColor,
+    cardOpacity,
+    borderRadius,
+    fontSize,
+    sceneCardLayout,
+    sceneCardArrayCollapsedLimit,
+  });
   return {
     ...defaultSettings,
     ...input,
@@ -590,12 +620,12 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     inactiveLabel: asText(input.inactiveLabel, defaultSettings.inactiveLabel).slice(0, 40),
     sceneCardEnabled: asBool(input.sceneCardEnabled, defaultSettings.sceneCardEnabled),
     sceneCardPosition: sanitizeSceneCardPosition(input.sceneCardPosition, defaultSettings.sceneCardPosition),
-    sceneCardLayout: sanitizeSceneCardLayout(input.sceneCardLayout, defaultSettings.sceneCardLayout),
+    sceneCardLayout,
     sceneCardTitle: asText(input.sceneCardTitle, defaultSettings.sceneCardTitle).slice(0, 40),
-    sceneCardColor: sanitizeHexColor(input.sceneCardColor) ?? defaultSettings.sceneCardColor,
-    sceneCardValueColor: sanitizeHexColor(input.sceneCardValueColor) ?? defaultSettings.sceneCardValueColor,
+    sceneCardColor,
+    sceneCardValueColor,
     sceneCardShowWhenEmpty: asBool(input.sceneCardShowWhenEmpty, defaultSettings.sceneCardShowWhenEmpty),
-    sceneCardArrayCollapsedLimit: clampInt(input.sceneCardArrayCollapsedLimit, defaultSettings.sceneCardArrayCollapsedLimit, 1, MAX_CUSTOM_ARRAY_ITEMS),
+    sceneCardArrayCollapsedLimit,
     sceneCardStatOrder: Array.isArray(input.sceneCardStatOrder)
       ? input.sceneCardStatOrder
         .map(item => String(item ?? "").trim().toLowerCase())
@@ -607,6 +637,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
         .map(item => String(item ?? "").trim().toLowerCase())
         .filter(Boolean)
       : [...defaultSettings.characterCardStatOrder],
+    cardVisualEditor,
     autoDetectActive: asBool(input.autoDetectActive, defaultSettings.autoDetectActive),
     autoGenerateTracker: asBool(input.autoGenerateTracker, defaultSettings.autoGenerateTracker),
     regenerateOnMessageEdit: asBool(input.regenerateOnMessageEdit, defaultSettings.regenerateOnMessageEdit),
@@ -629,11 +660,11 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     stExpressionImageZoom: sanitizeStExpressionZoom(input.stExpressionImageZoom, defaultSettings.stExpressionImageZoom),
     stExpressionImagePositionX: sanitizeStExpressionPosition(input.stExpressionImagePositionX, defaultSettings.stExpressionImagePositionX),
     stExpressionImagePositionY: sanitizeStExpressionPosition(input.stExpressionImagePositionY, defaultSettings.stExpressionImagePositionY),
-    accentColor: asText(input.accentColor, defaultSettings.accentColor),
-    userCardColor: sanitizeHexColor(input.userCardColor) ?? defaultSettings.userCardColor,
-    cardOpacity: clampNumber(input.cardOpacity, defaultSettings.cardOpacity, 0.1, 1),
-    borderRadius: clampInt(input.borderRadius, defaultSettings.borderRadius, 0, 32),
-    fontSize: clampInt(input.fontSize, defaultSettings.fontSize, 10, 22),
+    accentColor,
+    userCardColor,
+    cardOpacity,
+    borderRadius,
+    fontSize,
     defaultAffection: clampInt(input.defaultAffection, defaultSettings.defaultAffection, 0, 100),
     defaultTrust: clampInt(input.defaultTrust, defaultSettings.defaultTrust, 0, 100),
     defaultDesire: clampInt(input.defaultDesire, defaultSettings.defaultDesire, 0, 100),

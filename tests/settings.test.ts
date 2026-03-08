@@ -260,3 +260,27 @@ test("sanitizeSettings keeps autoGenerateTracker toggle", () => {
   assert.equal(disabled.autoGenerateTracker, false);
   assert.equal(enabled.autoGenerateTracker, true);
 });
+
+test("sanitizeSettings migrates legacy display fields into cardVisualEditor", () => {
+  const sanitized = sanitizeSettings({
+    accentColor: "#aa22ff",
+    userCardColor: "#224466",
+    sceneCardColor: "#335577",
+    sceneCardValueColor: "#446688",
+    cardOpacity: 0.7,
+    borderRadius: 18,
+    fontSize: 17,
+    sceneCardLayout: "rows",
+    sceneCardArrayCollapsedLimit: 7,
+  });
+
+  assert.equal(sanitized.cardVisualEditor.base.root.accentColor, "#aa22ff");
+  assert.equal(sanitized.cardVisualEditor.base.root.backgroundOpacity, 0.7);
+  assert.equal(sanitized.cardVisualEditor.base.root.borderRadius, 18);
+  assert.equal(sanitized.cardVisualEditor.base.root.fontSize, 17);
+  assert.equal(sanitized.cardVisualEditor.user.root?.backgroundColor, "#224466");
+  assert.equal(sanitized.cardVisualEditor.scene.root?.backgroundColor, "#335577");
+  assert.equal(sanitized.cardVisualEditor.scene.root?.valueColor, "#446688");
+  assert.equal(sanitized.cardVisualEditor.scene.root?.sceneValueStyle, "plain");
+  assert.equal(sanitized.cardVisualEditor.scene.root?.arrayCollapsedLimit, 7);
+});

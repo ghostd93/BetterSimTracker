@@ -2,6 +2,21 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp1] - 2026-03-08
+### Added
+- Introduced `cardVisualEditor` foundation schema in settings/types for future interactive card styling (user/character/scene).
+- Added new visual-editor core module with:
+  - schema defaults,
+  - legacy display migration,
+  - settings sanitization,
+  - base style resolver (`resolveCardStyle`).
+
+### Changed
+- `sanitizeSettings` now normalizes and persists `cardVisualEditor` with legacy display-field mapping to editor tokens.
+
+### Fixed
+- Added regression coverage for visual-editor foundation: clamp/fallback behavior, legacy migration mapping, idempotent migration, resolver enable/disable semantics.
+
 ## [2.2.4.5] - 2026-03-07
 ### Changed
 - Injection state payload is now standardized under one canonical block: `BST_TRACKER_STATE`.

@@ -27,6 +27,80 @@ export type MoodSource = "bst_images" | "st_expressions";
 export type SceneCardPosition = "above_tracker_cards" | "above_message";
 export type SceneCardLayout = "chips" | "rows";
 export type SceneStatLayout = "auto" | "chips" | "rows";
+export type CardVisualMotionIntensity = "low" | "medium" | "high";
+export type CardVisualTokenChipStyle = "filled" | "outline" | "soft";
+
+export interface CardVisualEditorStylePreset {
+  backgroundColor: string;
+  textColor: string;
+  labelColor: string;
+  valueColor: string;
+  accentColor: string;
+  borderColor: string;
+  borderWidth: number;
+  borderRadius: number;
+  backgroundOpacity: number;
+  shadowEnabled: boolean;
+  shadowColor: string;
+  shadowBlur: number;
+  shadowSpread: number;
+  padding: number;
+  rowGap: number;
+  sectionGap: number;
+  fontFamily: string;
+  fontSize: number;
+  titleFontSize: number;
+  labelFontSize: number;
+  valueFontSize: number;
+  secondaryFontSize: number;
+  lineHeight: number;
+  letterSpacing: number;
+  barHeight: number;
+  chipRadius: number;
+  chipStyle: CardVisualTokenChipStyle;
+  buttonRadius: number;
+  arrayCollapsedLimit: number;
+  sceneValueStyle: "chip" | "plain";
+}
+
+export interface CardVisualEditorCardStyle {
+  motionEnabled: boolean;
+  motionIntensity: CardVisualMotionIntensity;
+  root: CardVisualEditorStylePreset;
+  elements: Record<string, CardVisualEditorStylePreset>;
+}
+
+export interface CardVisualEditorCardStyleOverride {
+  motionEnabled?: boolean;
+  motionIntensity?: CardVisualMotionIntensity;
+  root?: Partial<CardVisualEditorStylePreset>;
+  elements?: Record<string, Partial<CardVisualEditorStylePreset>>;
+}
+
+export interface CardVisualEditorPreset {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  schemaVersion: number;
+  base: CardVisualEditorCardStyleOverride;
+  character: CardVisualEditorCardStyleOverride;
+  user: CardVisualEditorCardStyleOverride;
+  scene: CardVisualEditorCardStyleOverride;
+}
+
+export interface CardVisualEditorSettings {
+  schemaVersion: number;
+  enabled: boolean;
+  useEditorStyling: boolean;
+  base: CardVisualEditorCardStyle;
+  character: CardVisualEditorCardStyleOverride;
+  user: CardVisualEditorCardStyleOverride;
+  scene: CardVisualEditorCardStyleOverride;
+  presets: CardVisualEditorPreset[];
+  activePresetId: string | null;
+}
+
 export interface SceneCardStatDisplayOptions {
   visible: boolean;
   showLabel: boolean;
@@ -137,6 +211,7 @@ export interface BetterSimTrackerSettings {
   sceneCardStatOrder: string[];
   sceneCardStatDisplay: Record<string, SceneCardStatDisplayOptions>;
   characterCardStatOrder: string[];
+  cardVisualEditor: CardVisualEditorSettings;
   autoDetectActive: boolean;
   autoGenerateTracker: boolean;
   regenerateOnMessageEdit: boolean;
