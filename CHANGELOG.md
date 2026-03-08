@@ -1,3 +1,11 @@
+## [2.2.4.6-exp2] - 2026-03-08
+### Changed
+- Removed `Live mode` from Visual Card Editor. Editing is now always preview-only until `Apply`.
+- `Apply` now always commits editor styling to runtime cards immediately (no extra runtime toggle dependency).
+
+### Fixed
+- Improved drag-and-drop destination clarity in layer tree with stronger drop-target highlight and explicit before/after marker.
+
 ## [2.2.4.6] - 2026-03-08
 ### Fixed
 - Fixed array-stat clear regression in manual tracker edit flow: deleting the last array item now persists as an explicit empty array ([]) instead of reviving stale previous values from fallback history.

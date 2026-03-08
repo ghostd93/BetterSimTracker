@@ -118,8 +118,13 @@ function getLayerIdsForType(catalog: LayerCatalog, type: CardType): readonly str
   return getLayerNodesForType(catalog, type).map(node => node.id);
 }
 
-export function shouldLiveApply(liveMode: boolean, useEditorStyling: boolean): boolean {
-  return Boolean(liveMode && useEditorStyling);
+export function buildAppliedEditorSettings(
+  draft: CardVisualEditorSettings,
+  legacy: OpenCardVisualEditorModalInput["legacy"],
+): CardVisualEditorSettings {
+  const next = sanitizeCardVisualEditorSettings(draft, legacy);
+  next.useEditorStyling = true;
+  return next;
 }
 
 export function pushDraftHistory(
@@ -817,7 +822,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
   let draft = sanitizeCardVisualEditorSettings(base, input.legacy);
   let activeType: CardType = "character";
   let selectedLayerId = "root";
-  let liveMode = false;
   let previewViewport: PreviewViewport = "desktop";
   let selectedPresetId = draft.activePresetId || "";
   let presetNameDraft = "";
@@ -843,6 +847,10 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
     modal.querySelectorAll(".bst-card-editor-layer-row").forEach(row => {
       row.classList.remove("is-drop-before");
       row.classList.remove("is-drop-after");
+      row.classList.remove("is-drop-target");
+      if (row instanceof HTMLElement) {
+        row.removeAttribute("data-drop-position");
+      }
     });
   };
 
@@ -882,11 +890,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
               <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
               <span class="bst-card-editor-switch-label">Use Editor Styling</span>
             </label>
-            <label class="bst-card-editor-switch">
-              <input type="checkbox" data-k="liveMode" ${liveMode ? "checked" : ""} title="When enabled, changes update real cards immediately (only if Use Editor Styling is on).">
-              <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
-              <span class="bst-card-editor-switch-label">Live mode</span>
-            </label>
           </div>
         </div>
         <div class="bst-card-editor-presets">
@@ -910,8 +913,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         </div>
       </div>
       <div class="bst-card-editor-toggle-hints">
-        <div><strong>Use Editor Styling</strong>: applies saved editor styles to real cards. Turn OFF to keep original styling.</div>
-        <div><strong>Live mode</strong>: applies edits instantly while editing. If OFF, edits are preview-only until <strong>Apply</strong>.</div>
+        <div><strong>Use Editor Styling</strong>: saved style applies to real cards after <strong>Apply</strong>. Turn OFF to keep original styling.</div>
       </div>
       ${presetTransferMode === "none" ? "" : `
         <div class="bst-card-editor-transfer-panel">
@@ -1022,6 +1024,8 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         const pointY = (event as DragEvent).clientY;
         const position: "before" | "after" = pointY < rect.top + rect.height / 2 ? "before" : "after";
         row.classList.add(position === "before" ? "is-drop-before" : "is-drop-after");
+        row.classList.add("is-drop-target");
+        row.setAttribute("data-drop-position", position);
       });
       node.addEventListener("drop", (event) => {
         event.preventDefault();
@@ -1040,7 +1044,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         const nextOrder = reorderLayerIdsWithDropPosition(layerIds, sourceLayerId, targetLayerId, dropPosition);
         writeOverrideLayerOrder(draft, activeType, nextOrder);
         render();
-        maybeApplyLive();
       });
       node.addEventListener("dragend", () => {
         draggedLayerId = null;
@@ -1056,7 +1059,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         writeOverrideLayerOrder(draft, activeType, nextOrder);
         selectedLayerId = layerId;
         render();
-        maybeApplyLive();
       });
     });
     modal.querySelectorAll("[data-layer-down]").forEach(node => {
@@ -1068,7 +1070,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         writeOverrideLayerOrder(draft, activeType, nextOrder);
         selectedLayerId = layerId;
         render();
-        maybeApplyLive();
       });
     });
     modal.querySelectorAll("[data-layer-visible]").forEach(node => {
@@ -1084,7 +1085,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         }
         selectedLayerId = layerId;
         render();
-        maybeApplyLive();
       });
     });
     modal.querySelectorAll("[data-layer-reset]").forEach(node => {
@@ -1095,16 +1095,11 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         clearOverrideElement(draft, activeType, layerId);
         selectedLayerId = layerId;
         render();
-        maybeApplyLive();
       });
     });
     (modal.querySelector('[data-k="useEditorStyling"]') as HTMLInputElement | null)?.addEventListener("change", (event) => {
       captureHistory();
       draft.useEditorStyling = (event.target as HTMLInputElement).checked;
-      render();
-    });
-    (modal.querySelector('[data-k="liveMode"]') as HTMLInputElement | null)?.addEventListener("change", (event) => {
-      liveMode = (event.target as HTMLInputElement).checked;
       render();
     });
     (modal.querySelector('[data-k="presetSelect"]') as HTMLSelectElement | null)?.addEventListener("change", (event) => {
@@ -1127,14 +1122,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         writeOverrideElement(draft, activeType, selectedLayerId, { visible: value });
       }
       refreshPreview();
-      maybeApplyLive();
     });
-
-    const maybeApplyLive = (): void => {
-      if (!shouldLiveApply(liveMode, draft.useEditorStyling)) return;
-      const next = sanitizeCardVisualEditorSettings(draft, input.legacy);
-      input.onApply(next);
-    };
 
     const captureHistory = (): void => {
       historyStack = pushDraftHistory(historyStack, sanitizeCardVisualEditorSettings(draft, input.legacy), HISTORY_LIMIT);
@@ -1148,7 +1136,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       historyStack = historyStack.slice(0, -1);
       draft = sanitizeCardVisualEditorSettings(previous, input.legacy);
       render();
-      maybeApplyLive();
     };
 
     const applyRedo = (): void => {
@@ -1158,7 +1145,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       futureStack = futureStack.slice(0, -1);
       draft = sanitizeCardVisualEditorSettings(nextDraft, input.legacy);
       render();
-      maybeApplyLive();
     };
 
     const refreshPreview = (): void => {
@@ -1192,7 +1178,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           writeOverrideElement(draft, activeType, selectedLayerId, { [key]: readNumber(node, fallback, min, max) });
         }
         refreshPreview();
-        maybeApplyLive();
       });
     };
     const bindText = (key: keyof CardVisualEditorStylePreset): void => {
@@ -1206,7 +1191,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           writeOverrideElement(draft, activeType, selectedLayerId, { [key]: node.value.trim() });
         }
         refreshPreview();
-        maybeApplyLive();
       });
     };
     bindText("backgroundColor");
@@ -1238,7 +1222,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       draft.scene = {};
       selectedLayerId = "root";
       render();
-      maybeApplyLive();
     });
     (modal.querySelector('[data-act="undo"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
       applyUndo();
@@ -1260,7 +1243,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       selectedPresetId = id;
       presetNameDraft = "";
       render();
-      maybeApplyLive();
     });
     (modal.querySelector('[data-act="preset-load"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
       if (!selectedPresetId) return;
@@ -1269,7 +1251,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       captureHistory();
       draft = applyPresetToDraft(draft, preset);
       render();
-      maybeApplyLive();
     });
     (modal.querySelector('[data-act="preset-delete"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
       if (!selectedPresetId) return;
@@ -1279,7 +1260,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       selectedPresetId = "";
       presetNameDraft = "";
       render();
-      maybeApplyLive();
     });
     (modal.querySelector('[data-act="preset-export"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
       if (!selectedPresetId) return;
@@ -1352,10 +1332,9 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       presetTransferError = "";
       presetTransferText = "";
       render();
-      maybeApplyLive();
     });
     (modal.querySelector('[data-act="apply"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
-      const next = sanitizeCardVisualEditorSettings(draft, input.legacy);
+      const next = buildAppliedEditorSettings(draft, input.legacy);
       input.onApply(next);
       close();
     });

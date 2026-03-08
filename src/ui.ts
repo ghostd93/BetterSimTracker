@@ -3443,7 +3443,15 @@ export function ensureStyles(): void {
   gap: 6px;
   align-items: center;
   padding-left: calc(var(--bst-layer-depth, 0) * 16px);
+  padding-top: 2px;
+  padding-bottom: 2px;
   position: relative;
+  border-radius: 8px;
+  transition: background-color .12s ease, box-shadow .12s ease;
+}
+.bst-card-editor-layer-row.is-drop-target {
+  background: color-mix(in srgb, var(--bst-accent) 24%, rgba(10,18,34,0.76) 76%);
+  box-shadow: inset 0 0 0 1px rgba(143,180,255,0.58);
 }
 .bst-card-editor-layer-row.is-drop-before::before,
 .bst-card-editor-layer-row.is-drop-after::after {
@@ -3457,11 +3465,33 @@ export function ensureStyles(): void {
   box-shadow: 0 0 0 1px rgba(12, 24, 42, 0.8);
   pointer-events: none;
 }
+.bst-card-editor-layer-row.is-drop-before::after,
+.bst-card-editor-layer-row.is-drop-after::before {
+  content: attr(data-drop-position);
+  position: absolute;
+  right: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--bst-accent) 80%, #ffffff 20%);
+  background: rgba(6, 11, 19, 0.9);
+  border: 1px solid rgba(143,180,255,0.6);
+  border-radius: 999px;
+  padding: 1px 6px;
+  pointer-events: none;
+}
 .bst-card-editor-layer-row.is-drop-before::before {
   top: -2px;
 }
+.bst-card-editor-layer-row.is-drop-before::after {
+  top: -11px;
+}
 .bst-card-editor-layer-row.is-drop-after::after {
   bottom: -2px;
+}
+.bst-card-editor-layer-row.is-drop-after::before {
+  bottom: -11px;
 }
 .bst-card-editor-layer-btn {
   border: 1px solid rgba(255,255,255,0.2);

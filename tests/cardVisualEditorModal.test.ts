@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { createDefaultCardVisualEditorSettings } from "../src/cardVisualEditor";
 import {
   applyPresetToDraft,
+  buildAppliedEditorSettings,
   isLayerMovable,
   moveLayerByDirection,
   parsePresetTransferPayload,
@@ -13,7 +14,6 @@ import {
   resolvePreviewLayerOrder,
   resolvePreviewLayerStyle,
   resolvePreviewRootStyle,
-  shouldLiveApply,
   toPresetId,
 } from "../src/cardVisualEditorModal";
 
@@ -77,11 +77,25 @@ test("resolvePreviewLayerStyle exposes visibility defaults and overrides", () =>
   assert.equal(mood.visible, false);
 });
 
-test("shouldLiveApply requires both live mode and editor styling", () => {
-  assert.equal(shouldLiveApply(false, false), false);
-  assert.equal(shouldLiveApply(true, false), false);
-  assert.equal(shouldLiveApply(false, true), false);
-  assert.equal(shouldLiveApply(true, true), true);
+test("buildAppliedEditorSettings always enables editor styling on apply", () => {
+  const draft = createDefaultCardVisualEditorSettings();
+  draft.useEditorStyling = false;
+  draft.base.root.backgroundColor = "#212131";
+
+  const applied = buildAppliedEditorSettings(draft, {
+    accentColor: "#8fb4ff",
+    userCardColor: "#2c3f6d",
+    sceneCardColor: "#1f3b4f",
+    sceneCardValueColor: "#f5f8ff",
+    cardOpacity: 0.92,
+    borderRadius: 18,
+    fontSize: 16,
+    sceneCardLayout: "chips",
+    sceneCardArrayCollapsedLimit: 4,
+  });
+
+  assert.equal(applied.useEditorStyling, true);
+  assert.equal(applied.base.root.backgroundColor, "#212131");
 });
 
 test("resolvePreviewLayerOrder keeps override order and appends missing defaults", () => {
