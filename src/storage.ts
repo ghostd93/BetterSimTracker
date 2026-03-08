@@ -80,7 +80,9 @@ function normalizeCustomNonNumericStatistics(raw: unknown): CustomNonNumericStat
       if (Array.isArray(value)) {
         const items = normalizeCustomNonNumericValue("array", value, { textMaxLength: 200 });
         if (!Array.isArray(items)) continue;
-        if (!items.length) continue;
+        // Preserve explicit empty arrays as a real value.
+        // This is required to represent "cleared array stat" and to prevent
+        // fallback logic from reviving stale previous items.
         byCharacter[characterName] = items;
         continue;
       }

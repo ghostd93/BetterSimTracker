@@ -148,6 +148,35 @@ test("mergeStatisticsWithFallback and custom merges preserve previous missing va
       pose: { Seraphina: "Standing" },
     },
   );
+
+  assert.deepEqual(
+    mergeCustomNonNumericStatisticsWithFallback(
+      { clothes: { Seraphina: [] } },
+      { clothes: { Seraphina: ["Hat"] } },
+    ),
+    {
+      clothes: { Seraphina: [] },
+    },
+  );
+});
+
+test("getTrackerDataFromMessage preserves explicit empty array values", () => {
+  const message = {
+    mes: "Reply",
+    name: "Seraphina",
+    is_user: false,
+    is_system: false,
+    extra: {
+      [EXTENSION_KEY]: makeTracker(1234, {
+        customNonNumericStatistics: {
+          clothes: { Seraphina: [] },
+        },
+      }),
+    },
+  };
+  const data = getTrackerDataFromMessage(message);
+  assert.ok(data);
+  assert.deepEqual(data?.customNonNumericStatistics?.clothes, { Seraphina: [] });
 });
 
 test("buildMergedPromptMacroData merges tracker history into one richer snapshot", () => {

@@ -2655,7 +2655,7 @@ function filterCustomNonNumericStatisticsToCharacters(
         filtered[name] = value;
       } else if (Array.isArray(value)) {
         const items = normalizeNonNumericArrayItems(value, 200);
-        if (!items.length) continue;
+        // Preserve explicit empty arrays as clear sentinels.
         filtered[name] = items;
       } else {
         const text = String(value ?? "").trim();
@@ -2735,6 +2735,12 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
     const statDef = customStatById.get(statKey);
     const ownerKey = statDef?.globalScope ? GLOBAL_TRACKER_KEY : character;
     if (rawValue == null) {
+      if ((statDef?.kind ?? "text_short") === "array") {
+        if (!customNonNumeric[statKey]) customNonNumeric[statKey] = {};
+        // Keep an explicit empty array so fallback logic does not revive stale items.
+        customNonNumeric[statKey][ownerKey] = [];
+        continue;
+      }
       if (customNonNumeric[statKey]) {
         delete customNonNumeric[statKey][ownerKey];
         if (Object.keys(customNonNumeric[statKey]).length === 0) {
