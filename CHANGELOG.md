@@ -1,3 +1,13 @@
+## [2.2.4.6-exp5] - 2026-03-08
+### Changed
+- Removed redundant `Use Editor Styling` toggle from Visual Card Editor modal (now controlled only in main Display settings).
+- Reworked top editor toolbar with iconized actions, consistent control heights, and cleaner alignment for tabs/presets/actions.
+- Improved layer row composition so action buttons are integrated into each movable layer row while locked rows stay minimal.
+
+### Fixed
+- Preview header now mirrors real cards more closely (no fake message-meta line, no text-only scene `Edit/Collapse` artifacts).
+- Scene preview now renders scene stats as real stat rows/chips (including date-time chips) instead of incorrect numeric bar rendering.
+
 ## [2.2.4.6-exp4] - 2026-03-08
 ### Changed
 - Removed visibility controls from Visual Card Editor to simplify layer UX.

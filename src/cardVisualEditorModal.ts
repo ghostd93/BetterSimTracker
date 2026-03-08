@@ -20,6 +20,7 @@ type LayerNode = {
   parentId: string | null;
   movable: boolean;
   type: LayerNodeType;
+  previewKind?: "numeric" | "text" | "array" | "date_time" | "boolean" | "enum_single";
 };
 type LayerCatalog = {
   character: LayerNode[];
@@ -82,12 +83,16 @@ const LEGACY_DEFAULT_LAYER_IDS: Record<CardType, readonly string[]> = {
 };
 
 function normalizeLayerNode(input: LayerNode): LayerNode {
+  const previewKind = input.previewKind;
   return {
     id: String(input.id ?? "").trim(),
     label: String(input.label ?? "").trim() || String(input.id ?? "").trim(),
     parentId: input.parentId ? String(input.parentId).trim() : null,
     movable: Boolean(input.movable),
     type: input.type === "leaf" ? "leaf" : "container",
+    previewKind: previewKind === "numeric" || previewKind === "text" || previewKind === "array" || previewKind === "date_time" || previewKind === "boolean" || previewKind === "enum_single"
+      ? previewKind
+      : undefined,
   };
 }
 
@@ -626,7 +631,7 @@ function renderPreviewCard(
   const numericContainerId = type === "scene" ? "scene.stat.row" : "stats.numeric.row";
   const customContainerId = type === "scene" ? "scene.stat.array.container" : "stats.nonNumeric.row";
   const selectedClass = (id: string): string => (selectedLayerId === id ? " is-selected" : "");
-  const visible = (id: string): boolean => resolvePreviewLayerStyle(draft, type, id).visible !== false;
+  const visible = (_id: string): boolean => true;
   const orderedLayerIds = resolvePreviewLayerOrder(draft, type, layerIds);
   const nodeById = getLayerNodeById(nodes);
   const childrenMap = new Map<string, string[]>();
@@ -698,6 +703,11 @@ function renderPreviewCard(
 
   const numericLeafIds = getContainerLeafIds(numericContainerId).filter(visible);
   const customLeafIds = getContainerLeafIds(customContainerId).filter(visible);
+  const isNumericLeaf = (statId: string): boolean => {
+    const node = nodeById.get(statId);
+    if (node?.previewKind === "numeric") return true;
+    return statId === "stat.affection" || statId === "stat.trust" || statId === "stat.desire" || statId === "stat.connection";
+  };
 
   const renderBar = (statId: string): string => {
     const token = resolvePreviewLayerStyle(draft, type, statId);
@@ -723,8 +733,10 @@ function renderPreviewCard(
     const label = layerLabelById[statId] || statId;
     const fallbackValue = "Sample value near max length to preview spacing, wrapping and card rhythm.";
     const value = customSample[statId] || fallbackValue;
-    const isDateTimeLike = statId.includes("date_time");
-    const isArrayLike = statId.includes("clothes") || statId.includes("characters_in_scene");
+    const kind = nodeById.get(statId)?.previewKind;
+    const isDateTimeLike = kind === "date_time" || statId.includes("date_time");
+    const isArrayLike = kind === "array" || statId.includes("clothes") || statId.includes("characters_in_scene");
+    const isBooleanLike = kind === "boolean";
     const chipLike = (value.length < 70 && !value.includes(",")) || isDateTimeLike || isArrayLike;
     const chipContent = isDateTimeLike
       ? `<span class="bst-card-editor-preview-chip">Wednesday</span><span class="bst-card-editor-preview-chip">March 4th, 2026</span><span class="bst-card-editor-preview-chip">20:22</span><span class="bst-card-editor-preview-chip">Late Evening</span>`
@@ -736,6 +748,8 @@ function renderPreviewCard(
             .slice(0, 5)
             .map(item => `<span class="bst-card-editor-preview-chip">${escapeHtml(item)}</span>`)
             .join("")
+        : isBooleanLike
+          ? `<span class="bst-card-editor-preview-chip">Enabled</span>`
         : "";
     return `
       <div class="bst-card-editor-preview-custom-row${selectedClass(statId)}" data-layer="${statId}">
@@ -763,15 +777,30 @@ function renderPreviewCard(
 
   const sceneBadge = type === "scene" ? `<span class="bst-card-editor-preview-badge">Global</span>` : "";
   const actionBadge = type === "scene"
-    ? `<div class="bst-card-editor-preview-actions"><span class="bst-card-editor-preview-action">Edit</span><span class="bst-card-editor-preview-action">Collapse</span></div>`
-    : `<div class="bst-card-editor-preview-actions"><span class="bst-card-editor-preview-action">Graph</span><span class="bst-card-editor-preview-action">Active</span></div>`;
+    ? `<div class="bst-card-editor-preview-actions"><span class="bst-card-editor-preview-action-icon" title="Collapse">&#9662;</span><span class="bst-card-editor-preview-action-icon" title="Edit">&#9998;</span></div>`
+    : `<div class="bst-card-editor-preview-actions"><span class="bst-card-editor-preview-action">Graph</span><span class="bst-card-editor-preview-action-icon" title="Edit">&#9998;</span><span class="bst-card-editor-preview-action">Active</span></div>`;
 
-  const numericBlock = visible(numericContainerId) && numericLeafIds.length
+  const numericBarLeafIds = numericLeafIds.filter(isNumericLeaf);
+  const numericTextLeafIds = numericLeafIds.filter(id => !isNumericLeaf(id));
+  const sceneStatLeafIds = type === "scene" ? numericLeafIds : [];
+
+  const numericBlock = type !== "scene" && visible(numericContainerId) && (numericBarLeafIds.length || numericTextLeafIds.length)
     ? `
       <div class="bst-card-editor-preview-section${selectedClass(numericContainerId)}" data-layer="${numericContainerId}" style="${sectionStyle}
         border-color:${escapeHtml(numericToken.borderColor || sectionToken.borderColor || "transparent")};
         color:${escapeHtml(numericToken.textColor || sectionToken.textColor || root.textColor || "#f1f3f8")};">
-        ${numericLeafIds.map(renderBar).join("")}
+        ${numericBarLeafIds.map(renderBar).join("")}
+        ${numericTextLeafIds.map(renderCustom).join("")}
+      </div>
+    `
+    : "";
+
+  const sceneStatsBlock = type === "scene" && visible(numericContainerId) && sceneStatLeafIds.length
+    ? `
+      <div class="bst-card-editor-preview-section${selectedClass(numericContainerId)}" data-layer="${numericContainerId}" style="${sectionStyle}
+        border-color:${escapeHtml(numericToken.borderColor || sectionToken.borderColor || "transparent")};
+        color:${escapeHtml(numericToken.textColor || sectionToken.textColor || root.textColor || "#f1f3f8")};">
+        ${sceneStatLeafIds.map(renderCustom).join("")}
       </div>
     `
     : "";
@@ -815,14 +844,11 @@ function renderPreviewCard(
       <div class="bst-card-editor-preview-header${selectedClass(headerId)}" data-layer="${headerId}" style="${headerStyle}">
         <div class="bst-card-editor-preview-header-top">
           <strong style="font-size:${String(headerStyleToken.titleFontSize || root.titleFontSize)}px">${ownerTitle}</strong>
-          ${sceneBadge}
-        </div>
-        <div class="bst-card-editor-preview-header-bottom">
-          <span class="bst-card-editor-preview-meta">Message #24 - 18:42</span>
-          ${actionBadge}
+          <div class="bst-card-editor-preview-actions-wrap">${sceneBadge}${actionBadge}</div>
         </div>
       </div>
       ${numericBlock}
+      ${sceneStatsBlock}
       ${customBlock}
       ${moodBlock}
       ${thoughtBlock}
@@ -887,27 +913,17 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         <div class="bst-card-editor-primary">
           <div class="bst-card-editor-group-title">Card + viewport</div>
           <div class="bst-card-editor-tabs">
-            <button type="button" data-tab="character" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "character" ? "is-active" : ""}">Character</button>
-            <button type="button" data-tab="user" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "user" ? "is-active" : ""}">User</button>
-            <button type="button" data-tab="scene" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "scene" ? "is-active" : ""}">Scene</button>
+            <button type="button" data-tab="character" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "character" ? "is-active" : ""}">&#128100; Character</button>
+            <button type="button" data-tab="user" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "user" ? "is-active" : ""}">&#128101; User</button>
+            <button type="button" data-tab="scene" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "scene" ? "is-active" : ""}">&#127970; Scene</button>
           </div>
           <div class="bst-card-editor-preview-viewport">
-            <button type="button" data-vp="desktop" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "desktop" ? "is-active" : ""}">Desktop</button>
-            <button type="button" data-vp="mobile" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "mobile" ? "is-active" : ""}">Mobile</button>
-          </div>
-        </div>
-        <div class="bst-card-editor-secondary">
-          <div class="bst-card-editor-group-title">Apply behavior</div>
-          <div class="bst-card-editor-toggles">
-            <label class="bst-card-editor-switch">
-              <input type="checkbox" data-k="useEditorStyling" ${draft.useEditorStyling ? "checked" : ""} title="Apply saved editor styles to real tracker cards. Turn off to use original styling.">
-              <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
-              <span class="bst-card-editor-switch-label">Use Editor Styling</span>
-            </label>
+            <button type="button" data-vp="desktop" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "desktop" ? "is-active" : ""}">&#128421; Desktop</button>
+            <button type="button" data-vp="mobile" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "mobile" ? "is-active" : ""}">&#128241; Mobile</button>
           </div>
         </div>
         <div class="bst-card-editor-presets">
-          <div class="bst-card-editor-group-title">Presets + history</div>
+          <div class="bst-card-editor-group-title">&#128190; Presets + history</div>
           <div class="bst-card-editor-history-controls">
             <select data-k="presetSelect" class="bst-input bst-card-editor-preset-select">
               <option value="">Preset: none</option>
@@ -916,21 +932,21 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
               `).join("")}
             </select>
             <input data-k="presetName" class="bst-input bst-card-editor-preset-name" type="text" maxlength="80" value="${escapeHtml(presetNameDraft)}" placeholder="Preset name">
-            <button type="button" data-act="preset-save" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Save current style as preset">Save preset</button>
+            <button type="button" data-act="preset-save" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Save current style as preset">&#128190; Save</button>
             ${selectedPresetId
-              ? `<button type="button" data-act="preset-load" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Load selected preset">Load</button>
-                 <button type="button" data-act="preset-delete" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Delete selected preset">Delete</button>
-                 <button type="button" data-act="preset-export" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Export selected preset as JSON">Export</button>`
+              ? `<button type="button" data-act="preset-load" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Load selected preset">&#128194; Load</button>
+                 <button type="button" data-act="preset-delete" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Delete selected preset">&#128465; Delete</button>
+                 <button type="button" data-act="preset-export" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Export selected preset as JSON">&#11015; Export</button>`
               : ""
             }
-            <button type="button" data-act="preset-import" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Import preset from JSON">Import</button>
-            <button type="button" data-act="undo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${historyStack.length === 0 ? "disabled" : ""}>Undo</button>
-            <button type="button" data-act="redo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${futureStack.length === 0 ? "disabled" : ""}>Redo</button>
+            <button type="button" data-act="preset-import" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Import preset from JSON">&#11014; Import</button>
+            <button type="button" data-act="undo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${historyStack.length === 0 ? "disabled" : ""}>&#8630; Undo</button>
+            <button type="button" data-act="redo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${futureStack.length === 0 ? "disabled" : ""}>&#8631; Redo</button>
           </div>
         </div>
       </div>
       <div class="bst-card-editor-toggle-hints">
-        <div><strong>Use Editor Styling</strong>: saved style applies to real cards after <strong>Apply</strong>. Turn OFF to keep original styling.</div>
+        <div>Changes are preview-only until <strong>Apply</strong>. Use the global <strong>Use Editor Styling</strong> toggle in Display settings to enable/disable editor styles on real cards.</div>
       </div>
       ${presetTransferMode === "none" ? "" : `
         <div class="bst-card-editor-transfer-panel">
@@ -1087,11 +1103,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         selectedLayerId = layerId;
         render();
       });
-    });
-    (modal.querySelector('[data-k="useEditorStyling"]') as HTMLInputElement | null)?.addEventListener("change", (event) => {
-      captureHistory();
-      draft.useEditorStyling = (event.target as HTMLInputElement).checked;
-      render();
     });
     (modal.querySelector('[data-k="presetSelect"]') as HTMLSelectElement | null)?.addEventListener("change", (event) => {
       selectedPresetId = String((event.target as HTMLSelectElement).value || "");

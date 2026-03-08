@@ -3260,6 +3260,7 @@ export function ensureStyles(): void {
   font-size: 18px;
 }
 .bst-card-editor-toolbar {
+  --bst-editor-control-h: 38px;
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
@@ -3270,14 +3271,17 @@ export function ensureStyles(): void {
   background: rgba(10, 18, 34, 0.72);
 }
 .bst-card-editor-toolbar .bst-btn {
-  height: 34px;
+  height: var(--bst-editor-control-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .bst-card-editor-primary,
-.bst-card-editor-secondary,
 .bst-card-editor-presets {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-start;
   flex-wrap: wrap;
   padding: 8px;
@@ -3285,11 +3289,8 @@ export function ensureStyles(): void {
   border-radius: 10px;
   background: rgba(14, 24, 42, 0.68);
 }
-.bst-card-editor-secondary {
-  align-items: center;
-}
 .bst-card-editor-group-title {
-  min-width: 140px;
+  min-width: 168px;
   font-size: 12px;
   font-weight: 700;
   color: rgba(198, 217, 248, 0.98);
@@ -3412,12 +3413,12 @@ export function ensureStyles(): void {
 .bst-card-editor-preset-select {
   min-width: 170px;
   max-width: 220px;
-  height: 34px;
+  height: var(--bst-editor-control-h);
 }
 .bst-card-editor-preset-name {
   min-width: 150px;
   max-width: 220px;
-  height: 34px;
+  height: var(--bst-editor-control-h);
 }
 .bst-card-editor-hist-btn[disabled] {
   opacity: 0.45;
@@ -3452,7 +3453,7 @@ export function ensureStyles(): void {
 }
 .bst-card-editor-layer-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 6px;
   align-items: center;
   padding-left: calc(var(--bst-layer-depth, 0) * 16px);
@@ -3519,7 +3520,7 @@ export function ensureStyles(): void {
   border: 1px solid rgba(255,255,255,0.2);
   background: rgba(15, 26, 42, 0.72);
   color: #e8eefc;
-  border-radius: 8px;
+  border-radius: 8px 0 0 8px;
   padding: 7px 9px;
   font-size: 12px;
   cursor: grab;
@@ -3600,6 +3601,9 @@ export function ensureStyles(): void {
   border-top-right-radius: 7px;
   border-bottom-right-radius: 7px;
   border-left: 0;
+}
+.bst-card-editor-layer-row.is-locked-row .bst-card-editor-layer-btn {
+  border-radius: 8px;
 }
 .bst-card-editor-layer-mini:hover {
   border-color: rgba(167, 198, 240, 0.7);
@@ -3710,9 +3714,23 @@ export function ensureStyles(): void {
   border-radius: 999px;
   padding: 2px 8px;
 }
+.bst-card-editor-preview-action-icon {
+  font-size: 12px;
+  border: 1px solid rgba(255,255,255,0.26);
+  border-radius: 7px;
+  padding: 2px 6px;
+  line-height: 1;
+  min-width: 24px;
+  text-align: center;
+}
 .bst-card-editor-preview-actions {
   display: inline-flex;
   gap: 6px;
+}
+.bst-card-editor-preview-actions-wrap {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
 }
 .bst-card-editor-preview-section {
   display: grid;

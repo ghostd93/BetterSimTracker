@@ -4299,21 +4299,21 @@ export function openSettingsModal(input: {
   modal.querySelector('[data-action="open-visual-editor"]')?.addEventListener("click", () => {
     const current = collectSettings();
     const builtInCharacterNodes = [
-      current.trackAffection ? { id: "stat.affection", label: "Affection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const } : null,
-      current.trackTrust ? { id: "stat.trust", label: "Trust", parentId: "stats.numeric.row", movable: true, type: "leaf" as const } : null,
-      current.trackDesire ? { id: "stat.desire", label: "Desire", parentId: "stats.numeric.row", movable: true, type: "leaf" as const } : null,
-      current.trackConnection ? { id: "stat.connection", label: "Connection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const } : null,
-      current.trackMood ? { id: "stat.mood", label: "Mood", parentId: "mood.container", movable: true, type: "leaf" as const } : null,
-      current.trackLastThought ? { id: "stat.lastThought", label: "Last thought", parentId: "thought.panel", movable: true, type: "leaf" as const } : null,
-    ].filter(Boolean) as Array<{ id: string; label: string; parentId: string; movable: true; type: "leaf" }>;
+      current.trackAffection ? { id: "stat.affection", label: "Affection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+      current.trackTrust ? { id: "stat.trust", label: "Trust", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+      current.trackDesire ? { id: "stat.desire", label: "Desire", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+      current.trackConnection ? { id: "stat.connection", label: "Connection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+      current.trackMood ? { id: "stat.mood", label: "Mood", parentId: "mood.container", movable: true, type: "leaf" as const, previewKind: "enum_single" as const } : null,
+      current.trackLastThought ? { id: "stat.lastThought", label: "Last thought", parentId: "thought.panel", movable: true, type: "leaf" as const, previewKind: "text" as const } : null,
+    ].filter(Boolean) as Array<{ id: string; label: string; parentId: string; movable: true; type: "leaf"; previewKind: "numeric" | "text" | "enum_single" }>;
     const builtInUserNodes = [
-      current.trackAffection ? { id: "stat.affection", label: "Affection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const } : null,
-      current.trackTrust ? { id: "stat.trust", label: "Trust", parentId: "stats.numeric.row", movable: true, type: "leaf" as const } : null,
-      current.trackDesire ? { id: "stat.desire", label: "Desire", parentId: "stats.numeric.row", movable: true, type: "leaf" as const } : null,
-      current.trackConnection ? { id: "stat.connection", label: "Connection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const } : null,
-      current.enableUserTracking && current.userTrackMood ? { id: "stat.mood", label: "Mood", parentId: "mood.container", movable: true, type: "leaf" as const } : null,
-      current.enableUserTracking && current.userTrackLastThought ? { id: "stat.lastThought", label: "Last thought", parentId: "thought.panel", movable: true, type: "leaf" as const } : null,
-    ].filter(Boolean) as Array<{ id: string; label: string; parentId: string; movable: true; type: "leaf" }>;
+      current.trackAffection ? { id: "stat.affection", label: "Affection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+      current.trackTrust ? { id: "stat.trust", label: "Trust", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+      current.trackDesire ? { id: "stat.desire", label: "Desire", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+      current.trackConnection ? { id: "stat.connection", label: "Connection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+      current.enableUserTracking && current.userTrackMood ? { id: "stat.mood", label: "Mood", parentId: "mood.container", movable: true, type: "leaf" as const, previewKind: "enum_single" as const } : null,
+      current.enableUserTracking && current.userTrackLastThought ? { id: "stat.lastThought", label: "Last thought", parentId: "thought.panel", movable: true, type: "leaf" as const, previewKind: "text" as const } : null,
+    ].filter(Boolean) as Array<{ id: string; label: string; parentId: string; movable: true; type: "leaf"; previewKind: "numeric" | "text" | "enum_single" }>;
     const customCharacterNodes = (current.customStats ?? [])
       .filter(stat => stat.track && stat.trackCharacters && !stat.globalScope)
       .map(stat => ({
@@ -4322,6 +4322,7 @@ export function openSettingsModal(input: {
         parentId: stat.kind === "numeric" ? "stats.numeric.row" : "stats.nonNumeric.row",
         movable: true,
         type: "leaf" as const,
+        previewKind: stat.kind as "numeric" | "text" | "array" | "date_time" | "boolean" | "enum_single",
       }));
     const customUserNodes = (current.customStats ?? [])
       .filter(stat => stat.track && stat.trackUser && !stat.globalScope)
@@ -4331,6 +4332,7 @@ export function openSettingsModal(input: {
         parentId: stat.kind === "numeric" ? "stats.numeric.row" : "stats.nonNumeric.row",
         movable: true,
         type: "leaf" as const,
+        previewKind: stat.kind as "numeric" | "text" | "array" | "date_time" | "boolean" | "enum_single",
       }));
     const sceneNodes = (current.customStats ?? [])
       .filter(stat => stat.track && stat.globalScope)
@@ -4340,6 +4342,7 @@ export function openSettingsModal(input: {
         parentId: stat.kind === "array" ? "scene.stat.array.container" : "scene.stat.row",
         movable: true,
         type: "leaf" as const,
+        previewKind: stat.kind as "numeric" | "text" | "array" | "date_time" | "boolean" | "enum_single",
       }));
     openCardVisualEditorModal({
       current: current.cardVisualEditor,
