@@ -305,7 +305,6 @@ function readNumber(node: HTMLInputElement, fallback: number, min: number, max: 
 }
 
 const ROOT_INSPECTOR_KEYS: Array<keyof CardVisualEditorStylePreset> = [
-  "visible",
   "backgroundColor",
   "textColor",
   "borderColor",
@@ -320,7 +319,6 @@ const ROOT_INSPECTOR_KEYS: Array<keyof CardVisualEditorStylePreset> = [
 ];
 
 const CONTENT_INSPECTOR_KEYS: Array<keyof CardVisualEditorStylePreset> = [
-  "visible",
   "textColor",
   "labelColor",
   "valueColor",
@@ -407,7 +405,7 @@ function renderLayerTree(
       return (defaultIndex.get(a.id) ?? 0) - (defaultIndex.get(b.id) ?? 0);
     });
     return children.map(node => `
-      <div class="bst-card-editor-layer-row ${selectedLayerId === node.id ? "is-active" : ""}" data-layer-row="${escapeHtml(node.id)}" style="--bst-layer-depth:${String(depth)};">
+      <div class="bst-card-editor-layer-row ${selectedLayerId === node.id ? "is-active" : ""} ${node.movable ? "has-actions" : "is-locked-row"}" data-layer-row="${escapeHtml(node.id)}" style="--bst-layer-depth:${String(depth)};">
         <button
           type="button"
           draggable="${node.movable ? "true" : "false"}"
@@ -424,14 +422,7 @@ function renderLayerTree(
         ${node.movable
           ? `<button type="button" class="bst-card-editor-layer-mini bst-card-editor-layer-mini-icon" data-layer-up="${escapeHtml(node.id)}" title="Move up within siblings" aria-label="Move up">&#8593;</button>
              <button type="button" class="bst-card-editor-layer-mini bst-card-editor-layer-mini-icon" data-layer-down="${escapeHtml(node.id)}" title="Move down within siblings" aria-label="Move down">&#8595;</button>`
-          : `<span class="bst-card-editor-layer-mini-spacer"></span><span class="bst-card-editor-layer-mini-spacer"></span>`
-        }
-        <button type="button" class="bst-card-editor-layer-mini" data-layer-visible="${escapeHtml(node.id)}" title="Toggle visibility">
-          ${resolvePreviewLayerStyle(draft, activeType, node.id).visible === false ? "Hidden" : "Visible"}
-        </button>
-        ${hasLayerStyleOverride(draft, activeType, node.id)
-          ? `<button type="button" class="bst-card-editor-layer-mini" data-layer-reset="${escapeHtml(node.id)}" title="Reset this layer style">Reset</button>`
-          : `<span class="bst-card-editor-layer-mini-spacer"></span>`
+          : ""
         }
       </div>
       ${renderBranch(node.id, depth + 1)}
@@ -449,17 +440,17 @@ function resolveInspectorKeys(
   if (!node) return CONTENT_INSPECTOR_KEYS;
   if (node.type === "container") {
     if (layerId.includes("header")) {
-      return ["visible", "backgroundColor", "textColor", "borderColor", "backgroundOpacity", "borderWidth", "borderRadius", "titleFontSize", "padding", "rowGap", "sectionGap"];
+      return ["backgroundColor", "textColor", "borderColor", "backgroundOpacity", "borderWidth", "borderRadius", "titleFontSize", "padding", "rowGap", "sectionGap"];
     }
-    return ["visible", "backgroundColor", "textColor", "borderColor", "backgroundOpacity", "borderWidth", "borderRadius", "padding", "rowGap", "sectionGap"];
+    return ["backgroundColor", "textColor", "borderColor", "backgroundOpacity", "borderWidth", "borderRadius", "padding", "rowGap", "sectionGap"];
   }
   if (layerId.includes("mood")) {
-    return ["visible", "textColor", "valueColor", "borderColor", "borderWidth", "borderRadius", "valueFontSize", "padding", "rowGap"];
+    return ["textColor", "valueColor", "borderColor", "borderWidth", "borderRadius", "valueFontSize", "padding", "rowGap"];
   }
   if (layerId.includes("thought")) {
-    return ["visible", "textColor", "valueColor", "borderColor", "backgroundColor", "backgroundOpacity", "borderWidth", "borderRadius", "valueFontSize", "padding"];
+    return ["textColor", "valueColor", "borderColor", "backgroundColor", "backgroundOpacity", "borderWidth", "borderRadius", "valueFontSize", "padding"];
   }
-  return ["visible", "textColor", "labelColor", "valueColor", "borderColor", "backgroundColor", "backgroundOpacity", "borderWidth", "borderRadius", "labelFontSize", "valueFontSize", "padding", "rowGap"];
+  return ["textColor", "labelColor", "valueColor", "borderColor", "backgroundColor", "backgroundOpacity", "borderWidth", "borderRadius", "labelFontSize", "valueFontSize", "padding", "rowGap"];
 }
 
 function shouldShowInspectorField(
@@ -961,15 +952,14 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
             ${renderPreviewCard(draft, activeType, selectedLayerId, getLayerIdsForType(layerCatalog, activeType), layerLabelById, nodes)}
           </div>
           <div class="bst-card-editor-pane-title">Inspector</div>
-          <div class="bst-card-editor-help">Editing layer: <code>${escapeHtml(selectedLayerId)}</code></div>
+          <div class="bst-card-editor-help bst-card-editor-help-row">
+            <span>Editing layer: <code>${escapeHtml(selectedLayerId)}</code></span>
+            ${hasLayerStyleOverride(draft, activeType, selectedLayerId)
+              ? `<button type="button" data-act="inspector-reset-layer" class="bst-btn bst-btn-soft bst-card-editor-inspector-reset">Reset Layer</button>`
+              : ""
+            }
+          </div>
           <div class="bst-card-editor-inspector">
-            ${shouldShowInspectorField("visible", inspectorKeys) ? `
-              <label class="bst-card-editor-switch">
-                <input data-k="visible" type="checkbox" ${root.visible !== false ? "checked" : ""}>
-                <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
-                <span class="bst-card-editor-switch-label">Visible</span>
-              </label>
-            ` : ""}
             ${shouldShowInspectorField("backgroundColor", inspectorKeys) ? `<label class="bst-card-editor-field">Background <input data-k="backgroundColor" type="text" value="${escapeHtml(root.backgroundColor || "")}" placeholder="#1a2134 / rgb(...)"></label>` : ""}
             ${shouldShowInspectorField("textColor", inspectorKeys) ? `<label class="bst-card-editor-field">Text color <input data-k="textColor" type="text" value="${escapeHtml(root.textColor || "")}" placeholder="#f1f3f8"></label>` : ""}
             ${shouldShowInspectorField("labelColor", inspectorKeys) ? `<label class="bst-card-editor-field">Label color <input data-k="labelColor" type="text" value="${escapeHtml(root.labelColor || "")}" placeholder="#c7d0e0"></label>` : ""}
@@ -1098,31 +1088,6 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         render();
       });
     });
-    modal.querySelectorAll("[data-layer-visible]").forEach(node => {
-      node.addEventListener("click", () => {
-        const layerId = String((node as HTMLElement).getAttribute("data-layer-visible") || "");
-        if (!layerId) return;
-        captureHistory();
-        const currentVisible = resolvePreviewLayerStyle(draft, activeType, layerId).visible !== false;
-        if (layerId === "root") {
-          writeOverrideRoot(draft, activeType, { visible: !currentVisible });
-        } else {
-          writeOverrideElement(draft, activeType, layerId, { visible: !currentVisible });
-        }
-        selectedLayerId = layerId;
-        render();
-      });
-    });
-    modal.querySelectorAll("[data-layer-reset]").forEach(node => {
-      node.addEventListener("click", () => {
-        const layerId = String((node as HTMLElement).getAttribute("data-layer-reset") || "");
-        if (!layerId || layerId === "root") return;
-        captureHistory();
-        clearOverrideElement(draft, activeType, layerId);
-        selectedLayerId = layerId;
-        render();
-      });
-    });
     (modal.querySelector('[data-k="useEditorStyling"]') as HTMLInputElement | null)?.addEventListener("change", (event) => {
       captureHistory();
       draft.useEditorStyling = (event.target as HTMLInputElement).checked;
@@ -1139,15 +1104,16 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       presetTransferText = String((event.target as HTMLTextAreaElement).value || "");
       presetTransferError = "";
     });
-    (modal.querySelector('[data-k="visible"]') as HTMLInputElement | null)?.addEventListener("change", (event) => {
+    (modal.querySelector('[data-act="inspector-reset-layer"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
       captureHistory();
-      const value = (event.target as HTMLInputElement).checked;
       if (selectedLayerId === "root") {
-        writeOverrideRoot(draft, activeType, { visible: value });
+        const targetKey = activeType === "character" ? "character" : activeType === "user" ? "user" : "scene";
+        const current = draft[targetKey] as CardVisualEditorCardStyleOverride;
+        draft[targetKey] = { ...current, root: undefined };
       } else {
-        writeOverrideElement(draft, activeType, selectedLayerId, { visible: value });
+        clearOverrideElement(draft, activeType, selectedLayerId);
       }
-      refreshPreview();
+      render();
     });
 
     const captureHistory = (): void => {

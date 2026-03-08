@@ -3285,12 +3285,17 @@ export function ensureStyles(): void {
   border-radius: 10px;
   background: rgba(14, 24, 42, 0.68);
 }
+.bst-card-editor-secondary {
+  align-items: center;
+}
 .bst-card-editor-group-title {
-  min-width: 130px;
+  min-width: 140px;
   font-size: 12px;
   font-weight: 700;
-  color: rgba(230, 239, 255, 0.95);
+  color: rgba(198, 217, 248, 0.98);
   letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.92;
 }
 .bst-card-editor-tabs {
   display: flex;
@@ -3457,6 +3462,12 @@ export function ensureStyles(): void {
   border-radius: 8px;
   transition: background-color .12s ease, box-shadow .12s ease;
 }
+.bst-card-editor-layer-row.has-actions {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.bst-card-editor-layer-row.is-locked-row {
+  grid-template-columns: minmax(0, 1fr);
+}
 .bst-card-editor-layer-row.is-active {
   background: rgba(62, 104, 168, 0.14);
 }
@@ -3514,6 +3525,10 @@ export function ensureStyles(): void {
   cursor: grab;
   user-select: none;
   text-align: left;
+}
+.bst-card-editor-layer-row.has-actions .bst-card-editor-layer-btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 .bst-card-editor-layer-title-wrap {
   display: flex;
@@ -3577,6 +3592,15 @@ export function ensureStyles(): void {
   cursor: pointer;
   padding: 0 8px;
 }
+.bst-card-editor-layer-row.has-actions .bst-card-editor-layer-mini {
+  border-left: 0;
+  border-radius: 0;
+}
+.bst-card-editor-layer-row.has-actions .bst-card-editor-layer-mini:last-child {
+  border-top-right-radius: 7px;
+  border-bottom-right-radius: 7px;
+  border-left: 0;
+}
 .bst-card-editor-layer-mini:hover {
   border-color: rgba(167, 198, 240, 0.7);
   background: rgba(40, 68, 110, 0.68);
@@ -3601,6 +3625,16 @@ export function ensureStyles(): void {
   margin-bottom: 8px;
   font-size: 12px;
   color: rgba(240,245,255,0.85);
+}
+.bst-card-editor-help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bst-card-editor-inspector-reset {
+  height: 30px;
+  white-space: nowrap;
 }
 .bst-card-editor-help code {
   color: #cbe0ff;

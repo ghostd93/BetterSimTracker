@@ -1,3 +1,10 @@
+## [2.2.4.6-exp4] - 2026-03-08
+### Changed
+- Removed visibility controls from Visual Card Editor to simplify layer UX.
+- Moved layer reset action from layer rows into Inspector (`Reset Layer`) for clearer edit flow.
+- Integrated reorder arrows directly into movable layer rows and removed meaningless controls from locked rows.
+- Polished top editor menu spacing, sizing, and section readability.
+
 ## [2.2.4.6-exp3] - 2026-03-08
 ### Changed
 - Polished Visual Card Editor controls and spacing for cleaner, more consistent UI.
