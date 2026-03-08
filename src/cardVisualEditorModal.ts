@@ -63,7 +63,6 @@ const BASE_CHARACTER_TREE: LayerNode[] = [
   { id: "root", label: "Root", parentId: null, movable: false, type: "container" },
   { id: "header", label: "Header", parentId: "root", movable: false, type: "container" },
   { id: "body", label: "Body", parentId: "root", movable: false, type: "container" },
-  { id: "footer", label: "Footer", parentId: "root", movable: false, type: "container" },
   { id: "stats.numeric.row", label: "Numeric stats", parentId: "body", movable: false, type: "container" },
   { id: "stats.nonNumeric.row", label: "Custom stats", parentId: "body", movable: false, type: "container" },
   { id: "mood.container", label: "Mood", parentId: "body", movable: false, type: "container" },
@@ -73,14 +72,13 @@ const BASE_SCENE_TREE: LayerNode[] = [
   { id: "root", label: "Root", parentId: null, movable: false, type: "container" },
   { id: "scene.header", label: "Header", parentId: "root", movable: false, type: "container" },
   { id: "scene.body", label: "Body", parentId: "root", movable: false, type: "container" },
-  { id: "scene.footer", label: "Footer", parentId: "root", movable: false, type: "container" },
   { id: "scene.stat.row", label: "Scene stats", parentId: "scene.body", movable: false, type: "container" },
   { id: "scene.stat.array.container", label: "Scene array stats", parentId: "scene.body", movable: false, type: "container" },
 ];
 const LEGACY_DEFAULT_LAYER_IDS: Record<CardType, readonly string[]> = {
-  character: ["root", "header", "body", "footer", "stats.numeric.row", "stats.nonNumeric.row", "mood.container", "thought.panel"],
-  user: ["root", "header", "body", "footer", "stats.numeric.row", "stats.nonNumeric.row", "mood.container", "thought.panel"],
-  scene: ["root", "scene.header", "scene.body", "scene.footer", "scene.stat.row", "scene.stat.array.container"],
+  character: ["root", "header", "body", "stats.numeric.row", "stats.nonNumeric.row", "mood.container", "thought.panel"],
+  user: ["root", "header", "body", "stats.numeric.row", "stats.nonNumeric.row", "mood.container", "thought.panel"],
+  scene: ["root", "scene.header", "scene.body", "scene.stat.row", "scene.stat.array.container"],
 };
 
 function normalizeLayerNode(input: LayerNode): LayerNode {
@@ -280,6 +278,21 @@ export function moveLayerByDirection(
   return list;
 }
 
+function reorderLayerIdsWithDropPosition(
+  layerIds: readonly string[],
+  fromId: string,
+  targetId: string,
+  dropPosition: "before" | "after",
+): string[] {
+  if (!fromId || !targetId || fromId === targetId) return [...layerIds];
+  const next = [...layerIds].filter(id => id !== fromId);
+  const targetIndex = next.indexOf(targetId);
+  if (targetIndex < 0) return [...layerIds];
+  const insertIndex = dropPosition === "after" ? targetIndex + 1 : targetIndex;
+  next.splice(insertIndex, 0, fromId);
+  return next;
+}
+
 function readNumber(node: HTMLInputElement, fallback: number, min: number, max: number): number {
   const parsed = Number(node.value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -317,7 +330,7 @@ const CONTENT_INSPECTOR_KEYS: Array<keyof CardVisualEditorStylePreset> = [
 ];
 
 export function isLayerMovable(layerId: string): boolean {
-  return !new Set(["root", "header", "body", "footer", "scene.header", "scene.body", "scene.footer", "scene.stat.row", "scene.stat.array.container", "stats.numeric.row", "stats.nonNumeric.row", "mood.container", "thought.panel"]).has(layerId);
+  return !new Set(["root", "header", "body", "scene.header", "scene.body", "scene.stat.row", "scene.stat.array.container", "stats.numeric.row", "stats.nonNumeric.row", "mood.container", "thought.panel"]).has(layerId);
 }
 
 function getLayerNodeById(nodes: LayerNode[]): Map<string, LayerNode> {
@@ -345,6 +358,15 @@ function renderLayerTree(
   draft: CardVisualEditorSettings,
   activeType: CardType,
 ): string {
+  const lockBadge = (node: LayerNode): string => (node.movable ? "movable" : "locked");
+  const roleLabel = (node: LayerNode): string => {
+    if (node.id === "root") return "card";
+    if (node.type === "container") return "section";
+    if (node.id.startsWith("stat.")) return "built-in";
+    if (node.id.startsWith("custom.")) return "custom";
+    if (node.id.startsWith("scene.")) return "scene";
+    return "layer";
+  };
   const childrenMap = new Map<string, LayerNode[]>();
   for (const node of nodes) {
     const parentKey = node.parentId ?? "__root__";
@@ -370,14 +392,19 @@ function renderLayerTree(
           class="bst-card-editor-layer-btn ${selectedLayerId === node.id ? "is-active" : ""}"
           data-layer-pick="${escapeHtml(node.id)}"
           data-layer-drag="${escapeHtml(node.id)}">
-          ${escapeHtml(node.label)} <span class="bst-card-editor-layer-id">${escapeHtml(node.id)}</span>
+          <span class="bst-card-editor-layer-title-wrap">
+            <span class="bst-card-editor-layer-title">${escapeHtml(node.label)}</span>
+            <span class="bst-card-editor-layer-role">${escapeHtml(roleLabel(node))}</span>
+            <span class="bst-card-editor-layer-lock ${node.movable ? "is-movable" : "is-locked"}">${lockBadge(node)}</span>
+          </span>
+          <span class="bst-card-editor-layer-id" title="${escapeHtml(node.id)}">${escapeHtml(node.id)}</span>
         </button>
-        <button type="button" class="bst-card-editor-layer-mini" data-layer-up="${escapeHtml(node.id)}" title="Move up" ${node.movable ? "" : "disabled"}>&uarr;</button>
-        <button type="button" class="bst-card-editor-layer-mini" data-layer-down="${escapeHtml(node.id)}" title="Move down" ${node.movable ? "" : "disabled"}>&darr;</button>
+        <button type="button" class="bst-card-editor-layer-mini" data-layer-up="${escapeHtml(node.id)}" title="Move up within siblings" ${node.movable ? "" : "disabled"}>↑</button>
+        <button type="button" class="bst-card-editor-layer-mini" data-layer-down="${escapeHtml(node.id)}" title="Move down within siblings" ${node.movable ? "" : "disabled"}>↓</button>
         <button type="button" class="bst-card-editor-layer-mini" data-layer-visible="${escapeHtml(node.id)}" title="Toggle visibility">
           ${resolvePreviewLayerStyle(draft, activeType, node.id).visible === false ? "Hidden" : "Shown"}
         </button>
-        <button type="button" class="bst-card-editor-layer-mini" data-layer-reset="${escapeHtml(node.id)}" title="Reset layer style" ${node.id === "root" ? "disabled" : ""}>Reset</button>
+        <button type="button" class="bst-card-editor-layer-mini" data-layer-reset="${escapeHtml(node.id)}" title="Reset this layer style" ${node.id === "root" ? "disabled" : ""}>Reset</button>
       </div>
       ${renderBranch(node.id, depth + 1)}
     `).join("");
@@ -572,141 +599,214 @@ function renderPreviewCard(
   selectedLayerId: string,
   layerIds: readonly string[],
   layerLabelById: Record<string, string>,
+  nodes: LayerNode[],
 ): string {
   const root = resolvePreviewLayerStyle(draft, type, "root");
   const headerId = type === "scene" ? "scene.header" : "header";
   const bodyId = type === "scene" ? "scene.body" : "body";
-  const rowId = type === "scene" ? "scene.stat.row" : "stats.numeric.row";
-  const nonNumericId = type === "scene" ? "scene.stat.array.container" : "stats.nonNumeric.row";
-  const header = resolvePreviewLayerStyle(draft, type, headerId);
-  const body = resolvePreviewLayerStyle(draft, type, bodyId);
-  const row = resolvePreviewLayerStyle(draft, type, rowId);
-  const nonNumeric = resolvePreviewLayerStyle(draft, type, nonNumericId);
-  const mood = resolvePreviewLayerStyle(draft, type, "mood.container");
-  const thought = resolvePreviewLayerStyle(draft, type, "thought.panel");
-  const orderedLayerIds = resolvePreviewLayerOrder(draft, type, layerIds);
-  const title = type === "character" ? "Character" : type === "user" ? "User" : "Scene";
-  const valueText = type === "scene" ? "Scene Date/Time: 2026-03-08 20:00" : "Affection 58%";
+  const numericContainerId = type === "scene" ? "scene.stat.row" : "stats.numeric.row";
+  const customContainerId = type === "scene" ? "scene.stat.array.container" : "stats.nonNumeric.row";
   const selectedClass = (id: string): string => (selectedLayerId === id ? " is-selected" : "");
-  const isLayerVisible = (layerId: string): boolean => resolvePreviewLayerStyle(draft, type, layerId).visible !== false;
-  const ownerBlockMarkupByLayer: Record<string, string> = {
-    "stats.numeric.row": `
-      <div class="bst-card-editor-preview-section${selectedClass(bodyId)}" data-layer="${bodyId}" style="
-        margin-top:${String(root.rowGap)}px;
-        color:${escapeHtml(body.textColor || root.textColor || "#f1f3f8")};
-        border:${String(body.borderWidth ?? 0)}px solid ${escapeHtml(body.borderColor || "transparent")};
-        border-radius:${String(body.borderRadius)}px;
-        padding:${String(Math.max(4, Math.round((body.padding ?? root.padding) * 0.7)))}px;">
-        <div class="bst-card-editor-preview-row${selectedClass(rowId)}" data-layer="${rowId}" style="
-          color:${escapeHtml(row.labelColor || root.labelColor || root.textColor || "#c7d0e0")};
-          font-size:${String(row.labelFontSize || root.labelFontSize)}px;">${escapeHtml(layerLabelById[rowId] || "Label")}</div>
-        <div class="bst-card-editor-preview-row${selectedClass(rowId)}" data-layer="${rowId}" style="
-          margin-top:6px;
-          color:${escapeHtml(row.valueColor || root.valueColor || root.textColor || "#f1f3f8")};
-          font-size:${String(row.valueFontSize || root.valueFontSize)}px;">${escapeHtml(valueText)}</div>
-      </div>
-    `,
-    "stats.nonNumeric.row": `
-      <div class="bst-card-editor-preview-chip-row${selectedClass(nonNumericId)}" data-layer="${nonNumericId}" style="
-        margin-top:${String(root.sectionGap)};
-        color:${escapeHtml(nonNumeric.valueColor || root.valueColor || root.textColor || "#f1f3f8")}">
-        <span class="bst-card-editor-preview-chip" style="border-radius:${String(root.chipRadius)}px;">chip A</span>
-        <span class="bst-card-editor-preview-chip" style="border-radius:${String(root.chipRadius)}px;">chip B</span>
-      </div>
-    `,
-    "mood.container": `<div class="bst-card-editor-preview-row${selectedClass("mood.container")}" data-layer="mood.container" style="margin-top:${String(root.sectionGap)};color:${escapeHtml(mood.valueColor || root.valueColor || "#f1f3f8")}">Mood: Hopeful</div>`,
-    "thought.panel": `<div class="bst-card-editor-preview-row${selectedClass("thought.panel")}" data-layer="thought.panel" style="margin-top:${String(root.rowGap)};color:${escapeHtml(thought.valueColor || root.valueColor || "#f1f3f8")}">Thought preview text...</div>`,
+  const visible = (id: string): boolean => resolvePreviewLayerStyle(draft, type, id).visible !== false;
+  const orderedLayerIds = resolvePreviewLayerOrder(draft, type, layerIds);
+  const nodeById = getLayerNodeById(nodes);
+  const childrenMap = new Map<string, string[]>();
+  for (const node of nodes) {
+    const key = node.parentId ?? "__root__";
+    const list = childrenMap.get(key) ?? [];
+    list.push(node.id);
+    childrenMap.set(key, list);
+  }
+  const getContainerLeafIds = (containerId: string): string[] => {
+    const directChildren = childrenMap.get(containerId) ?? [];
+    return directChildren
+      .filter(id => {
+        const node = nodeById.get(id);
+        return Boolean(node && node.type === "leaf");
+      })
+      .sort((a, b) => {
+        const ai = orderedLayerIds.indexOf(a);
+        const bi = orderedLayerIds.indexOf(b);
+        if (ai >= 0 && bi >= 0) return ai - bi;
+        if (ai >= 0) return -1;
+        if (bi >= 0) return 1;
+        return a.localeCompare(b);
+      });
   };
-  for (const layerId of layerIds) {
-    if (ownerBlockMarkupByLayer[layerId]) continue;
-    if (layerId === "root" || layerId === headerId || layerId === bodyId || layerId === "footer") continue;
-    const layerStyle = resolvePreviewLayerStyle(draft, type, layerId);
-    ownerBlockMarkupByLayer[layerId] = `
-      <div class="bst-card-editor-preview-row${selectedClass(layerId)}" data-layer="${layerId}" style="
-        margin-top:${String(root.rowGap)};
-        color:${escapeHtml(layerStyle.valueColor || layerStyle.textColor || root.valueColor || root.textColor || "#f1f3f8")};
-        border:${String(layerStyle.borderWidth ?? 0)}px solid ${escapeHtml(layerStyle.borderColor || "transparent")};
-        border-radius:${String(layerStyle.borderRadius ?? root.borderRadius)};
-        padding:${String(Math.max(2, Math.round((layerStyle.padding ?? root.padding) * 0.5)))}px;
-        ${layerStyle.visible === false ? "display:none;" : ""}
-      ">
-        ${escapeHtml(layerLabelById[layerId] || layerId)} preview
+
+  const rootStyle = `
+    background:${escapeHtml(root.backgroundColor || "#1a2134")};
+    color:${escapeHtml(root.textColor || "#f1f3f8")};
+    border:${String(root.borderWidth)}px solid ${escapeHtml(root.borderColor || "#3a4966")};
+    border-radius:${String(root.borderRadius)}px;
+    opacity:${String(root.backgroundOpacity)};
+    font-size:${String(root.fontSize)}px;
+    padding:${String(root.padding)}px;
+    box-shadow:${root.shadowEnabled ? `0 0 ${String(root.shadowBlur)}px ${String(root.shadowSpread)}px ${escapeHtml(root.shadowColor || "#00000044")}` : "none"};
+    ${root.visible === false ? "display:none;" : ""}
+  `;
+
+  const headerStyleToken = resolvePreviewLayerStyle(draft, type, headerId);
+  const headerStyle = `
+    color:${escapeHtml(headerStyleToken.textColor || root.textColor || "#f1f3f8")};
+    border:${String(headerStyleToken.borderWidth ?? 0)}px solid ${escapeHtml(headerStyleToken.borderColor || "transparent")};
+    border-radius:${String(headerStyleToken.borderRadius ?? root.borderRadius)}px;
+    padding:${String(Math.max(6, Math.round((headerStyleToken.padding ?? root.padding) * 0.7)))}px;
+  `;
+  const sectionToken = resolvePreviewLayerStyle(draft, type, bodyId);
+  const sectionStyle = `
+    margin-top:${String(root.sectionGap)}px;
+    border:${String(sectionToken.borderWidth ?? 0)}px solid ${escapeHtml(sectionToken.borderColor || "transparent")};
+    border-radius:${String(sectionToken.borderRadius ?? root.borderRadius)}px;
+    padding:${String(Math.max(6, Math.round((sectionToken.padding ?? root.padding) * 0.7)))}px;
+    color:${escapeHtml(sectionToken.textColor || root.textColor || "#f1f3f8")};
+  `;
+
+  const numericSample: Record<string, number> = {
+    "stat.affection": 92,
+    "stat.trust": 84,
+    "stat.desire": 67,
+    "stat.connection": 88,
+  };
+  const customSample: Record<string, string> = {
+    "custom.clothes": "white summer dress, lace bra, silk ribbon, silver necklace, sandal heels",
+    "custom.pose": "Leaning close, shoulders relaxed, one hand brushing hair behind ear.",
+    "custom.physicality": "Soft skin glow, flushed cheeks, visible breathing, slightly trembling fingers.",
+    "scene.scene_date_time": "Wednesday - March 4th, 2026 - 20:22 - Late Evening",
+    "scene.characters_in_scene": "Seraphina, User, Guard Captain, Innkeeper",
+    "scene.tv_screen_scene": "Rainy neon alley, camera dolly-in, tense violin swells before reveal.",
+  };
+
+  const numericLeafIds = getContainerLeafIds(numericContainerId).filter(visible);
+  const customLeafIds = getContainerLeafIds(customContainerId).filter(visible);
+
+  const renderBar = (statId: string): string => {
+    const token = resolvePreviewLayerStyle(draft, type, statId);
+    const baseValue = numericSample[statId];
+    const value = Number.isFinite(baseValue)
+      ? Number(baseValue)
+      : Math.max(58, Math.min(97, 58 + (Math.abs(statId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 40)));
+    const label = layerLabelById[statId] || statId.replace(/^stat\./, "");
+    return `
+      <div class="bst-card-editor-preview-bar-row${selectedClass(statId)}" data-layer="${statId}">
+        <div class="bst-card-editor-preview-bar-head" style="font-size:${String(token.labelFontSize || root.labelFontSize)}px;color:${escapeHtml(token.labelColor || root.labelColor || "#c7d0e0")}">
+          <span>${escapeHtml(label)}</span><span>${String(value)}%</span>
+        </div>
+        <div class="bst-card-editor-preview-bar-track" style="height:${String(token.barHeight || root.barHeight)}px;border-radius:${String(token.barHeight || root.barHeight)}px;background:rgba(255,255,255,0.16);">
+          <div class="bst-card-editor-preview-bar-fill" style="width:${String(value)}%;background:${escapeHtml(token.accentColor || root.accentColor || "#8fb4ff")};"></div>
+        </div>
       </div>
     `;
-  }
-  const sceneBlockMarkupByLayer: Record<string, string> = {
-    "scene.stat.row": `
-      <div class="bst-card-editor-preview-section${selectedClass(bodyId)}" data-layer="${bodyId}" style="
-        margin-top:${String(root.rowGap)}px;
-        color:${escapeHtml(body.textColor || root.textColor || "#f1f3f8")};
-        border:${String(body.borderWidth ?? 0)}px solid ${escapeHtml(body.borderColor || "transparent")};
-        border-radius:${String(body.borderRadius)}px;
-        padding:${String(Math.max(4, Math.round((body.padding ?? root.padding) * 0.7)))}px;">
-        <div class="bst-card-editor-preview-row${selectedClass(rowId)}" data-layer="${rowId}" style="
-          color:${escapeHtml(row.labelColor || root.labelColor || root.textColor || "#c7d0e0")};
-          font-size:${String(row.labelFontSize || root.labelFontSize)}px;">${escapeHtml(layerLabelById[rowId] || "Label")}</div>
-        <div class="bst-card-editor-preview-row${selectedClass(rowId)}" data-layer="${rowId}" style="
-          margin-top:6px;
-          color:${escapeHtml(row.valueColor || root.valueColor || root.textColor || "#f1f3f8")};
-          font-size:${String(row.valueFontSize || root.valueFontSize)}px;">${escapeHtml(valueText)}</div>
-      </div>
-    `,
-    "scene.stat.array.container": `
-      <div class="bst-card-editor-preview-chip-row${selectedClass(nonNumericId)}" data-layer="${nonNumericId}" style="
-        margin-top:${String(root.sectionGap)};
-        color:${escapeHtml(nonNumeric.valueColor || root.valueColor || root.textColor || "#f1f3f8")}">
-        <span class="bst-card-editor-preview-chip" style="border-radius:${String(root.chipRadius)}px;">chip A</span>
-        <span class="bst-card-editor-preview-chip" style="border-radius:${String(root.chipRadius)}px;">chip B</span>
-      </div>
-    `,
   };
-  for (const layerId of layerIds) {
-    if (sceneBlockMarkupByLayer[layerId]) continue;
-    if (layerId === "root" || layerId === headerId || layerId === bodyId || layerId === "scene.footer") continue;
-    const layerStyle = resolvePreviewLayerStyle(draft, type, layerId);
-    sceneBlockMarkupByLayer[layerId] = `
-      <div class="bst-card-editor-preview-row${selectedClass(layerId)}" data-layer="${layerId}" style="
-        margin-top:${String(root.rowGap)};
-        color:${escapeHtml(layerStyle.valueColor || layerStyle.textColor || root.valueColor || root.textColor || "#f1f3f8")};
-        border:${String(layerStyle.borderWidth ?? 0)}px solid ${escapeHtml(layerStyle.borderColor || "transparent")};
-        border-radius:${String(layerStyle.borderRadius ?? root.borderRadius)};
-        padding:${String(Math.max(2, Math.round((layerStyle.padding ?? root.padding) * 0.5)))}px;
-        ${layerStyle.visible === false ? "display:none;" : ""}
-      ">
-        ${escapeHtml(layerLabelById[layerId] || layerId)} preview
+
+  const renderCustom = (statId: string): string => {
+    const token = resolvePreviewLayerStyle(draft, type, statId);
+    const label = layerLabelById[statId] || statId;
+    const fallbackValue = "Sample value near max length to preview spacing, wrapping and card rhythm.";
+    const value = customSample[statId] || fallbackValue;
+    const isDateTimeLike = statId.includes("date_time");
+    const isArrayLike = statId.includes("clothes") || statId.includes("characters_in_scene");
+    const chipLike = (value.length < 70 && !value.includes(",")) || isDateTimeLike || isArrayLike;
+    const chipContent = isDateTimeLike
+      ? `<span class="bst-card-editor-preview-chip">Wednesday</span><span class="bst-card-editor-preview-chip">March 4th, 2026</span><span class="bst-card-editor-preview-chip">20:22</span><span class="bst-card-editor-preview-chip">Late Evening</span>`
+      : isArrayLike
+        ? value
+            .split(",")
+            .map(item => item.trim())
+            .filter(Boolean)
+            .slice(0, 5)
+            .map(item => `<span class="bst-card-editor-preview-chip">${escapeHtml(item)}</span>`)
+            .join("")
+        : "";
+    return `
+      <div class="bst-card-editor-preview-custom-row${selectedClass(statId)}" data-layer="${statId}">
+        <div class="bst-card-editor-preview-custom-label" style="font-size:${String(token.labelFontSize || root.labelFontSize)}px;color:${escapeHtml(token.labelColor || root.labelColor || "#c7d0e0")}">${escapeHtml(label)}</div>
+        <div class="${chipLike ? "bst-card-editor-preview-custom-chiplist" : "bst-card-editor-preview-custom-value"}" style="
+          border-radius:${String(token.chipRadius || root.chipRadius)}px;
+          color:${escapeHtml(token.valueColor || root.valueColor || "#f1f3f8")};
+          border:${String(token.borderWidth ?? 1)}px solid ${escapeHtml(token.borderColor || "rgba(143,180,255,0.35)")};
+          background:${escapeHtml(token.backgroundColor || "rgba(18, 30, 52, 0.58)")};
+          padding:${chipLike ? "6px 8px" : "8px 10px"};
+          font-size:${String(token.valueFontSize || root.valueFontSize)}px;
+        ">${chipLike ? chipContent : escapeHtml(value)}</div>
       </div>
     `;
-  }
-  const ownerBlocks = orderedLayerIds
-    .filter(id => isLayerVisible(id))
-    .filter(id => Object.prototype.hasOwnProperty.call(ownerBlockMarkupByLayer, id))
-    .map(id => ownerBlockMarkupByLayer[id])
-    .join("");
-  const sceneBlocks = orderedLayerIds
-    .filter(id => isLayerVisible(id))
-    .filter(id => Object.prototype.hasOwnProperty.call(sceneBlockMarkupByLayer, id))
-    .map(id => sceneBlockMarkupByLayer[id])
-    .join("");
+  };
+
+  const numericToken = resolvePreviewLayerStyle(draft, type, numericContainerId);
+  const customToken = resolvePreviewLayerStyle(draft, type, customContainerId);
+  const moodToken = resolvePreviewLayerStyle(draft, type, "mood.container");
+  const thoughtToken = resolvePreviewLayerStyle(draft, type, "thought.panel");
+
+  const showMood = type !== "scene" && visible("mood.container");
+  const showThought = type !== "scene" && visible("thought.panel");
+  const ownerTitle = type === "character" ? "Seraphina" : type === "user" ? "User (Persona)" : "Scene";
+
+  const sceneBadge = type === "scene" ? `<span class="bst-card-editor-preview-badge">Global</span>` : "";
+  const actionBadge = type === "scene"
+    ? `<div class="bst-card-editor-preview-actions"><span class="bst-card-editor-preview-action">Edit</span><span class="bst-card-editor-preview-action">Collapse</span></div>`
+    : `<div class="bst-card-editor-preview-actions"><span class="bst-card-editor-preview-action">Graph</span><span class="bst-card-editor-preview-action">Active</span></div>`;
+
+  const numericBlock = visible(numericContainerId) && numericLeafIds.length
+    ? `
+      <div class="bst-card-editor-preview-section${selectedClass(numericContainerId)}" data-layer="${numericContainerId}" style="${sectionStyle}
+        border-color:${escapeHtml(numericToken.borderColor || sectionToken.borderColor || "transparent")};
+        color:${escapeHtml(numericToken.textColor || sectionToken.textColor || root.textColor || "#f1f3f8")};">
+        ${numericLeafIds.map(renderBar).join("")}
+      </div>
+    `
+    : "";
+
+  const customBlock = visible(customContainerId) && customLeafIds.length
+    ? `
+      <div class="bst-card-editor-preview-section${selectedClass(customContainerId)}" data-layer="${customContainerId}" style="${sectionStyle}
+        border-color:${escapeHtml(customToken.borderColor || sectionToken.borderColor || "transparent")};
+        color:${escapeHtml(customToken.textColor || sectionToken.textColor || root.textColor || "#f1f3f8")};">
+        ${customLeafIds.map(renderCustom).join("")}
+      </div>
+    `
+    : "";
+
+  const moodBlock = showMood
+    ? `
+      <div class="bst-card-editor-preview-mood${selectedClass("mood.container")}" data-layer="mood.container" style="margin-top:${String(root.sectionGap)}px;
+        color:${escapeHtml(moodToken.valueColor || root.valueColor || "#f1f3f8")}">
+        <span class="bst-card-editor-preview-avatar">:)</span>
+        <span class="bst-card-editor-preview-chip" style="border-radius:${String(root.chipRadius)}px">Hopeful (stable)</span>
+      </div>
+    `
+    : "";
+  const thoughtBlock = showThought
+    ? `
+      <div class="bst-card-editor-preview-thought${selectedClass("thought.panel")}" data-layer="thought.panel" style="
+        margin-top:${String(root.rowGap)}px;
+        border:${String(thoughtToken.borderWidth ?? 1)}px solid ${escapeHtml(thoughtToken.borderColor || "rgba(143,180,255,0.35)")};
+        border-radius:${String(thoughtToken.borderRadius ?? root.borderRadius)}px;
+        background:${escapeHtml(thoughtToken.backgroundColor || "rgba(13,20,34,0.68)")};
+        color:${escapeHtml(thoughtToken.valueColor || root.valueColor || "#f1f3f8")};
+        padding:${String(Math.max(8, thoughtToken.padding || root.padding))}px;
+        font-size:${String(thoughtToken.valueFontSize || root.valueFontSize)}px;">
+        I am relieved, but still alert. I need to keep the scene stable and safe.
+      </div>
+    `
+    : "";
+
   return `
-    <div class="bst-card-editor-preview-card${selectedClass("root")}" style="
-      background:${escapeHtml(root.backgroundColor || "#1a2134")};
-      color:${escapeHtml(root.textColor || "#f1f3f8")};
-      border:${String(root.borderWidth)}px solid ${escapeHtml(root.borderColor || "#3a4966")};
-      border-radius:${String(root.borderRadius)}px;
-      opacity:${String(root.backgroundOpacity)};
-      font-size:${String(root.fontSize)}px;
-      padding:${String(root.padding)}px;
-      box-shadow:${root.shadowEnabled ? `0 0 ${String(root.shadowBlur)}px ${String(root.shadowSpread)}px ${escapeHtml(root.shadowColor || "#00000044")}` : "none"};
-      ${root.visible === false ? "display:none;" : ""}
-      " data-layer="root">
-      <div class="bst-card-editor-preview-section${selectedClass(headerId)}" data-layer="${headerId}" style="
-        color:${escapeHtml(header.textColor || root.textColor || "#f1f3f8")};
-        border:${String(header.borderWidth ?? 0)}px solid ${escapeHtml(header.borderColor || "transparent")};
-        border-radius:${String(header.borderRadius)}px;
-        padding:${String(Math.max(4, Math.round((header.padding ?? root.padding) * 0.7)))}px;">
-        ${header.visible === false ? "" : `<div class="bst-card-editor-preview-title" style="font-size:${String(header.titleFontSize || root.titleFontSize)}px;">${title} Preview</div>`}
+    <div class="bst-card-editor-preview-card${selectedClass("root")}" style="${rootStyle}" data-layer="root">
+      <div class="bst-card-editor-preview-header${selectedClass(headerId)}" data-layer="${headerId}" style="${headerStyle}">
+        <div class="bst-card-editor-preview-header-top">
+          <strong style="font-size:${String(headerStyleToken.titleFontSize || root.titleFontSize)}px">${ownerTitle}</strong>
+          ${sceneBadge}
+        </div>
+        <div class="bst-card-editor-preview-header-bottom">
+          <span class="bst-card-editor-preview-meta">Message #24 - 18:42</span>
+          ${actionBadge}
+        </div>
       </div>
-      ${type === "scene" ? sceneBlocks : ownerBlocks}
+      ${numericBlock}
+      ${customBlock}
+      ${moodBlock}
+      ${thoughtBlock}
     </div>
   `;
 }
@@ -739,6 +839,13 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
   modal.tabIndex = -1;
   document.body.appendChild(modal);
 
+  const clearDropIndicators = (): void => {
+    modal.querySelectorAll(".bst-card-editor-layer-row").forEach(row => {
+      row.classList.remove("is-drop-before");
+      row.classList.remove("is-drop-after");
+    });
+  };
+
   const render = (): void => {
     const nodes = getLayerNodesForType(layerCatalog, activeType);
     const nodeById = getLayerNodeById(nodes);
@@ -755,42 +862,51 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         <button type="button" data-act="close" class="bst-btn bst-close-btn">&times;</button>
       </div>
       <div class="bst-card-editor-toolbar">
-        <div class="bst-card-editor-tabs">
-          <button type="button" data-tab="character" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "character" ? "is-active" : ""}">Character</button>
-          <button type="button" data-tab="user" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "user" ? "is-active" : ""}">User</button>
-          <button type="button" data-tab="scene" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "scene" ? "is-active" : ""}">Scene</button>
+        <div class="bst-card-editor-primary">
+          <div class="bst-card-editor-group-title">Card + viewport</div>
+          <div class="bst-card-editor-tabs">
+            <button type="button" data-tab="character" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "character" ? "is-active" : ""}">Character</button>
+            <button type="button" data-tab="user" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "user" ? "is-active" : ""}">User</button>
+            <button type="button" data-tab="scene" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "scene" ? "is-active" : ""}">Scene</button>
+          </div>
+          <div class="bst-card-editor-preview-viewport">
+            <button type="button" data-vp="desktop" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "desktop" ? "is-active" : ""}">Desktop</button>
+            <button type="button" data-vp="mobile" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "mobile" ? "is-active" : ""}">Mobile</button>
+          </div>
         </div>
-        <div class="bst-card-editor-preview-viewport">
-          <button type="button" data-vp="desktop" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "desktop" ? "is-active" : ""}">Desktop</button>
-          <button type="button" data-vp="mobile" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "mobile" ? "is-active" : ""}">Mobile</button>
+        <div class="bst-card-editor-secondary">
+          <div class="bst-card-editor-group-title">Runtime mode</div>
+          <div class="bst-card-editor-toggles">
+            <label class="bst-card-editor-switch">
+              <input type="checkbox" data-k="useEditorStyling" ${draft.useEditorStyling ? "checked" : ""} title="Apply saved editor styles to real tracker cards. Turn off to use original styling.">
+              <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
+              <span class="bst-card-editor-switch-label">Use Editor Styling</span>
+            </label>
+            <label class="bst-card-editor-switch">
+              <input type="checkbox" data-k="liveMode" ${liveMode ? "checked" : ""} title="When enabled, changes update real cards immediately (only if Use Editor Styling is on).">
+              <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
+              <span class="bst-card-editor-switch-label">Live mode</span>
+            </label>
+          </div>
         </div>
-        <div class="bst-card-editor-toggles">
-          <label class="bst-card-editor-switch">
-            <input type="checkbox" data-k="useEditorStyling" ${draft.useEditorStyling ? "checked" : ""} title="Apply saved editor styles to real tracker cards. Turn off to use original styling.">
-            <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
-            <span class="bst-card-editor-switch-label">Use Editor Styling</span>
-          </label>
-          <label class="bst-card-editor-switch">
-            <input type="checkbox" data-k="liveMode" ${liveMode ? "checked" : ""} title="When enabled, changes update real cards immediately (only if Use Editor Styling is on).">
-            <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
-            <span class="bst-card-editor-switch-label">Live mode</span>
-          </label>
-        </div>
-        <div class="bst-card-editor-history-controls">
-          <select data-k="presetSelect" class="bst-input bst-card-editor-preset-select">
-            <option value="">Preset: none</option>
-            ${draft.presets.map(preset => `
-              <option value="${escapeHtml(preset.id)}" ${selectedPresetId === preset.id ? "selected" : ""}>${escapeHtml(preset.name)}</option>
-            `).join("")}
-          </select>
-          <input data-k="presetName" class="bst-input bst-card-editor-preset-name" type="text" maxlength="80" value="${escapeHtml(presetNameDraft)}" placeholder="Preset name">
-          <button type="button" data-act="preset-save" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Save current style as preset">Save preset</button>
-          <button type="button" data-act="preset-load" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Load selected preset">Load</button>
-          <button type="button" data-act="preset-delete" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Delete selected preset">Delete</button>
-          <button type="button" data-act="preset-export" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Export selected preset as JSON">Export</button>
-          <button type="button" data-act="preset-import" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Import preset from JSON">Import</button>
-          <button type="button" data-act="undo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${historyStack.length === 0 ? "disabled" : ""}>Undo</button>
-          <button type="button" data-act="redo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${futureStack.length === 0 ? "disabled" : ""}>Redo</button>
+        <div class="bst-card-editor-presets">
+          <div class="bst-card-editor-group-title">Presets + history</div>
+          <div class="bst-card-editor-history-controls">
+            <select data-k="presetSelect" class="bst-input bst-card-editor-preset-select">
+              <option value="">Preset: none</option>
+              ${draft.presets.map(preset => `
+                <option value="${escapeHtml(preset.id)}" ${selectedPresetId === preset.id ? "selected" : ""}>${escapeHtml(preset.name)}</option>
+              `).join("")}
+            </select>
+            <input data-k="presetName" class="bst-input bst-card-editor-preset-name" type="text" maxlength="80" value="${escapeHtml(presetNameDraft)}" placeholder="Preset name">
+            <button type="button" data-act="preset-save" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Save current style as preset">Save preset</button>
+            <button type="button" data-act="preset-load" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Load selected preset">Load</button>
+            <button type="button" data-act="preset-delete" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Delete selected preset">Delete</button>
+            <button type="button" data-act="preset-export" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Export selected preset as JSON">Export</button>
+            <button type="button" data-act="preset-import" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Import preset from JSON">Import</button>
+            <button type="button" data-act="undo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${historyStack.length === 0 ? "disabled" : ""}>Undo</button>
+            <button type="button" data-act="redo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${futureStack.length === 0 ? "disabled" : ""}>Redo</button>
+          </div>
         </div>
       </div>
       <div class="bst-card-editor-toggle-hints">
@@ -814,7 +930,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         <div class="bst-card-editor-pane">
           <div class="bst-card-editor-pane-title">Preview</div>
           <div class="bst-card-editor-live-preview" style="max-width:${String(resolvePreviewViewportWidth(previewViewport))}px;">
-            ${renderPreviewCard(draft, activeType, selectedLayerId, getLayerIdsForType(layerCatalog, activeType), layerLabelById)}
+            ${renderPreviewCard(draft, activeType, selectedLayerId, getLayerIdsForType(layerCatalog, activeType), layerLabelById, nodes)}
           </div>
           <div class="bst-card-editor-pane-title">Inspector</div>
           <div class="bst-card-editor-help">Editing layer: <code>${escapeHtml(selectedLayerId)}</code></div>
@@ -844,7 +960,8 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           </div>
         </div>
         <div class="bst-card-editor-pane">
-          <div class="bst-card-editor-pane-title">Layers</div>
+          <div class="bst-card-editor-pane-title">Layers (tree)</div>
+          <div class="bst-card-editor-help">Locked layers stay fixed. Drag movable stat layers; drop line shows exact target.</div>
           <div class="bst-card-editor-layers">
             ${renderLayerTree(nodes, layerIds, selectedLayerId, draft, activeType)}
           </div>
@@ -892,11 +1009,27 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         event.preventDefault();
         const transfer = (event as DragEvent).dataTransfer;
         if (transfer) transfer.dropEffect = "move";
+        const targetLayerId = String((node as HTMLElement).getAttribute("data-layer-drag") || "");
+        const sourceLayerId = draggedLayerId || (event as DragEvent).dataTransfer?.getData("text/plain") || "";
+        const row = (node as HTMLElement).closest(".bst-card-editor-layer-row") as HTMLElement | null;
+        clearDropIndicators();
+        if (!row || !sourceLayerId || !targetLayerId || sourceLayerId === targetLayerId) return;
+        const sourceNode = nodeById.get(sourceLayerId);
+        const targetNode = nodeById.get(targetLayerId);
+        if (!sourceNode || !targetNode) return;
+        if (sourceNode.parentId !== targetNode.parentId) return;
+        const rect = row.getBoundingClientRect();
+        const pointY = (event as DragEvent).clientY;
+        const position: "before" | "after" = pointY < rect.top + rect.height / 2 ? "before" : "after";
+        row.classList.add(position === "before" ? "is-drop-before" : "is-drop-after");
       });
       node.addEventListener("drop", (event) => {
         event.preventDefault();
         const targetLayerId = String((node as HTMLElement).getAttribute("data-layer-drag") || "");
         const sourceLayerId = draggedLayerId || (event as DragEvent).dataTransfer?.getData("text/plain") || "";
+        const row = (node as HTMLElement).closest(".bst-card-editor-layer-row") as HTMLElement | null;
+        const dropPosition: "before" | "after" = row?.classList.contains("is-drop-after") ? "after" : "before";
+        clearDropIndicators();
         if (!isLayerMovable(sourceLayerId)) return;
         if (!sourceLayerId || !targetLayerId || sourceLayerId === targetLayerId) return;
         const sourceNode = nodeById.get(sourceLayerId);
@@ -904,13 +1037,14 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         if (!sourceNode || !targetNode) return;
         if (sourceNode.parentId !== targetNode.parentId) return;
         captureHistory();
-        const nextOrder = reorderLayerIds(layerIds, sourceLayerId, targetLayerId);
+        const nextOrder = reorderLayerIdsWithDropPosition(layerIds, sourceLayerId, targetLayerId, dropPosition);
         writeOverrideLayerOrder(draft, activeType, nextOrder);
         render();
         maybeApplyLive();
       });
       node.addEventListener("dragend", () => {
         draggedLayerId = null;
+        clearDropIndicators();
       });
     });
     modal.querySelectorAll("[data-layer-up]").forEach(node => {
@@ -1031,7 +1165,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       const previewNode = modal.querySelector(".bst-card-editor-live-preview") as HTMLElement | null;
       if (!previewNode) return;
       previewNode.style.maxWidth = `${String(resolvePreviewViewportWidth(previewViewport))}px`;
-      previewNode.innerHTML = renderPreviewCard(draft, activeType, selectedLayerId, getLayerIdsForType(layerCatalog, activeType), layerLabelById);
+      previewNode.innerHTML = renderPreviewCard(draft, activeType, selectedLayerId, getLayerIdsForType(layerCatalog, activeType), layerLabelById, nodes);
       previewNode.querySelectorAll("[data-layer]").forEach(node => {
         node.addEventListener("click", (event) => {
           event.preventDefault();

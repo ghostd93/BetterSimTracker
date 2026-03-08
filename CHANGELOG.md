@@ -2,6 +2,25 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp13] - 2026-03-08
+### Changed
+- Reworked Visual Card Editor layout for better UX readability:
+  - segmented toolbar groups (`Card + viewport`, `Runtime mode`, `Presets + history`),
+  - improved panel spacing and hierarchy,
+  - cleaner preview/layers balance.
+- Redesigned layer rows to show clearer metadata and controls:
+  - explicit role badge + lock/movable badge,
+  - compact reorder controls (`↑` / `↓`) with sibling-only behavior,
+  - clearer per-layer visibility/reset actions.
+- Upgraded preview rendering to reflect real card structure more faithfully:
+  - dynamic stat/custom blocks from active layer catalog,
+  - richer sample content (bars, chips, long values, mood/thought blocks),
+  - improved visual parity with real tracker card composition.
+
+### Fixed
+- Added explicit DnD drop target lines (`before`/`after`) in layer tree so drop destination is always visible.
+- Removed noisy/ambiguous preview artifacts and normalized editor text rendering for consistent readability.
+
 ## [2.2.4.5-exp12] - 2026-03-08
 ### Added
 - Visual Editor now builds dynamic layer catalogs from current tracked built-ins/custom stats per card type (Character/User/Scene).
