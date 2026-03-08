@@ -6,6 +6,7 @@ import {
   applyPresetToDraft,
   isLayerMovable,
   moveLayerByDirection,
+  parsePresetTransferPayload,
   pushDraftHistory,
   reorderLayerIds,
   resolvePreviewViewportWidth,
@@ -175,4 +176,22 @@ test("applyPresetToDraft replaces editor style payload from preset snapshot", ()
   assert.equal(next.base.root.backgroundColor, "#222222");
   assert.equal(next.character.root?.borderRadius, 28);
   assert.equal(next.activePresetId, "retro");
+});
+
+test("parsePresetTransferPayload parses valid JSON payload and rejects invalid data", () => {
+  const valid = parsePresetTransferPayload(JSON.stringify({
+    id: "retro_pack",
+    name: "Retro Pack",
+    base: { root: { backgroundColor: "#121212" } },
+  }));
+  assert.ok(valid);
+  assert.equal(valid?.id, "retro_pack");
+  assert.equal(valid?.name, "Retro Pack");
+  assert.equal(valid?.base?.root?.backgroundColor, "#121212");
+
+  const invalid = parsePresetTransferPayload("{not json");
+  assert.equal(invalid, null);
+
+  const missingName = parsePresetTransferPayload(JSON.stringify({ base: {} }));
+  assert.equal(missingName, null);
 });

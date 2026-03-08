@@ -3337,6 +3337,28 @@ export function ensureStyles(): void {
   display: grid;
   gap: 6px;
 }
+.bst-card-editor-transfer-panel {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 10px;
+  background: rgba(12, 20, 36, 0.78);
+  display: grid;
+  gap: 8px;
+}
+.bst-card-editor-transfer-head {
+  font-size: 13px;
+  color: #dbe8ff;
+}
+.bst-card-editor-transfer-error {
+  color: #ffb4b4;
+  font-size: 12px;
+}
+.bst-card-editor-transfer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .bst-card-editor-preview-viewport {
   display: inline-flex;
   gap: 6px;

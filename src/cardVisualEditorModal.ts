@@ -30,6 +30,18 @@ type OpenCardVisualEditorModalInput = {
   onApply: (next: CardVisualEditorSettings) => void;
 };
 
+type PresetTransferPayload = {
+  id?: string;
+  name?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  schemaVersion?: number;
+  base?: CardVisualEditorCardStyleOverride;
+  character?: CardVisualEditorCardStyleOverride;
+  user?: CardVisualEditorCardStyleOverride;
+  scene?: CardVisualEditorCardStyleOverride;
+};
+
 const HISTORY_LIMIT = 80;
 const BACKDROP_CLASS = "bst-card-editor-backdrop";
 const MODAL_CLASS = "bst-card-editor-modal";
@@ -70,6 +82,30 @@ export function toPresetId(name: string): string {
     .replace(/^_+|_+$/g, "")
     .slice(0, 64);
   return normalized || "preset";
+}
+
+export function parsePresetTransferPayload(input: string): PresetTransferPayload | null {
+  const raw = String(input ?? "").trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+    const obj = parsed as Record<string, unknown>;
+    const payload: PresetTransferPayload = {};
+    if (typeof obj.id === "string") payload.id = obj.id.trim();
+    if (typeof obj.name === "string") payload.name = obj.name.trim();
+    if (typeof obj.createdAt === "number" && Number.isFinite(obj.createdAt)) payload.createdAt = obj.createdAt;
+    if (typeof obj.updatedAt === "number" && Number.isFinite(obj.updatedAt)) payload.updatedAt = obj.updatedAt;
+    if (typeof obj.schemaVersion === "number" && Number.isFinite(obj.schemaVersion)) payload.schemaVersion = obj.schemaVersion;
+    if (obj.base && typeof obj.base === "object") payload.base = obj.base as CardVisualEditorCardStyleOverride;
+    if (obj.character && typeof obj.character === "object") payload.character = obj.character as CardVisualEditorCardStyleOverride;
+    if (obj.user && typeof obj.user === "object") payload.user = obj.user as CardVisualEditorCardStyleOverride;
+    if (obj.scene && typeof obj.scene === "object") payload.scene = obj.scene as CardVisualEditorCardStyleOverride;
+    if (!payload.name && !payload.id) return null;
+    return payload;
+  } catch {
+    return null;
+  }
 }
 
 function cloneCardOverride(
@@ -474,6 +510,9 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
   let previewViewport: PreviewViewport = "desktop";
   let selectedPresetId = draft.activePresetId || "";
   let presetNameDraft = "";
+  let presetTransferMode: "none" | "import" | "export" = "none";
+  let presetTransferText = "";
+  let presetTransferError = "";
   let draggedLayerId: string | null = null;
   let historyStack: CardVisualEditorSettings[] = [];
   let futureStack: CardVisualEditorSettings[] = [];
@@ -529,6 +568,8 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           <button type="button" data-act="preset-save" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Save current style as preset">Save preset</button>
           <button type="button" data-act="preset-load" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Load selected preset">Load</button>
           <button type="button" data-act="preset-delete" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Delete selected preset">Delete</button>
+          <button type="button" data-act="preset-export" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Export selected preset as JSON">Export</button>
+          <button type="button" data-act="preset-import" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Import preset from JSON">Import</button>
           <button type="button" data-act="undo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${historyStack.length === 0 ? "disabled" : ""}>Undo</button>
           <button type="button" data-act="redo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${futureStack.length === 0 ? "disabled" : ""}>Redo</button>
         </div>
@@ -537,6 +578,19 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         <div><strong>Use Editor Styling</strong>: applies saved editor styles to real cards. Turn OFF to keep original styling.</div>
         <div><strong>Live mode</strong>: applies edits instantly while editing. If OFF, edits are preview-only until <strong>Apply</strong>.</div>
       </div>
+      ${presetTransferMode === "none" ? "" : `
+        <div class="bst-card-editor-transfer-panel">
+          <div class="bst-card-editor-transfer-head">
+            <strong>${presetTransferMode === "export" ? "Preset Export" : "Preset Import"}</strong>
+          </div>
+          <textarea data-k="presetTransferText" rows="7" placeholder="${presetTransferMode === "export" ? "" : "Paste preset JSON here..."}">${escapeHtml(presetTransferText)}</textarea>
+          ${presetTransferError ? `<div class="bst-card-editor-transfer-error">${escapeHtml(presetTransferError)}</div>` : ""}
+          <div class="bst-card-editor-transfer-actions">
+            ${presetTransferMode === "import" ? `<button type="button" data-act="preset-import-apply" class="bst-btn">Import Preset</button>` : ""}
+            <button type="button" data-act="preset-transfer-close" class="bst-btn bst-btn-soft">Close</button>
+          </div>
+        </div>
+      `}
       <div class="bst-card-editor-grid">
         <div class="bst-card-editor-pane">
           <div class="bst-card-editor-pane-title">Preview</div>
@@ -720,6 +774,10 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
     (modal.querySelector('[data-k="presetName"]') as HTMLInputElement | null)?.addEventListener("input", (event) => {
       presetNameDraft = String((event.target as HTMLInputElement).value || "");
     });
+    (modal.querySelector('[data-k="presetTransferText"]') as HTMLTextAreaElement | null)?.addEventListener("input", (event) => {
+      presetTransferText = String((event.target as HTMLTextAreaElement).value || "");
+      presetTransferError = "";
+    });
     (modal.querySelector('[data-k="visible"]') as HTMLInputElement | null)?.addEventListener("change", (event) => {
       captureHistory();
       const value = (event.target as HTMLInputElement).checked;
@@ -880,6 +938,79 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       if (draft.activePresetId === selectedPresetId) draft.activePresetId = null;
       selectedPresetId = "";
       presetNameDraft = "";
+      render();
+      maybeApplyLive();
+    });
+    (modal.querySelector('[data-act="preset-export"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
+      if (!selectedPresetId) return;
+      const preset = draft.presets.find(row => row.id === selectedPresetId);
+      if (!preset) return;
+      presetTransferMode = "export";
+      presetTransferError = "";
+      presetTransferText = JSON.stringify(preset, null, 2);
+      render();
+    });
+    (modal.querySelector('[data-act="preset-import"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
+      presetTransferMode = "import";
+      presetTransferError = "";
+      presetTransferText = "";
+      render();
+    });
+    (modal.querySelector('[data-act="preset-transfer-close"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
+      presetTransferMode = "none";
+      presetTransferError = "";
+      presetTransferText = "";
+      render();
+    });
+    (modal.querySelector('[data-act="preset-import-apply"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
+      const payload = parsePresetTransferPayload(presetTransferText);
+      if (!payload) {
+        presetTransferError = "Invalid preset JSON.";
+        render();
+        return;
+      }
+      const resolvedName = String(payload.name || payload.id || "").trim();
+      if (!resolvedName) {
+        presetTransferError = "Preset must include name or id.";
+        render();
+        return;
+      }
+      captureHistory();
+      const presetId = toPresetId(payload.id || resolvedName);
+      const existing = draft.presets.find(row => row.id === presetId);
+      const mergedBaseElements: Record<string, CardVisualEditorStylePreset> = {};
+      for (const [key, value] of Object.entries(draft.base.elements ?? {})) {
+        mergedBaseElements[key] = { ...draft.base.root, ...value };
+      }
+      for (const [key, value] of Object.entries(payload.base?.elements ?? {})) {
+        mergedBaseElements[key] = { ...draft.base.root, ...(mergedBaseElements[key] ?? {}), ...value };
+      }
+      const nextPreset = buildPresetSnapshot(
+        {
+          ...draft,
+          base: {
+            ...draft.base,
+            root: { ...draft.base.root, ...(payload.base?.root ?? {}) },
+            elements: mergedBaseElements,
+            layerOrder: Array.isArray(payload.base?.layerOrder) ? [...payload.base.layerOrder] : draft.base.layerOrder,
+            motionEnabled: payload.base?.motionEnabled ?? draft.base.motionEnabled,
+            motionIntensity: payload.base?.motionIntensity ?? draft.base.motionIntensity,
+          },
+          character: payload.character ? cloneCardOverride(payload.character) : draft.character,
+          user: payload.user ? cloneCardOverride(payload.user) : draft.user,
+          scene: payload.scene ? cloneCardOverride(payload.scene) : draft.scene,
+        },
+        presetId,
+        resolvedName,
+        existing,
+      );
+      draft.presets = [...draft.presets.filter(row => row.id !== presetId), nextPreset]
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+      draft.activePresetId = presetId;
+      selectedPresetId = presetId;
+      presetTransferMode = "none";
+      presetTransferError = "";
+      presetTransferText = "";
       render();
       maybeApplyLive();
     });

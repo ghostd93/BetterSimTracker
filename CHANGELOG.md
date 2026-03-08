@@ -2,6 +2,18 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp11] - 2026-03-08
+### Added
+- Added Visual Editor preset transfer panel with BST-styled JSON import/export workflow.
+- Added preset export action for selected preset and import action with inline validation feedback.
+
+### Changed
+- Preset import now normalizes incoming style payloads into editor-safe token structure before saving.
+
+### Fixed
+- Fixed preset import merge typing/runtime path for element tokens (full token resolution, no partial-token leakage).
+- Added regression coverage for preset transfer payload parsing.
+
 ## [2.2.4.5-exp10] - 2026-03-08
 ### Added
 - Added Visual Editor preset controls: save/load/delete presets directly in the editor toolbar.
