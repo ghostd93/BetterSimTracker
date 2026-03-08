@@ -1,3 +1,10 @@
+## [2.2.4.6-exp6] - 2026-03-08
+### Changed
+- Refined Visual Editor top toolbar with monochrome iconography and normalized control alignment/height across tabs, viewport buttons, preset select/input, and action buttons.
+- Reworked layer-row action layout so reorder arrows are grouped/integrated per movable layer row and locked rows stay minimal.
+- Rebalanced inspector logic by layer/stat type (`numeric`, `text`, `array`, `date_time`, `enum_single`, `boolean`) so shown controls are now context-specific instead of near-identical across layers.
+- Expanded inspector controls with additional style tokens (accent color, font family, line height, letter spacing, chip radius, bar height), all wired to live preview and apply flow.
+
 ## [2.2.4.6-exp5] - 2026-03-08
 ### Changed
 - Removed redundant `Use Editor Styling` toggle from Visual Card Editor modal (now controlled only in main Display settings).

@@ -3407,6 +3407,13 @@ export function ensureStyles(): void {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+.bst-card-editor-history-controls > * {
+  height: var(--bst-editor-control-h);
+}
+.bst-card-editor-history-controls input,
+.bst-card-editor-history-controls select {
+  margin: 0;
+}
 .bst-card-editor-history-controls .bst-btn[disabled] {
   opacity: 0.4;
 }
@@ -3464,7 +3471,7 @@ export function ensureStyles(): void {
   transition: background-color .12s ease, box-shadow .12s ease;
 }
 .bst-card-editor-layer-row.has-actions {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 .bst-card-editor-layer-row.is-locked-row {
   grid-template-columns: minmax(0, 1fr);
@@ -3601,6 +3608,10 @@ export function ensureStyles(): void {
   border-top-right-radius: 7px;
   border-bottom-right-radius: 7px;
   border-left: 0;
+}
+.bst-card-editor-layer-actions {
+  display: inline-flex;
+  align-items: stretch;
 }
 .bst-card-editor-layer-row.is-locked-row .bst-card-editor-layer-btn {
   border-radius: 8px;
