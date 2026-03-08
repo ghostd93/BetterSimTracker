@@ -2,6 +2,21 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp4] - 2026-03-08
+### Added
+- Added layer-aware visual editing in the experimental card editor:
+  - dedicated `Layers` panel per card type,
+  - contextual inspector now edits the currently selected layer,
+  - click-to-select layer targeting directly from preview elements.
+- Added `Live mode` toggle in the editor to apply edits to runtime cards immediately when `Use Editor Styling` is enabled.
+
+### Changed
+- Preview rendering now supports per-layer style resolution (`root` + layer override), not only root-level style tokens.
+- Default reset flow now resets layer selection safely and keeps editor session stable.
+
+### Fixed
+- Added regression coverage for layer style resolution and live-mode gating logic in editor modal helpers.
+
 ## [2.2.4.5-exp3] - 2026-03-08
 ### Changed
 - Simplified Visual Editor controls to one clear setting toggle: `Use Editor Styling`.

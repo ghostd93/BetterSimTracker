@@ -3296,6 +3296,33 @@ export function ensureStyles(): void {
   font-weight: 600;
   margin-bottom: 8px;
 }
+.bst-card-editor-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.bst-card-editor-layer-btn {
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(15, 26, 42, 0.72);
+  color: #e8eefc;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.bst-card-editor-layer-btn.is-active {
+  border-color: rgba(143,180,255,0.95);
+  background: rgba(41, 79, 132, 0.58);
+}
+.bst-card-editor-help {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: rgba(240,245,255,0.85);
+}
+.bst-card-editor-help code {
+  color: #cbe0ff;
+}
 .bst-card-editor-inspector {
   display: grid;
   gap: 8px;
@@ -3338,6 +3365,13 @@ export function ensureStyles(): void {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 12px;
+}
+.bst-card-editor-preview-card [data-layer] {
+  cursor: pointer;
+}
+.bst-card-editor-preview-card .is-selected {
+  outline: 1px dashed rgba(143,180,255,0.9);
+  outline-offset: 2px;
 }
 .bst-graph-backdrop {
   position: fixed;
