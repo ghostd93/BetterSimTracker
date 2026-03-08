@@ -85,6 +85,7 @@ export function cloneCardStyle(style: CardVisualEditorCardStyle): CardVisualEdit
     elements: Object.fromEntries(
       Object.entries(style.elements ?? {}).map(([key, value]) => [key, { ...value }]),
     ),
+    layerOrder: Array.isArray(style.layerOrder) ? [...style.layerOrder] : undefined,
   };
 }
 
@@ -181,7 +182,22 @@ function sanitizeCardStyle(input: unknown, fallback: CardVisualEditorCardStyle):
     motionIntensity: sanitizeMotionIntensity(source.motionIntensity, fallback.motionIntensity),
     root: sanitizeStylePreset(source.root, fallback.root),
     elements: sanitizeElementOverrides(source.elements),
+    layerOrder: sanitizeLayerOrder(source.layerOrder),
   };
+}
+
+function sanitizeLayerOrder(input: unknown): string[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of input) {
+    const value = String(raw ?? "").trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    out.push(value.slice(0, 80));
+    if (out.length >= 64) break;
+  }
+  return out.length ? out : undefined;
 }
 
 function sanitizeCardStyleOverride(input: unknown): CardVisualEditorCardStyleOverride {
@@ -192,6 +208,7 @@ function sanitizeCardStyleOverride(input: unknown): CardVisualEditorCardStyleOve
   if (source.motionEnabled !== undefined) out.motionEnabled = asBool(source.motionEnabled, true);
   if (source.motionIntensity !== undefined) out.motionIntensity = sanitizeMotionIntensity(source.motionIntensity, "medium");
   if (source.elements !== undefined) out.elements = sanitizeElementOverrides(source.elements);
+  if (source.layerOrder !== undefined) out.layerOrder = sanitizeLayerOrder(source.layerOrder);
   return out;
 }
 
@@ -331,4 +348,3 @@ export function resolveCardStyle(
         : editor.scene;
   return mergeStyle(editor.base, override);
 }
-

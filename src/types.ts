@@ -68,6 +68,7 @@ export interface CardVisualEditorCardStyle {
   motionIntensity: CardVisualMotionIntensity;
   root: CardVisualEditorStylePreset;
   elements: Record<string, CardVisualEditorStylePreset>;
+  layerOrder?: string[];
 }
 
 export interface CardVisualEditorCardStyleOverride {
@@ -75,6 +76,7 @@ export interface CardVisualEditorCardStyleOverride {
   motionIntensity?: CardVisualMotionIntensity;
   root?: Partial<CardVisualEditorStylePreset>;
   elements?: Record<string, Partial<CardVisualEditorStylePreset>>;
+  layerOrder?: string[];
 }
 
 export interface CardVisualEditorPreset {

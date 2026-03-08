@@ -3366,7 +3366,11 @@ export function ensureStyles(): void {
   border-radius: 8px;
   padding: 4px 8px;
   font-size: 11px;
-  cursor: pointer;
+  cursor: grab;
+  user-select: none;
+}
+.bst-card-editor-layer-btn:active {
+  cursor: grabbing;
 }
 .bst-card-editor-layer-btn.is-active {
   border-color: rgba(143,180,255,0.95);

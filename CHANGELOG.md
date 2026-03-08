@@ -2,6 +2,17 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp6] - 2026-03-08
+### Added
+- Added drag-and-drop reordering for Visual Editor layers.
+- Added persisted per-card-type `layerOrder` support in card visual editor settings.
+
+### Changed
+- Preview now renders owner/scene layer blocks in configured `layerOrder`, so layout order edits are visible immediately.
+
+### Fixed
+- Added regression coverage for layer-order resolution and drag reorder helper behavior.
+
 ## [2.2.4.5-exp5] - 2026-03-08
 ### Added
 - Added explicit inline helper text for Visual Editor top-bar toggles (`Use Editor Styling`, `Live mode`) so users can understand behavior without guesswork.
