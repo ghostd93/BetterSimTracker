@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { createDefaultCardVisualEditorSettings } from "../src/cardVisualEditor";
 import {
+  pushDraftHistory,
   reorderLayerIds,
   resolvePreviewLayerOrder,
   resolvePreviewLayerStyle,
@@ -80,4 +81,22 @@ test("reorderLayerIds moves source before target", () => {
   const input = ["root", "header", "body", "footer"];
   const reordered = reorderLayerIds(input, "footer", "header");
   assert.deepEqual(reordered, ["root", "footer", "header", "body"]);
+});
+
+test("pushDraftHistory deduplicates adjacent snapshots and enforces max entries", () => {
+  const a = createDefaultCardVisualEditorSettings();
+  const b = createDefaultCardVisualEditorSettings();
+  b.useEditorStyling = true;
+  const c = createDefaultCardVisualEditorSettings();
+  c.enabled = true;
+
+  let history = pushDraftHistory([], a, 2);
+  history = pushDraftHistory(history, a, 2);
+  assert.equal(history.length, 1);
+
+  history = pushDraftHistory(history, b, 2);
+  history = pushDraftHistory(history, c, 2);
+  assert.equal(history.length, 2);
+  assert.equal(history[0].useEditorStyling, true);
+  assert.equal(history[1].enabled, true);
 });

@@ -2,6 +2,19 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp7] - 2026-03-08
+### Added
+- Added Visual Editor session history controls: `Undo` and `Redo` buttons.
+- Added keyboard shortcuts in the editor modal:
+  - `Ctrl/Cmd + Z` for undo
+  - `Ctrl/Cmd + Y` and `Ctrl/Cmd + Shift + Z` for redo
+
+### Changed
+- Editor now captures reversible history snapshots for layer drag-reorder and inspector style edits.
+
+### Fixed
+- Added regression coverage for editor history deduplication/limit behavior.
+
 ## [2.2.4.5-exp6] - 2026-03-08
 ### Added
 - Added drag-and-drop reordering for Visual Editor layers.

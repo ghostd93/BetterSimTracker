@@ -3337,6 +3337,15 @@ export function ensureStyles(): void {
   display: grid;
   gap: 6px;
 }
+.bst-card-editor-history-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.bst-card-editor-hist-btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .bst-card-editor-grid {
   display: grid;
   grid-template-columns: minmax(360px, 1fr) minmax(320px, 420px);
