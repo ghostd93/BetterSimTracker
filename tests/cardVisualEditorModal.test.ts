@@ -5,6 +5,7 @@ import { createDefaultCardVisualEditorSettings } from "../src/cardVisualEditor";
 import {
   applyPresetToDraft,
   buildAppliedEditorSettings,
+  hasLayerStyleOverride,
   isLayerMovable,
   moveLayerByDirection,
   parsePresetTransferPayload,
@@ -164,6 +165,21 @@ test("isLayerMovable locks root and structural containers, allows stat leaves", 
   assert.equal(isLayerMovable("scene.stat.row"), false);
   assert.equal(isLayerMovable("stat.affection"), true);
   assert.equal(isLayerMovable("custom.pose"), true);
+});
+
+test("hasLayerStyleOverride returns true only when layer has explicit override payload", () => {
+  const draft = createDefaultCardVisualEditorSettings();
+  assert.equal(hasLayerStyleOverride(draft, "character", "root"), false);
+  assert.equal(hasLayerStyleOverride(draft, "character", "stat.affection"), false);
+
+  draft.character = {
+    root: { borderRadius: 18 },
+    elements: {
+      "stat.affection": { labelColor: "#fefefe" },
+    },
+  };
+  assert.equal(hasLayerStyleOverride(draft, "character", "root"), true);
+  assert.equal(hasLayerStyleOverride(draft, "character", "stat.affection"), true);
 });
 
 test("applyPresetToDraft replaces editor style payload from preset snapshot", () => {

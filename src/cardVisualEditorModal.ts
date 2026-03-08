@@ -342,9 +342,26 @@ function getLayerNodeById(nodes: LayerNode[]): Map<string, LayerNode> {
   return new Map(nodes.map(node => [node.id, node]));
 }
 
-function isLayerNodeMovable(nodeById: Map<string, LayerNode>, layerId: string): boolean {
-  const node = nodeById.get(layerId);
-  return Boolean(node?.movable);
+export function hasLayerStyleOverride(
+  draft: CardVisualEditorSettings,
+  type: CardType,
+  layerId: string,
+): boolean {
+  if (layerId === "root") {
+    const rootOverride = type === "scene"
+      ? draft.scene.root
+      : type === "user"
+        ? draft.user.root
+        : draft.character.root;
+    return Boolean(rootOverride && Object.keys(rootOverride).length > 0);
+  }
+  const elements = type === "scene"
+    ? draft.scene.elements
+    : type === "user"
+      ? draft.user.elements
+      : draft.character.elements;
+  const layer = elements?.[layerId];
+  return Boolean(layer && Object.keys(layer).length > 0);
 }
 
 function getOrderedMovableLayerIds(
@@ -404,12 +421,18 @@ function renderLayerTree(
           </span>
           <span class="bst-card-editor-layer-id" title="${escapeHtml(node.id)}">${escapeHtml(node.id)}</span>
         </button>
-        <button type="button" class="bst-card-editor-layer-mini" data-layer-up="${escapeHtml(node.id)}" title="Move up within siblings" ${node.movable ? "" : "disabled"}>↑</button>
-        <button type="button" class="bst-card-editor-layer-mini" data-layer-down="${escapeHtml(node.id)}" title="Move down within siblings" ${node.movable ? "" : "disabled"}>↓</button>
+        ${node.movable
+          ? `<button type="button" class="bst-card-editor-layer-mini bst-card-editor-layer-mini-icon" data-layer-up="${escapeHtml(node.id)}" title="Move up within siblings" aria-label="Move up">&#8593;</button>
+             <button type="button" class="bst-card-editor-layer-mini bst-card-editor-layer-mini-icon" data-layer-down="${escapeHtml(node.id)}" title="Move down within siblings" aria-label="Move down">&#8595;</button>`
+          : `<span class="bst-card-editor-layer-mini-spacer"></span><span class="bst-card-editor-layer-mini-spacer"></span>`
+        }
         <button type="button" class="bst-card-editor-layer-mini" data-layer-visible="${escapeHtml(node.id)}" title="Toggle visibility">
-          ${resolvePreviewLayerStyle(draft, activeType, node.id).visible === false ? "Hidden" : "Shown"}
+          ${resolvePreviewLayerStyle(draft, activeType, node.id).visible === false ? "Hidden" : "Visible"}
         </button>
-        <button type="button" class="bst-card-editor-layer-mini" data-layer-reset="${escapeHtml(node.id)}" title="Reset this layer style" ${node.id === "root" ? "disabled" : ""}>Reset</button>
+        ${hasLayerStyleOverride(draft, activeType, node.id)
+          ? `<button type="button" class="bst-card-editor-layer-mini" data-layer-reset="${escapeHtml(node.id)}" title="Reset this layer style">Reset</button>`
+          : `<span class="bst-card-editor-layer-mini-spacer"></span>`
+        }
       </div>
       ${renderBranch(node.id, depth + 1)}
     `).join("");
@@ -883,7 +906,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           </div>
         </div>
         <div class="bst-card-editor-secondary">
-          <div class="bst-card-editor-group-title">Runtime mode</div>
+          <div class="bst-card-editor-group-title">Apply behavior</div>
           <div class="bst-card-editor-toggles">
             <label class="bst-card-editor-switch">
               <input type="checkbox" data-k="useEditorStyling" ${draft.useEditorStyling ? "checked" : ""} title="Apply saved editor styles to real tracker cards. Turn off to use original styling.">
@@ -903,9 +926,12 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
             </select>
             <input data-k="presetName" class="bst-input bst-card-editor-preset-name" type="text" maxlength="80" value="${escapeHtml(presetNameDraft)}" placeholder="Preset name">
             <button type="button" data-act="preset-save" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Save current style as preset">Save preset</button>
-            <button type="button" data-act="preset-load" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Load selected preset">Load</button>
-            <button type="button" data-act="preset-delete" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Delete selected preset">Delete</button>
-            <button type="button" data-act="preset-export" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Export selected preset as JSON">Export</button>
+            ${selectedPresetId
+              ? `<button type="button" data-act="preset-load" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Load selected preset">Load</button>
+                 <button type="button" data-act="preset-delete" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Delete selected preset">Delete</button>
+                 <button type="button" data-act="preset-export" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Export selected preset as JSON">Export</button>`
+              : ""
+            }
             <button type="button" data-act="preset-import" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Import preset from JSON">Import</button>
             <button type="button" data-act="undo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${historyStack.length === 0 ? "disabled" : ""}>Undo</button>
             <button type="button" data-act="redo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${futureStack.length === 0 ? "disabled" : ""}>Redo</button>

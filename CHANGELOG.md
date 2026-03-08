@@ -1,3 +1,15 @@
+## [2.2.4.6-exp3] - 2026-03-08
+### Changed
+- Polished Visual Card Editor controls and spacing for cleaner, more consistent UI.
+- Improved layer action buttons (clear arrow icons, compact icon sizing, stronger button hierarchy).
+- Preset action row now hides context-only actions (`Load/Delete/Export`) when no preset is selected.
+
+### Fixed
+- Removed non-sensical layer controls from list rows:
+  - `Up/Down` controls are no longer rendered for locked/non-movable layers.
+  - `Reset` is shown only when a layer actually has an override to reset.
+- Improved active-layer readability in layer tree with clearer row highlight.
+
 ## [2.2.4.6-exp2] - 2026-03-08
 ### Changed
 - Removed `Live mode` from Visual Card Editor. Editing is now always preview-only until `Apply`.
