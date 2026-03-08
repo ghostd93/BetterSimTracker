@@ -3418,6 +3418,7 @@ export function ensureStyles(): void {
   grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   gap: 6px;
   align-items: center;
+  padding-left: calc(var(--bst-layer-depth, 0) * 12px);
 }
 .bst-card-editor-layer-btn {
   border: 1px solid rgba(255,255,255,0.2);
@@ -3441,14 +3442,15 @@ export function ensureStyles(): void {
   background: rgba(41, 79, 132, 0.58);
 }
 .bst-card-editor-layer-mini {
-  min-width: 26px;
+  min-width: 44px;
   height: 26px;
   border-radius: 7px;
   border: 1px solid rgba(255,255,255,0.24);
   background: rgba(18, 30, 50, 0.8);
   color: #e8eefc;
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
+  padding: 0 6px;
 }
 .bst-card-editor-layer-mini:hover {
   border-color: rgba(167, 198, 240, 0.7);

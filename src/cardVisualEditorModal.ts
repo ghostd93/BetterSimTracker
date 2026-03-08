@@ -13,6 +13,19 @@ import { escapeHtml } from "./ui";
 
 type CardType = "character" | "user" | "scene";
 type PreviewViewport = "desktop" | "mobile";
+type LayerNodeType = "container" | "leaf";
+type LayerNode = {
+  id: string;
+  label: string;
+  parentId: string | null;
+  movable: boolean;
+  type: LayerNodeType;
+};
+type LayerCatalog = {
+  character: LayerNode[];
+  user: LayerNode[];
+  scene: LayerNode[];
+};
 
 type OpenCardVisualEditorModalInput = {
   current: CardVisualEditorSettings;
@@ -27,6 +40,7 @@ type OpenCardVisualEditorModalInput = {
     sceneCardLayout: "chips" | "rows";
     sceneCardArrayCollapsedLimit: number;
   };
+  layerCatalog?: Partial<LayerCatalog>;
   onApply: (next: CardVisualEditorSettings) => void;
 };
 
@@ -45,12 +59,65 @@ type PresetTransferPayload = {
 const HISTORY_LIMIT = 80;
 const BACKDROP_CLASS = "bst-card-editor-backdrop";
 const MODAL_CLASS = "bst-card-editor-modal";
-const COMMON_LAYER_IDS = ["root", "header", "body", "footer"] as const;
-const OWNER_LAYER_IDS = ["stats.numeric.row", "stats.nonNumeric.row", "mood.container", "thought.panel"] as const;
-const SCENE_LAYER_IDS = ["scene.header", "scene.body", "scene.stat.row", "scene.stat.array.container"] as const;
+const BASE_CHARACTER_TREE: LayerNode[] = [
+  { id: "root", label: "Root", parentId: null, movable: false, type: "container" },
+  { id: "header", label: "Header", parentId: "root", movable: false, type: "container" },
+  { id: "body", label: "Body", parentId: "root", movable: false, type: "container" },
+  { id: "footer", label: "Footer", parentId: "root", movable: false, type: "container" },
+  { id: "stats.numeric.row", label: "Numeric stats", parentId: "body", movable: false, type: "container" },
+  { id: "stats.nonNumeric.row", label: "Custom stats", parentId: "body", movable: false, type: "container" },
+  { id: "mood.container", label: "Mood", parentId: "body", movable: false, type: "container" },
+  { id: "thought.panel", label: "Thought", parentId: "body", movable: false, type: "container" },
+];
+const BASE_SCENE_TREE: LayerNode[] = [
+  { id: "root", label: "Root", parentId: null, movable: false, type: "container" },
+  { id: "scene.header", label: "Header", parentId: "root", movable: false, type: "container" },
+  { id: "scene.body", label: "Body", parentId: "root", movable: false, type: "container" },
+  { id: "scene.footer", label: "Footer", parentId: "root", movable: false, type: "container" },
+  { id: "scene.stat.row", label: "Scene stats", parentId: "scene.body", movable: false, type: "container" },
+  { id: "scene.stat.array.container", label: "Scene array stats", parentId: "scene.body", movable: false, type: "container" },
+];
+const LEGACY_DEFAULT_LAYER_IDS: Record<CardType, readonly string[]> = {
+  character: ["root", "header", "body", "footer", "stats.numeric.row", "stats.nonNumeric.row", "mood.container", "thought.panel"],
+  user: ["root", "header", "body", "footer", "stats.numeric.row", "stats.nonNumeric.row", "mood.container", "thought.panel"],
+  scene: ["root", "scene.header", "scene.body", "scene.footer", "scene.stat.row", "scene.stat.array.container"],
+};
 
-function getLayerIdsForType(type: CardType): readonly string[] {
-  return type === "scene" ? [...COMMON_LAYER_IDS, ...SCENE_LAYER_IDS] : [...COMMON_LAYER_IDS, ...OWNER_LAYER_IDS];
+function normalizeLayerNode(input: LayerNode): LayerNode {
+  return {
+    id: String(input.id ?? "").trim(),
+    label: String(input.label ?? "").trim() || String(input.id ?? "").trim(),
+    parentId: input.parentId ? String(input.parentId).trim() : null,
+    movable: Boolean(input.movable),
+    type: input.type === "leaf" ? "leaf" : "container",
+  };
+}
+
+function dedupeLayerNodes(nodes: LayerNode[]): LayerNode[] {
+  const out: LayerNode[] = [];
+  const seen = new Set<string>();
+  for (const node of nodes) {
+    const normalized = normalizeLayerNode(node);
+    if (!normalized.id || seen.has(normalized.id)) continue;
+    seen.add(normalized.id);
+    out.push(normalized);
+  }
+  return out;
+}
+
+function buildLayerCatalog(input?: Partial<LayerCatalog>): LayerCatalog {
+  const character = dedupeLayerNodes([...BASE_CHARACTER_TREE, ...(input?.character ?? [])]);
+  const user = dedupeLayerNodes([...BASE_CHARACTER_TREE, ...(input?.user ?? [])]);
+  const scene = dedupeLayerNodes([...BASE_SCENE_TREE, ...(input?.scene ?? [])]);
+  return { character, user, scene };
+}
+
+function getLayerNodesForType(catalog: LayerCatalog, type: CardType): LayerNode[] {
+  return type === "scene" ? [...catalog.scene] : type === "user" ? [...catalog.user] : [...catalog.character];
+}
+
+function getLayerIdsForType(catalog: LayerCatalog, type: CardType): readonly string[] {
+  return getLayerNodesForType(catalog, type).map(node => node.id);
 }
 
 export function shouldLiveApply(liveMode: boolean, useEditorStyling: boolean): boolean {
@@ -250,12 +317,118 @@ const CONTENT_INSPECTOR_KEYS: Array<keyof CardVisualEditorStylePreset> = [
 ];
 
 export function isLayerMovable(layerId: string): boolean {
-  return layerId !== "root";
+  return !new Set(["root", "header", "body", "footer", "scene.header", "scene.body", "scene.footer", "scene.stat.row", "scene.stat.array.container", "stats.numeric.row", "stats.nonNumeric.row", "mood.container", "thought.panel"]).has(layerId);
 }
 
-function shouldShowInspectorField(layerId: string, key: keyof CardVisualEditorStylePreset): boolean {
-  const pool = layerId === "root" ? ROOT_INSPECTOR_KEYS : CONTENT_INSPECTOR_KEYS;
-  return pool.includes(key);
+function getLayerNodeById(nodes: LayerNode[]): Map<string, LayerNode> {
+  return new Map(nodes.map(node => [node.id, node]));
+}
+
+function isLayerNodeMovable(nodeById: Map<string, LayerNode>, layerId: string): boolean {
+  const node = nodeById.get(layerId);
+  return Boolean(node?.movable);
+}
+
+function getOrderedMovableLayerIds(
+  draft: CardVisualEditorSettings,
+  type: CardType,
+  nodes: LayerNode[],
+): string[] {
+  const movableDefaults = nodes.filter(node => node.movable).map(node => node.id);
+  return resolvePreviewLayerOrder(draft, type, movableDefaults);
+}
+
+function renderLayerTree(
+  nodes: LayerNode[],
+  orderedMovable: string[],
+  selectedLayerId: string,
+  draft: CardVisualEditorSettings,
+  activeType: CardType,
+): string {
+  const childrenMap = new Map<string, LayerNode[]>();
+  for (const node of nodes) {
+    const parentKey = node.parentId ?? "__root__";
+    const list = childrenMap.get(parentKey) ?? [];
+    list.push(node);
+    childrenMap.set(parentKey, list);
+  }
+  const defaultIndex = new Map(nodes.map((node, index) => [node.id, index]));
+  const movableOrder = new Map(orderedMovable.map((id, index) => [id, index]));
+  const renderBranch = (parentId: string | null, depth: number): string => {
+    const key = parentId ?? "__root__";
+    const children = [...(childrenMap.get(key) ?? [])].sort((a, b) => {
+      const ai = movableOrder.get(a.id);
+      const bi = movableOrder.get(b.id);
+      if (ai !== undefined && bi !== undefined) return ai - bi;
+      return (defaultIndex.get(a.id) ?? 0) - (defaultIndex.get(b.id) ?? 0);
+    });
+    return children.map(node => `
+      <div class="bst-card-editor-layer-row ${selectedLayerId === node.id ? "is-active" : ""}" data-layer-row="${escapeHtml(node.id)}" style="--bst-layer-depth:${String(depth)};">
+        <button
+          type="button"
+          draggable="${node.movable ? "true" : "false"}"
+          class="bst-card-editor-layer-btn ${selectedLayerId === node.id ? "is-active" : ""}"
+          data-layer-pick="${escapeHtml(node.id)}"
+          data-layer-drag="${escapeHtml(node.id)}">
+          ${escapeHtml(node.label)} <span class="bst-card-editor-layer-id">${escapeHtml(node.id)}</span>
+        </button>
+        <button type="button" class="bst-card-editor-layer-mini" data-layer-up="${escapeHtml(node.id)}" title="Move up" ${node.movable ? "" : "disabled"}>&uarr;</button>
+        <button type="button" class="bst-card-editor-layer-mini" data-layer-down="${escapeHtml(node.id)}" title="Move down" ${node.movable ? "" : "disabled"}>&darr;</button>
+        <button type="button" class="bst-card-editor-layer-mini" data-layer-visible="${escapeHtml(node.id)}" title="Toggle visibility">
+          ${resolvePreviewLayerStyle(draft, activeType, node.id).visible === false ? "Hidden" : "Shown"}
+        </button>
+        <button type="button" class="bst-card-editor-layer-mini" data-layer-reset="${escapeHtml(node.id)}" title="Reset layer style" ${node.id === "root" ? "disabled" : ""}>Reset</button>
+      </div>
+      ${renderBranch(node.id, depth + 1)}
+    `).join("");
+  };
+  return renderBranch(null, 0);
+}
+
+function resolveInspectorKeys(
+  layerId: string,
+  nodeById: Map<string, LayerNode>,
+): Array<keyof CardVisualEditorStylePreset> {
+  if (layerId === "root") return ROOT_INSPECTOR_KEYS;
+  const node = nodeById.get(layerId);
+  if (!node) return CONTENT_INSPECTOR_KEYS;
+  if (node.type === "container") {
+    if (layerId.includes("header")) {
+      return ["visible", "backgroundColor", "textColor", "borderColor", "backgroundOpacity", "borderWidth", "borderRadius", "titleFontSize", "padding", "rowGap", "sectionGap"];
+    }
+    return ["visible", "backgroundColor", "textColor", "borderColor", "backgroundOpacity", "borderWidth", "borderRadius", "padding", "rowGap", "sectionGap"];
+  }
+  if (layerId.includes("mood")) {
+    return ["visible", "textColor", "valueColor", "borderColor", "borderWidth", "borderRadius", "valueFontSize", "padding", "rowGap"];
+  }
+  if (layerId.includes("thought")) {
+    return ["visible", "textColor", "valueColor", "borderColor", "backgroundColor", "backgroundOpacity", "borderWidth", "borderRadius", "valueFontSize", "padding"];
+  }
+  return ["visible", "textColor", "labelColor", "valueColor", "borderColor", "backgroundColor", "backgroundOpacity", "borderWidth", "borderRadius", "labelFontSize", "valueFontSize", "padding", "rowGap"];
+}
+
+function shouldShowInspectorField(
+  key: keyof CardVisualEditorStylePreset,
+  inspectorKeys: Array<keyof CardVisualEditorStylePreset>,
+): boolean {
+  return inspectorKeys.includes(key);
+}
+
+function moveLayerByDirectionWithinSiblings(
+  layerIds: readonly string[],
+  nodeById: Map<string, LayerNode>,
+  layerId: string,
+  direction: "up" | "down",
+): string[] {
+  const node = nodeById.get(layerId);
+  if (!node?.movable) return [...layerIds];
+  const siblingIds = layerIds.filter(id => nodeById.get(id)?.parentId === node.parentId && nodeById.get(id)?.movable);
+  const siblingIndex = siblingIds.indexOf(layerId);
+  if (siblingIndex < 0) return [...layerIds];
+  const targetSiblingIndex = direction === "up" ? siblingIndex - 1 : siblingIndex + 1;
+  if (targetSiblingIndex < 0 || targetSiblingIndex >= siblingIds.length) return [...layerIds];
+  const targetId = siblingIds[targetSiblingIndex];
+  return reorderLayerIds(layerIds, layerId, targetId);
 }
 
 function closeExisting(): void {
@@ -305,8 +478,10 @@ function resolveOverrideLayerOrder(
 export function resolvePreviewLayerOrder(
   draft: CardVisualEditorSettings,
   type: CardType,
+  layerIds?: readonly string[],
 ): string[] {
-  const defaults = [...getLayerIdsForType(type)];
+  const defaults = [...(layerIds ?? LEGACY_DEFAULT_LAYER_IDS[type])];
+  if (!defaults.length) return [];
   const override = resolveOverrideLayerOrder(draft, type);
   const seen = new Set<string>();
   const merged: string[] = [];
@@ -395,6 +570,8 @@ function renderPreviewCard(
   draft: CardVisualEditorSettings,
   type: CardType,
   selectedLayerId: string,
+  layerIds: readonly string[],
+  layerLabelById: Record<string, string>,
 ): string {
   const root = resolvePreviewLayerStyle(draft, type, "root");
   const headerId = type === "scene" ? "scene.header" : "header";
@@ -407,7 +584,7 @@ function renderPreviewCard(
   const nonNumeric = resolvePreviewLayerStyle(draft, type, nonNumericId);
   const mood = resolvePreviewLayerStyle(draft, type, "mood.container");
   const thought = resolvePreviewLayerStyle(draft, type, "thought.panel");
-  const orderedLayerIds = resolvePreviewLayerOrder(draft, type);
+  const orderedLayerIds = resolvePreviewLayerOrder(draft, type, layerIds);
   const title = type === "character" ? "Character" : type === "user" ? "User" : "Scene";
   const valueText = type === "scene" ? "Scene Date/Time: 2026-03-08 20:00" : "Affection 58%";
   const selectedClass = (id: string): string => (selectedLayerId === id ? " is-selected" : "");
@@ -422,7 +599,7 @@ function renderPreviewCard(
         padding:${String(Math.max(4, Math.round((body.padding ?? root.padding) * 0.7)))}px;">
         <div class="bst-card-editor-preview-row${selectedClass(rowId)}" data-layer="${rowId}" style="
           color:${escapeHtml(row.labelColor || root.labelColor || root.textColor || "#c7d0e0")};
-          font-size:${String(row.labelFontSize || root.labelFontSize)}px;">Label</div>
+          font-size:${String(row.labelFontSize || root.labelFontSize)}px;">${escapeHtml(layerLabelById[rowId] || "Label")}</div>
         <div class="bst-card-editor-preview-row${selectedClass(rowId)}" data-layer="${rowId}" style="
           margin-top:6px;
           color:${escapeHtml(row.valueColor || root.valueColor || root.textColor || "#f1f3f8")};
@@ -440,6 +617,23 @@ function renderPreviewCard(
     "mood.container": `<div class="bst-card-editor-preview-row${selectedClass("mood.container")}" data-layer="mood.container" style="margin-top:${String(root.sectionGap)};color:${escapeHtml(mood.valueColor || root.valueColor || "#f1f3f8")}">Mood: Hopeful</div>`,
     "thought.panel": `<div class="bst-card-editor-preview-row${selectedClass("thought.panel")}" data-layer="thought.panel" style="margin-top:${String(root.rowGap)};color:${escapeHtml(thought.valueColor || root.valueColor || "#f1f3f8")}">Thought preview text...</div>`,
   };
+  for (const layerId of layerIds) {
+    if (ownerBlockMarkupByLayer[layerId]) continue;
+    if (layerId === "root" || layerId === headerId || layerId === bodyId || layerId === "footer") continue;
+    const layerStyle = resolvePreviewLayerStyle(draft, type, layerId);
+    ownerBlockMarkupByLayer[layerId] = `
+      <div class="bst-card-editor-preview-row${selectedClass(layerId)}" data-layer="${layerId}" style="
+        margin-top:${String(root.rowGap)};
+        color:${escapeHtml(layerStyle.valueColor || layerStyle.textColor || root.valueColor || root.textColor || "#f1f3f8")};
+        border:${String(layerStyle.borderWidth ?? 0)}px solid ${escapeHtml(layerStyle.borderColor || "transparent")};
+        border-radius:${String(layerStyle.borderRadius ?? root.borderRadius)};
+        padding:${String(Math.max(2, Math.round((layerStyle.padding ?? root.padding) * 0.5)))}px;
+        ${layerStyle.visible === false ? "display:none;" : ""}
+      ">
+        ${escapeHtml(layerLabelById[layerId] || layerId)} preview
+      </div>
+    `;
+  }
   const sceneBlockMarkupByLayer: Record<string, string> = {
     "scene.stat.row": `
       <div class="bst-card-editor-preview-section${selectedClass(bodyId)}" data-layer="${bodyId}" style="
@@ -450,7 +644,7 @@ function renderPreviewCard(
         padding:${String(Math.max(4, Math.round((body.padding ?? root.padding) * 0.7)))}px;">
         <div class="bst-card-editor-preview-row${selectedClass(rowId)}" data-layer="${rowId}" style="
           color:${escapeHtml(row.labelColor || root.labelColor || root.textColor || "#c7d0e0")};
-          font-size:${String(row.labelFontSize || root.labelFontSize)}px;">Label</div>
+          font-size:${String(row.labelFontSize || root.labelFontSize)}px;">${escapeHtml(layerLabelById[rowId] || "Label")}</div>
         <div class="bst-card-editor-preview-row${selectedClass(rowId)}" data-layer="${rowId}" style="
           margin-top:6px;
           color:${escapeHtml(row.valueColor || root.valueColor || root.textColor || "#f1f3f8")};
@@ -466,6 +660,23 @@ function renderPreviewCard(
       </div>
     `,
   };
+  for (const layerId of layerIds) {
+    if (sceneBlockMarkupByLayer[layerId]) continue;
+    if (layerId === "root" || layerId === headerId || layerId === bodyId || layerId === "scene.footer") continue;
+    const layerStyle = resolvePreviewLayerStyle(draft, type, layerId);
+    sceneBlockMarkupByLayer[layerId] = `
+      <div class="bst-card-editor-preview-row${selectedClass(layerId)}" data-layer="${layerId}" style="
+        margin-top:${String(root.rowGap)};
+        color:${escapeHtml(layerStyle.valueColor || layerStyle.textColor || root.valueColor || root.textColor || "#f1f3f8")};
+        border:${String(layerStyle.borderWidth ?? 0)}px solid ${escapeHtml(layerStyle.borderColor || "transparent")};
+        border-radius:${String(layerStyle.borderRadius ?? root.borderRadius)};
+        padding:${String(Math.max(2, Math.round((layerStyle.padding ?? root.padding) * 0.5)))}px;
+        ${layerStyle.visible === false ? "display:none;" : ""}
+      ">
+        ${escapeHtml(layerLabelById[layerId] || layerId)} preview
+      </div>
+    `;
+  }
   const ownerBlocks = orderedLayerIds
     .filter(id => isLayerVisible(id))
     .filter(id => Object.prototype.hasOwnProperty.call(ownerBlockMarkupByLayer, id))
@@ -516,6 +727,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
   let draggedLayerId: string | null = null;
   let historyStack: CardVisualEditorSettings[] = [];
   let futureStack: CardVisualEditorSettings[] = [];
+  const layerCatalog = buildLayerCatalog(input.layerCatalog);
 
   const backdrop = document.createElement("div");
   backdrop.className = BACKDROP_CLASS;
@@ -528,8 +740,15 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
   document.body.appendChild(modal);
 
   const render = (): void => {
+    const nodes = getLayerNodesForType(layerCatalog, activeType);
+    const nodeById = getLayerNodeById(nodes);
+    const layerIds = getOrderedMovableLayerIds(draft, activeType, nodes);
+    const layerLabelById = Object.fromEntries(nodes.map(node => [node.id, node.label])) as Record<string, string>;
+    if (!nodeById.has(selectedLayerId)) {
+      selectedLayerId = "root";
+    }
     const root = resolvePreviewLayerStyle(draft, activeType, selectedLayerId);
-    const layerIds = resolvePreviewLayerOrder(draft, activeType);
+    const inspectorKeys = resolveInspectorKeys(selectedLayerId, nodeById);
     modal.innerHTML = `
       <div class="bst-card-editor-head">
         <div class="bst-card-editor-title">Visual Card Editor (Experimental)</div>
@@ -595,56 +814,39 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         <div class="bst-card-editor-pane">
           <div class="bst-card-editor-pane-title">Preview</div>
           <div class="bst-card-editor-live-preview" style="max-width:${String(resolvePreviewViewportWidth(previewViewport))}px;">
-            ${renderPreviewCard(draft, activeType, selectedLayerId)}
+            ${renderPreviewCard(draft, activeType, selectedLayerId, getLayerIdsForType(layerCatalog, activeType), layerLabelById)}
           </div>
           <div class="bst-card-editor-pane-title">Inspector</div>
           <div class="bst-card-editor-help">Editing layer: <code>${escapeHtml(selectedLayerId)}</code></div>
           <div class="bst-card-editor-inspector">
-            ${shouldShowInspectorField(selectedLayerId, "visible") ? `
+            ${shouldShowInspectorField("visible", inspectorKeys) ? `
               <label class="bst-card-editor-switch">
                 <input data-k="visible" type="checkbox" ${root.visible !== false ? "checked" : ""}>
                 <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
                 <span class="bst-card-editor-switch-label">Visible</span>
               </label>
             ` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "backgroundColor") ? `<label class="bst-card-editor-field">Background <input data-k="backgroundColor" type="text" value="${escapeHtml(root.backgroundColor || "")}" placeholder="#1a2134 / rgb(...)"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "textColor") ? `<label class="bst-card-editor-field">Text color <input data-k="textColor" type="text" value="${escapeHtml(root.textColor || "")}" placeholder="#f1f3f8"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "labelColor") ? `<label class="bst-card-editor-field">Label color <input data-k="labelColor" type="text" value="${escapeHtml(root.labelColor || "")}" placeholder="#c7d0e0"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "valueColor") ? `<label class="bst-card-editor-field">Value color <input data-k="valueColor" type="text" value="${escapeHtml(root.valueColor || "")}" placeholder="#f1f3f8"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "borderColor") ? `<label class="bst-card-editor-field">Border color <input data-k="borderColor" type="text" value="${escapeHtml(root.borderColor || "")}" placeholder="#3a4966"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "backgroundOpacity") ? `<label class="bst-card-editor-field">Opacity <input data-k="backgroundOpacity" type="number" min="0" max="1" step="0.01" value="${String(root.backgroundOpacity)}"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "borderWidth") ? `<label class="bst-card-editor-field">Border width <input data-k="borderWidth" type="number" min="0" max="12" step="0.1" value="${String(root.borderWidth)}"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "borderRadius") ? `<label class="bst-card-editor-field">Border radius <input data-k="borderRadius" type="number" min="0" max="48" value="${String(root.borderRadius)}"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "fontSize") ? `<label class="bst-card-editor-field">Font size <input data-k="fontSize" type="number" min="10" max="32" value="${String(root.fontSize)}"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "titleFontSize") ? `<label class="bst-card-editor-field">Title size <input data-k="titleFontSize" type="number" min="10" max="48" value="${String(root.titleFontSize)}"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "labelFontSize") ? `<label class="bst-card-editor-field">Label size <input data-k="labelFontSize" type="number" min="10" max="48" value="${String(root.labelFontSize)}"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "valueFontSize") ? `<label class="bst-card-editor-field">Value size <input data-k="valueFontSize" type="number" min="10" max="48" value="${String(root.valueFontSize)}"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "padding") ? `<label class="bst-card-editor-field">Padding <input data-k="padding" type="number" min="0" max="64" value="${String(root.padding)}"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "rowGap") ? `<label class="bst-card-editor-field">Row gap <input data-k="rowGap" type="number" min="0" max="64" value="${String(root.rowGap)}"></label>` : ""}
-            ${shouldShowInspectorField(selectedLayerId, "sectionGap") ? `<label class="bst-card-editor-field">Section gap <input data-k="sectionGap" type="number" min="0" max="64" value="${String(root.sectionGap)}"></label>` : ""}
+            ${shouldShowInspectorField("backgroundColor", inspectorKeys) ? `<label class="bst-card-editor-field">Background <input data-k="backgroundColor" type="text" value="${escapeHtml(root.backgroundColor || "")}" placeholder="#1a2134 / rgb(...)"></label>` : ""}
+            ${shouldShowInspectorField("textColor", inspectorKeys) ? `<label class="bst-card-editor-field">Text color <input data-k="textColor" type="text" value="${escapeHtml(root.textColor || "")}" placeholder="#f1f3f8"></label>` : ""}
+            ${shouldShowInspectorField("labelColor", inspectorKeys) ? `<label class="bst-card-editor-field">Label color <input data-k="labelColor" type="text" value="${escapeHtml(root.labelColor || "")}" placeholder="#c7d0e0"></label>` : ""}
+            ${shouldShowInspectorField("valueColor", inspectorKeys) ? `<label class="bst-card-editor-field">Value color <input data-k="valueColor" type="text" value="${escapeHtml(root.valueColor || "")}" placeholder="#f1f3f8"></label>` : ""}
+            ${shouldShowInspectorField("borderColor", inspectorKeys) ? `<label class="bst-card-editor-field">Border color <input data-k="borderColor" type="text" value="${escapeHtml(root.borderColor || "")}" placeholder="#3a4966"></label>` : ""}
+            ${shouldShowInspectorField("backgroundOpacity", inspectorKeys) ? `<label class="bst-card-editor-field">Opacity <input data-k="backgroundOpacity" type="number" min="0" max="1" step="0.01" value="${String(root.backgroundOpacity)}"></label>` : ""}
+            ${shouldShowInspectorField("borderWidth", inspectorKeys) ? `<label class="bst-card-editor-field">Border width <input data-k="borderWidth" type="number" min="0" max="12" step="0.1" value="${String(root.borderWidth)}"></label>` : ""}
+            ${shouldShowInspectorField("borderRadius", inspectorKeys) ? `<label class="bst-card-editor-field">Border radius <input data-k="borderRadius" type="number" min="0" max="48" value="${String(root.borderRadius)}"></label>` : ""}
+            ${shouldShowInspectorField("fontSize", inspectorKeys) ? `<label class="bst-card-editor-field">Font size <input data-k="fontSize" type="number" min="10" max="32" value="${String(root.fontSize)}"></label>` : ""}
+            ${shouldShowInspectorField("titleFontSize", inspectorKeys) ? `<label class="bst-card-editor-field">Title size <input data-k="titleFontSize" type="number" min="10" max="48" value="${String(root.titleFontSize)}"></label>` : ""}
+            ${shouldShowInspectorField("labelFontSize", inspectorKeys) ? `<label class="bst-card-editor-field">Label size <input data-k="labelFontSize" type="number" min="10" max="48" value="${String(root.labelFontSize)}"></label>` : ""}
+            ${shouldShowInspectorField("valueFontSize", inspectorKeys) ? `<label class="bst-card-editor-field">Value size <input data-k="valueFontSize" type="number" min="10" max="48" value="${String(root.valueFontSize)}"></label>` : ""}
+            ${shouldShowInspectorField("padding", inspectorKeys) ? `<label class="bst-card-editor-field">Padding <input data-k="padding" type="number" min="0" max="64" value="${String(root.padding)}"></label>` : ""}
+            ${shouldShowInspectorField("rowGap", inspectorKeys) ? `<label class="bst-card-editor-field">Row gap <input data-k="rowGap" type="number" min="0" max="64" value="${String(root.rowGap)}"></label>` : ""}
+            ${shouldShowInspectorField("sectionGap", inspectorKeys) ? `<label class="bst-card-editor-field">Section gap <input data-k="sectionGap" type="number" min="0" max="64" value="${String(root.sectionGap)}"></label>` : ""}
           </div>
         </div>
         <div class="bst-card-editor-pane">
           <div class="bst-card-editor-pane-title">Layers</div>
           <div class="bst-card-editor-layers">
-            ${layerIds.map(layerId => `
-              <div class="bst-card-editor-layer-row ${selectedLayerId === layerId ? "is-active" : ""}" data-layer-row="${escapeHtml(layerId)}">
-                <button
-                  type="button"
-                  draggable="${isLayerMovable(layerId) ? "true" : "false"}"
-                  class="bst-card-editor-layer-btn ${selectedLayerId === layerId ? "is-active" : ""}"
-                  data-layer-pick="${escapeHtml(layerId)}"
-                  data-layer-drag="${escapeHtml(layerId)}">
-                  ${escapeHtml(layerId)}
-                </button>
-                <button type="button" class="bst-card-editor-layer-mini" data-layer-up="${escapeHtml(layerId)}" title="Move up" ${isLayerMovable(layerId) ? "" : "disabled"}>↑</button>
-                <button type="button" class="bst-card-editor-layer-mini" data-layer-down="${escapeHtml(layerId)}" title="Move down" ${isLayerMovable(layerId) ? "" : "disabled"}>↓</button>
-                <button type="button" class="bst-card-editor-layer-mini" data-layer-visible="${escapeHtml(layerId)}" title="Toggle visibility">
-                  ${resolvePreviewLayerStyle(draft, activeType, layerId).visible === false ? "🙈" : "👁"}
-                </button>
-                <button type="button" class="bst-card-editor-layer-mini" data-layer-reset="${escapeHtml(layerId)}" title="Reset layer style" ${layerId === "root" ? "disabled" : ""}>⟲</button>
-              </div>
-            `).join("")}
+            ${renderLayerTree(nodes, layerIds, selectedLayerId, draft, activeType)}
           </div>
         </div>
       </div>
@@ -697,6 +899,10 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         const sourceLayerId = draggedLayerId || (event as DragEvent).dataTransfer?.getData("text/plain") || "";
         if (!isLayerMovable(sourceLayerId)) return;
         if (!sourceLayerId || !targetLayerId || sourceLayerId === targetLayerId) return;
+        const sourceNode = nodeById.get(sourceLayerId);
+        const targetNode = nodeById.get(targetLayerId);
+        if (!sourceNode || !targetNode) return;
+        if (sourceNode.parentId !== targetNode.parentId) return;
         captureHistory();
         const nextOrder = reorderLayerIds(layerIds, sourceLayerId, targetLayerId);
         writeOverrideLayerOrder(draft, activeType, nextOrder);
@@ -712,7 +918,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         const layerId = String((node as HTMLElement).getAttribute("data-layer-up") || "");
         if (!layerId) return;
         captureHistory();
-        const nextOrder = moveLayerByDirection(layerIds, layerId, "up");
+        const nextOrder = moveLayerByDirectionWithinSiblings(layerIds, nodeById, layerId, "up");
         writeOverrideLayerOrder(draft, activeType, nextOrder);
         selectedLayerId = layerId;
         render();
@@ -724,7 +930,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         const layerId = String((node as HTMLElement).getAttribute("data-layer-down") || "");
         if (!layerId) return;
         captureHistory();
-        const nextOrder = moveLayerByDirection(layerIds, layerId, "down");
+        const nextOrder = moveLayerByDirectionWithinSiblings(layerIds, nodeById, layerId, "down");
         writeOverrideLayerOrder(draft, activeType, nextOrder);
         selectedLayerId = layerId;
         render();
@@ -825,7 +1031,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       const previewNode = modal.querySelector(".bst-card-editor-live-preview") as HTMLElement | null;
       if (!previewNode) return;
       previewNode.style.maxWidth = `${String(resolvePreviewViewportWidth(previewViewport))}px`;
-      previewNode.innerHTML = renderPreviewCard(draft, activeType, selectedLayerId);
+      previewNode.innerHTML = renderPreviewCard(draft, activeType, selectedLayerId, getLayerIdsForType(layerCatalog, activeType), layerLabelById);
       previewNode.querySelectorAll("[data-layer]").forEach(node => {
         node.addEventListener("click", (event) => {
           event.preventDefault();
@@ -1037,3 +1243,5 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
 
   render();
 }
+
+

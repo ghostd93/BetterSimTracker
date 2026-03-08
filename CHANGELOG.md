@@ -2,6 +2,20 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp12] - 2026-03-08
+### Added
+- Visual Editor now builds dynamic layer catalogs from current tracked built-ins/custom stats per card type (Character/User/Scene).
+- Layer tree now renders hierarchical nesting with depth indentation.
+
+### Changed
+- Inspector fields are now selected by layer profile (root/container/mood/thought/stat leaf), reducing irrelevant controls.
+- Layer reorder controls now operate within sibling scope only, preserving parent-child structure integrity.
+
+### Fixed
+- Locked structural layers (`root`, header/body/footer containers, stat containers) from reorder/reset interactions.
+- Fixed preview rendering to use resolved layer catalogs consistently in main render and refresh paths.
+- Added regression coverage for structural layer movability rules.
+
 ## [2.2.4.5-exp11] - 2026-03-08
 ### Added
 - Added Visual Editor preset transfer panel with BST-styled JSON import/export workflow.

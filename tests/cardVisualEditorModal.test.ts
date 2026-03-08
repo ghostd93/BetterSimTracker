@@ -143,10 +143,13 @@ test("toPresetId normalizes and clamps names", () => {
   assert.equal(toPresetId("###"), "preset");
 });
 
-test("isLayerMovable keeps root locked and allows other layers", () => {
+test("isLayerMovable locks root and structural containers, allows stat leaves", () => {
   assert.equal(isLayerMovable("root"), false);
-  assert.equal(isLayerMovable("header"), true);
-  assert.equal(isLayerMovable("scene.stat.row"), true);
+  assert.equal(isLayerMovable("header"), false);
+  assert.equal(isLayerMovable("body"), false);
+  assert.equal(isLayerMovable("scene.stat.row"), false);
+  assert.equal(isLayerMovable("stat.affection"), true);
+  assert.equal(isLayerMovable("custom.pose"), true);
 });
 
 test("applyPresetToDraft replaces editor style payload from preset snapshot", () => {
