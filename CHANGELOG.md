@@ -2,6 +2,24 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp2] - 2026-03-08
+### Added
+- Added `Visual Editor (Experimental)` controls in Display settings:
+  - `Enable Visual Editor`
+  - `Use Editor Styling`
+  - `Open Visual Card Editor` entry point.
+- Added initial interactive editor shell modal with:
+  - card-type tabs (`Character`, `User`, `Scene`),
+  - live draft preview pane,
+  - inspector controls for core root tokens (background/text/border/opacity/size/spacing),
+  - `Default`, `Cancel`, and `Apply` flow.
+
+### Changed
+- Settings modal now persists editor state through `cardVisualEditor` and applies modal edits through sanitized editor settings.
+
+### Fixed
+- Added UI-adjacent regression coverage for preview root-style resolution to verify base+override composition in editor preview.
+
 ## [2.2.4.5-exp1] - 2026-03-08
 ### Added
 - Introduced `cardVisualEditor` foundation schema in settings/types for future interactive card styling (user/character/scene).

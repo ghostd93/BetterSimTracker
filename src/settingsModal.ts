@@ -84,6 +84,7 @@ import {
   toMacroCharacterSlug,
 } from "./ui";
 import { closeGraphModal } from "./graphModal";
+import { openCardVisualEditorModal } from "./cardVisualEditorModal";
 export function openSettingsModal(input: {
   settings: BetterSimTrackerSettings;
   profileOptions: ConnectionProfileOption[];
@@ -179,6 +180,7 @@ export function openSettingsModal(input: {
     return out;
   })();
   let builtInNumericStatUiState: BuiltInNumericStatUiSettings = cloneBuiltInNumericStatUi(input.settings.builtInNumericStatUi);
+  let cardVisualEditorState: BetterSimTrackerSettings["cardVisualEditor"] = input.settings.cardVisualEditor;
 
   const modal = document.createElement("div");
   modal.className = "bst-settings";
@@ -373,6 +375,15 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="collapseCardsByDefault" type="checkbox">Collapse Cards By Default</label>
           <label class="bst-check"><input data-k="showInactive" type="checkbox">Show Inactive</label>
           <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
+        </div>
+        <div class="bst-section-divider">Visual Editor (Experimental)</div>
+        <div class="bst-help-line">Interactive shell for per-card styling draft (Character/User/Scene). Apply saves to editor config.</div>
+        <div class="bst-check-grid">
+          <label class="bst-check"><input data-k="cardVisualEditorEnabled" type="checkbox">Enable Visual Editor</label>
+          <label class="bst-check"><input data-k="cardVisualUseStyling" type="checkbox">Use Editor Styling</label>
+        </div>
+        <div>
+          <button type="button" class="bst-btn bst-btn-soft" data-action="open-visual-editor">Open Visual Card Editor</button>
         </div>
       </div>
       <details class="bst-subdrawer" data-bst-row="sceneCardDrawer">
@@ -1055,6 +1066,8 @@ export function openSettingsModal(input: {
   set("showInactive", String(input.settings.showInactive));
   set("inactiveLabel", input.settings.inactiveLabel);
   set("showLastThought", String(input.settings.showLastThought));
+  setExtra("cardVisualEditorEnabled", String(cardVisualEditorState.enabled));
+  setExtra("cardVisualUseStyling", String(cardVisualEditorState.useEditorStyling));
   set("sceneCardEnabled", String(input.settings.sceneCardEnabled));
   set("sceneCardPosition", input.settings.sceneCardPosition);
   set("sceneCardLayout", input.settings.sceneCardLayout);
@@ -4026,6 +4039,11 @@ export function openSettingsModal(input: {
       showInactive: readBool("showInactive", input.settings.showInactive),
       inactiveLabel: read("inactiveLabel") || input.settings.inactiveLabel,
       showLastThought: readBool("showLastThought", input.settings.showLastThought),
+      cardVisualEditor: {
+        ...cardVisualEditorState,
+        enabled: readBoolExtra("cardVisualEditorEnabled", cardVisualEditorState.enabled),
+        useEditorStyling: readBoolExtra("cardVisualUseStyling", cardVisualEditorState.useEditorStyling),
+      },
       sceneCardEnabled: readBool("sceneCardEnabled", input.settings.sceneCardEnabled),
       sceneCardPosition: read("sceneCardPosition") === "above_message" ? "above_message" : "above_tracker_cards",
       sceneCardLayout: read("sceneCardLayout") === "rows" ? "rows" : "chips",
@@ -4268,6 +4286,7 @@ export function openSettingsModal(input: {
     syncSceneCardStatOrderState();
     syncCharacterCardStatOrderState();
     builtInNumericStatUiState = cloneBuiltInNumericStatUi(next.builtInNumericStatUi);
+    cardVisualEditorState = next.cardVisualEditor;
     next.sceneCardStatOrder = [...sceneCardStatOrderState];
     next.characterCardStatOrder = [...characterCardStatOrderState];
     input.settings = next;
@@ -4279,6 +4298,30 @@ export function openSettingsModal(input: {
     updateGlobalStExpressionSummary();
     syncExtractionVisibility();
   };
+
+  modal.querySelector('[data-action="open-visual-editor"]')?.addEventListener("click", () => {
+    const current = collectSettings();
+    openCardVisualEditorModal({
+      current: current.cardVisualEditor,
+      legacy: {
+        accentColor: current.accentColor,
+        userCardColor: current.userCardColor,
+        sceneCardColor: current.sceneCardColor,
+        sceneCardValueColor: current.sceneCardValueColor,
+        cardOpacity: current.cardOpacity,
+        borderRadius: current.borderRadius,
+        fontSize: current.fontSize,
+        sceneCardLayout: current.sceneCardLayout,
+        sceneCardArrayCollapsedLimit: current.sceneCardArrayCollapsedLimit,
+      },
+      onApply: (next) => {
+        cardVisualEditorState = next;
+        setExtra("cardVisualEditorEnabled", String(next.enabled));
+        setExtra("cardVisualUseStyling", String(next.useEditorStyling));
+        persistLive();
+      },
+    });
+  });
 
   modal.querySelector('[data-action="open-global-st-framing"]')?.addEventListener("click", async () => {
     if (globalFrameButton) globalFrameButton.disabled = true;
