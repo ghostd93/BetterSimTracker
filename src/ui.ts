@@ -3280,6 +3280,63 @@ export function ensureStyles(): void {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+.bst-card-editor-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #e8eefc;
+  user-select: none;
+  cursor: pointer;
+}
+.bst-card-editor-switch input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+.bst-card-editor-switch-pill {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.16);
+  border: 1px solid rgba(255,255,255,0.34);
+  transition: background .16s ease, border-color .16s ease;
+}
+.bst-card-editor-switch-pill::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #ffffff;
+  transition: transform .16s ease;
+}
+.bst-card-editor-switch input[type="checkbox"]:checked + .bst-card-editor-switch-pill {
+  background: color-mix(in srgb, var(--bst-accent) 58%, #1a2e4d 42%);
+  border-color: color-mix(in srgb, var(--bst-accent) 72%, #ffffff 28%);
+}
+.bst-card-editor-switch input[type="checkbox"]:checked + .bst-card-editor-switch-pill::after {
+  transform: translateX(14px);
+}
+.bst-card-editor-switch-label {
+  line-height: 1.1;
+}
+.bst-card-editor-toggle-hints {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 10px;
+  background: rgba(13, 23, 40, 0.62);
+  font-size: 12px;
+  color: rgba(235, 242, 255, 0.9);
+  display: grid;
+  gap: 6px;
+}
 .bst-card-editor-grid {
   display: grid;
   grid-template-columns: minmax(360px, 1fr) minmax(320px, 420px);

@@ -219,9 +219,21 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           <button type="button" data-tab="scene" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "scene" ? "is-active" : ""}">Scene</button>
         </div>
         <div class="bst-card-editor-toggles">
-          <label class="bst-check"><input type="checkbox" data-k="useEditorStyling" ${draft.useEditorStyling ? "checked" : ""}>Use Editor Styling</label>
-          <label class="bst-check"><input type="checkbox" data-k="liveMode" ${liveMode ? "checked" : ""}>Live mode</label>
+          <label class="bst-card-editor-switch">
+            <input type="checkbox" data-k="useEditorStyling" ${draft.useEditorStyling ? "checked" : ""} title="Apply saved editor styles to real tracker cards. Turn off to use original styling.">
+            <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
+            <span class="bst-card-editor-switch-label">Use Editor Styling</span>
+          </label>
+          <label class="bst-card-editor-switch">
+            <input type="checkbox" data-k="liveMode" ${liveMode ? "checked" : ""} title="When enabled, changes update real cards immediately (only if Use Editor Styling is on).">
+            <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
+            <span class="bst-card-editor-switch-label">Live mode</span>
+          </label>
         </div>
+      </div>
+      <div class="bst-card-editor-toggle-hints">
+        <div><strong>Use Editor Styling</strong>: applies saved editor styles to real cards. Turn OFF to keep original styling.</div>
+        <div><strong>Live mode</strong>: applies edits instantly while editing. If OFF, edits are preview-only until <strong>Apply</strong>.</div>
       </div>
       <div class="bst-card-editor-grid">
         <div class="bst-card-editor-pane">

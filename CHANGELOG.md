@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp5] - 2026-03-08
+### Added
+- Added explicit inline helper text for Visual Editor top-bar toggles (`Use Editor Styling`, `Live mode`) so users can understand behavior without guesswork.
+- Added hover tooltips for the same toggles as quick in-place explanations.
+
+### Changed
+- Clarified Visual Editor control UX by documenting how `Live mode` interacts with `Use Editor Styling` directly in modal context.
+
 ## [2.2.4.5-exp4] - 2026-03-08
 ### Added
 - Added layer-aware visual editing in the experimental card editor:
