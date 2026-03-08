@@ -138,7 +138,9 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       <div class="bst-card-editor-grid">
         <div class="bst-card-editor-pane">
           <div class="bst-card-editor-pane-title">Preview</div>
-          ${renderPreviewCard(draft, activeType)}
+          <div class="bst-card-editor-live-preview">
+            ${renderPreviewCard(draft, activeType)}
+          </div>
         </div>
         <div class="bst-card-editor-pane">
           <div class="bst-card-editor-pane-title">Inspector</div>
@@ -175,6 +177,12 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       render();
     });
 
+    const refreshPreview = (): void => {
+      const previewNode = modal.querySelector(".bst-card-editor-live-preview") as HTMLElement | null;
+      if (!previewNode) return;
+      previewNode.innerHTML = renderPreviewCard(draft, activeType);
+    };
+
     const bindNumber = (
       key: keyof CardVisualEditorStylePreset,
       min: number,
@@ -185,7 +193,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       if (!node) return;
       node.addEventListener("input", () => {
         writeOverrideRoot(draft, activeType, { [key]: readNumber(node, fallback, min, max) });
-        render();
+        refreshPreview();
       });
     };
     const bindText = (key: keyof CardVisualEditorStylePreset): void => {
@@ -193,7 +201,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       if (!node) return;
       node.addEventListener("input", () => {
         writeOverrideRoot(draft, activeType, { [key]: node.value.trim() });
-        render();
+        refreshPreview();
       });
     };
     bindText("backgroundColor");
