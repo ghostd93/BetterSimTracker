@@ -1,4 +1,4 @@
-## [2.2.4.6-exp1] - 2026-03-08
+## [2.2.4.6] - 2026-03-08
 ### Fixed
 - Fixed array-stat clear regression in manual tracker edit flow: deleting the last array item now persists as an explicit empty array ([]) instead of reviving stale previous values from fallback history.
 - Fixed storage normalization to preserve explicit empty array values for custom non-numeric stats.
