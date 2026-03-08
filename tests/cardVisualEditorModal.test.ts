@@ -5,6 +5,8 @@ import { createDefaultCardVisualEditorSettings } from "../src/cardVisualEditor";
 import {
   applyPresetToDraft,
   buildAppliedEditorSettings,
+  getInspectorFieldLabel,
+  getInspectorKeysForLayer,
   hasLayerStyleOverride,
   isLayerMovable,
   moveLayerByDirection,
@@ -227,4 +229,47 @@ test("parsePresetTransferPayload parses valid JSON payload and rejects invalid d
 
   const missingName = parsePresetTransferPayload(JSON.stringify({ base: {} }));
   assert.equal(missingName, null);
+});
+
+test("getInspectorKeysForLayer returns type-specific controls", () => {
+  const nodes = [
+    { id: "root", label: "Root", parentId: null, movable: false, type: "container" as const },
+    { id: "stat.affection", label: "Affection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const },
+    { id: "custom.clothes", label: "Clothes", parentId: "stats.nonNumeric.row", movable: true, type: "leaf" as const, previewKind: "array" as const },
+    { id: "custom.pose", label: "Pose", parentId: "stats.nonNumeric.row", movable: true, type: "leaf" as const, previewKind: "text" as const },
+  ];
+
+  const rootKeys = getInspectorKeysForLayer("root", nodes);
+  assert.ok(rootKeys.includes("fontFamily"));
+  assert.ok(rootKeys.includes("chipRadius"));
+  assert.ok(rootKeys.includes("barHeight"));
+
+  const numericKeys = getInspectorKeysForLayer("stat.affection", nodes);
+  assert.ok(numericKeys.includes("accentColor"));
+  assert.ok(numericKeys.includes("barHeight"));
+  assert.equal(numericKeys.includes("fontFamily"), false);
+
+  const arrayKeys = getInspectorKeysForLayer("custom.clothes", nodes);
+  assert.ok(arrayKeys.includes("chipRadius"));
+  assert.equal(arrayKeys.includes("barHeight"), false);
+
+  const textKeys = getInspectorKeysForLayer("custom.pose", nodes);
+  assert.ok(textKeys.includes("fontFamily"));
+  assert.ok(textKeys.includes("lineHeight"));
+});
+
+test("getInspectorFieldLabel adapts labels to stat presentation kind", () => {
+  const nodes = [
+    { id: "root", label: "Root", parentId: null, movable: false, type: "container" as const },
+    { id: "stat.affection", label: "Affection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const },
+    { id: "custom.clothes", label: "Clothes", parentId: "stats.nonNumeric.row", movable: true, type: "leaf" as const, previewKind: "array" as const },
+    { id: "thought.panel", label: "Thought", parentId: "body", movable: false, type: "container" as const },
+  ];
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
+
+  assert.equal(getInspectorFieldLabel("accentColor", "stat.affection", nodeById), "Bar accent color");
+  assert.equal(getInspectorFieldLabel("padding", "stat.affection", nodeById), "Row padding");
+  assert.equal(getInspectorFieldLabel("valueColor", "custom.clothes", nodeById), "Chip/value color");
+  assert.equal(getInspectorFieldLabel("padding", "thought.panel", nodeById), "Thought padding");
+  assert.equal(getInspectorFieldLabel("backgroundColor", "root", nodeById), "Block background");
 });

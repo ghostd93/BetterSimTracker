@@ -1,3 +1,11 @@
+## [2.2.4.6-exp7] - 2026-03-08
+### Changed
+- Reworked Visual Editor toolbar structure so card/viewport controls and preset actions read as separate logical sections with clearer guidance text.
+- Simplified preset flow by keeping `New preset` as the dedicated creation entry point and moving naming into the save panel instead of mixing it into the main toolbar.
+- Refined layer tree rows with clearer placement text (`Inside ...`), disabled move controls when a stat cannot move further, and stronger drop markers that show exact insertion line more clearly.
+- Reorganized Inspector into logical groups (`Surface`, `Typography`, `Presentation`, `Spacing`) with layer-aware explanations so users can understand what each control affects before changing it.
+- Renamed Inspector field labels contextually (for example `Bar accent color`, `Thought padding`, `Chip/value color`) so the same underlying token no longer appears as an ambiguous generic input across unrelated stat types.
+
 ## [2.2.4.6-exp6] - 2026-03-08
 ### Changed
 - Refined Visual Editor top toolbar with monochrome iconography and normalized control alignment/height across tabs, viewport buttons, preset select/input, and action buttons.

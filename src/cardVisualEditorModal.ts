@@ -401,6 +401,29 @@ function renderLayerTree(
   }
   const defaultIndex = new Map(nodes.map((node, index) => [node.id, index]));
   const movableOrder = new Map(orderedMovable.map((id, index) => [id, index]));
+  const getSiblingMoveState = (node: LayerNode): { canMoveUp: boolean; canMoveDown: boolean } => {
+    if (!node.movable) return { canMoveUp: false, canMoveDown: false };
+    const siblingIds = (childrenMap.get(node.parentId ?? "__root__") ?? [])
+      .filter(child => child.movable)
+      .sort((a, b) => {
+        const ai = movableOrder.get(a.id);
+        const bi = movableOrder.get(b.id);
+        if (ai !== undefined && bi !== undefined) return ai - bi;
+        return (defaultIndex.get(a.id) ?? 0) - (defaultIndex.get(b.id) ?? 0);
+      })
+      .map(child => child.id);
+    const index = siblingIds.indexOf(node.id);
+    return {
+      canMoveUp: index > 0,
+      canMoveDown: index >= 0 && index < siblingIds.length - 1,
+    };
+  };
+  const pathLabel = (node: LayerNode): string => {
+    if (node.id === "root") return "Card shell";
+    if (!node.parentId) return "Top level";
+    const parent = nodes.find(row => row.id === node.parentId);
+    return parent ? `Inside ${parent.label}` : node.parentId;
+  };
   const renderBranch = (parentId: string | null, depth: number): string => {
     const key = parentId ?? "__root__";
     const children = [...(childrenMap.get(key) ?? [])].sort((a, b) => {
@@ -409,7 +432,9 @@ function renderLayerTree(
       if (ai !== undefined && bi !== undefined) return ai - bi;
       return (defaultIndex.get(a.id) ?? 0) - (defaultIndex.get(b.id) ?? 0);
     });
-    return children.map(node => `
+    return children.map(node => {
+      const moveState = getSiblingMoveState(node);
+      return `
       <div class="bst-card-editor-layer-row ${selectedLayerId === node.id ? "is-active" : ""} ${node.movable ? "has-actions" : "is-locked-row"}" data-layer-row="${escapeHtml(node.id)}" style="--bst-layer-depth:${String(depth)};">
         <button
           type="button"
@@ -422,18 +447,19 @@ function renderLayerTree(
             <span class="bst-card-editor-layer-role">${escapeHtml(roleLabel(node))}</span>
             <span class="bst-card-editor-layer-lock ${node.movable ? "is-movable" : "is-locked"}">${lockBadge(node)}</span>
           </span>
-          <span class="bst-card-editor-layer-id" title="${escapeHtml(node.id)}">${escapeHtml(node.id)}</span>
+          <span class="bst-card-editor-layer-id" title="${escapeHtml(node.id)}">${escapeHtml(pathLabel(node))}</span>
         </button>
         ${node.movable
           ? `<div class="bst-card-editor-layer-actions">
-               <button type="button" class="bst-card-editor-layer-mini bst-card-editor-layer-mini-icon" data-layer-up="${escapeHtml(node.id)}" title="Move up within siblings" aria-label="Move up">&#8593;</button>
-               <button type="button" class="bst-card-editor-layer-mini bst-card-editor-layer-mini-icon" data-layer-down="${escapeHtml(node.id)}" title="Move down within siblings" aria-label="Move down">&#8595;</button>
+               <button type="button" class="bst-card-editor-layer-mini bst-card-editor-layer-mini-icon" data-layer-up="${escapeHtml(node.id)}" title="Move earlier within this section" aria-label="Move earlier" ${moveState.canMoveUp ? "" : "disabled"}>&uarr;</button>
+               <button type="button" class="bst-card-editor-layer-mini bst-card-editor-layer-mini-icon" data-layer-down="${escapeHtml(node.id)}" title="Move later within this section" aria-label="Move later" ${moveState.canMoveDown ? "" : "disabled"}>&darr;</button>
              </div>`
           : ""
         }
       </div>
       ${renderBranch(node.id, depth + 1)}
-    `).join("");
+    `;
+    }).join("");
   };
   return renderBranch(null, 0);
 }
@@ -491,6 +517,174 @@ function shouldShowInspectorField(
   inspectorKeys: Array<keyof CardVisualEditorStylePreset>,
 ): boolean {
   return inspectorKeys.includes(key);
+}
+
+function describeLayerForInspector(layerId: string, nodeById: Map<string, LayerNode>): string {
+  const node = nodeById.get(layerId);
+  if (layerId === "root") return "Controls the whole card shell: card background, global spacing, typography baseline, and default tokens inherited by child layers.";
+  if (!node) return "Controls the selected layer styling.";
+  if (node.type === "container") {
+    if (layerId.includes("header")) return "Controls the header block that contains the card title and action pills.";
+    if (layerId.includes("body")) return "Controls the main content block that wraps the card sections.";
+    if (layerId.includes("numeric")) return "Controls the numeric-stat section wrapper. Child stat layers inherit from here unless overridden.";
+    if (layerId.includes("nonNumeric") || layerId.includes("array")) return "Controls the custom-stat section wrapper. Child stat layers inherit from here unless overridden.";
+    if (layerId.includes("mood")) return "Controls the mood section wrapper and default mood chip/avatar spacing.";
+    if (layerId.includes("thought")) return "Controls the thought panel wrapper.";
+    return "Controls this section wrapper and the defaults inherited by child layers inside it.";
+  }
+  switch (node.previewKind) {
+    case "numeric":
+      return "Controls a numeric stat row: label/value typography, bar color, bar height, and row spacing.";
+    case "array":
+      return "Controls an array stat presentation: chip container, chip radius, value spacing, and wrapping rhythm.";
+    case "date_time":
+      return "Controls date/time stat chips and the value container they sit in.";
+    case "enum_single":
+    case "boolean":
+      return "Controls compact chip-like values such as mood or boolean states.";
+    case "text":
+      return layerId.includes("thought")
+        ? "Controls the expanded thought text panel."
+        : "Controls text stat label/value styling and text container spacing.";
+    default:
+      return "Controls the selected stat presentation.";
+  }
+}
+
+function describeInspectorField(
+  key: keyof CardVisualEditorStylePreset,
+  layerId: string,
+  nodeById: Map<string, LayerNode>,
+): string {
+  const node = nodeById.get(layerId);
+  const kind = node?.previewKind;
+  switch (key) {
+    case "backgroundColor":
+      return layerId === "root" ? "Main card background." : "Background for this layer or value container.";
+    case "textColor":
+      return "Base text color for this layer.";
+    case "labelColor":
+      return "Color of labels such as stat names.";
+    case "valueColor":
+      return "Color of stat values, chips, or thought text.";
+    case "accentColor":
+      return "Used mainly by numeric bars and accented highlights.";
+    case "borderColor":
+      return "Border color around this block or value container.";
+    case "fontFamily":
+      return "Optional font override for this layer only.";
+    case "backgroundOpacity":
+      return "Transparency of this layer background.";
+    case "borderWidth":
+      return "Thickness of this layer border.";
+    case "borderRadius":
+      return "Corner rounding for this block.";
+    case "fontSize":
+      return "Base font size inherited by child text.";
+    case "titleFontSize":
+      return "Size of header title text.";
+    case "labelFontSize":
+      return "Size of stat labels.";
+    case "valueFontSize":
+      return "Size of stat values or chip text.";
+    case "lineHeight":
+      return "Vertical text spacing inside this layer.";
+    case "letterSpacing":
+      return "Horizontal text tracking for this layer.";
+    case "barHeight":
+      return "Height of the numeric progress bar.";
+    case "chipRadius":
+      return "Corner rounding for value chips.";
+    case "padding":
+      if (kind === "numeric") return "Inner spacing around the stat row head and bar.";
+      if (kind === "array" || kind === "date_time" || kind === "enum_single" || kind === "boolean" || kind === "text") return "Inner spacing inside the value container/chip group.";
+      return "Inner spacing inside this block.";
+    case "rowGap":
+      return "Gap between rows or stacked items in this layer.";
+    case "sectionGap":
+      return "Gap between major sections inside this block.";
+    default:
+      return "";
+  }
+}
+
+export function getInspectorFieldLabel(
+  key: keyof CardVisualEditorStylePreset,
+  layerId: string,
+  nodeById: Map<string, LayerNode>,
+): string {
+  const node = nodeById.get(layerId);
+  const kind = node?.previewKind;
+  switch (key) {
+    case "backgroundColor":
+      return node?.type === "container" || layerId === "root" ? "Block background" : "Value background";
+    case "textColor":
+      return "Base text color";
+    case "labelColor":
+      return "Label color";
+    case "valueColor":
+      if (kind === "array" || kind === "date_time" || kind === "enum_single" || kind === "boolean") return "Chip/value color";
+      if (layerId.includes("thought")) return "Thought text color";
+      return "Value text color";
+    case "accentColor":
+      return kind === "numeric" ? "Bar accent color" : "Accent color";
+    case "borderColor":
+      return "Border color";
+    case "fontFamily":
+      return "Font family";
+    case "backgroundOpacity":
+      return "Background opacity";
+    case "borderWidth":
+      return "Border width";
+    case "borderRadius":
+      return kind === "array" || kind === "date_time" || kind === "enum_single" || kind === "boolean" ? "Container radius" : "Corner radius";
+    case "fontSize":
+      return "Base font size";
+    case "titleFontSize":
+      return "Title size";
+    case "labelFontSize":
+      return "Label size";
+    case "valueFontSize":
+      return kind === "array" || kind === "date_time" || kind === "enum_single" || kind === "boolean" ? "Chip/value size" : "Value size";
+    case "lineHeight":
+      return "Line height";
+    case "letterSpacing":
+      return "Letter spacing";
+    case "barHeight":
+      return "Bar thickness";
+    case "chipRadius":
+      return "Chip radius";
+    case "padding":
+      if (kind === "array" || kind === "date_time" || kind === "enum_single" || kind === "boolean") return "Value padding";
+      if (kind === "numeric") return "Row padding";
+      if (layerId.includes("thought")) return "Thought padding";
+      return "Inner padding";
+    case "rowGap":
+      if (kind === "array" || kind === "date_time") return "Chip row gap";
+      return "Item gap";
+    case "sectionGap":
+      return "Section gap";
+    default:
+      return key;
+  }
+}
+
+function describeInspectorGroup(group: "surface" | "type" | "text" | "spacing", layerId: string, nodeById: Map<string, LayerNode>): string {
+  const node = nodeById.get(layerId);
+  const kind = node?.previewKind;
+  switch (group) {
+    case "surface":
+      return "Shell styling for the selected layer: background, borders, opacity, and color accents.";
+    case "type":
+      if (kind === "numeric") return "Numeric stat presentation: bar color, label/value balance, and progress density.";
+      if (kind === "array" || kind === "date_time" || kind === "enum_single" || kind === "boolean") return "Value-chip presentation: chip shape, value emphasis, and container styling.";
+      if (layerId === "root") return "Global card tokens inherited by all child layers unless overridden.";
+      return "Layer-specific presentation controls for this selected block.";
+    case "text":
+      return "Typography for the selected layer: font family, size, contrast, and readability.";
+    case "spacing":
+      return "Spacing and rhythm for this layer: inner padding, row separation, and section breathing room.";
+  }
 }
 
 function moveLayerByDirectionWithinSiblings(
@@ -584,6 +778,13 @@ export function resolvePreviewRootStyle(
 ): CardVisualEditorStylePreset {
   const base = cloneCardStyle(draft.base);
   return { ...base.root, ...resolveOverrideRoot(draft, type) };
+}
+
+export function getInspectorKeysForLayer(
+  layerId: string,
+  nodes: LayerNode[],
+): Array<keyof CardVisualEditorStylePreset> {
+  return resolveInspectorKeys(layerId, getLayerNodeById(nodes));
 }
 
 export function resolvePreviewLayerStyle(
@@ -693,6 +894,9 @@ function renderPreviewCard(
     border-radius:${String(root.borderRadius)}px;
     opacity:${String(root.backgroundOpacity)};
     font-size:${String(root.fontSize)}px;
+    font-family:${escapeHtml(root.fontFamily || "inherit")};
+    line-height:${String(root.lineHeight)};
+    letter-spacing:${String(root.letterSpacing)}px;
     padding:${String(root.padding)}px;
     box-shadow:${root.shadowEnabled ? `0 0 ${String(root.shadowBlur)}px ${String(root.shadowSpread)}px ${escapeHtml(root.shadowColor || "#00000044")}` : "none"};
     ${root.visible === false ? "display:none;" : ""}
@@ -746,7 +950,13 @@ function renderPreviewCard(
     const label = layerLabelById[statId] || statId.replace(/^stat\./, "");
     return `
       <div class="bst-card-editor-preview-bar-row${selectedClass(statId)}" data-layer="${statId}">
-        <div class="bst-card-editor-preview-bar-head" style="font-size:${String(token.labelFontSize || root.labelFontSize)}px;color:${escapeHtml(token.labelColor || root.labelColor || "#c7d0e0")}">
+        <div class="bst-card-editor-preview-bar-head" style="
+          font-size:${String(token.labelFontSize || root.labelFontSize)}px;
+          color:${escapeHtml(token.labelColor || root.labelColor || "#c7d0e0")};
+          font-family:${escapeHtml(token.fontFamily || root.fontFamily || "inherit")};
+          line-height:${String(token.lineHeight || root.lineHeight)};
+          letter-spacing:${String(token.letterSpacing || root.letterSpacing)}px;
+          padding:${String(Math.max(0, token.padding ?? 0))}px;">
           <span>${escapeHtml(label)}</span><span>${String(value)}%</span>
         </div>
         <div class="bst-card-editor-preview-bar-track" style="height:${String(token.barHeight || root.barHeight)}px;border-radius:${String(token.barHeight || root.barHeight)}px;background:rgba(255,255,255,0.16);">
@@ -787,8 +997,11 @@ function renderPreviewCard(
           color:${escapeHtml(token.valueColor || root.valueColor || "#f1f3f8")};
           border:${String(token.borderWidth ?? 1)}px solid ${escapeHtml(token.borderColor || "rgba(143,180,255,0.35)")};
           background:${escapeHtml(token.backgroundColor || "rgba(18, 30, 52, 0.58)")};
-          padding:${chipLike ? "6px 8px" : "8px 10px"};
+          padding:${String(Math.max(4, token.padding ?? root.padding))}px;
           font-size:${String(token.valueFontSize || root.valueFontSize)}px;
+          font-family:${escapeHtml(token.fontFamily || root.fontFamily || "inherit")};
+          line-height:${String(token.lineHeight || root.lineHeight)};
+          letter-spacing:${String(token.letterSpacing || root.letterSpacing)}px;
         ">${chipLike ? chipContent : escapeHtml(value)}</div>
       </div>
     `;
@@ -861,7 +1074,10 @@ function renderPreviewCard(
         background:${escapeHtml(thoughtToken.backgroundColor || "rgba(13,20,34,0.68)")};
         color:${escapeHtml(thoughtToken.valueColor || root.valueColor || "#f1f3f8")};
         padding:${String(Math.max(8, thoughtToken.padding || root.padding))}px;
-        font-size:${String(thoughtToken.valueFontSize || root.valueFontSize)}px;">
+        font-size:${String(thoughtToken.valueFontSize || root.valueFontSize)}px;
+        font-family:${escapeHtml(thoughtToken.fontFamily || root.fontFamily || "inherit")};
+        line-height:${String(thoughtToken.lineHeight || root.lineHeight)};
+        letter-spacing:${String(thoughtToken.letterSpacing || root.letterSpacing)}px;">
         I am relieved, but still alert. I need to keep the scene stable and safe.
       </div>
     `
@@ -893,7 +1109,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
   let previewViewport: PreviewViewport = "desktop";
   let selectedPresetId = draft.activePresetId || "";
   let presetNameDraft = "";
-  let presetTransferMode: "none" | "import" | "export" = "none";
+  let presetTransferMode: "none" | "new" | "import" | "export" = "none";
   let presetTransferText = "";
   let presetTransferError = "";
   let draggedLayerId: string | null = null;
@@ -932,6 +1148,56 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
     }
     const root = resolvePreviewLayerStyle(draft, activeType, selectedLayerId);
     const inspectorKeys = resolveInspectorKeys(selectedLayerId, nodeById);
+    const layerDescription = describeLayerForInspector(selectedLayerId, nodeById);
+    const renderInspectorField = (
+      key: keyof CardVisualEditorStylePreset,
+      inputMarkup: string,
+    ): string => shouldShowInspectorField(key, inspectorKeys)
+      ? `<label class="bst-card-editor-field">${escapeHtml(getInspectorFieldLabel(key, selectedLayerId, nodeById))}${inputMarkup}<span class="bst-card-editor-field-hint">${escapeHtml(describeInspectorField(key, selectedLayerId, nodeById))}</span></label>`
+      : "";
+    const renderInspectorGroup = (
+      title: string,
+      description: string,
+      keys: Array<keyof CardVisualEditorStylePreset>,
+      renderers: Partial<Record<keyof CardVisualEditorStylePreset, string>>,
+    ): string => {
+      const visibleRows = keys.map(key => renderers[key] || "").filter(Boolean).join("");
+      if (!visibleRows) return "";
+      return `
+        <section class="bst-card-editor-inspector-group">
+          <div class="bst-card-editor-inspector-group-head">
+            <div class="bst-card-editor-inspector-group-title">${escapeHtml(title)}</div>
+            <div class="bst-card-editor-inspector-group-desc">${escapeHtml(description)}</div>
+          </div>
+          <div class="bst-card-editor-inspector-group-fields">
+            ${visibleRows}
+          </div>
+        </section>
+      `;
+    };
+    const inspectorFieldMarkup: Partial<Record<keyof CardVisualEditorStylePreset, string>> = {
+      backgroundColor: renderInspectorField("backgroundColor", `<input data-k="backgroundColor" type="text" value="${escapeHtml(root.backgroundColor || "")}" placeholder="#1a2134 / rgb(...)">`),
+      textColor: renderInspectorField("textColor", `<input data-k="textColor" type="text" value="${escapeHtml(root.textColor || "")}" placeholder="#f1f3f8">`),
+      labelColor: renderInspectorField("labelColor", `<input data-k="labelColor" type="text" value="${escapeHtml(root.labelColor || "")}" placeholder="#c7d0e0">`),
+      valueColor: renderInspectorField("valueColor", `<input data-k="valueColor" type="text" value="${escapeHtml(root.valueColor || "")}" placeholder="#f1f3f8">`),
+      accentColor: renderInspectorField("accentColor", `<input data-k="accentColor" type="text" value="${escapeHtml(root.accentColor || "")}" placeholder="#8fb4ff">`),
+      borderColor: renderInspectorField("borderColor", `<input data-k="borderColor" type="text" value="${escapeHtml(root.borderColor || "")}" placeholder="#3a4966">`),
+      fontFamily: renderInspectorField("fontFamily", `<input data-k="fontFamily" type="text" value="${escapeHtml(root.fontFamily || "")}" placeholder="inherit">`),
+      backgroundOpacity: renderInspectorField("backgroundOpacity", `<input data-k="backgroundOpacity" type="number" min="0" max="1" step="0.01" value="${String(root.backgroundOpacity)}">`),
+      borderWidth: renderInspectorField("borderWidth", `<input data-k="borderWidth" type="number" min="0" max="12" step="0.1" value="${String(root.borderWidth)}">`),
+      borderRadius: renderInspectorField("borderRadius", `<input data-k="borderRadius" type="number" min="0" max="48" value="${String(root.borderRadius)}">`),
+      fontSize: renderInspectorField("fontSize", `<input data-k="fontSize" type="number" min="10" max="32" value="${String(root.fontSize)}">`),
+      titleFontSize: renderInspectorField("titleFontSize", `<input data-k="titleFontSize" type="number" min="10" max="48" value="${String(root.titleFontSize)}">`),
+      labelFontSize: renderInspectorField("labelFontSize", `<input data-k="labelFontSize" type="number" min="10" max="48" value="${String(root.labelFontSize)}">`),
+      valueFontSize: renderInspectorField("valueFontSize", `<input data-k="valueFontSize" type="number" min="10" max="48" value="${String(root.valueFontSize)}">`),
+      lineHeight: renderInspectorField("lineHeight", `<input data-k="lineHeight" type="number" min="1" max="2" step="0.05" value="${String(root.lineHeight)}">`),
+      letterSpacing: renderInspectorField("letterSpacing", `<input data-k="letterSpacing" type="number" min="-1" max="4" step="0.1" value="${String(root.letterSpacing)}">`),
+      barHeight: renderInspectorField("barHeight", `<input data-k="barHeight" type="number" min="1" max="24" value="${String(root.barHeight)}">`),
+      chipRadius: renderInspectorField("chipRadius", `<input data-k="chipRadius" type="number" min="0" max="999" value="${String(root.chipRadius)}">`),
+      padding: renderInspectorField("padding", `<input data-k="padding" type="number" min="0" max="64" value="${String(root.padding)}">`),
+      rowGap: renderInspectorField("rowGap", `<input data-k="rowGap" type="number" min="0" max="64" value="${String(root.rowGap)}">`),
+      sectionGap: renderInspectorField("sectionGap", `<input data-k="sectionGap" type="number" min="0" max="64" value="${String(root.sectionGap)}">`),
+    };
     modal.innerHTML = `
       <div class="bst-card-editor-head">
         <div class="bst-card-editor-title">Visual Card Editor (Experimental)</div>
@@ -940,36 +1206,41 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       <div class="bst-card-editor-toolbar">
         <div class="bst-card-editor-primary">
           <div class="bst-card-editor-group-title">Card + viewport</div>
-          <div class="bst-card-editor-tabs">
-            <button type="button" data-tab="character" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "character" ? "is-active" : ""}">&#9679; Character</button>
-            <button type="button" data-tab="user" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "user" ? "is-active" : ""}">&#9675; User</button>
-            <button type="button" data-tab="scene" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "scene" ? "is-active" : ""}">&#9635; Scene</button>
-          </div>
-          <div class="bst-card-editor-preview-viewport">
-            <button type="button" data-vp="desktop" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "desktop" ? "is-active" : ""}">&#9645; Desktop</button>
-            <button type="button" data-vp="mobile" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "mobile" ? "is-active" : ""}">&#9646; Mobile</button>
+          <div class="bst-card-editor-group-note">Choose which real card type you are styling and which preview size to inspect.</div>
+          <div class="bst-card-editor-primary-controls">
+            <div class="bst-card-editor-tabs">
+              <button type="button" data-tab="character" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "character" ? "is-active" : ""}">Character</button>
+              <button type="button" data-tab="user" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "user" ? "is-active" : ""}">User</button>
+              <button type="button" data-tab="scene" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "scene" ? "is-active" : ""}">Scene</button>
+            </div>
+            <div class="bst-card-editor-preview-viewport">
+              <button type="button" data-vp="desktop" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "desktop" ? "is-active" : ""}">Desktop</button>
+              <button type="button" data-vp="mobile" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "mobile" ? "is-active" : ""}">Mobile</button>
+            </div>
           </div>
         </div>
         <div class="bst-card-editor-presets">
           <div class="bst-card-editor-group-title">Presets + history</div>
-          <div class="bst-card-editor-history-controls">
-            <select data-k="presetSelect" class="bst-input bst-card-editor-preset-select">
-              <option value="">Preset: none</option>
-              ${draft.presets.map(preset => `
-                <option value="${escapeHtml(preset.id)}" ${selectedPresetId === preset.id ? "selected" : ""}>${escapeHtml(preset.name)}</option>
-              `).join("")}
-            </select>
-            <input data-k="presetName" class="bst-input bst-card-editor-preset-name" type="text" maxlength="80" value="${escapeHtml(presetNameDraft)}" placeholder="Preset name">
-            <button type="button" data-act="preset-save" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Save current style as preset">&#10010; Save</button>
-            ${selectedPresetId
-              ? `<button type="button" data-act="preset-load" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Load selected preset">&#10515; Load</button>
-                 <button type="button" data-act="preset-delete" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Delete selected preset">&#10006; Delete</button>
-                 <button type="button" data-act="preset-export" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Export selected preset as JSON">&#8595; Export</button>`
-              : ""
-            }
-            <button type="button" data-act="preset-import" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Import preset from JSON">&#8593; Import</button>
-            <button type="button" data-act="undo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${historyStack.length === 0 ? "disabled" : ""}>&#8630; Undo</button>
-            <button type="button" data-act="redo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${futureStack.length === 0 ? "disabled" : ""}>&#8631; Redo</button>
+          <div class="bst-card-editor-group-note">Save complete editor layouts, load earlier drafts, or exchange presets as JSON.</div>
+          <div class="bst-card-editor-presets-controls">
+            <div class="bst-card-editor-history-controls">
+              <select data-k="presetSelect" class="bst-input bst-card-editor-preset-select" aria-label="Current preset">
+                <option value="">Current preset: none</option>
+                ${draft.presets.map(preset => `
+                  <option value="${escapeHtml(preset.id)}" ${selectedPresetId === preset.id ? "selected" : ""}>${escapeHtml(preset.name)}</option>
+                `).join("")}
+              </select>
+              <button type="button" data-act="preset-new" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Create a new preset from current style">New preset</button>
+              ${selectedPresetId
+                ? `<button type="button" data-act="preset-load" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Load selected preset">Load</button>
+                   <button type="button" data-act="preset-delete" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Delete selected preset">Delete</button>
+                   <button type="button" data-act="preset-export" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Export selected preset as JSON">Export</button>`
+                : ""
+              }
+              <button type="button" data-act="preset-import" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Import preset from JSON">Import</button>
+              <button type="button" data-act="undo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${historyStack.length === 0 ? "disabled" : ""}>Undo</button>
+              <button type="button" data-act="redo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${futureStack.length === 0 ? "disabled" : ""}>Redo</button>
+            </div>
           </div>
         </div>
       </div>
@@ -979,12 +1250,16 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       ${presetTransferMode === "none" ? "" : `
         <div class="bst-card-editor-transfer-panel">
           <div class="bst-card-editor-transfer-head">
-            <strong>${presetTransferMode === "export" ? "Preset Export" : "Preset Import"}</strong>
+            <strong>${presetTransferMode === "export" ? "Preset Export" : presetTransferMode === "new" ? "New Preset" : "Preset Import"}</strong>
           </div>
-          <textarea data-k="presetTransferText" rows="7" placeholder="${presetTransferMode === "export" ? "" : "Paste preset JSON here..."}">${escapeHtml(presetTransferText)}</textarea>
+          ${presetTransferMode === "new"
+            ? `<input data-k="presetNameDialog" class="bst-input" type="text" maxlength="80" value="${escapeHtml(presetNameDraft)}" placeholder="Preset name">`
+            : `<textarea data-k="presetTransferText" rows="7" placeholder="${presetTransferMode === "export" ? "" : "Paste preset JSON here..."}">${escapeHtml(presetTransferText)}</textarea>`
+          }
           ${presetTransferError ? `<div class="bst-card-editor-transfer-error">${escapeHtml(presetTransferError)}</div>` : ""}
           <div class="bst-card-editor-transfer-actions">
             ${presetTransferMode === "import" ? `<button type="button" data-act="preset-import-apply" class="bst-btn">Import Preset</button>` : ""}
+            ${presetTransferMode === "new" ? `<button type="button" data-act="preset-new-save" class="bst-btn">Save Preset</button>` : ""}
             <button type="button" data-act="preset-transfer-close" class="bst-btn bst-btn-soft">Close</button>
           </div>
         </div>
@@ -992,6 +1267,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       <div class="bst-card-editor-grid">
         <div class="bst-card-editor-pane">
           <div class="bst-card-editor-pane-title">Preview</div>
+          <div class="bst-card-editor-help">Preview uses realistic sample data near longer values so spacing, chips, thought length, and dense stat layouts are visible while editing.</div>
           <div class="bst-card-editor-live-preview" style="max-width:${String(resolvePreviewViewportWidth(previewViewport))}px;">
             ${renderPreviewCard(draft, activeType, selectedLayerId, getLayerIdsForType(layerCatalog, activeType), layerLabelById, nodes)}
           </div>
@@ -1003,33 +1279,17 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
               : ""
             }
           </div>
+          <div class="bst-card-editor-help">${escapeHtml(layerDescription)}</div>
           <div class="bst-card-editor-inspector">
-            ${shouldShowInspectorField("backgroundColor", inspectorKeys) ? `<label class="bst-card-editor-field">Background <input data-k="backgroundColor" type="text" value="${escapeHtml(root.backgroundColor || "")}" placeholder="#1a2134 / rgb(...)"></label>` : ""}
-            ${shouldShowInspectorField("textColor", inspectorKeys) ? `<label class="bst-card-editor-field">Text color <input data-k="textColor" type="text" value="${escapeHtml(root.textColor || "")}" placeholder="#f1f3f8"></label>` : ""}
-            ${shouldShowInspectorField("labelColor", inspectorKeys) ? `<label class="bst-card-editor-field">Label color <input data-k="labelColor" type="text" value="${escapeHtml(root.labelColor || "")}" placeholder="#c7d0e0"></label>` : ""}
-            ${shouldShowInspectorField("valueColor", inspectorKeys) ? `<label class="bst-card-editor-field">Value color <input data-k="valueColor" type="text" value="${escapeHtml(root.valueColor || "")}" placeholder="#f1f3f8"></label>` : ""}
-            ${shouldShowInspectorField("accentColor", inspectorKeys) ? `<label class="bst-card-editor-field">Accent color <input data-k="accentColor" type="text" value="${escapeHtml(root.accentColor || "")}" placeholder="#8fb4ff"></label>` : ""}
-            ${shouldShowInspectorField("borderColor", inspectorKeys) ? `<label class="bst-card-editor-field">Border color <input data-k="borderColor" type="text" value="${escapeHtml(root.borderColor || "")}" placeholder="#3a4966"></label>` : ""}
-            ${shouldShowInspectorField("fontFamily", inspectorKeys) ? `<label class="bst-card-editor-field">Font family <input data-k="fontFamily" type="text" value="${escapeHtml(root.fontFamily || "")}" placeholder="inherit"></label>` : ""}
-            ${shouldShowInspectorField("backgroundOpacity", inspectorKeys) ? `<label class="bst-card-editor-field">Opacity <input data-k="backgroundOpacity" type="number" min="0" max="1" step="0.01" value="${String(root.backgroundOpacity)}"></label>` : ""}
-            ${shouldShowInspectorField("borderWidth", inspectorKeys) ? `<label class="bst-card-editor-field">Border width <input data-k="borderWidth" type="number" min="0" max="12" step="0.1" value="${String(root.borderWidth)}"></label>` : ""}
-            ${shouldShowInspectorField("borderRadius", inspectorKeys) ? `<label class="bst-card-editor-field">Border radius <input data-k="borderRadius" type="number" min="0" max="48" value="${String(root.borderRadius)}"></label>` : ""}
-            ${shouldShowInspectorField("fontSize", inspectorKeys) ? `<label class="bst-card-editor-field">Font size <input data-k="fontSize" type="number" min="10" max="32" value="${String(root.fontSize)}"></label>` : ""}
-            ${shouldShowInspectorField("titleFontSize", inspectorKeys) ? `<label class="bst-card-editor-field">Title size <input data-k="titleFontSize" type="number" min="10" max="48" value="${String(root.titleFontSize)}"></label>` : ""}
-            ${shouldShowInspectorField("labelFontSize", inspectorKeys) ? `<label class="bst-card-editor-field">Label size <input data-k="labelFontSize" type="number" min="10" max="48" value="${String(root.labelFontSize)}"></label>` : ""}
-            ${shouldShowInspectorField("valueFontSize", inspectorKeys) ? `<label class="bst-card-editor-field">Value size <input data-k="valueFontSize" type="number" min="10" max="48" value="${String(root.valueFontSize)}"></label>` : ""}
-            ${shouldShowInspectorField("lineHeight", inspectorKeys) ? `<label class="bst-card-editor-field">Line height <input data-k="lineHeight" type="number" min="1" max="2" step="0.05" value="${String(root.lineHeight)}"></label>` : ""}
-            ${shouldShowInspectorField("letterSpacing", inspectorKeys) ? `<label class="bst-card-editor-field">Letter spacing <input data-k="letterSpacing" type="number" min="-1" max="4" step="0.1" value="${String(root.letterSpacing)}"></label>` : ""}
-            ${shouldShowInspectorField("barHeight", inspectorKeys) ? `<label class="bst-card-editor-field">Bar height <input data-k="barHeight" type="number" min="1" max="24" value="${String(root.barHeight)}"></label>` : ""}
-            ${shouldShowInspectorField("chipRadius", inspectorKeys) ? `<label class="bst-card-editor-field">Chip radius <input data-k="chipRadius" type="number" min="0" max="999" value="${String(root.chipRadius)}"></label>` : ""}
-            ${shouldShowInspectorField("padding", inspectorKeys) ? `<label class="bst-card-editor-field">Padding <input data-k="padding" type="number" min="0" max="64" value="${String(root.padding)}"></label>` : ""}
-            ${shouldShowInspectorField("rowGap", inspectorKeys) ? `<label class="bst-card-editor-field">Row gap <input data-k="rowGap" type="number" min="0" max="64" value="${String(root.rowGap)}"></label>` : ""}
-            ${shouldShowInspectorField("sectionGap", inspectorKeys) ? `<label class="bst-card-editor-field">Section gap <input data-k="sectionGap" type="number" min="0" max="64" value="${String(root.sectionGap)}"></label>` : ""}
+            ${renderInspectorGroup("Surface", describeInspectorGroup("surface", selectedLayerId, nodeById), ["backgroundColor", "backgroundOpacity", "borderColor", "borderWidth", "borderRadius", "accentColor"], inspectorFieldMarkup)}
+            ${renderInspectorGroup("Typography", describeInspectorGroup("text", selectedLayerId, nodeById), ["textColor", "labelColor", "valueColor", "fontFamily", "fontSize", "titleFontSize", "labelFontSize", "valueFontSize", "lineHeight", "letterSpacing"], inspectorFieldMarkup)}
+            ${renderInspectorGroup("Presentation", describeInspectorGroup("type", selectedLayerId, nodeById), ["barHeight", "chipRadius"], inspectorFieldMarkup)}
+            ${renderInspectorGroup("Spacing", describeInspectorGroup("spacing", selectedLayerId, nodeById), ["padding", "rowGap", "sectionGap"], inspectorFieldMarkup)}
           </div>
         </div>
         <div class="bst-card-editor-pane">
           <div class="bst-card-editor-pane-title">Layers (tree)</div>
-          <div class="bst-card-editor-help">Locked layers stay fixed. Drag movable stat layers; drop line shows exact target.</div>
+          <div class="bst-card-editor-help">Only movable stat layers can be reordered. Root and section wrappers stay fixed so the card structure remains valid.</div>
           <div class="bst-card-editor-layers">
             ${renderLayerTree(nodes, layerIds, selectedLayerId, draft, activeType)}
           </div>
@@ -1142,7 +1402,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       selectedPresetId = String((event.target as HTMLSelectElement).value || "");
       render();
     });
-    (modal.querySelector('[data-k="presetName"]') as HTMLInputElement | null)?.addEventListener("input", (event) => {
+    (modal.querySelector('[data-k="presetNameDialog"]') as HTMLInputElement | null)?.addEventListener("input", (event) => {
       presetNameDraft = String((event.target as HTMLInputElement).value || "");
     });
     (modal.querySelector('[data-k="presetTransferText"]') as HTMLTextAreaElement | null)?.addEventListener("input", (event) => {
@@ -1272,9 +1532,19 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
     (modal.querySelector('[data-act="redo"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
       applyRedo();
     });
-    (modal.querySelector('[data-act="preset-save"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
+    (modal.querySelector('[data-act="preset-new"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
+      presetNameDraft = "";
+      presetTransferError = "";
+      presetTransferMode = "new";
+      render();
+    });
+    (modal.querySelector('[data-act="preset-new-save"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
       const name = presetNameDraft.trim();
-      if (!name) return;
+      if (!name) {
+        presetTransferError = "Preset name is required.";
+        render();
+        return;
+      }
       captureHistory();
       const id = toPresetId(name);
       const previous = draft.presets.find(preset => preset.id === id);
@@ -1285,6 +1555,8 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       draft.activePresetId = id;
       selectedPresetId = id;
       presetNameDraft = "";
+      presetTransferMode = "none";
+      presetTransferError = "";
       render();
     });
     (modal.querySelector('[data-act="preset-load"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
