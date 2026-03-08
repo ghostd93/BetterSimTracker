@@ -3227,6 +3227,118 @@ export function ensureStyles(): void {
   color: rgba(255, 222, 160, 0.92);
   min-height: 14px;
 }
+.bst-card-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 18, 0.72);
+  z-index: 2147483450;
+}
+.bst-card-editor-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2147483451;
+  width: min(1100px, calc(100vw - 20px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  background: linear-gradient(160deg, rgba(18, 23, 34, 0.98), rgba(10, 14, 24, 0.98));
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 16px;
+  padding: 14px;
+  color: #f3f5f9;
+  box-shadow: 0 18px 44px rgba(0,0,0,0.45);
+}
+.bst-card-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bst-card-editor-title {
+  font-weight: 700;
+  font-size: 18px;
+}
+.bst-card-editor-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+.bst-card-editor-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bst-card-editor-tab.is-active {
+  outline: 1px solid #8fb4ff;
+}
+.bst-card-editor-toggles {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.bst-card-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(320px, 420px);
+  gap: 14px;
+  margin-top: 12px;
+}
+.bst-card-editor-pane {
+  border: 1px solid #2f3f63;
+  border-radius: 12px;
+  padding: 10px;
+  background: #081024;
+}
+.bst-card-editor-pane-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.bst-card-editor-inspector {
+  display: grid;
+  gap: 8px;
+}
+.bst-card-editor-field {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
+.bst-card-editor-modal input:not([type="checkbox"]),
+.bst-card-editor-modal select,
+.bst-card-editor-modal textarea {
+  background: #0d1220;
+  color: #f3f5f9;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+.bst-card-editor-modal input:not([type="checkbox"]):hover,
+.bst-card-editor-modal select:hover,
+.bst-card-editor-modal textarea:hover {
+  border-color: rgba(168, 203, 245, 0.48);
+  background: #101728;
+}
+.bst-card-editor-modal input:not([type="checkbox"]):focus-visible,
+.bst-card-editor-modal select:focus-visible,
+.bst-card-editor-modal textarea:focus-visible {
+  outline: none;
+  border-color: rgba(56,189,248,0.9);
+  box-shadow: 0 0 0 2px rgba(56,189,248,0.25);
+}
+.bst-card-editor-modal input::placeholder,
+.bst-card-editor-modal textarea::placeholder {
+  color: rgba(243,245,249,0.6);
+}
+.bst-card-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
 .bst-graph-backdrop {
   position: fixed;
   inset: 0;
@@ -3708,6 +3820,21 @@ export function ensureStyles(): void {
     max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px);
     margin: 0;
     border-radius: 12px;
+  }
+  .bst-card-editor-modal {
+    width: min(100%, calc(100vw - 12px));
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px);
+    margin: 0;
+    border-radius: 12px;
+  }
+  .bst-card-editor-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bst-card-editor-toggles {
+    justify-content: flex-start;
+  }
+  .bst-card-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
   .bst-edit-grid.bst-edit-grid-two {
     grid-template-columns: minmax(0, 1fr);

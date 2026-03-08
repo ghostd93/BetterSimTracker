@@ -2,6 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp3] - 2026-03-08
+### Changed
+- Simplified Visual Editor controls to one clear setting toggle: `Use Editor Styling`.
+- Removed redundant `Enable Visual Editor` toggles from both Display settings and the editor modal.
+- Updated Visual Editor help text to clarify that editor styles remain saved while styling is disabled.
+
+### Fixed
+- Card editor modal now always opens above settings modal layers.
+- Card editor modal styling now uses BST shared modal/input classes for consistent extension look and mobile behavior.
+
 ## [2.2.4.5-exp2] - 2026-03-08
 ### Added
 - Added `Visual Editor (Experimental)` controls in Display settings:

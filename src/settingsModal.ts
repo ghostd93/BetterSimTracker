@@ -377,9 +377,8 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
         </div>
         <div class="bst-section-divider">Visual Editor (Experimental)</div>
-        <div class="bst-help-line">Interactive shell for per-card styling draft (Character/User/Scene). Apply saves to editor config.</div>
+        <div class="bst-help-line">Interactive shell for per-card styling draft (Character/User/Scene). Apply saves editor config; turning styling off keeps original cards untouched.</div>
         <div class="bst-check-grid">
-          <label class="bst-check"><input data-k="cardVisualEditorEnabled" type="checkbox">Enable Visual Editor</label>
           <label class="bst-check"><input data-k="cardVisualUseStyling" type="checkbox">Use Editor Styling</label>
         </div>
         <div>
@@ -1066,7 +1065,6 @@ export function openSettingsModal(input: {
   set("showInactive", String(input.settings.showInactive));
   set("inactiveLabel", input.settings.inactiveLabel);
   set("showLastThought", String(input.settings.showLastThought));
-  setExtra("cardVisualEditorEnabled", String(cardVisualEditorState.enabled));
   setExtra("cardVisualUseStyling", String(cardVisualEditorState.useEditorStyling));
   set("sceneCardEnabled", String(input.settings.sceneCardEnabled));
   set("sceneCardPosition", input.settings.sceneCardPosition);
@@ -4041,7 +4039,6 @@ export function openSettingsModal(input: {
       showLastThought: readBool("showLastThought", input.settings.showLastThought),
       cardVisualEditor: {
         ...cardVisualEditorState,
-        enabled: readBoolExtra("cardVisualEditorEnabled", cardVisualEditorState.enabled),
         useEditorStyling: readBoolExtra("cardVisualUseStyling", cardVisualEditorState.useEditorStyling),
       },
       sceneCardEnabled: readBool("sceneCardEnabled", input.settings.sceneCardEnabled),
@@ -4316,7 +4313,6 @@ export function openSettingsModal(input: {
       },
       onApply: (next) => {
         cardVisualEditorState = next;
-        setExtra("cardVisualEditorEnabled", String(next.enabled));
         setExtra("cardVisualUseStyling", String(next.useEditorStyling));
         persistLive();
       },
