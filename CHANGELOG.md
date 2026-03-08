@@ -1,6 +1,8 @@
-# Changelog
-
-All notable changes to BetterSimTracker are documented here.
+## [2.2.4.5-exp14] - 2026-03-08
+### Fixed
+- Fixed array-stat clear regression in manual tracker edit flow: deleting the last array item now persists as an explicit empty array ([]) instead of reviving stale previous values from fallback history.
+- Fixed storage normalization to preserve explicit empty array values for custom non-numeric stats.
+- Fixed owner filtering path to keep empty-array clear sentinels, preventing old array values from reappearing on cards/injection.
 
 ## [2.2.4.5-exp13] - 2026-03-08
 ### Changed
@@ -982,3 +984,4 @@ And more...
 ## [1.0.0] - 2026-02-18
 
 - First stable public release.
+
