@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import { createDefaultCardVisualEditorSettings } from "../src/cardVisualEditor";
 import {
+  applyPresetToDraft,
+  isLayerMovable,
   moveLayerByDirection,
   pushDraftHistory,
   reorderLayerIds,
@@ -11,6 +13,7 @@ import {
   resolvePreviewLayerStyle,
   resolvePreviewRootStyle,
   shouldLiveApply,
+  toPresetId,
 } from "../src/cardVisualEditorModal";
 
 test("resolvePreviewRootStyle merges base root with card override root", () => {
@@ -132,4 +135,44 @@ test("pushDraftHistory deduplicates adjacent snapshots and enforces max entries"
 test("resolvePreviewViewportWidth returns deterministic widths", () => {
   assert.equal(resolvePreviewViewportWidth("desktop"), 720);
   assert.equal(resolvePreviewViewportWidth("mobile"), 360);
+});
+
+test("toPresetId normalizes and clamps names", () => {
+  assert.equal(toPresetId("  Neon Character Preset  "), "neon_character_preset");
+  assert.equal(toPresetId("###"), "preset");
+});
+
+test("isLayerMovable keeps root locked and allows other layers", () => {
+  assert.equal(isLayerMovable("root"), false);
+  assert.equal(isLayerMovable("header"), true);
+  assert.equal(isLayerMovable("scene.stat.row"), true);
+});
+
+test("applyPresetToDraft replaces editor style payload from preset snapshot", () => {
+  const draft = createDefaultCardVisualEditorSettings();
+  draft.base.root.backgroundColor = "#111111";
+  draft.character = { root: { borderRadius: 15 } };
+  const next = applyPresetToDraft(draft, {
+    id: "retro",
+    name: "Retro",
+    createdAt: 1,
+    updatedAt: 2,
+    schemaVersion: 1,
+    base: {
+      root: {
+        ...draft.base.root,
+        backgroundColor: "#222222",
+      },
+    },
+    character: {
+      root: {
+        borderRadius: 28,
+      },
+    },
+    user: {},
+    scene: {},
+  });
+  assert.equal(next.base.root.backgroundColor, "#222222");
+  assert.equal(next.character.root?.borderRadius, 28);
+  assert.equal(next.activePresetId, "retro");
 });

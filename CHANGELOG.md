@@ -2,6 +2,20 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp10] - 2026-03-08
+### Added
+- Added Visual Editor preset controls: save/load/delete presets directly in the editor toolbar.
+- Added layer lock behavior for `root` (cannot be moved/reset) with explicit disabled controls.
+
+### Changed
+- Moved inspector panel under the preview pane for faster visual editing flow.
+- Inspector is now layer-dependent (root fields vs content-layer fields), reducing invalid controls per layer.
+- Visibility toggle in inspector now stays fully synchronized with the layer visibility icon state.
+
+### Fixed
+- Fixed preset apply path typing/sanitization issues and added regression coverage for preset helpers.
+- Improved layer drag/drop behavior with explicit move semantics and safer non-movable layer handling.
+
 ## [2.2.4.5-exp9] - 2026-03-08
 ### Added
 - Added preview viewport switcher in Visual Editor (`Desktop` / `Mobile`) with deterministic preview width modes.

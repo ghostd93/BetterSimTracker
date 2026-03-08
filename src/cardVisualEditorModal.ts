@@ -5,6 +5,7 @@ import {
 } from "./cardVisualEditor";
 import type {
   CardVisualEditorCardStyleOverride,
+  CardVisualEditorPreset,
   CardVisualEditorSettings,
   CardVisualEditorStylePreset,
 } from "./types";
@@ -61,6 +62,96 @@ export function resolvePreviewViewportWidth(mode: PreviewViewport): number {
   return mode === "mobile" ? 360 : 720;
 }
 
+export function toPresetId(name: string): string {
+  const normalized = String(name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_\-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64);
+  return normalized || "preset";
+}
+
+function cloneCardOverride(
+  source: CardVisualEditorCardStyleOverride | undefined,
+): CardVisualEditorCardStyleOverride {
+  if (!source) return {};
+  return {
+    motionEnabled: source.motionEnabled,
+    motionIntensity: source.motionIntensity,
+    root: source.root ? { ...source.root } : undefined,
+    elements: source.elements
+      ? Object.fromEntries(Object.entries(source.elements).map(([key, value]) => [key, { ...value }]))
+      : undefined,
+    layerOrder: Array.isArray(source.layerOrder) ? [...source.layerOrder] : undefined,
+  };
+}
+
+function buildPresetSnapshot(
+  draft: CardVisualEditorSettings,
+  id: string,
+  name: string,
+  previous?: CardVisualEditorPreset,
+): CardVisualEditorPreset {
+  const now = Date.now();
+  return {
+    id,
+    name,
+    createdAt: previous?.createdAt ?? now,
+    updatedAt: now,
+    schemaVersion: draft.schemaVersion,
+    base: cloneCardOverride(draft.base),
+    character: cloneCardOverride(draft.character),
+    user: cloneCardOverride(draft.user),
+    scene: cloneCardOverride(draft.scene),
+  };
+}
+
+export function applyPresetToDraft(
+  draft: CardVisualEditorSettings,
+  preset: CardVisualEditorPreset,
+): CardVisualEditorSettings {
+  const next = sanitizeCardVisualEditorSettings(draft, {
+    accentColor: "",
+    userCardColor: "",
+    sceneCardColor: "",
+    sceneCardValueColor: "",
+    cardOpacity: draft.base.root.backgroundOpacity,
+    borderRadius: draft.base.root.borderRadius,
+    fontSize: draft.base.root.fontSize,
+    sceneCardLayout: "chips",
+    sceneCardArrayCollapsedLimit: draft.base.root.arrayCollapsedLimit,
+  });
+  next.base = cloneCardStyle({
+    motionEnabled: preset.base.motionEnabled ?? next.base.motionEnabled,
+    motionIntensity: preset.base.motionIntensity ?? next.base.motionIntensity,
+    root: { ...next.base.root, ...(preset.base.root ?? {}) },
+    elements: Object.fromEntries(
+      Object.entries(preset.base.elements ?? {}).map(([key, value]) => [key, { ...next.base.root, ...value }]),
+    ) as Record<string, CardVisualEditorStylePreset>,
+    layerOrder: Array.isArray(preset.base.layerOrder) ? [...preset.base.layerOrder] : undefined,
+  });
+  next.character = cloneCardOverride(preset.character);
+  next.user = cloneCardOverride(preset.user);
+  next.scene = cloneCardOverride(preset.scene);
+  const hasPreset = next.presets.some(row => row.id === preset.id);
+  if (!hasPreset) {
+    next.presets = [...next.presets, buildPresetSnapshot(next, preset.id, preset.name, preset)];
+  }
+  next.activePresetId = preset.id;
+  return sanitizeCardVisualEditorSettings(next, {
+    accentColor: "",
+    userCardColor: "",
+    sceneCardColor: "",
+    sceneCardValueColor: "",
+    cardOpacity: next.base.root.backgroundOpacity,
+    borderRadius: next.base.root.borderRadius,
+    fontSize: next.base.root.fontSize,
+    sceneCardLayout: "chips",
+    sceneCardArrayCollapsedLimit: next.base.root.arrayCollapsedLimit,
+  });
+}
+
 export function reorderLayerIds(layerIds: readonly string[], fromId: string, toId: string): string[] {
   const list = [...layerIds];
   const fromIndex = list.indexOf(fromId);
@@ -90,6 +181,45 @@ function readNumber(node: HTMLInputElement, fallback: number, min: number, max: 
   const parsed = Number(node.value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(min, Math.min(max, parsed));
+}
+
+const ROOT_INSPECTOR_KEYS: Array<keyof CardVisualEditorStylePreset> = [
+  "visible",
+  "backgroundColor",
+  "textColor",
+  "borderColor",
+  "backgroundOpacity",
+  "borderWidth",
+  "borderRadius",
+  "fontSize",
+  "titleFontSize",
+  "padding",
+  "rowGap",
+  "sectionGap",
+];
+
+const CONTENT_INSPECTOR_KEYS: Array<keyof CardVisualEditorStylePreset> = [
+  "visible",
+  "textColor",
+  "labelColor",
+  "valueColor",
+  "borderColor",
+  "borderWidth",
+  "borderRadius",
+  "labelFontSize",
+  "valueFontSize",
+  "padding",
+  "rowGap",
+  "sectionGap",
+];
+
+export function isLayerMovable(layerId: string): boolean {
+  return layerId !== "root";
+}
+
+function shouldShowInspectorField(layerId: string, key: keyof CardVisualEditorStylePreset): boolean {
+  const pool = layerId === "root" ? ROOT_INSPECTOR_KEYS : CONTENT_INSPECTOR_KEYS;
+  return pool.includes(key);
 }
 
 function closeExisting(): void {
@@ -342,6 +472,8 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
   let selectedLayerId = "root";
   let liveMode = false;
   let previewViewport: PreviewViewport = "desktop";
+  let selectedPresetId = draft.activePresetId || "";
+  let presetNameDraft = "";
   let draggedLayerId: string | null = null;
   let historyStack: CardVisualEditorSettings[] = [];
   let futureStack: CardVisualEditorSettings[] = [];
@@ -387,6 +519,16 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           </label>
         </div>
         <div class="bst-card-editor-history-controls">
+          <select data-k="presetSelect" class="bst-input bst-card-editor-preset-select">
+            <option value="">Preset: none</option>
+            ${draft.presets.map(preset => `
+              <option value="${escapeHtml(preset.id)}" ${selectedPresetId === preset.id ? "selected" : ""}>${escapeHtml(preset.name)}</option>
+            `).join("")}
+          </select>
+          <input data-k="presetName" class="bst-input bst-card-editor-preset-name" type="text" maxlength="80" value="${escapeHtml(presetNameDraft)}" placeholder="Preset name">
+          <button type="button" data-act="preset-save" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Save current style as preset">Save preset</button>
+          <button type="button" data-act="preset-load" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Load selected preset">Load</button>
+          <button type="button" data-act="preset-delete" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${selectedPresetId ? "" : "disabled"} title="Delete selected preset">Delete</button>
           <button type="button" data-act="undo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${historyStack.length === 0 ? "disabled" : ""}>Undo</button>
           <button type="button" data-act="redo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${futureStack.length === 0 ? "disabled" : ""}>Redo</button>
         </div>
@@ -401,6 +543,32 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           <div class="bst-card-editor-live-preview" style="max-width:${String(resolvePreviewViewportWidth(previewViewport))}px;">
             ${renderPreviewCard(draft, activeType, selectedLayerId)}
           </div>
+          <div class="bst-card-editor-pane-title">Inspector</div>
+          <div class="bst-card-editor-help">Editing layer: <code>${escapeHtml(selectedLayerId)}</code></div>
+          <div class="bst-card-editor-inspector">
+            ${shouldShowInspectorField(selectedLayerId, "visible") ? `
+              <label class="bst-card-editor-switch">
+                <input data-k="visible" type="checkbox" ${root.visible !== false ? "checked" : ""}>
+                <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
+                <span class="bst-card-editor-switch-label">Visible</span>
+              </label>
+            ` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "backgroundColor") ? `<label class="bst-card-editor-field">Background <input data-k="backgroundColor" type="text" value="${escapeHtml(root.backgroundColor || "")}" placeholder="#1a2134 / rgb(...)"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "textColor") ? `<label class="bst-card-editor-field">Text color <input data-k="textColor" type="text" value="${escapeHtml(root.textColor || "")}" placeholder="#f1f3f8"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "labelColor") ? `<label class="bst-card-editor-field">Label color <input data-k="labelColor" type="text" value="${escapeHtml(root.labelColor || "")}" placeholder="#c7d0e0"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "valueColor") ? `<label class="bst-card-editor-field">Value color <input data-k="valueColor" type="text" value="${escapeHtml(root.valueColor || "")}" placeholder="#f1f3f8"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "borderColor") ? `<label class="bst-card-editor-field">Border color <input data-k="borderColor" type="text" value="${escapeHtml(root.borderColor || "")}" placeholder="#3a4966"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "backgroundOpacity") ? `<label class="bst-card-editor-field">Opacity <input data-k="backgroundOpacity" type="number" min="0" max="1" step="0.01" value="${String(root.backgroundOpacity)}"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "borderWidth") ? `<label class="bst-card-editor-field">Border width <input data-k="borderWidth" type="number" min="0" max="12" step="0.1" value="${String(root.borderWidth)}"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "borderRadius") ? `<label class="bst-card-editor-field">Border radius <input data-k="borderRadius" type="number" min="0" max="48" value="${String(root.borderRadius)}"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "fontSize") ? `<label class="bst-card-editor-field">Font size <input data-k="fontSize" type="number" min="10" max="32" value="${String(root.fontSize)}"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "titleFontSize") ? `<label class="bst-card-editor-field">Title size <input data-k="titleFontSize" type="number" min="10" max="48" value="${String(root.titleFontSize)}"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "labelFontSize") ? `<label class="bst-card-editor-field">Label size <input data-k="labelFontSize" type="number" min="10" max="48" value="${String(root.labelFontSize)}"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "valueFontSize") ? `<label class="bst-card-editor-field">Value size <input data-k="valueFontSize" type="number" min="10" max="48" value="${String(root.valueFontSize)}"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "padding") ? `<label class="bst-card-editor-field">Padding <input data-k="padding" type="number" min="0" max="64" value="${String(root.padding)}"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "rowGap") ? `<label class="bst-card-editor-field">Row gap <input data-k="rowGap" type="number" min="0" max="64" value="${String(root.rowGap)}"></label>` : ""}
+            ${shouldShowInspectorField(selectedLayerId, "sectionGap") ? `<label class="bst-card-editor-field">Section gap <input data-k="sectionGap" type="number" min="0" max="64" value="${String(root.sectionGap)}"></label>` : ""}
+          </div>
         </div>
         <div class="bst-card-editor-pane">
           <div class="bst-card-editor-pane-title">Layers</div>
@@ -409,40 +577,20 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
               <div class="bst-card-editor-layer-row ${selectedLayerId === layerId ? "is-active" : ""}" data-layer-row="${escapeHtml(layerId)}">
                 <button
                   type="button"
-                  draggable="true"
+                  draggable="${isLayerMovable(layerId) ? "true" : "false"}"
                   class="bst-card-editor-layer-btn ${selectedLayerId === layerId ? "is-active" : ""}"
                   data-layer-pick="${escapeHtml(layerId)}"
                   data-layer-drag="${escapeHtml(layerId)}">
                   ${escapeHtml(layerId)}
                 </button>
-                <button type="button" class="bst-card-editor-layer-mini" data-layer-up="${escapeHtml(layerId)}" title="Move up">↑</button>
-                <button type="button" class="bst-card-editor-layer-mini" data-layer-down="${escapeHtml(layerId)}" title="Move down">↓</button>
+                <button type="button" class="bst-card-editor-layer-mini" data-layer-up="${escapeHtml(layerId)}" title="Move up" ${isLayerMovable(layerId) ? "" : "disabled"}>↑</button>
+                <button type="button" class="bst-card-editor-layer-mini" data-layer-down="${escapeHtml(layerId)}" title="Move down" ${isLayerMovable(layerId) ? "" : "disabled"}>↓</button>
                 <button type="button" class="bst-card-editor-layer-mini" data-layer-visible="${escapeHtml(layerId)}" title="Toggle visibility">
                   ${resolvePreviewLayerStyle(draft, activeType, layerId).visible === false ? "🙈" : "👁"}
                 </button>
-                <button type="button" class="bst-card-editor-layer-mini" data-layer-reset="${escapeHtml(layerId)}" title="Reset layer style">⟲</button>
+                <button type="button" class="bst-card-editor-layer-mini" data-layer-reset="${escapeHtml(layerId)}" title="Reset layer style" ${layerId === "root" ? "disabled" : ""}>⟲</button>
               </div>
             `).join("")}
-          </div>
-          <div class="bst-card-editor-pane-title">Inspector</div>
-          <div class="bst-card-editor-help">Editing layer: <code>${escapeHtml(selectedLayerId)}</code></div>
-          <div class="bst-card-editor-inspector">
-            <label class="bst-card-editor-switch">
-              <input data-k="visible" type="checkbox" ${root.visible !== false ? "checked" : ""}>
-              <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
-              <span class="bst-card-editor-switch-label">Visible</span>
-            </label>
-            <label class="bst-card-editor-field">Background <input data-k="backgroundColor" type="text" value="${escapeHtml(root.backgroundColor || "")}" placeholder="#1a2134 / rgb(...)"></label>
-            <label class="bst-card-editor-field">Text color <input data-k="textColor" type="text" value="${escapeHtml(root.textColor || "")}" placeholder="#f1f3f8"></label>
-            <label class="bst-card-editor-field">Border color <input data-k="borderColor" type="text" value="${escapeHtml(root.borderColor || "")}" placeholder="#3a4966"></label>
-            <label class="bst-card-editor-field">Opacity <input data-k="backgroundOpacity" type="number" min="0" max="1" step="0.01" value="${String(root.backgroundOpacity)}"></label>
-            <label class="bst-card-editor-field">Border width <input data-k="borderWidth" type="number" min="0" max="12" step="0.1" value="${String(root.borderWidth)}"></label>
-            <label class="bst-card-editor-field">Border radius <input data-k="borderRadius" type="number" min="0" max="48" value="${String(root.borderRadius)}"></label>
-            <label class="bst-card-editor-field">Font size <input data-k="fontSize" type="number" min="10" max="32" value="${String(root.fontSize)}"></label>
-            <label class="bst-card-editor-field">Title size <input data-k="titleFontSize" type="number" min="10" max="48" value="${String(root.titleFontSize)}"></label>
-            <label class="bst-card-editor-field">Padding <input data-k="padding" type="number" min="0" max="64" value="${String(root.padding)}"></label>
-            <label class="bst-card-editor-field">Row gap <input data-k="rowGap" type="number" min="0" max="64" value="${String(root.rowGap)}"></label>
-            <label class="bst-card-editor-field">Section gap <input data-k="sectionGap" type="number" min="0" max="64" value="${String(root.sectionGap)}"></label>
           </div>
         </div>
       </div>
@@ -475,15 +623,25 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
     modal.querySelectorAll("[data-layer-drag]").forEach(node => {
       node.addEventListener("dragstart", (event) => {
         draggedLayerId = String((node as HTMLElement).getAttribute("data-layer-drag") || "");
-        (event as DragEvent).dataTransfer?.setData("text/plain", draggedLayerId);
+        if (!isLayerMovable(draggedLayerId)) {
+          event.preventDefault();
+          draggedLayerId = null;
+          return;
+        }
+        const transfer = (event as DragEvent).dataTransfer;
+        transfer?.setData("text/plain", draggedLayerId);
+        if (transfer) transfer.effectAllowed = "move";
       });
       node.addEventListener("dragover", (event) => {
         event.preventDefault();
+        const transfer = (event as DragEvent).dataTransfer;
+        if (transfer) transfer.dropEffect = "move";
       });
       node.addEventListener("drop", (event) => {
         event.preventDefault();
         const targetLayerId = String((node as HTMLElement).getAttribute("data-layer-drag") || "");
         const sourceLayerId = draggedLayerId || (event as DragEvent).dataTransfer?.getData("text/plain") || "";
+        if (!isLayerMovable(sourceLayerId)) return;
         if (!sourceLayerId || !targetLayerId || sourceLayerId === targetLayerId) return;
         captureHistory();
         const nextOrder = reorderLayerIds(layerIds, sourceLayerId, targetLayerId);
@@ -554,6 +712,13 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
     (modal.querySelector('[data-k="liveMode"]') as HTMLInputElement | null)?.addEventListener("change", (event) => {
       liveMode = (event.target as HTMLInputElement).checked;
       render();
+    });
+    (modal.querySelector('[data-k="presetSelect"]') as HTMLSelectElement | null)?.addEventListener("change", (event) => {
+      selectedPresetId = String((event.target as HTMLSelectElement).value || "");
+      render();
+    });
+    (modal.querySelector('[data-k="presetName"]') as HTMLInputElement | null)?.addEventListener("input", (event) => {
+      presetNameDraft = String((event.target as HTMLInputElement).value || "");
     });
     (modal.querySelector('[data-k="visible"]') as HTMLInputElement | null)?.addEventListener("change", (event) => {
       captureHistory();
@@ -648,12 +813,16 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
     };
     bindText("backgroundColor");
     bindText("textColor");
+    bindText("labelColor");
+    bindText("valueColor");
     bindText("borderColor");
     bindNumber("backgroundOpacity", 0, 1, root.backgroundOpacity);
     bindNumber("borderWidth", 0, 12, root.borderWidth);
     bindNumber("borderRadius", 0, 48, root.borderRadius);
     bindNumber("fontSize", 10, 32, root.fontSize);
     bindNumber("titleFontSize", 10, 48, root.titleFontSize);
+    bindNumber("labelFontSize", 10, 48, root.labelFontSize);
+    bindNumber("valueFontSize", 10, 48, root.valueFontSize);
     bindNumber("padding", 0, 64, root.padding);
     bindNumber("rowGap", 0, 64, root.rowGap);
     bindNumber("sectionGap", 0, 64, root.sectionGap);
@@ -678,6 +847,41 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
     });
     (modal.querySelector('[data-act="redo"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
       applyRedo();
+    });
+    (modal.querySelector('[data-act="preset-save"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
+      const name = presetNameDraft.trim();
+      if (!name) return;
+      captureHistory();
+      const id = toPresetId(name);
+      const previous = draft.presets.find(preset => preset.id === id);
+      const nextPreset = buildPresetSnapshot(draft, id, name, previous);
+      const nextPresets = [...draft.presets.filter(preset => preset.id !== id), nextPreset]
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+      draft.presets = nextPresets;
+      draft.activePresetId = id;
+      selectedPresetId = id;
+      presetNameDraft = "";
+      render();
+      maybeApplyLive();
+    });
+    (modal.querySelector('[data-act="preset-load"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
+      if (!selectedPresetId) return;
+      const preset = draft.presets.find(row => row.id === selectedPresetId);
+      if (!preset) return;
+      captureHistory();
+      draft = applyPresetToDraft(draft, preset);
+      render();
+      maybeApplyLive();
+    });
+    (modal.querySelector('[data-act="preset-delete"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
+      if (!selectedPresetId) return;
+      captureHistory();
+      draft.presets = draft.presets.filter(preset => preset.id !== selectedPresetId);
+      if (draft.activePresetId === selectedPresetId) draft.activePresetId = null;
+      selectedPresetId = "";
+      presetNameDraft = "";
+      render();
+      maybeApplyLive();
     });
     (modal.querySelector('[data-act="apply"]') as HTMLButtonElement | null)?.addEventListener("click", () => {
       const next = sanitizeCardVisualEditorSettings(draft, input.legacy);

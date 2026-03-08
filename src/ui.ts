@@ -3350,6 +3350,16 @@ export function ensureStyles(): void {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.bst-card-editor-preset-select {
+  min-width: 170px;
+  max-width: 220px;
+}
+.bst-card-editor-preset-name {
+  min-width: 150px;
+  max-width: 220px;
 }
 .bst-card-editor-hist-btn[disabled] {
   opacity: 0.45;
@@ -3383,7 +3393,7 @@ export function ensureStyles(): void {
 }
 .bst-card-editor-layer-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   gap: 6px;
   align-items: center;
 }
@@ -3396,6 +3406,10 @@ export function ensureStyles(): void {
   font-size: 11px;
   cursor: grab;
   user-select: none;
+}
+.bst-card-editor-layer-btn[draggable="false"] {
+  cursor: default;
+  opacity: 0.88;
 }
 .bst-card-editor-layer-btn:active {
   cursor: grabbing;
@@ -3417,6 +3431,10 @@ export function ensureStyles(): void {
 .bst-card-editor-layer-mini:hover {
   border-color: rgba(167, 198, 240, 0.7);
   background: rgba(40, 68, 110, 0.68);
+}
+.bst-card-editor-layer-mini[disabled] {
+  opacity: 0.42;
+  cursor: not-allowed;
 }
 .bst-card-editor-help {
   margin-bottom: 8px;
