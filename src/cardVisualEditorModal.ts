@@ -66,6 +66,21 @@ export function reorderLayerIds(layerIds: readonly string[], fromId: string, toI
   return list;
 }
 
+export function moveLayerByDirection(
+  layerIds: readonly string[],
+  layerId: string,
+  direction: "up" | "down",
+): string[] {
+  const list = [...layerIds];
+  const index = list.indexOf(layerId);
+  if (index < 0) return list;
+  const target = direction === "up" ? index - 1 : index + 1;
+  if (target < 0 || target >= list.length) return list;
+  const [item] = list.splice(index, 1);
+  list.splice(target, 0, item);
+  return list;
+}
+
 function readNumber(node: HTMLInputElement, fallback: number, min: number, max: number): number {
   const parsed = Number(node.value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -180,6 +195,18 @@ function writeOverrideElement(
     ...(nextElements[layerId] ?? {}),
     ...elementStyle,
   } as CardVisualEditorStylePreset;
+  draft[targetKey] = { ...current, elements: nextElements };
+}
+
+function clearOverrideElement(
+  draft: CardVisualEditorSettings,
+  type: CardType,
+  layerId: string,
+): void {
+  const targetKey = type === "character" ? "character" : type === "user" ? "user" : "scene";
+  const current = draft[targetKey] as CardVisualEditorCardStyleOverride;
+  const nextElements = { ...(current.elements ?? {}) };
+  delete nextElements[layerId];
   draft[targetKey] = { ...current, elements: nextElements };
 }
 
@@ -365,14 +392,19 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           <div class="bst-card-editor-pane-title">Layers</div>
           <div class="bst-card-editor-layers">
             ${layerIds.map(layerId => `
-              <button
-                type="button"
-                draggable="true"
-                class="bst-card-editor-layer-btn ${selectedLayerId === layerId ? "is-active" : ""}"
-                data-layer-pick="${escapeHtml(layerId)}"
-                data-layer-drag="${escapeHtml(layerId)}">
-                ${escapeHtml(layerId)}
-              </button>
+              <div class="bst-card-editor-layer-row ${selectedLayerId === layerId ? "is-active" : ""}" data-layer-row="${escapeHtml(layerId)}">
+                <button
+                  type="button"
+                  draggable="true"
+                  class="bst-card-editor-layer-btn ${selectedLayerId === layerId ? "is-active" : ""}"
+                  data-layer-pick="${escapeHtml(layerId)}"
+                  data-layer-drag="${escapeHtml(layerId)}">
+                  ${escapeHtml(layerId)}
+                </button>
+                <button type="button" class="bst-card-editor-layer-mini" data-layer-up="${escapeHtml(layerId)}" title="Move up">↑</button>
+                <button type="button" class="bst-card-editor-layer-mini" data-layer-down="${escapeHtml(layerId)}" title="Move down">↓</button>
+                <button type="button" class="bst-card-editor-layer-mini" data-layer-reset="${escapeHtml(layerId)}" title="Reset layer style">⟲</button>
+              </div>
             `).join("")}
           </div>
           <div class="bst-card-editor-pane-title">Inspector</div>
@@ -433,6 +465,41 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       });
       node.addEventListener("dragend", () => {
         draggedLayerId = null;
+      });
+    });
+    modal.querySelectorAll("[data-layer-up]").forEach(node => {
+      node.addEventListener("click", () => {
+        const layerId = String((node as HTMLElement).getAttribute("data-layer-up") || "");
+        if (!layerId) return;
+        captureHistory();
+        const nextOrder = moveLayerByDirection(layerIds, layerId, "up");
+        writeOverrideLayerOrder(draft, activeType, nextOrder);
+        selectedLayerId = layerId;
+        render();
+        maybeApplyLive();
+      });
+    });
+    modal.querySelectorAll("[data-layer-down]").forEach(node => {
+      node.addEventListener("click", () => {
+        const layerId = String((node as HTMLElement).getAttribute("data-layer-down") || "");
+        if (!layerId) return;
+        captureHistory();
+        const nextOrder = moveLayerByDirection(layerIds, layerId, "down");
+        writeOverrideLayerOrder(draft, activeType, nextOrder);
+        selectedLayerId = layerId;
+        render();
+        maybeApplyLive();
+      });
+    });
+    modal.querySelectorAll("[data-layer-reset]").forEach(node => {
+      node.addEventListener("click", () => {
+        const layerId = String((node as HTMLElement).getAttribute("data-layer-reset") || "");
+        if (!layerId || layerId === "root") return;
+        captureHistory();
+        clearOverrideElement(draft, activeType, layerId);
+        selectedLayerId = layerId;
+        render();
+        maybeApplyLive();
       });
     });
     (modal.querySelector('[data-k="useEditorStyling"]') as HTMLInputElement | null)?.addEventListener("change", (event) => {

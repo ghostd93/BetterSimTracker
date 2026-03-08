@@ -3363,10 +3363,15 @@ export function ensureStyles(): void {
   margin-bottom: 8px;
 }
 .bst-card-editor-layers {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 6px;
   margin-bottom: 10px;
+}
+.bst-card-editor-layer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 6px;
+  align-items: center;
 }
 .bst-card-editor-layer-btn {
   border: 1px solid rgba(255,255,255,0.2);
@@ -3384,6 +3389,20 @@ export function ensureStyles(): void {
 .bst-card-editor-layer-btn.is-active {
   border-color: rgba(143,180,255,0.95);
   background: rgba(41, 79, 132, 0.58);
+}
+.bst-card-editor-layer-mini {
+  min-width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.24);
+  background: rgba(18, 30, 50, 0.8);
+  color: #e8eefc;
+  font-size: 12px;
+  cursor: pointer;
+}
+.bst-card-editor-layer-mini:hover {
+  border-color: rgba(167, 198, 240, 0.7);
+  background: rgba(40, 68, 110, 0.68);
 }
 .bst-card-editor-help {
   margin-bottom: 8px;

@@ -2,6 +2,19 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp8] - 2026-03-08
+### Added
+- Added explicit layer-row controls in Visual Editor:
+  - move layer up (`↑`)
+  - move layer down (`↓`)
+  - reset selected layer style override (`⟲`)
+
+### Changed
+- Layer panel now uses row-style controls for easier ordering/management without drag-only interaction.
+
+### Fixed
+- Added regression coverage for directional layer moves while preserving order safety.
+
 ## [2.2.4.5-exp7] - 2026-03-08
 ### Added
 - Added Visual Editor session history controls: `Undo` and `Redo` buttons.

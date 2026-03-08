@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { createDefaultCardVisualEditorSettings } from "../src/cardVisualEditor";
 import {
+  moveLayerByDirection,
   pushDraftHistory,
   reorderLayerIds,
   resolvePreviewLayerOrder,
@@ -81,6 +82,16 @@ test("reorderLayerIds moves source before target", () => {
   const input = ["root", "header", "body", "footer"];
   const reordered = reorderLayerIds(input, "footer", "header");
   assert.deepEqual(reordered, ["root", "footer", "header", "body"]);
+});
+
+test("moveLayerByDirection moves layer up/down when possible", () => {
+  const input = ["root", "header", "body", "footer"];
+  const up = moveLayerByDirection(input, "body", "up");
+  assert.deepEqual(up, ["root", "body", "header", "footer"]);
+  const down = moveLayerByDirection(input, "header", "down");
+  assert.deepEqual(down, ["root", "body", "header", "footer"]);
+  const blocked = moveLayerByDirection(input, "root", "up");
+  assert.deepEqual(blocked, input);
 });
 
 test("pushDraftHistory deduplicates adjacent snapshots and enforces max entries", () => {
