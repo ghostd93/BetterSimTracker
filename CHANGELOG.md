@@ -1,3 +1,11 @@
+## [2.2.4.6-exp8] - 2026-03-08
+### Changed
+- Replaced editor color text fields with paired color pickers so color styling is editable visually instead of by raw hex only.
+- Tightened Inspector field alignment and field-group layout to reduce vertical drift and overlapping controls.
+
+### Fixed
+- Wired `Apply` to real tracker-card styling paths by applying Visual Editor layer styles to runtime Character/User/Scene cards instead of only previewing them inside the modal.
+
 ## [2.2.4.6-exp7] - 2026-03-08
 ### Changed
 - Reworked Visual Editor toolbar structure so card/viewport controls and preset actions read as separate logical sections with clearer guidance text.

@@ -687,6 +687,20 @@ function describeInspectorGroup(group: "surface" | "type" | "text" | "spacing", 
   }
 }
 
+function renderColorField(
+  key: keyof CardVisualEditorStylePreset,
+  value: string,
+  placeholder: string,
+): string {
+  const normalized = /^#([0-9a-f]{6})$/i.test(value.trim()) ? value.trim() : "#8fb4ff";
+  return `
+    <div class="bst-card-editor-color-field-wrap">
+      <input data-k="${String(key)}" type="text" value="${escapeHtml(value || "")}" placeholder="${escapeHtml(placeholder)}">
+      <input data-k-color="${String(key)}" class="bst-card-editor-color-picker" type="color" value="${escapeHtml(normalized)}" aria-label="${escapeHtml(String(key))} color picker">
+    </div>
+  `;
+}
+
 function moveLayerByDirectionWithinSiblings(
   layerIds: readonly string[],
   nodeById: Map<string, LayerNode>,
@@ -1176,12 +1190,12 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       `;
     };
     const inspectorFieldMarkup: Partial<Record<keyof CardVisualEditorStylePreset, string>> = {
-      backgroundColor: renderInspectorField("backgroundColor", `<input data-k="backgroundColor" type="text" value="${escapeHtml(root.backgroundColor || "")}" placeholder="#1a2134 / rgb(...)">`),
-      textColor: renderInspectorField("textColor", `<input data-k="textColor" type="text" value="${escapeHtml(root.textColor || "")}" placeholder="#f1f3f8">`),
-      labelColor: renderInspectorField("labelColor", `<input data-k="labelColor" type="text" value="${escapeHtml(root.labelColor || "")}" placeholder="#c7d0e0">`),
-      valueColor: renderInspectorField("valueColor", `<input data-k="valueColor" type="text" value="${escapeHtml(root.valueColor || "")}" placeholder="#f1f3f8">`),
-      accentColor: renderInspectorField("accentColor", `<input data-k="accentColor" type="text" value="${escapeHtml(root.accentColor || "")}" placeholder="#8fb4ff">`),
-      borderColor: renderInspectorField("borderColor", `<input data-k="borderColor" type="text" value="${escapeHtml(root.borderColor || "")}" placeholder="#3a4966">`),
+      backgroundColor: renderInspectorField("backgroundColor", renderColorField("backgroundColor", root.backgroundColor || "", "#1a2134")),
+      textColor: renderInspectorField("textColor", renderColorField("textColor", root.textColor || "", "#f1f3f8")),
+      labelColor: renderInspectorField("labelColor", renderColorField("labelColor", root.labelColor || "", "#c7d0e0")),
+      valueColor: renderInspectorField("valueColor", renderColorField("valueColor", root.valueColor || "", "#f1f3f8")),
+      accentColor: renderInspectorField("accentColor", renderColorField("accentColor", root.accentColor || "", "#8fb4ff")),
+      borderColor: renderInspectorField("borderColor", renderColorField("borderColor", root.borderColor || "", "#3a4966")),
       fontFamily: renderInspectorField("fontFamily", `<input data-k="fontFamily" type="text" value="${escapeHtml(root.fontFamily || "")}" placeholder="inherit">`),
       backgroundOpacity: renderInspectorField("backgroundOpacity", `<input data-k="backgroundOpacity" type="number" min="0" max="1" step="0.01" value="${String(root.backgroundOpacity)}">`),
       borderWidth: renderInspectorField("borderWidth", `<input data-k="borderWidth" type="number" min="0" max="12" step="0.1" value="${String(root.borderWidth)}">`),
@@ -1245,7 +1259,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         </div>
       </div>
       <div class="bst-card-editor-toggle-hints">
-        <div>Changes are preview-only until <strong>Apply</strong>. Use the global <strong>Use Editor Styling</strong> toggle in Display settings to enable/disable editor styles on real cards.</div>
+        <div>Changes stay preview-only until <strong>Apply</strong>. Apply saves the editor style config and refreshes real cards immediately.</div>
       </div>
       ${presetTransferMode === "none" ? "" : `
         <div class="bst-card-editor-transfer-panel">
@@ -1490,12 +1504,38 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         refreshPreview();
       });
     };
+    const bindColorPicker = (key: keyof CardVisualEditorStylePreset): void => {
+      const textNode = modal.querySelector(`[data-k="${String(key)}"]`) as HTMLInputElement | null;
+      const colorNode = modal.querySelector(`[data-k-color="${String(key)}"]`) as HTMLInputElement | null;
+      if (!textNode || !colorNode) return;
+      colorNode.addEventListener("input", () => {
+        textNode.value = colorNode.value;
+        captureHistory();
+        if (selectedLayerId === "root") {
+          writeOverrideRoot(draft, activeType, { [key]: colorNode.value });
+        } else {
+          writeOverrideElement(draft, activeType, selectedLayerId, { [key]: colorNode.value });
+        }
+        refreshPreview();
+      });
+      textNode.addEventListener("input", () => {
+        if (/^#([0-9a-f]{6})$/i.test(textNode.value.trim())) {
+          colorNode.value = textNode.value.trim();
+        }
+      });
+    };
     bindText("backgroundColor");
     bindText("textColor");
     bindText("labelColor");
     bindText("valueColor");
     bindText("accentColor");
     bindText("borderColor");
+    bindColorPicker("backgroundColor");
+    bindColorPicker("textColor");
+    bindColorPicker("labelColor");
+    bindColorPicker("valueColor");
+    bindColorPicker("accentColor");
+    bindColorPicker("borderColor");
     bindText("fontFamily");
     bindNumber("backgroundOpacity", 0, 1, root.backgroundOpacity);
     bindNumber("borderWidth", 0, 12, root.borderWidth);

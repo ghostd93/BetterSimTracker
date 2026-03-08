@@ -4345,7 +4345,7 @@ export function openSettingsModal(input: {
         previewKind: stat.kind as "numeric" | "text" | "array" | "date_time" | "boolean" | "enum_single",
       }));
     openCardVisualEditorModal({
-      current: current.cardVisualEditor,
+      current: cardVisualEditorState,
       legacy: {
         accentColor: current.accentColor,
         userCardColor: current.userCardColor,

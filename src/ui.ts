@@ -72,6 +72,7 @@ import {
   resolveEnumOption,
   hasScriptLikeContent,
 } from "./customStatRuntime";
+import { resolveCardStyle } from "./cardVisualEditor";
 
 type UiNumericStatDefinition = {
   key: string;
@@ -667,6 +668,108 @@ function buildActionPalette(cardHex: string): {
     hoverBorder: rgbToHex(hoverBorder),
     focus: rgbToHex(focus),
   };
+}
+
+function applyCommonEditorStyles(
+  element: HTMLElement,
+  token: {
+    visible?: boolean;
+    backgroundColor?: string;
+    textColor?: string;
+    borderColor?: string;
+    borderWidth?: number;
+    borderRadius?: number;
+    backgroundOpacity?: number;
+    fontFamily?: string;
+    fontSize?: number;
+    lineHeight?: number;
+    letterSpacing?: number;
+    padding?: number;
+  },
+): void {
+  if (token.visible === false) {
+    element.style.display = "none";
+    return;
+  }
+  if (token.backgroundColor) element.style.background = token.backgroundColor;
+  if (token.textColor) element.style.color = token.textColor;
+  if (token.borderColor || (token.borderWidth ?? 0) > 0) {
+    element.style.borderStyle = "solid";
+    element.style.borderColor = token.borderColor || "transparent";
+    element.style.borderWidth = `${String(token.borderWidth ?? 0)}px`;
+  }
+  if (token.borderRadius != null) element.style.borderRadius = `${String(token.borderRadius)}px`;
+  if (token.backgroundOpacity != null) element.style.opacity = `${String(token.backgroundOpacity)}`;
+  if (token.fontFamily) element.style.fontFamily = token.fontFamily;
+  if (token.fontSize != null) element.style.fontSize = `${String(token.fontSize)}px`;
+  if (token.lineHeight != null) element.style.lineHeight = `${String(token.lineHeight)}`;
+  if (token.letterSpacing != null) element.style.letterSpacing = `${String(token.letterSpacing)}px`;
+  if (token.padding != null) element.style.padding = `${String(token.padding)}px`;
+}
+
+function applyEditorStyleToTrackerCard(
+  card: HTMLElement,
+  cardType: "character" | "user" | "scene",
+  settings: BetterSimTrackerSettings,
+): void {
+  const style = resolveCardStyle(cardType, settings.cardVisualEditor);
+  if (!style) return;
+  applyCommonEditorStyles(card, style.root);
+  if (style.root.textColor) card.style.color = style.root.textColor;
+  if (style.root.fontFamily) card.style.fontFamily = style.root.fontFamily;
+  if (style.root.fontSize != null) card.style.fontSize = `${String(style.root.fontSize)}px`;
+  const applyLayer = (layerId: string, element: HTMLElement | null): void => {
+    if (!element) return;
+    const token = style.elements[layerId];
+    if (!token) return;
+    applyCommonEditorStyles(element, token);
+    if (token.labelColor || token.labelFontSize != null || token.fontFamily || token.lineHeight != null || token.letterSpacing != null || token.padding != null) {
+      element.querySelectorAll(".bst-label").forEach(node => {
+        const label = node as HTMLElement;
+        if (token.labelColor) label.style.color = token.labelColor;
+        if (token.labelFontSize != null) label.style.fontSize = `${String(token.labelFontSize)}px`;
+        if (token.fontFamily) label.style.fontFamily = token.fontFamily;
+        if (token.lineHeight != null) label.style.lineHeight = `${String(token.lineHeight)}`;
+        if (token.letterSpacing != null) label.style.letterSpacing = `${String(token.letterSpacing)}px`;
+        if (token.padding != null) label.style.padding = `${String(token.padding)}px`;
+      });
+    }
+    if (token.valueColor || token.valueFontSize != null || token.fontFamily || token.lineHeight != null || token.letterSpacing != null || token.chipRadius != null || token.backgroundColor || token.borderColor) {
+      element.querySelectorAll(".bst-non-numeric-chip, .bst-array-item-chip, .bst-mood-badge, .bst-thought-text, .bst-thought-content, .bst-thought-panel").forEach(node => {
+        const value = node as HTMLElement;
+        if (token.valueColor) value.style.color = token.valueColor;
+        if (token.valueFontSize != null) value.style.fontSize = `${String(token.valueFontSize)}px`;
+        if (token.fontFamily) value.style.fontFamily = token.fontFamily;
+        if (token.lineHeight != null) value.style.lineHeight = `${String(token.lineHeight)}`;
+        if (token.letterSpacing != null) value.style.letterSpacing = `${String(token.letterSpacing)}px`;
+        if (token.chipRadius != null) value.style.borderRadius = `${String(token.chipRadius)}px`;
+        if (token.backgroundColor) value.style.background = token.backgroundColor;
+        if (token.borderColor) value.style.borderColor = token.borderColor;
+      });
+    }
+    if (token.barHeight != null || token.accentColor) {
+      element.querySelectorAll(".bst-track").forEach(trackNode => {
+        const track = trackNode as HTMLElement;
+        if (token.barHeight != null) {
+          track.style.height = `${String(token.barHeight)}px`;
+          track.style.borderRadius = `${String(token.barHeight)}px`;
+        }
+      });
+      element.querySelectorAll(".bst-fill").forEach(fillNode => {
+        const fill = fillNode as HTMLElement;
+        if (token.accentColor) fill.style.background = token.accentColor;
+        if (token.barHeight != null) fill.style.borderRadius = `${String(token.barHeight)}px`;
+      });
+    }
+  };
+
+  applyLayer(cardType === "scene" ? "scene.header" : "header", card.querySelector('[data-bst-layer="scene.header"], [data-bst-layer="header"]'));
+  applyLayer(cardType === "scene" ? "scene.body" : "body", card.querySelector('[data-bst-layer="scene.body"], [data-bst-layer="body"]'));
+  card.querySelectorAll<HTMLElement>("[data-bst-layer]").forEach(node => {
+    const layerId = node.dataset.bstLayer?.trim();
+    if (!layerId) return;
+    applyLayer(layerId, node);
+  });
 }
 
 function moodBadgeColor(moodRaw: string): string {
@@ -3671,11 +3774,42 @@ export function ensureStyles(): void {
   display: grid;
   gap: 5px;
   font-size: 12px;
+  align-content: start;
+}
+.bst-card-editor-field > input,
+.bst-card-editor-field > select,
+.bst-card-editor-field > textarea,
+.bst-card-editor-color-field-wrap {
+  align-self: start;
+}
+.bst-card-editor-field > input:not([type="checkbox"]):not([type="color"]),
+.bst-card-editor-field > select,
+.bst-card-editor-color-field-wrap > input[type="text"] {
+  min-height: 38px;
+  height: 38px;
+}
+.bst-card-editor-field > textarea {
+  min-height: 96px;
 }
 .bst-card-editor-field-hint {
   color: rgba(218, 228, 248, 0.72);
   font-size: 11px;
   line-height: 1.35;
+}
+.bst-card-editor-color-field-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+  align-items: center;
+}
+.bst-card-editor-color-picker {
+  width: 42px;
+  min-width: 42px;
+  height: 38px;
+  padding: 3px !important;
+  border-radius: 8px;
+  cursor: pointer;
+  margin: 0;
 }
 .bst-card-editor-inspector-group {
   border: 1px solid rgba(255,255,255,0.12);
@@ -5378,7 +5512,7 @@ export function renderTracker(
       const isNew = !renderedCardKeys.has(cardKey);
       renderedCardKeys.add(cardKey);
       const cardHtml = `
-        <div class="bst-head">
+        <div class="bst-head" data-bst-layer="header">
           <div class="bst-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
           <div class="bst-actions">
             ${!isUserCard ? `<button class="bst-mini-btn" data-bst-action="graph" data-character="${name}" title="Open relationship graph"><span aria-hidden="true">&#128200;</span> <span class="bst-graph-label">Graph</span></button>` : ""}
@@ -5392,7 +5526,8 @@ export function renderTracker(
           ${collapsedNonNumeric || ""}
           ${showCollapsedMood ? `<span class="bst-collapsed-mood" title="${moodText}">${moodToEmojiEntity(moodText)}</span>` : ""}
         </div>` : ""}
-        <div class="bst-body">
+        <div class="bst-body" data-bst-layer="body">
+        ${enabledNumeric.length ? `<div class="bst-section-numeric" data-bst-layer="stats.numeric.row">` : ""}
         ${enabledNumeric.map(({ key, label, color, defaultValue }) => {
           const defDefault = defaultValue ?? 50;
           const currentValueRaw = getNumericRawValue(data, key, name, isNumericGlobalScope(key));
@@ -5407,12 +5542,14 @@ export function renderTracker(
           const showDelta = latestAiIndex != null && entry.messageIndex === latestAiIndex && hasPrevValue && hasCurrentValue;
           const rowClass = showDelta && delta !== 0 ? "bst-row bst-row-changed" : "bst-row";
           return `
-            <div class="${rowClass}">
+            <div class="${rowClass}" data-bst-layer="stat.${escapeHtml(key)}">
               <div class="bst-label"><span>${label}</span><span>${value}%${showDelta ? `<span class="${deltaClass}">${formatDelta(delta)}</span>` : ""}</span></div>
               <div class="bst-track"><div class="bst-fill" style="width:${value}%;--bst-stat-color:${color};"></div></div>
             </div>
           `;
         }).join("")}
+        ${enabledNumeric.length ? `</div>` : ""}
+        ${enabledNonNumeric.length ? `<div class="bst-section-custom" data-bst-layer="stats.nonNumeric.row">` : ""}
         ${enabledNonNumeric.map(def => {
           const resolved = resolveEffectiveNonNumericValue(def, name);
           const color = def.color || "#9bd5ff";
@@ -5426,7 +5563,7 @@ export function renderTracker(
               ? visibleItems.map(item => `<span class="bst-array-item-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(item)}">${escapeHtml(item)}</span>`).join("")
               : `<span class="bst-array-item-empty">No items</span>`;
             return `
-              <div class="bst-row bst-row-non-numeric">
+              <div class="bst-row bst-row-non-numeric" data-bst-layer="custom.${escapeHtml(def.id)}">
                 <div class="bst-label">
                   <span>${escapeHtml(def.label)}</span>
                 </div>
@@ -5441,7 +5578,7 @@ export function renderTracker(
           }
           if (def.kind === "date_time" && def.dateTimeMode === "structured") {
             return `
-              <div class="bst-row bst-row-non-numeric">
+              <div class="bst-row bst-row-non-numeric" data-bst-layer="custom.${escapeHtml(def.id)}">
                 <div class="bst-label">
                   <span>${escapeHtml(def.label)}</span>
                 </div>
@@ -5453,7 +5590,7 @@ export function renderTracker(
           }
           const displayValue = resolved == null ? "not set" : formatNonNumericForDisplay(def, resolved);
           return `
-            <div class="bst-row bst-row-non-numeric">
+            <div class="bst-row bst-row-non-numeric" data-bst-layer="custom.${escapeHtml(def.id)}">
               <div class="bst-label">
                 <span>${escapeHtml(def.label)}</span>
                 <span class="bst-non-numeric-chip" style="--bst-stat-color:${escapeHtml(color)};" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</span>
@@ -5461,20 +5598,21 @@ export function renderTracker(
             </div>
           `;
         }).join("")}
+        ${enabledNonNumeric.length ? `</div>` : ""}
         ${moodText !== "" ? `
-        <div class="bst-mood${moodImage ? " bst-mood-has-image" : ""}" title="${moodText} (${moodTrend})">
+        <div class="bst-mood${moodImage ? " bst-mood-has-image" : ""}" data-bst-layer="mood.container" title="${moodText} (${moodTrend})">
           <div class="bst-mood-wrap ${moodImage ? "bst-mood-wrap--image" : "bst-mood-wrap--emoji"}">
             ${moodImage
               ? `<button type="button" class="bst-mood-image-trigger" data-bst-action="open-mood-preview" data-bst-image-src="${escapeHtml(moodImage)}" data-bst-image-alt="${escapeHtml(moodText)}" data-bst-image-character="${escapeHtml(displayName)}" data-bst-image-mood="${escapeHtml(moodText)}" aria-label="Open mood image preview for ${escapeHtml(displayName)} (${escapeHtml(moodText)})"><span class="bst-mood-image-frame${moodSource === "st_expressions" ? " bst-mood-image-frame--st-expression" : ""}"><img class="bst-mood-image${moodSource === "st_expressions" ? " bst-mood-image--st-expression" : ""}" src="${escapeHtml(moodImage)}" alt="${escapeHtml(moodText)}"${stExpressionImageStyle}></span></button>`
               : `<span class="bst-mood-chip"><span class="bst-mood-emoji">${moodToEmojiEntity(moodText)}</span></span>`}
             ${moodImage && lastThoughtText
-              ? renderThoughtMarkup(lastThoughtText, thoughtUiKey, "bubble", expandedThoughtKeys.has(thoughtUiKey))
+              ? `<div data-bst-layer="thought.panel">${renderThoughtMarkup(lastThoughtText, thoughtUiKey, "bubble", expandedThoughtKeys.has(thoughtUiKey))}</div>`
               : moodImage
                 ? ""
                 : `<span class="bst-mood-badge" style="background:${moodBadgeColor(moodText)};">${moodText} (${moodTrend})</span>`}
           </div>
         </div>` : ""}
-        ${settings.showLastThought && lastThoughtText !== "" && !moodImage ? renderThoughtMarkup(lastThoughtText, thoughtUiKey, "panel", expandedThoughtKeys.has(thoughtUiKey)) : ""}
+        ${settings.showLastThought && lastThoughtText !== "" && !moodImage ? `<div data-bst-layer="thought.panel">${renderThoughtMarkup(lastThoughtText, thoughtUiKey, "panel", expandedThoughtKeys.has(thoughtUiKey))}</div>` : ""}
         ${enabledNumeric.length === 0 && enabledNonNumeric.length === 0 && moodText === "" && !(settings.showLastThought && lastThoughtText !== "") ? `<div class="bst-empty">No stats recorded.</div>` : ""}
         </div>
       `;
@@ -5540,7 +5678,7 @@ export function renderTracker(
     const sceneCollapsed = collapsedSceneMessages.has(entry.messageIndex);
     const sceneCardHtml = sceneCardVisible
       ? `
-        <div class="bst-head">
+        <div class="bst-head" data-bst-layer="scene.header">
           <div class="bst-name" title="${escapeHtml(settings.sceneCardTitle)}">${escapeHtml(settings.sceneCardTitle)}</div>
           <div class="bst-actions">
             <button class="bst-mini-btn bst-mini-btn-icon" data-bst-action="toggle-scene-collapse" title="${sceneCollapsed ? "Expand scene card" : "Collapse scene card"}" aria-expanded="${sceneCollapsed ? "false" : "true"}"><span aria-hidden="true">${sceneCollapsed ? "&#9656;" : "&#9662;"}</span></button>
@@ -5550,7 +5688,7 @@ export function renderTracker(
             <div class="bst-state" title="Global scene stats">Global</div>
           </div>
         </div>
-        <div class="bst-body"${sceneCollapsed ? ` style="display:none"` : ""}>
+        <div class="bst-body" data-bst-layer="scene.body"${sceneCollapsed ? ` style="display:none"` : ""}>
           ${sceneValues.map(item => {
             const def = item.def;
             const resolved = item.value as string | boolean | string[];
@@ -5566,7 +5704,7 @@ export function renderTracker(
             if (statLayout === "rows") {
               if (def.kind === "date_time" && def.dateTimeMode === "structured") {
                 return `
-                  <div class="bst-row bst-row-non-numeric">
+                  <div class="bst-row bst-row-non-numeric" data-bst-layer="scene.${escapeHtml(def.id)}">
                     <div class="bst-label">
                       ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
                     </div>
@@ -5593,7 +5731,7 @@ export function renderTracker(
                 const textValueRaw = items.length ? items.join(", ") : "Not set";
                 const textValue = truncateDisplayText(textValueRaw, textMaxLength);
                 return `
-                  <div class="bst-row bst-row-non-numeric">
+                  <div class="bst-row bst-row-non-numeric" data-bst-layer="scene.${escapeHtml(def.id)}">
                     <div class="bst-label">
                       ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
                       ${valueStyle === "plain"
@@ -5615,7 +5753,7 @@ export function renderTracker(
                 const displayValueRaw = formatDateTimeTimestampDisplay(resolved ?? "", dateFormat);
                 const displayValue = truncateDisplayText(displayValueRaw, textMaxLength);
                 return `
-                  <div class="bst-row bst-row-non-numeric">
+                  <div class="bst-row bst-row-non-numeric" data-bst-layer="scene.${escapeHtml(def.id)}">
                     <div class="bst-label">
                       ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
                       ${valueStyle === "plain"
@@ -5628,7 +5766,7 @@ export function renderTracker(
               const displayValueRaw = resolved == null ? "Not set" : formatNonNumericForDisplay(def, resolved);
               const displayValue = truncateDisplayText(displayValueRaw, textMaxLength);
               return `
-                <div class="bst-row bst-row-non-numeric">
+                <div class="bst-row bst-row-non-numeric" data-bst-layer="scene.${escapeHtml(def.id)}">
                   <div class="bst-label">
                     ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
                     ${valueStyle === "plain"
@@ -5640,7 +5778,7 @@ export function renderTracker(
             }
             if (def.kind === "date_time" && def.dateTimeMode === "structured") {
               return `
-                <div class="bst-row bst-row-non-numeric">
+                <div class="bst-row bst-row-non-numeric" data-bst-layer="scene.${escapeHtml(def.id)}">
                   <div class="bst-label">
                     ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
                   </div>
@@ -5714,7 +5852,7 @@ export function renderTracker(
             const displayValueRaw = resolved == null ? "Not set" : formatNonNumericForDisplay(def, resolved);
             const displayValue = truncateDisplayText(displayValueRaw, textMaxLength);
             return `
-              <div class="bst-row bst-row-non-numeric">
+              <div class="bst-row bst-row-non-numeric" data-bst-layer="scene.${escapeHtml(def.id)}">
                 <div class="bst-label">
                   ${showLabel ? `<span>${escapeHtml(statLabel)}</span>` : ""}
                   ${valueStyle === "plain"
@@ -5771,6 +5909,7 @@ export function renderTracker(
       card.style.setProperty("--bst-action-border-hover", scenePalette.hoverBorder);
       card.style.setProperty("--bst-action-focus", scenePalette.focus);
       card.innerHTML = sceneCardHtml;
+      applyEditorStyleToTrackerCard(card, "scene", settings);
       target.innerHTML = "";
       target.appendChild(card);
     };
@@ -5789,6 +5928,7 @@ export function renderTracker(
         card.style.setProperty("--bst-action-border-hover", palette.hoverBorder);
         card.style.setProperty("--bst-action-focus", palette.focus);
         card.innerHTML = item.html;
+        applyEditorStyleToTrackerCard(card, item.name === USER_TRACKER_KEY ? "user" : "character", settings);
         root.appendChild(card);
       }
     };
