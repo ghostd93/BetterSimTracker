@@ -2,6 +2,17 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.5-exp9] - 2026-03-08
+### Added
+- Added preview viewport switcher in Visual Editor (`Desktop` / `Mobile`) with deterministic preview width modes.
+- Added per-layer visibility controls in the layer panel and inspector (`Visible` toggle + quick eye button).
+
+### Changed
+- Layer visibility now participates in preview rendering and can be adjusted without leaving the layer tree workflow.
+
+### Fixed
+- Added regression coverage for preview viewport width helper and layer visibility override behavior.
+
 ## [2.2.4.5-exp8] - 2026-03-08
 ### Added
 - Added explicit layer-row controls in Visual Editor:

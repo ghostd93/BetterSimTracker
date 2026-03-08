@@ -11,6 +11,7 @@ import type {
 import { escapeHtml } from "./ui";
 
 type CardType = "character" | "user" | "scene";
+type PreviewViewport = "desktop" | "mobile";
 
 type OpenCardVisualEditorModalInput = {
   current: CardVisualEditorSettings;
@@ -54,6 +55,10 @@ export function pushDraftHistory(
   next.push(snapshot);
   if (next.length > maxEntries) next.splice(0, next.length - maxEntries);
   return next;
+}
+
+export function resolvePreviewViewportWidth(mode: PreviewViewport): number {
+  return mode === "mobile" ? 360 : 720;
 }
 
 export function reorderLayerIds(layerIds: readonly string[], fromId: string, toId: string): string[] {
@@ -240,6 +245,7 @@ function renderPreviewCard(
   const title = type === "character" ? "Character" : type === "user" ? "User" : "Scene";
   const valueText = type === "scene" ? "Scene Date/Time: 2026-03-08 20:00" : "Affection 58%";
   const selectedClass = (id: string): string => (selectedLayerId === id ? " is-selected" : "");
+  const isLayerVisible = (layerId: string): boolean => resolvePreviewLayerStyle(draft, type, layerId).visible !== false;
   const ownerBlockMarkupByLayer: Record<string, string> = {
     "stats.numeric.row": `
       <div class="bst-card-editor-preview-section${selectedClass(bodyId)}" data-layer="${bodyId}" style="
@@ -295,10 +301,12 @@ function renderPreviewCard(
     `,
   };
   const ownerBlocks = orderedLayerIds
+    .filter(id => isLayerVisible(id))
     .filter(id => Object.prototype.hasOwnProperty.call(ownerBlockMarkupByLayer, id))
     .map(id => ownerBlockMarkupByLayer[id])
     .join("");
   const sceneBlocks = orderedLayerIds
+    .filter(id => isLayerVisible(id))
     .filter(id => Object.prototype.hasOwnProperty.call(sceneBlockMarkupByLayer, id))
     .map(id => sceneBlockMarkupByLayer[id])
     .join("");
@@ -312,13 +320,14 @@ function renderPreviewCard(
       font-size:${String(root.fontSize)}px;
       padding:${String(root.padding)}px;
       box-shadow:${root.shadowEnabled ? `0 0 ${String(root.shadowBlur)}px ${String(root.shadowSpread)}px ${escapeHtml(root.shadowColor || "#00000044")}` : "none"};
+      ${root.visible === false ? "display:none;" : ""}
       " data-layer="root">
       <div class="bst-card-editor-preview-section${selectedClass(headerId)}" data-layer="${headerId}" style="
         color:${escapeHtml(header.textColor || root.textColor || "#f1f3f8")};
         border:${String(header.borderWidth ?? 0)}px solid ${escapeHtml(header.borderColor || "transparent")};
         border-radius:${String(header.borderRadius)}px;
         padding:${String(Math.max(4, Math.round((header.padding ?? root.padding) * 0.7)))}px;">
-        <div class="bst-card-editor-preview-title" style="font-size:${String(header.titleFontSize || root.titleFontSize)}px;">${title} Preview</div>
+        ${header.visible === false ? "" : `<div class="bst-card-editor-preview-title" style="font-size:${String(header.titleFontSize || root.titleFontSize)}px;">${title} Preview</div>`}
       </div>
       ${type === "scene" ? sceneBlocks : ownerBlocks}
     </div>
@@ -332,6 +341,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
   let activeType: CardType = "character";
   let selectedLayerId = "root";
   let liveMode = false;
+  let previewViewport: PreviewViewport = "desktop";
   let draggedLayerId: string | null = null;
   let historyStack: CardVisualEditorSettings[] = [];
   let futureStack: CardVisualEditorSettings[] = [];
@@ -360,6 +370,10 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           <button type="button" data-tab="user" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "user" ? "is-active" : ""}">User</button>
           <button type="button" data-tab="scene" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "scene" ? "is-active" : ""}">Scene</button>
         </div>
+        <div class="bst-card-editor-preview-viewport">
+          <button type="button" data-vp="desktop" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "desktop" ? "is-active" : ""}">Desktop</button>
+          <button type="button" data-vp="mobile" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "mobile" ? "is-active" : ""}">Mobile</button>
+        </div>
         <div class="bst-card-editor-toggles">
           <label class="bst-card-editor-switch">
             <input type="checkbox" data-k="useEditorStyling" ${draft.useEditorStyling ? "checked" : ""} title="Apply saved editor styles to real tracker cards. Turn off to use original styling.">
@@ -384,7 +398,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       <div class="bst-card-editor-grid">
         <div class="bst-card-editor-pane">
           <div class="bst-card-editor-pane-title">Preview</div>
-          <div class="bst-card-editor-live-preview">
+          <div class="bst-card-editor-live-preview" style="max-width:${String(resolvePreviewViewportWidth(previewViewport))}px;">
             ${renderPreviewCard(draft, activeType, selectedLayerId)}
           </div>
         </div>
@@ -403,6 +417,9 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
                 </button>
                 <button type="button" class="bst-card-editor-layer-mini" data-layer-up="${escapeHtml(layerId)}" title="Move up">↑</button>
                 <button type="button" class="bst-card-editor-layer-mini" data-layer-down="${escapeHtml(layerId)}" title="Move down">↓</button>
+                <button type="button" class="bst-card-editor-layer-mini" data-layer-visible="${escapeHtml(layerId)}" title="Toggle visibility">
+                  ${resolvePreviewLayerStyle(draft, activeType, layerId).visible === false ? "🙈" : "👁"}
+                </button>
                 <button type="button" class="bst-card-editor-layer-mini" data-layer-reset="${escapeHtml(layerId)}" title="Reset layer style">⟲</button>
               </div>
             `).join("")}
@@ -410,6 +427,11 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           <div class="bst-card-editor-pane-title">Inspector</div>
           <div class="bst-card-editor-help">Editing layer: <code>${escapeHtml(selectedLayerId)}</code></div>
           <div class="bst-card-editor-inspector">
+            <label class="bst-card-editor-switch">
+              <input data-k="visible" type="checkbox" ${root.visible !== false ? "checked" : ""}>
+              <span class="bst-card-editor-switch-pill" aria-hidden="true"></span>
+              <span class="bst-card-editor-switch-label">Visible</span>
+            </label>
             <label class="bst-card-editor-field">Background <input data-k="backgroundColor" type="text" value="${escapeHtml(root.backgroundColor || "")}" placeholder="#1a2134 / rgb(...)"></label>
             <label class="bst-card-editor-field">Text color <input data-k="textColor" type="text" value="${escapeHtml(root.textColor || "")}" placeholder="#f1f3f8"></label>
             <label class="bst-card-editor-field">Border color <input data-k="borderColor" type="text" value="${escapeHtml(root.borderColor || "")}" placeholder="#3a4966"></label>
@@ -435,6 +457,12 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       node.addEventListener("click", () => {
         activeType = String((node as HTMLElement).getAttribute("data-tab")) as CardType;
         selectedLayerId = "root";
+        render();
+      });
+    });
+    modal.querySelectorAll("[data-vp]").forEach(node => {
+      node.addEventListener("click", () => {
+        previewViewport = String((node as HTMLElement).getAttribute("data-vp")) as PreviewViewport;
         render();
       });
     });
@@ -491,6 +519,22 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
         maybeApplyLive();
       });
     });
+    modal.querySelectorAll("[data-layer-visible]").forEach(node => {
+      node.addEventListener("click", () => {
+        const layerId = String((node as HTMLElement).getAttribute("data-layer-visible") || "");
+        if (!layerId) return;
+        captureHistory();
+        const currentVisible = resolvePreviewLayerStyle(draft, activeType, layerId).visible !== false;
+        if (layerId === "root") {
+          writeOverrideRoot(draft, activeType, { visible: !currentVisible });
+        } else {
+          writeOverrideElement(draft, activeType, layerId, { visible: !currentVisible });
+        }
+        selectedLayerId = layerId;
+        render();
+        maybeApplyLive();
+      });
+    });
     modal.querySelectorAll("[data-layer-reset]").forEach(node => {
       node.addEventListener("click", () => {
         const layerId = String((node as HTMLElement).getAttribute("data-layer-reset") || "");
@@ -510,6 +554,17 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
     (modal.querySelector('[data-k="liveMode"]') as HTMLInputElement | null)?.addEventListener("change", (event) => {
       liveMode = (event.target as HTMLInputElement).checked;
       render();
+    });
+    (modal.querySelector('[data-k="visible"]') as HTMLInputElement | null)?.addEventListener("change", (event) => {
+      captureHistory();
+      const value = (event.target as HTMLInputElement).checked;
+      if (selectedLayerId === "root") {
+        writeOverrideRoot(draft, activeType, { visible: value });
+      } else {
+        writeOverrideElement(draft, activeType, selectedLayerId, { visible: value });
+      }
+      refreshPreview();
+      maybeApplyLive();
     });
 
     const maybeApplyLive = (): void => {
@@ -546,6 +601,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
     const refreshPreview = (): void => {
       const previewNode = modal.querySelector(".bst-card-editor-live-preview") as HTMLElement | null;
       if (!previewNode) return;
+      previewNode.style.maxWidth = `${String(resolvePreviewViewportWidth(previewViewport))}px`;
       previewNode.innerHTML = renderPreviewCard(draft, activeType, selectedLayerId);
       previewNode.querySelectorAll("[data-layer]").forEach(node => {
         node.addEventListener("click", (event) => {

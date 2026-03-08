@@ -6,6 +6,7 @@ import {
   moveLayerByDirection,
   pushDraftHistory,
   reorderLayerIds,
+  resolvePreviewViewportWidth,
   resolvePreviewLayerOrder,
   resolvePreviewLayerStyle,
   resolvePreviewRootStyle,
@@ -54,6 +55,22 @@ test("resolvePreviewLayerStyle inherits root and applies selected layer override
   assert.equal(header.textColor, "#88bbff");
   assert.equal(header.borderColor, "#335577");
   assert.equal(header.borderRadius, 16);
+});
+
+test("resolvePreviewLayerStyle exposes visibility defaults and overrides", () => {
+  const draft = createDefaultCardVisualEditorSettings();
+  const root = resolvePreviewLayerStyle(draft, "character", "root");
+  assert.equal(root.visible, true);
+
+  draft.character = {
+    elements: {
+      "mood.container": {
+        visible: false,
+      },
+    },
+  };
+  const mood = resolvePreviewLayerStyle(draft, "character", "mood.container");
+  assert.equal(mood.visible, false);
 });
 
 test("shouldLiveApply requires both live mode and editor styling", () => {
@@ -110,4 +127,9 @@ test("pushDraftHistory deduplicates adjacent snapshots and enforces max entries"
   assert.equal(history.length, 2);
   assert.equal(history[0].useEditorStyling, true);
   assert.equal(history[1].enabled, true);
+});
+
+test("resolvePreviewViewportWidth returns deterministic widths", () => {
+  assert.equal(resolvePreviewViewportWidth("desktop"), 720);
+  assert.equal(resolvePreviewViewportWidth("mobile"), 360);
 });

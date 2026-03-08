@@ -24,6 +24,7 @@ type LegacyVisualInputs = {
 };
 
 const DEFAULT_STYLE_PRESET: CardVisualEditorStylePreset = {
+  visible: true,
   backgroundColor: "",
   textColor: "",
   labelColor: "",
@@ -131,6 +132,7 @@ function sanitizeSceneValueStyle(value: unknown, fallback: "chip" | "plain"): "c
 function sanitizeStylePreset(input: unknown, fallback: CardVisualEditorStylePreset): CardVisualEditorStylePreset {
   const source = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   return {
+    visible: asBool(source.visible, fallback.visible),
     backgroundColor: sanitizeColor(source.backgroundColor, fallback.backgroundColor),
     textColor: sanitizeColor(source.textColor, fallback.textColor),
     labelColor: sanitizeColor(source.labelColor, fallback.labelColor),

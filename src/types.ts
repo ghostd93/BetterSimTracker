@@ -31,6 +31,7 @@ export type CardVisualMotionIntensity = "low" | "medium" | "high";
 export type CardVisualTokenChipStyle = "filled" | "outline" | "soft";
 
 export interface CardVisualEditorStylePreset {
+  visible: boolean;
   backgroundColor: string;
   textColor: string;
   labelColor: string;

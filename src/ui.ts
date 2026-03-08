@@ -3337,6 +3337,15 @@ export function ensureStyles(): void {
   display: grid;
   gap: 6px;
 }
+.bst-card-editor-preview-viewport {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.bst-card-editor-vp-btn.is-active {
+  border-color: rgba(143,180,255,0.95);
+  background: rgba(41, 79, 132, 0.58);
+}
 .bst-card-editor-history-controls {
   display: inline-flex;
   align-items: center;
@@ -3357,6 +3366,11 @@ export function ensureStyles(): void {
   border-radius: 12px;
   padding: 10px;
   background: #081024;
+}
+.bst-card-editor-live-preview {
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
 }
 .bst-card-editor-pane-title {
   font-weight: 600;
