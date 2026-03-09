@@ -1,9 +1,9 @@
-## [2.2.4.6-exp11] - 2026-03-09
+## [2.2.4.6-exp24] - 2026-03-09
 ### Fixed
 - Resolved owner-scoped visual override lookup to use avatar-aware owner identity at render time, so one character's card-editor styling no longer spills onto other owners.
 - Added regression coverage for avatar-first character default resolution to keep per-owner styling scoped correctly when name fallbacks also exist.
 
-## [2.2.4.6-exp10] - 2026-03-09
+## [2.2.4.6-exp23] - 2026-03-09
 ### Changed
 - Renamed the settings entry point to `Global Visual Editor (Experimental)` to make the global-vs-owner styling split explicit.
 - Added separate owner-scoped visual-editor entry points to character defaults and persona defaults so per-owner styling can be edited where owner defaults already live.
@@ -13,11 +13,11 @@
 - Owner visual styling now overrides global styling only inside that owner scope, while other owners keep the global style unchanged.
 - Character/persona visual override sanitization and merge paths now preserve partial style payloads correctly, preventing accidental reset of inherited global style values.
 
-## [2.2.4.6-exp9] - 2026-03-09
+## [2.2.4.6-exp22] - 2026-03-09
 ### Fixed
 - Tightened Visual Editor Inspector field sizing so color controls and neighboring inputs no longer overlap or drift out of alignment.
 
-## [2.2.4.6-exp8] - 2026-03-08
+## [2.2.4.6-exp21] - 2026-03-08
 ### Changed
 - Replaced editor color text fields with paired color pickers so color styling is editable visually instead of by raw hex only.
 - Tightened Inspector field alignment and field-group layout to reduce vertical drift and overlapping controls.
@@ -25,7 +25,7 @@
 ### Fixed
 - Wired `Apply` to real tracker-card styling paths by applying Visual Editor layer styles to runtime Character/User/Scene cards instead of only previewing them inside the modal.
 
-## [2.2.4.6-exp7] - 2026-03-08
+## [2.2.4.6-exp20] - 2026-03-08
 ### Changed
 - Reworked Visual Editor toolbar structure so card/viewport controls and preset actions read as separate logical sections with clearer guidance text.
 - Simplified preset flow by keeping `New preset` as the dedicated creation entry point and moving naming into the save panel instead of mixing it into the main toolbar.
@@ -33,14 +33,14 @@
 - Reorganized Inspector into logical groups (`Surface`, `Typography`, `Presentation`, `Spacing`) with layer-aware explanations so users can understand what each control affects before changing it.
 - Renamed Inspector field labels contextually (for example `Bar accent color`, `Thought padding`, `Chip/value color`) so the same underlying token no longer appears as an ambiguous generic input across unrelated stat types.
 
-## [2.2.4.6-exp6] - 2026-03-08
+## [2.2.4.6-exp19] - 2026-03-08
 ### Changed
 - Refined Visual Editor top toolbar with monochrome iconography and normalized control alignment/height across tabs, viewport buttons, preset select/input, and action buttons.
 - Reworked layer-row action layout so reorder arrows are grouped/integrated per movable layer row and locked rows stay minimal.
 - Rebalanced inspector logic by layer/stat type (`numeric`, `text`, `array`, `date_time`, `enum_single`, `boolean`) so shown controls are now context-specific instead of near-identical across layers.
 - Expanded inspector controls with additional style tokens (accent color, font family, line height, letter spacing, chip radius, bar height), all wired to live preview and apply flow.
 
-## [2.2.4.6-exp5] - 2026-03-08
+## [2.2.4.6-exp18] - 2026-03-08
 ### Changed
 - Removed redundant `Use Editor Styling` toggle from Visual Card Editor modal (now controlled only in main Display settings).
 - Reworked top editor toolbar with iconized actions, consistent control heights, and cleaner alignment for tabs/presets/actions.
@@ -50,14 +50,14 @@
 - Preview header now mirrors real cards more closely (no fake message-meta line, no text-only scene `Edit/Collapse` artifacts).
 - Scene preview now renders scene stats as real stat rows/chips (including date-time chips) instead of incorrect numeric bar rendering.
 
-## [2.2.4.6-exp4] - 2026-03-08
+## [2.2.4.6-exp17] - 2026-03-08
 ### Changed
 - Removed visibility controls from Visual Card Editor to simplify layer UX.
 - Moved layer reset action from layer rows into Inspector (`Reset Layer`) for clearer edit flow.
 - Integrated reorder arrows directly into movable layer rows and removed meaningless controls from locked rows.
 - Polished top editor menu spacing, sizing, and section readability.
 
-## [2.2.4.6-exp3] - 2026-03-08
+## [2.2.4.6-exp16] - 2026-03-08
 ### Changed
 - Polished Visual Card Editor controls and spacing for cleaner, more consistent UI.
 - Improved layer action buttons (clear arrow icons, compact icon sizing, stronger button hierarchy).
@@ -69,7 +69,7 @@
   - `Reset` is shown only when a layer actually has an override to reset.
 - Improved active-layer readability in layer tree with clearer row highlight.
 
-## [2.2.4.6-exp2] - 2026-03-08
+## [2.2.4.6-exp15] - 2026-03-08
 ### Changed
 - Removed `Live mode` from Visual Card Editor. Editing is now always preview-only until `Apply`.
 - `Apply` now always commits editor styling to runtime cards immediately (no extra runtime toggle dependency).
@@ -77,13 +77,22 @@
 ### Fixed
 - Improved drag-and-drop destination clarity in layer tree with stronger drop-target highlight and explicit before/after marker.
 
-## [2.2.4.6] - 2026-03-08
-### Fixed
-- Fixed array-stat clear regression in manual tracker edit flow: deleting the last array item now persists as an explicit empty array ([]) instead of reviving stale previous values from fallback history.
-- Fixed storage normalization to preserve explicit empty array values for custom non-numeric stats.
-- Fixed owner filtering path to keep empty-array clear sentinels, preventing old array values from reappearing on cards/injection.
+## [2.2.4.6-exp14] - 2026-03-08
+### Added
+- Introduced `cardVisualEditor` foundation schema in settings/types for future interactive card styling (user/character/scene).
+- Added new visual-editor core module with:
+  - schema defaults,
+  - legacy display migration,
+  - settings sanitization,
+  - base style resolver (`resolveCardStyle`).
 
-## [2.2.4.5-exp13] - 2026-03-08
+### Changed
+- `sanitizeSettings` now normalizes and persists `cardVisualEditor` with legacy display-field mapping to editor tokens.
+
+### Fixed
+- Added regression coverage for visual-editor foundation: clamp/fallback behavior, legacy migration mapping, idempotent migration, resolver enable/disable semantics.
+
+## [2.2.4.6-exp13] - 2026-03-08
 ### Changed
 - Reworked Visual Card Editor layout for better UX readability:
   - segmented toolbar groups (`Card + viewport`, `Runtime mode`, `Presets + history`),
@@ -102,7 +111,7 @@
 - Added explicit DnD drop target lines (`before`/`after`) in layer tree so drop destination is always visible.
 - Removed noisy/ambiguous preview artifacts and normalized editor text rendering for consistent readability.
 
-## [2.2.4.5-exp12] - 2026-03-08
+## [2.2.4.6-exp12] - 2026-03-08
 ### Added
 - Visual Editor now builds dynamic layer catalogs from current tracked built-ins/custom stats per card type (Character/User/Scene).
 - Layer tree now renders hierarchical nesting with depth indentation.
@@ -116,7 +125,7 @@
 - Fixed preview rendering to use resolved layer catalogs consistently in main render and refresh paths.
 - Added regression coverage for structural layer movability rules.
 
-## [2.2.4.5-exp11] - 2026-03-08
+## [2.2.4.6-exp11] - 2026-03-08
 ### Added
 - Added Visual Editor preset transfer panel with BST-styled JSON import/export workflow.
 - Added preset export action for selected preset and import action with inline validation feedback.
@@ -128,7 +137,7 @@
 - Fixed preset import merge typing/runtime path for element tokens (full token resolution, no partial-token leakage).
 - Added regression coverage for preset transfer payload parsing.
 
-## [2.2.4.5-exp10] - 2026-03-08
+## [2.2.4.6-exp10] - 2026-03-08
 ### Added
 - Added Visual Editor preset controls: save/load/delete presets directly in the editor toolbar.
 - Added layer lock behavior for `root` (cannot be moved/reset) with explicit disabled controls.
@@ -142,7 +151,7 @@
 - Fixed preset apply path typing/sanitization issues and added regression coverage for preset helpers.
 - Improved layer drag/drop behavior with explicit move semantics and safer non-movable layer handling.
 
-## [2.2.4.5-exp9] - 2026-03-08
+## [2.2.4.6-exp9] - 2026-03-08
 ### Added
 - Added preview viewport switcher in Visual Editor (`Desktop` / `Mobile`) with deterministic preview width modes.
 - Added per-layer visibility controls in the layer panel and inspector (`Visible` toggle + quick eye button).
@@ -153,7 +162,7 @@
 ### Fixed
 - Added regression coverage for preview viewport width helper and layer visibility override behavior.
 
-## [2.2.4.5-exp8] - 2026-03-08
+## [2.2.4.6-exp8] - 2026-03-08
 ### Added
 - Added explicit layer-row controls in Visual Editor:
   - move layer up (`↑`)
@@ -166,7 +175,7 @@
 ### Fixed
 - Added regression coverage for directional layer moves while preserving order safety.
 
-## [2.2.4.5-exp7] - 2026-03-08
+## [2.2.4.6-exp7] - 2026-03-08
 ### Added
 - Added Visual Editor session history controls: `Undo` and `Redo` buttons.
 - Added keyboard shortcuts in the editor modal:
@@ -179,7 +188,7 @@
 ### Fixed
 - Added regression coverage for editor history deduplication/limit behavior.
 
-## [2.2.4.5-exp6] - 2026-03-08
+## [2.2.4.6-exp6] - 2026-03-08
 ### Added
 - Added drag-and-drop reordering for Visual Editor layers.
 - Added persisted per-card-type `layerOrder` support in card visual editor settings.
@@ -190,7 +199,7 @@
 ### Fixed
 - Added regression coverage for layer-order resolution and drag reorder helper behavior.
 
-## [2.2.4.5-exp5] - 2026-03-08
+## [2.2.4.6-exp5] - 2026-03-08
 ### Added
 - Added explicit inline helper text for Visual Editor top-bar toggles (`Use Editor Styling`, `Live mode`) so users can understand behavior without guesswork.
 - Added hover tooltips for the same toggles as quick in-place explanations.
@@ -198,7 +207,7 @@
 ### Changed
 - Clarified Visual Editor control UX by documenting how `Live mode` interacts with `Use Editor Styling` directly in modal context.
 
-## [2.2.4.5-exp4] - 2026-03-08
+## [2.2.4.6-exp4] - 2026-03-08
 ### Added
 - Added layer-aware visual editing in the experimental card editor:
   - dedicated `Layers` panel per card type,
@@ -213,7 +222,7 @@
 ### Fixed
 - Added regression coverage for layer style resolution and live-mode gating logic in editor modal helpers.
 
-## [2.2.4.5-exp3] - 2026-03-08
+## [2.2.4.6-exp3] - 2026-03-08
 ### Changed
 - Simplified Visual Editor controls to one clear setting toggle: `Use Editor Styling`.
 - Removed redundant `Enable Visual Editor` toggles from both Display settings and the editor modal.
@@ -223,7 +232,7 @@
 - Card editor modal now always opens above settings modal layers.
 - Card editor modal styling now uses BST shared modal/input classes for consistent extension look and mobile behavior.
 
-## [2.2.4.5-exp2] - 2026-03-08
+## [2.2.4.6-exp2] - 2026-03-08
 ### Added
 - Added `Visual Editor (Experimental)` controls in Display settings:
   - `Enable Visual Editor`
@@ -240,27 +249,6 @@
 
 ### Fixed
 - Added UI-adjacent regression coverage for preview root-style resolution to verify base+override composition in editor preview.
-
-## [2.2.4.5-exp1] - 2026-03-08
-### Added
-- Introduced `cardVisualEditor` foundation schema in settings/types for future interactive card styling (user/character/scene).
-- Added new visual-editor core module with:
-  - schema defaults,
-  - legacy display migration,
-  - settings sanitization,
-  - base style resolver (`resolveCardStyle`).
-
-### Changed
-- `sanitizeSettings` now normalizes and persists `cardVisualEditor` with legacy display-field mapping to editor tokens.
-
-### Fixed
-- Added regression coverage for visual-editor foundation: clamp/fallback behavior, legacy migration mapping, idempotent migration, resolver enable/disable semantics.
-
-## [2.2.4.6] - 2026-03-08
-### Fixed
-- Fixed array-stat clear regression in manual tracker edit flow: deleting the last array item now persists as an explicit empty array (`[]`) instead of reviving stale previous values from fallback history.
-- Fixed storage normalization to preserve explicit empty array values for custom non-numeric stats.
-- Fixed owner filtering path to keep empty-array clear sentinels, preventing old array values from reappearing on cards/injection.
 
 ## [2.2.4.6] - 2026-03-08
 ### Fixed
@@ -1075,4 +1063,6 @@ And more...
 ## [1.0.0] - 2026-02-18
 
 - First stable public release.
+
+
 
