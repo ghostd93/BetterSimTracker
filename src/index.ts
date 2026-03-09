@@ -1566,9 +1566,9 @@ function queueRender(): void {
     }, messageIndex => {
       clearTrackerRecovery(messageIndex);
       void runExtraction("manual_refresh", messageIndex);
-    }, characterName => {
+    }, (characterName, characterAvatar) => {
       const liveContext = getSafeContext();
-      return getConfiguredCharacterDefaults(liveContext, settings!, characterName).cardVisualOverride ?? null;
+      return getConfiguredCharacterDefaults(liveContext, settings!, characterName, characterAvatar).cardVisualOverride ?? null;
     });
   });
 }
@@ -1870,6 +1870,7 @@ function getConfiguredCharacterDefaults(
   context: STContext | null,
   settingsInput: BetterSimTrackerSettings,
   name: string,
+  avatarOverride?: string | null,
 ): {
   trackerEnabled?: boolean;
   statEnabled?: Record<string, boolean>;
@@ -1972,14 +1973,17 @@ function getConfiguredCharacterDefaults(
     };
   }
 
-  const character = findCharacterByName(context, name);
+  const directAvatar = String(avatarOverride ?? "").trim();
+  const character = directAvatar
+    ? context?.characters?.find(item => String(item?.avatar ?? "").trim() === directAvatar) ?? findCharacterByName(context, name)
+    : findCharacterByName(context, name);
   const extFromCharacter = character?.extensions as Record<string, unknown> | undefined;
   const extFromData = character?.data?.extensions as Record<string, unknown> | undefined;
   const own = ((extFromCharacter?.bettersimtracker ?? extFromData?.bettersimtracker) as Record<string, unknown> | undefined);
   const defaultsFromExtensions = (own?.defaults as Record<string, unknown> | undefined) ?? {};
   const defaultsFromSettings = resolveCharacterDefaultsEntry(settingsInput, {
     name,
-    avatar: character?.avatar,
+    avatar: directAvatar || character?.avatar,
   });
   const merged = { ...defaultsFromSettings, ...defaultsFromExtensions };
   const trackerEnabled = merged.trackerEnabled === false ? false : undefined;

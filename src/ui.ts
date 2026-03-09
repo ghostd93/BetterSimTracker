@@ -4783,7 +4783,10 @@ export function renderTracker(
   resolveEntryData?: (messageIndex: number) => TrackerData | null,
   onRequestRerender?: () => void,
   onRecoverTracker?: (messageIndex: number) => void,
-  resolveCardVisualOverride?: (characterName: string) => import("./types").CardVisualEditorCardStyleOverride | null,
+  resolveCardVisualOverride?: (
+    characterName: string,
+    characterAvatar?: string | null,
+  ) => import("./types").CardVisualEditorCardStyleOverride | null,
 ): void {
   ensureStyles();
   const palette = allocateCharacterColors(allCharacters);
@@ -5522,7 +5525,7 @@ export function renderTracker(
         ?? getResolvedCardColor(settings, moodLookupName, characterAvatar)
         ?? palette[name]
         ?? getStableAutoCardColor(name);
-      const cardVisualOverride = resolveCardVisualOverride?.(name) ?? null;
+      const cardVisualOverride = resolveCardVisualOverride?.(name, characterAvatar) ?? null;
       const cardKey = `${entry.messageIndex}:${normalizeName(name)}`;
       const isNew = !renderedCardKeys.has(cardKey);
       renderedCardKeys.add(cardKey);

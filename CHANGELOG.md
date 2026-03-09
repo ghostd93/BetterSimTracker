@@ -1,3 +1,8 @@
+## [2.2.4.6-exp11] - 2026-03-09
+### Fixed
+- Resolved owner-scoped visual override lookup to use avatar-aware owner identity at render time, so one character's card-editor styling no longer spills onto other owners.
+- Added regression coverage for avatar-first character default resolution to keep per-owner styling scoped correctly when name fallbacks also exist.
+
 ## [2.2.4.6-exp10] - 2026-03-09
 ### Changed
 - Renamed the settings entry point to `Global Visual Editor (Experimental)` to make the global-vs-owner styling split explicit.
