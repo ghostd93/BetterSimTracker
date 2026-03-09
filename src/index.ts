@@ -3549,7 +3549,7 @@ function refreshFromStoredData(): void {
     context,
     settings,
     allCharacterNames,
-    latestPromptMacroData,
+    getLatestPromptMacroData: () => latestPromptMacroData,
     getLastInjectedPrompt,
   });
   queuePromptSync(context);

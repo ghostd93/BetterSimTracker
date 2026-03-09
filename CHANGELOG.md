@@ -2,8 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.4.5-dev1] - 2026-03-08
+## [2.2.4.6-dev1] - 2026-03-09
 ### Fixed
+- Fixed BST stat macros (`{{bst_stat_user_<id>}}`, `{{bst_stat_scene_<id>}}`, `{{bst_stat_char_<id>_<character_slug>}}`) so they resolve against fresh tracker data even when prompt injection is off.
+- Fixed macro registration flow to avoid “stuck blank” stat macros when initial sync happened before tracker data existed.
 - Fixed array-stat clear regression in manual tracker edit flow:
   - deleting the last array item now persists as an explicit empty array (`[]`) instead of reviving stale previous values from fallback history.
 - Fixed storage normalization to preserve explicit empty array values for custom non-numeric stats.

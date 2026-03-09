@@ -217,10 +217,10 @@ export function syncBstMacros(input: {
   context: STContext;
   settings: BetterSimTrackerSettings;
   allCharacterNames: string[];
-  latestPromptMacroData: TrackerData | null;
+  getLatestPromptMacroData: () => TrackerData | null;
   getLastInjectedPrompt: () => string;
 }): void {
-  const { context, settings, allCharacterNames, latestPromptMacroData, getLastInjectedPrompt } = input;
+  const { context, settings, allCharacterNames, getLatestPromptMacroData, getLastInjectedPrompt } = input;
   const customDefs = (settings.customStats ?? [])
     .map(def => ({ ...def, id: String(def.id ?? "").trim().toLowerCase() }))
     .filter(def => def.id.length > 0);
@@ -312,7 +312,7 @@ export function syncBstMacros(input: {
         context,
         macroName,
         `BetterSimTracker stat macro for "${statId}" (${BST_MACRO_STAT_SCOPE_USER} scope).`,
-        () => resolveMacroStatValue(latestPromptMacroData, settings, statId, BST_MACRO_STAT_SCOPE_USER),
+        () => resolveMacroStatValue(getLatestPromptMacroData(), settings, statId, BST_MACRO_STAT_SCOPE_USER),
       );
     }
     if (allowsScene) {
@@ -321,7 +321,7 @@ export function syncBstMacros(input: {
         context,
         macroName,
         `BetterSimTracker stat macro for "${statId}" (${BST_MACRO_STAT_SCOPE_SCENE} scope).`,
-        () => resolveMacroStatValue(latestPromptMacroData, settings, statId, BST_MACRO_STAT_SCOPE_SCENE),
+        () => resolveMacroStatValue(getLatestPromptMacroData(), settings, statId, BST_MACRO_STAT_SCOPE_SCENE),
       );
     }
     if (allowsCharacter) {
@@ -330,7 +330,7 @@ export function syncBstMacros(input: {
           context,
           `bst_stat_char_${segment}_${target.macroSlug}`,
           `BetterSimTracker stat macro for "${statId}" (character "${target.displayName}").`,
-          () => resolveMacroStatValue(latestPromptMacroData, settings, statId, "char_target", target.ownerName),
+          () => resolveMacroStatValue(getLatestPromptMacroData(), settings, statId, "char_target", target.ownerName),
         );
       }
     }
