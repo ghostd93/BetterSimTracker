@@ -1,3 +1,7 @@
+## [2.2.4.6-exp9] - 2026-03-09
+### Fixed
+- Tightened Visual Editor Inspector field sizing so color controls and neighboring inputs no longer overlap or drift out of alignment.
+
 ## [2.2.4.6-exp8] - 2026-03-08
 ### Changed
 - Replaced editor color text fields with paired color pickers so color styling is editable visually instead of by raw hex only.

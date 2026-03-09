@@ -3775,21 +3775,29 @@ export function ensureStyles(): void {
   gap: 5px;
   font-size: 12px;
   align-content: start;
+  min-width: 0;
 }
 .bst-card-editor-field > input,
 .bst-card-editor-field > select,
 .bst-card-editor-field > textarea,
 .bst-card-editor-color-field-wrap {
   align-self: start;
+  min-width: 0;
 }
 .bst-card-editor-field > input:not([type="checkbox"]):not([type="color"]),
 .bst-card-editor-field > select,
 .bst-card-editor-color-field-wrap > input[type="text"] {
   min-height: 38px;
   height: 38px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .bst-card-editor-field > textarea {
   min-height: 96px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .bst-card-editor-field-hint {
   color: rgba(218, 228, 248, 0.72);
@@ -3801,15 +3809,19 @@ export function ensureStyles(): void {
   grid-template-columns: minmax(0, 1fr) 42px;
   gap: 8px;
   align-items: center;
+  width: 100%;
+  min-width: 0;
 }
 .bst-card-editor-color-picker {
   width: 42px;
   min-width: 42px;
+  max-width: 42px;
   height: 38px;
   padding: 3px !important;
   border-radius: 8px;
   cursor: pointer;
   margin: 0;
+  justify-self: end;
 }
 .bst-card-editor-inspector-group {
   border: 1px solid rgba(255,255,255,0.12);
@@ -3837,7 +3849,7 @@ export function ensureStyles(): void {
 .bst-card-editor-inspector-group-fields {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 .bst-card-editor-group-note {
   font-size: 11px;
