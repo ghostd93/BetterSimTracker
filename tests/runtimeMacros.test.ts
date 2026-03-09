@@ -205,6 +205,7 @@ test("syncBstMacros creates collision-safe character macros for duplicate names"
   assert.equal(registered.has("bst_stat_char_affection_chloe_b"), true);
   assert.equal(registered.get("bst_stat_char_affection_chloe_a")?.(), "42");
   assert.equal(registered.get("bst_stat_char_affection_chloe_b")?.(), "42");
+  assert.equal(registered.has("bst_stat_char_affection_chloe"), false);
 });
 
 test("syncBstMacros stat getters read fresh tracker data even when registration signature is unchanged", () => {
@@ -255,5 +256,25 @@ test("syncBstMacros registers macros in the new ST macro engine even when legacy
   assert.equal(registeredNewEngine.get("bst_injection")?.(), "<bst_inject_block>demo</bst_inject_block>");
   assert.equal(registeredNewEngine.get("bst_stat_user_clothes")?.(), "hoodie");
   assert.equal(registeredNewEngine.get("bst_stat_scene_scene_date_time")?.(), "2026-03-06 20:05");
+  assert.equal(registeredNewEngine.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
+});
+
+test("syncBstMacros exposes a legacy name-slug alias for unique characters when avatar slug differs", () => {
+  const { context, registered, registeredNewEngine } = makeContext();
+  context.characters = [
+    { name: "Seraphina", avatar: "cards/sera_alt.png" } as any,
+  ];
+
+  syncBstMacros({
+    context,
+    settings: makeSettings(),
+    allCharacterNames: ["Seraphina", USER_TRACKER_KEY],
+    getLatestPromptMacroData: () => makeTracker(),
+    getLastInjectedPrompt: () => "",
+  });
+
+  assert.equal(registered.get("bst_stat_char_clothes_sera_alt")?.(), "black sundress, sandals");
+  assert.equal(registered.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
+  assert.equal(registeredNewEngine.get("bst_stat_char_clothes_sera_alt")?.(), "black sundress, sandals");
   assert.equal(registeredNewEngine.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
 });

@@ -41,6 +41,7 @@ function toAvatarSlug(value: string): string {
 type CharacterMacroTarget = {
   ownerName: string;
   macroSlug: string;
+  legacyNameSlug: string | null;
   displayName: string;
   avatar: string | null;
 };
@@ -71,15 +72,26 @@ function buildCharacterMacroTargets(context: STContext, allCharacterNames: strin
   }
 
   const slugCounts = new Map<string, number>();
+  const nameSlugCounts = new Map<string, number>();
+  for (const candidate of candidates) {
+    const nameSlug = toCharacterSlug(candidate.ownerName);
+    nameSlugCounts.set(nameSlug, (nameSlugCounts.get(nameSlug) ?? 0) + 1);
+  }
+
   const targets: CharacterMacroTarget[] = [];
   for (const candidate of candidates) {
     const base = candidate.baseSlug || CHARACTER_SLUG_FALLBACK;
     const next = (slugCounts.get(base) ?? 0) + 1;
     slugCounts.set(base, next);
     const macroSlug = next === 1 ? base : `${base}_${next}`;
+    const nameSlug = toCharacterSlug(candidate.ownerName);
+    const legacyNameSlug = nameSlug && nameSlug !== macroSlug && (nameSlugCounts.get(nameSlug) ?? 0) === 1
+      ? nameSlug
+      : null;
     targets.push({
       ownerName: candidate.ownerName,
       macroSlug,
+      legacyNameSlug,
       displayName: candidate.displayName,
       avatar: candidate.avatar,
     });
@@ -225,7 +237,7 @@ export function syncBstMacros(input: {
   const customStatIds = customDefs.map(def => def.id);
   const characterTargets = buildCharacterMacroTargets(context, allCharacterNames);
   const characterSignature = characterTargets
-    .map(target => `${target.ownerName}:${target.macroSlug}:${target.avatar ?? ""}`)
+    .map(target => `${target.ownerName}:${target.macroSlug}:${target.legacyNameSlug ?? ""}:${target.avatar ?? ""}`)
     .join("|");
   const signature = [
     "v1",
@@ -330,6 +342,14 @@ export function syncBstMacros(input: {
           `BetterSimTracker stat macro for "${statId}" (character "${target.displayName}").`,
           () => resolveMacroStatValue(getLatestPromptMacroData(), settings, statId, "char_target", target.ownerName),
         );
+        if (target.legacyNameSlug) {
+          registerBstMacro(
+            context,
+            `bst_stat_char_${segment}_${target.legacyNameSlug}`,
+            `BetterSimTracker legacy stat macro alias for "${statId}" (character "${target.displayName}").`,
+            () => resolveMacroStatValue(getLatestPromptMacroData(), settings, statId, "char_target", target.ownerName),
+          );
+        }
       }
     }
   }

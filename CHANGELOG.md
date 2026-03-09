@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.6-dev3] - 2026-03-09
+### Fixed
+- Fixed character stat macros for unique owners by exposing a backward-safe name-slug alias alongside avatar-first runtime slugs, so prompts using `{{bst_stat_char_<id>_<character_name_slug>}}` continue to resolve when the owner has an avatar-based macro identity.
+- Added regression coverage to ensure duplicate-name characters stay collision-safe while unique characters still expose a stable name-based alias.
+
 ## [2.2.4.6-dev2] - 2026-03-09
 ### Fixed
 - Fixed BST stat macros to register into both SillyTavern macro paths (legacy + new macro engine), so `{{bst_stat_*}}` and `{{bst_injection}}` resolve in prompt-manager/chat-completion prompts even when `Inject Tracker Into Prompt` is off.
