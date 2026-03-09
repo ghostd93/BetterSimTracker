@@ -72,7 +72,7 @@ import {
   resolveEnumOption,
   hasScriptLikeContent,
 } from "./customStatRuntime";
-import { resolveCardStyle } from "./cardVisualEditor";
+import { resolveCardStyleWithOverride } from "./cardVisualEditor";
 
 type UiNumericStatDefinition = {
   key: string;
@@ -711,8 +711,9 @@ function applyEditorStyleToTrackerCard(
   card: HTMLElement,
   cardType: "character" | "user" | "scene",
   settings: BetterSimTrackerSettings,
+  ownerOverride?: import("./types").CardVisualEditorCardStyleOverride | null,
 ): void {
-  const style = resolveCardStyle(cardType, settings.cardVisualEditor);
+  const style = resolveCardStyleWithOverride(cardType, settings.cardVisualEditor, ownerOverride);
   if (!style) return;
   applyCommonEditorStyles(card, style.root);
   if (style.root.textColor) card.style.color = style.root.textColor;
@@ -4782,6 +4783,7 @@ export function renderTracker(
   resolveEntryData?: (messageIndex: number) => TrackerData | null,
   onRequestRerender?: () => void,
   onRecoverTracker?: (messageIndex: number) => void,
+  resolveCardVisualOverride?: (characterName: string) => import("./types").CardVisualEditorCardStyleOverride | null,
 ): void {
   ensureStyles();
   const palette = allocateCharacterColors(allCharacters);
@@ -5426,7 +5428,7 @@ export function renderTracker(
         return a.localeCompare(b);
       });
 
-    const cardHtmlByName: Array<{ name: string; displayName: string; ownerClass: string; html: string; isActive: boolean; isNew: boolean; cardColor: string }> = [];
+    const cardHtmlByName: Array<{ name: string; displayName: string; ownerClass: string; html: string; isActive: boolean; isNew: boolean; cardColor: string; cardVisualOverride: import("./types").CardVisualEditorCardStyleOverride | null }> = [];
     const signatureParts: string[] = [
       `msg:${entry.messageIndex}`,
       `collapsed:${collapsed ? "1" : "0"}`,
@@ -5520,6 +5522,7 @@ export function renderTracker(
         ?? getResolvedCardColor(settings, moodLookupName, characterAvatar)
         ?? palette[name]
         ?? getStableAutoCardColor(name);
+      const cardVisualOverride = resolveCardVisualOverride?.(name) ?? null;
       const cardKey = `${entry.messageIndex}:${normalizeName(name)}`;
       const isNew = !renderedCardKeys.has(cardKey);
       renderedCardKeys.add(cardKey);
@@ -5629,7 +5632,7 @@ export function renderTracker(
         </div>
       `;
       const ownerClass = `bst-owner-${toOwnerClassSuffix(displayName)}`;
-      cardHtmlByName.push({ name, displayName, ownerClass, html: cardHtml, isActive, isNew, cardColor });
+      cardHtmlByName.push({ name, displayName, ownerClass, html: cardHtml, isActive, isNew, cardColor, cardVisualOverride });
       const nonNumericSignature = enabledNonNumeric.map(def => {
         const value = resolveEffectiveNonNumericValue(def, name);
         if (value == null) return `${def.id}:not_set`;
@@ -5940,7 +5943,7 @@ export function renderTracker(
         card.style.setProperty("--bst-action-border-hover", palette.hoverBorder);
         card.style.setProperty("--bst-action-focus", palette.focus);
         card.innerHTML = item.html;
-        applyEditorStyleToTrackerCard(card, item.name === USER_TRACKER_KEY ? "user" : "character", settings);
+        applyEditorStyleToTrackerCard(card, item.name === USER_TRACKER_KEY ? "user" : "character", settings, item.cardVisualOverride);
         root.appendChild(card);
       }
     };

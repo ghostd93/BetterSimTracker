@@ -42,6 +42,9 @@ type OpenCardVisualEditorModalInput = {
     sceneCardArrayCollapsedLimit: number;
   };
   layerCatalog?: Partial<LayerCatalog>;
+  title?: string;
+  initialType?: CardType;
+  allowedTypes?: CardType[];
   onApply: (next: CardVisualEditorSettings) => void;
 };
 
@@ -1118,7 +1121,12 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
   closeExisting();
   const base = sanitizeCardVisualEditorSettings(input.current, input.legacy);
   let draft = sanitizeCardVisualEditorSettings(base, input.legacy);
-  let activeType: CardType = "character";
+  const allowedTypes: CardType[] = (Array.isArray(input.allowedTypes) && input.allowedTypes.length
+    ? input.allowedTypes.filter((type): type is CardType => type === "character" || type === "user" || type === "scene")
+    : ["character", "user", "scene"]);
+  let activeType: CardType = allowedTypes.includes(input.initialType ?? "character")
+    ? (input.initialType ?? "character")
+    : allowedTypes[0]!;
   let selectedLayerId = "root";
   let previewViewport: PreviewViewport = "desktop";
   let selectedPresetId = draft.activePresetId || "";
@@ -1214,7 +1222,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
     };
     modal.innerHTML = `
       <div class="bst-card-editor-head">
-        <div class="bst-card-editor-title">Visual Card Editor (Experimental)</div>
+        <div class="bst-card-editor-title">${escapeHtml(input.title || "Visual Card Editor (Experimental)")}</div>
         <button type="button" data-act="close" class="bst-btn bst-close-btn">&times;</button>
       </div>
       <div class="bst-card-editor-toolbar">
@@ -1223,9 +1231,9 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           <div class="bst-card-editor-group-note">Choose which real card type you are styling and which preview size to inspect.</div>
           <div class="bst-card-editor-primary-controls">
             <div class="bst-card-editor-tabs">
-              <button type="button" data-tab="character" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "character" ? "is-active" : ""}">Character</button>
-              <button type="button" data-tab="user" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "user" ? "is-active" : ""}">User</button>
-              <button type="button" data-tab="scene" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "scene" ? "is-active" : ""}">Scene</button>
+              ${allowedTypes.includes("character") ? `<button type="button" data-tab="character" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "character" ? "is-active" : ""}">Character</button>` : ""}
+              ${allowedTypes.includes("user") ? `<button type="button" data-tab="user" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "user" ? "is-active" : ""}">User</button>` : ""}
+              ${allowedTypes.includes("scene") ? `<button type="button" data-tab="scene" class="bst-btn bst-btn-soft bst-card-editor-tab ${activeType === "scene" ? "is-active" : ""}">Scene</button>` : ""}
             </div>
             <div class="bst-card-editor-preview-viewport">
               <button type="button" data-vp="desktop" class="bst-btn bst-btn-soft bst-card-editor-vp-btn ${previewViewport === "desktop" ? "is-active" : ""}">Desktop</button>

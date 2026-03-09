@@ -305,6 +305,7 @@ export interface CharacterDefaults {
   mood?: string;
   lastThought?: string;
   cardColor?: string;
+  cardVisualOverride?: CardVisualEditorCardStyleOverride;
   customStatDefaults?: Record<CustomStatKey, number>;
   customNonNumericStatDefaults?: Record<CustomStatKey, string | boolean | string[]>;
   moodSource?: MoodSource;

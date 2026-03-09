@@ -1,3 +1,13 @@
+## [2.2.4.6-exp10] - 2026-03-09
+### Changed
+- Renamed the settings entry point to `Global Visual Editor (Experimental)` to make the global-vs-owner styling split explicit.
+- Added separate owner-scoped visual-editor entry points to character defaults and persona defaults so per-owner styling can be edited where owner defaults already live.
+
+### Fixed
+- Owner-scoped visual overrides now resolve as true deltas on top of the global visual editor instead of backfilling missing fields from defaults.
+- Owner visual styling now overrides global styling only inside that owner scope, while other owners keep the global style unchanged.
+- Character/persona visual override sanitization and merge paths now preserve partial style payloads correctly, preventing accidental reset of inherited global style values.
+
 ## [2.2.4.6-exp9] - 2026-03-09
 ### Fixed
 - Tightened Visual Editor Inspector field sizing so color controls and neighboring inputs no longer overlap or drift out of alignment.

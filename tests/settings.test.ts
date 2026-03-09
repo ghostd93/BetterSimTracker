@@ -228,6 +228,12 @@ test("sanitizeSettings supports collapseCardsByDefault and trackerEnabled in cha
       Seraphina: {
         trackerEnabled: false,
         statEnabled: { affection: false, pose: false },
+        cardVisualOverride: {
+          root: { backgroundColor: "#223344" },
+          elements: {
+            "stat.affection": { accentColor: "#55aaee" },
+          },
+        },
         customNonNumericStatDefaults: {
           pose: "Standing by the bed",
         },
@@ -239,6 +245,8 @@ test("sanitizeSettings supports collapseCardsByDefault and trackerEnabled in cha
   assert.equal(sanitized.characterDefaults.Seraphina?.trackerEnabled, false);
   assert.equal(sanitized.characterDefaults.Seraphina?.statEnabled?.affection, false);
   assert.equal(sanitized.characterDefaults.Seraphina?.statEnabled?.pose, false);
+  assert.equal(sanitized.characterDefaults.Seraphina?.cardVisualOverride?.root?.backgroundColor, "#223344");
+  assert.equal(sanitized.characterDefaults.Seraphina?.cardVisualOverride?.elements?.["stat.affection"]?.accentColor, "#55aaee");
   assert.equal(
     sanitized.characterDefaults.Seraphina?.customNonNumericStatDefaults?.pose,
     "Standing by the bed",

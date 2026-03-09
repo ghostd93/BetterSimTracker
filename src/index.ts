@@ -1566,6 +1566,9 @@ function queueRender(): void {
     }, messageIndex => {
       clearTrackerRecovery(messageIndex);
       void runExtraction("manual_refresh", messageIndex);
+    }, characterName => {
+      const liveContext = getSafeContext();
+      return getConfiguredCharacterDefaults(liveContext, settings!, characterName).cardVisualOverride ?? null;
     });
   });
 }
@@ -1876,6 +1879,7 @@ function getConfiguredCharacterDefaults(
   connection?: number;
   mood?: string;
   lastThought?: string;
+  cardVisualOverride?: import("./types").CardVisualEditorCardStyleOverride;
   customStatDefaults?: Record<string, number>;
   customNonNumericStatDefaults?: Record<string, string | boolean | string[]>;
 } {
@@ -1904,6 +1908,9 @@ function getConfiguredCharacterDefaults(
     const connection = parseDefaultNumber(merged.connection);
     const mood = parseDefaultText(merged.mood);
     const lastThought = parseDefaultText(merged.lastThought);
+    const cardVisualOverride = merged.cardVisualOverride && typeof merged.cardVisualOverride === "object"
+      ? merged.cardVisualOverride as import("./types").CardVisualEditorCardStyleOverride
+      : undefined;
     const customStatDefaultsRaw = merged.customStatDefaults;
     const customStatDefaults: Record<string, number> = {};
     if (customStatDefaultsRaw && typeof customStatDefaultsRaw === "object") {
@@ -1959,6 +1966,7 @@ function getConfiguredCharacterDefaults(
       ...(connection != null ? { connection } : {}),
       ...(mood != null ? { mood } : {}),
       ...(lastThought != null ? { lastThought } : {}),
+      ...(cardVisualOverride && Object.keys(cardVisualOverride).length ? { cardVisualOverride } : {}),
       ...(Object.keys(customStatDefaults).length ? { customStatDefaults } : {}),
       ...(Object.keys(customNonNumericStatDefaults).length ? { customNonNumericStatDefaults } : {}),
     };
@@ -1992,6 +2000,9 @@ function getConfiguredCharacterDefaults(
   const connection = parseDefaultNumber(merged.connection);
   const mood = parseDefaultText(merged.mood);
   const lastThought = parseDefaultText(merged.lastThought);
+  const cardVisualOverride = merged.cardVisualOverride && typeof merged.cardVisualOverride === "object"
+    ? merged.cardVisualOverride as import("./types").CardVisualEditorCardStyleOverride
+    : undefined;
   const customStatDefaultsRaw = merged.customStatDefaults;
   const customStatDefaults: Record<string, number> = {};
   if (customStatDefaultsRaw && typeof customStatDefaultsRaw === "object") {
@@ -2047,6 +2058,7 @@ function getConfiguredCharacterDefaults(
     ...(connection != null ? { connection } : {}),
     ...(mood != null ? { mood } : {}),
     ...(lastThought != null ? { lastThought } : {}),
+    ...(cardVisualOverride && Object.keys(cardVisualOverride).length ? { cardVisualOverride } : {}),
     ...(Object.keys(customStatDefaults).length ? { customStatDefaults } : {}),
     ...(Object.keys(customNonNumericStatDefaults).length ? { customNonNumericStatDefaults } : {}),
   };

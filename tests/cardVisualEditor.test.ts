@@ -4,8 +4,11 @@ import assert from "node:assert/strict";
 import {
   CARD_VISUAL_EDITOR_SCHEMA_VERSION,
   createDefaultCardVisualEditorSettings,
+  deriveRelativeCardStyleOverride,
+  mergeCardStyleOverride,
   migrateLegacyDisplayToCardVisualEditor,
   resolveCardStyle,
+  resolveCardStyleWithOverride,
   sanitizeCardVisualEditorSettings,
 } from "../src/cardVisualEditor";
 
@@ -132,5 +135,41 @@ test("resolveCardStyle merges base and card override when enabled", () => {
   assert.equal(resolved?.root.backgroundColor, "#222222");
   assert.equal(resolved?.root.borderRadius, 20);
   assert.equal(resolved?.root.fontSize, settings.base.root.fontSize);
+});
+
+test("resolveCardStyleWithOverride applies owner override on top of global card override", () => {
+  const settings = createDefaultCardVisualEditorSettings();
+  settings.useEditorStyling = true;
+  settings.base.root.backgroundColor = "#111111";
+  settings.character = {
+    root: { backgroundColor: "#222222", borderRadius: 20 },
+    elements: { "stat.affection": { accentColor: "#ff0000" } },
+  };
+
+  const resolved = resolveCardStyleWithOverride("character", settings, {
+    root: { backgroundColor: "#333333" },
+    elements: { "stat.affection": { accentColor: "#00ff00" } },
+  });
+
+  assert.ok(resolved);
+  assert.equal(resolved?.root.backgroundColor, "#333333");
+  assert.equal(resolved?.root.borderRadius, 20);
+  assert.equal(resolved?.elements["stat.affection"]?.accentColor, "#00ff00");
+});
+
+test("mergeCardStyleOverride and deriveRelativeCardStyleOverride preserve only owner delta", () => {
+  const globalOverride = {
+    root: { backgroundColor: "#202020", borderRadius: 18 },
+    elements: { "stat.affection": { accentColor: "#ff0000" } },
+  };
+  const ownerOverride = {
+    root: { backgroundColor: "#303030" },
+    elements: { "stat.affection": { accentColor: "#00ff00" } },
+  };
+
+  const merged = mergeCardStyleOverride(globalOverride, ownerOverride);
+  const relative = deriveRelativeCardStyleOverride(merged, globalOverride);
+
+  assert.deepEqual(relative, ownerOverride);
 });
 

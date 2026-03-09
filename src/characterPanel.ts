@@ -30,6 +30,8 @@ import {
   normalizeNonNumericArrayItems,
 } from "./customStatRuntime";
 import { isCustomStatTrackableForOwnerToggle } from "./ownerStatToggles";
+import { openCardVisualEditorModal } from "./cardVisualEditorModal";
+import { deriveRelativeCardStyleOverride, mergeCardStyleOverride } from "./cardVisualEditor";
 
 const PANEL_ID = "bst-character-panel";
 const NAME_INPUT_SELECTORS = ["#character_name_pole", "#character_name", "input[name='name']"];
@@ -288,6 +290,37 @@ function sanitizeMoodDefaultValue(value: string): string | null {
   const trimmed = value.trim().slice(0, 80);
   if (!trimmed) return null;
   return normalizeMoodLabel(trimmed) ?? trimmed;
+}
+
+function buildCharacterEditorLayerCatalog(settings: BetterSimTrackerSettings): Parameters<typeof openCardVisualEditorModal>[0]["layerCatalog"] {
+  const builtInCharacterNodes = [
+    settings.trackAffection ? { id: "stat.affection", label: "Affection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+    settings.trackTrust ? { id: "stat.trust", label: "Trust", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+    settings.trackDesire ? { id: "stat.desire", label: "Desire", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+    settings.trackConnection ? { id: "stat.connection", label: "Connection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+    settings.trackMood ? { id: "stat.mood", label: "Mood", parentId: "mood.container", movable: true, type: "leaf" as const, previewKind: "enum_single" as const } : null,
+    settings.trackLastThought ? { id: "stat.lastThought", label: "Last thought", parentId: "thought.panel", movable: true, type: "leaf" as const, previewKind: "text" as const } : null,
+  ].filter(Boolean) as Array<{
+    id: string;
+    label: string;
+    parentId: string;
+    movable: boolean;
+    type: "leaf";
+    previewKind: "numeric" | "text" | "array" | "date_time" | "boolean" | "enum_single";
+  }>;
+  const customCharacterNodes = (settings.customStats ?? [])
+    .filter(stat => stat.track && stat.trackCharacters && !stat.globalScope)
+    .map(stat => ({
+      id: `custom.${String(stat.id ?? "").trim()}`,
+      label: String(stat.label ?? stat.id ?? "Custom stat"),
+      parentId: stat.kind === "numeric" ? "stats.numeric.row" : "stats.nonNumeric.row",
+      movable: true,
+      type: "leaf" as const,
+      previewKind: stat.kind as "numeric" | "text" | "array" | "date_time" | "boolean" | "enum_single",
+    }));
+  return {
+    character: [...builtInCharacterNodes, ...customCharacterNodes],
+  };
 }
 
 function resolveEffectiveMoodSource(settings: BetterSimTrackerSettings, defaults: Record<string, unknown>): MoodSource {
@@ -764,6 +797,11 @@ function renderPanel(input: InitInput, force = false): void {
       </div>
     `}
     <div class="bst-character-help">Leave card color empty to use the automatic palette for this character. Hex colors like #2b7cff.</div>
+    <div class="bst-character-divider">Character Card Visual Override</div>
+    <div class="bst-character-help">Override the global visual editor for this character only. This character-scoped style always wins over global card styling.</div>
+    <div class="bst-character-actions">
+      <button type="button" class="bst-btn bst-btn-soft" data-action="open-character-visual-editor">Open Character Visual Editor</button>
+    </div>
     <div class="bst-character-divider">Custom Stat Defaults</div>
     ${customStatFieldsHtml
       ? `<div class="bst-character-grid bst-character-grid-three">${customStatFieldsHtml}</div>`
@@ -888,6 +926,49 @@ function renderPanel(input: InitInput, force = false): void {
       }
     });
   }
+
+  panel.querySelector('[data-action="open-character-visual-editor"]')?.addEventListener("click", () => {
+    const liveSettings = getLiveSettings();
+    const liveDefaults = getDefaults(liveSettings, characterIdentity);
+    const ownerOverride = mergeCardStyleOverride(
+      liveSettings.cardVisualEditor.character,
+      (liveDefaults.cardVisualOverride as BetterSimTrackerSettings["characterDefaults"][string]["cardVisualOverride"] | undefined) ?? undefined,
+    );
+    openCardVisualEditorModal({
+      title: "Character Visual Editor",
+      current: {
+        ...liveSettings.cardVisualEditor,
+        character: ownerOverride,
+      },
+      initialType: "character",
+      allowedTypes: ["character"],
+      legacy: {
+        accentColor: liveSettings.accentColor,
+        userCardColor: liveSettings.userCardColor,
+        sceneCardColor: liveSettings.sceneCardColor,
+        sceneCardValueColor: liveSettings.sceneCardValueColor,
+        cardOpacity: liveSettings.cardOpacity,
+        borderRadius: liveSettings.borderRadius,
+        fontSize: liveSettings.fontSize,
+        sceneCardLayout: liveSettings.sceneCardLayout,
+        sceneCardArrayCollapsedLimit: liveSettings.sceneCardArrayCollapsedLimit,
+      },
+      layerCatalog: buildCharacterEditorLayerCatalog(liveSettings),
+      onApply: (next) => {
+        const relativeOverride = deriveRelativeCardStyleOverride(next.character, liveSettings.cardVisualEditor.character);
+        const persisted = withUpdatedDefaults(getLiveSettings(), characterIdentity, current => {
+          const copy = { ...current };
+          if (Object.keys(relativeOverride).length === 0) {
+            delete copy.cardVisualOverride;
+          } else {
+            copy.cardVisualOverride = relativeOverride;
+          }
+          return copy;
+        });
+        persistSettings(persisted);
+      },
+    });
+  });
 
   panel.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-bst-default]").forEach(node => {
     node.addEventListener("change", async () => {

@@ -166,6 +166,44 @@ function sanitizeStylePreset(input: unknown, fallback: CardVisualEditorStylePres
   };
 }
 
+function sanitizePartialStylePreset(input: unknown): Partial<CardVisualEditorStylePreset> {
+  if (!input || typeof input !== "object") return {};
+  const source = input as Record<string, unknown>;
+  const out: Partial<CardVisualEditorStylePreset> = {};
+  if (source.visible !== undefined) out.visible = asBool(source.visible, DEFAULT_STYLE_PRESET.visible);
+  if (source.backgroundColor !== undefined) out.backgroundColor = sanitizeColor(source.backgroundColor, "");
+  if (source.textColor !== undefined) out.textColor = sanitizeColor(source.textColor, "");
+  if (source.labelColor !== undefined) out.labelColor = sanitizeColor(source.labelColor, "");
+  if (source.valueColor !== undefined) out.valueColor = sanitizeColor(source.valueColor, "");
+  if (source.accentColor !== undefined) out.accentColor = sanitizeColor(source.accentColor, "");
+  if (source.borderColor !== undefined) out.borderColor = sanitizeColor(source.borderColor, "");
+  if (source.borderWidth !== undefined) out.borderWidth = clampNumber(source.borderWidth, DEFAULT_STYLE_PRESET.borderWidth, 0, 12);
+  if (source.borderRadius !== undefined) out.borderRadius = clampNumber(source.borderRadius, DEFAULT_STYLE_PRESET.borderRadius, 0, 48);
+  if (source.backgroundOpacity !== undefined) out.backgroundOpacity = clampNumber(source.backgroundOpacity, DEFAULT_STYLE_PRESET.backgroundOpacity, 0, 1);
+  if (source.shadowEnabled !== undefined) out.shadowEnabled = asBool(source.shadowEnabled, DEFAULT_STYLE_PRESET.shadowEnabled);
+  if (source.shadowColor !== undefined) out.shadowColor = sanitizeColor(source.shadowColor, "");
+  if (source.shadowBlur !== undefined) out.shadowBlur = clampNumber(source.shadowBlur, DEFAULT_STYLE_PRESET.shadowBlur, 0, 80);
+  if (source.shadowSpread !== undefined) out.shadowSpread = clampNumber(source.shadowSpread, DEFAULT_STYLE_PRESET.shadowSpread, -40, 80);
+  if (source.padding !== undefined) out.padding = clampNumber(source.padding, DEFAULT_STYLE_PRESET.padding, 0, 64);
+  if (source.rowGap !== undefined) out.rowGap = clampNumber(source.rowGap, DEFAULT_STYLE_PRESET.rowGap, 0, 64);
+  if (source.sectionGap !== undefined) out.sectionGap = clampNumber(source.sectionGap, DEFAULT_STYLE_PRESET.sectionGap, 0, 64);
+  if (source.fontFamily !== undefined) out.fontFamily = asText(source.fontFamily, "").slice(0, 80);
+  if (source.fontSize !== undefined) out.fontSize = clampNumber(source.fontSize, DEFAULT_STYLE_PRESET.fontSize, 10, 32);
+  if (source.titleFontSize !== undefined) out.titleFontSize = clampNumber(source.titleFontSize, DEFAULT_STYLE_PRESET.titleFontSize, 10, 48);
+  if (source.labelFontSize !== undefined) out.labelFontSize = clampNumber(source.labelFontSize, DEFAULT_STYLE_PRESET.labelFontSize, 10, 40);
+  if (source.valueFontSize !== undefined) out.valueFontSize = clampNumber(source.valueFontSize, DEFAULT_STYLE_PRESET.valueFontSize, 10, 40);
+  if (source.secondaryFontSize !== undefined) out.secondaryFontSize = clampNumber(source.secondaryFontSize, DEFAULT_STYLE_PRESET.secondaryFontSize, 10, 32);
+  if (source.lineHeight !== undefined) out.lineHeight = clampNumber(source.lineHeight, DEFAULT_STYLE_PRESET.lineHeight, 1, 2);
+  if (source.letterSpacing !== undefined) out.letterSpacing = clampNumber(source.letterSpacing, DEFAULT_STYLE_PRESET.letterSpacing, -1, 4);
+  if (source.barHeight !== undefined) out.barHeight = clampNumber(source.barHeight, DEFAULT_STYLE_PRESET.barHeight, 1, 24);
+  if (source.chipRadius !== undefined) out.chipRadius = clampNumber(source.chipRadius, DEFAULT_STYLE_PRESET.chipRadius, 0, 999);
+  if (source.chipStyle !== undefined) out.chipStyle = sanitizeChipStyle(source.chipStyle, DEFAULT_STYLE_PRESET.chipStyle);
+  if (source.buttonRadius !== undefined) out.buttonRadius = clampNumber(source.buttonRadius, DEFAULT_STYLE_PRESET.buttonRadius, 0, 24);
+  if (source.arrayCollapsedLimit !== undefined) out.arrayCollapsedLimit = clampInt(source.arrayCollapsedLimit, DEFAULT_STYLE_PRESET.arrayCollapsedLimit, 1, 30);
+  if (source.sceneValueStyle !== undefined) out.sceneValueStyle = sanitizeSceneValueStyle(source.sceneValueStyle, DEFAULT_STYLE_PRESET.sceneValueStyle);
+  return out;
+}
+
 function sanitizeElementOverrides(input: unknown): Record<string, CardVisualEditorStylePreset> {
   if (!input || typeof input !== "object") return {};
   const out: Record<string, CardVisualEditorStylePreset> = {};
@@ -173,6 +211,18 @@ function sanitizeElementOverrides(input: unknown): Record<string, CardVisualEdit
     const key = String(rawKey ?? "").trim();
     if (!key) continue;
     out[key] = sanitizeStylePreset(rawValue, DEFAULT_STYLE_PRESET);
+  }
+  return out;
+}
+
+function sanitizePartialElementOverrides(input: unknown): Record<string, Partial<CardVisualEditorStylePreset>> {
+  if (!input || typeof input !== "object") return {};
+  const out: Record<string, Partial<CardVisualEditorStylePreset>> = {};
+  for (const [rawKey, rawValue] of Object.entries(input as Record<string, unknown>)) {
+    const key = String(rawKey ?? "").trim();
+    if (!key) continue;
+    const sanitized = sanitizePartialStylePreset(rawValue);
+    if (Object.keys(sanitized).length) out[key] = sanitized;
   }
   return out;
 }
@@ -202,14 +252,20 @@ function sanitizeLayerOrder(input: unknown): string[] | undefined {
   return out.length ? out : undefined;
 }
 
-function sanitizeCardStyleOverride(input: unknown): CardVisualEditorCardStyleOverride {
+export function sanitizeCardStyleOverride(input: unknown): CardVisualEditorCardStyleOverride {
   if (!input || typeof input !== "object") return {};
   const source = input as Record<string, unknown>;
   const out: CardVisualEditorCardStyleOverride = {};
-  if (source.root !== undefined) out.root = sanitizeStylePreset(source.root, DEFAULT_STYLE_PRESET);
+  if (source.root !== undefined) {
+    const root = sanitizePartialStylePreset(source.root);
+    if (Object.keys(root).length) out.root = root;
+  }
   if (source.motionEnabled !== undefined) out.motionEnabled = asBool(source.motionEnabled, true);
   if (source.motionIntensity !== undefined) out.motionIntensity = sanitizeMotionIntensity(source.motionIntensity, "medium");
-  if (source.elements !== undefined) out.elements = sanitizeElementOverrides(source.elements);
+  if (source.elements !== undefined) {
+    const elements = sanitizePartialElementOverrides(source.elements);
+    if (Object.keys(elements).length) out.elements = elements;
+  }
   if (source.layerOrder !== undefined) out.layerOrder = sanitizeLayerOrder(source.layerOrder);
   return out;
 }
@@ -349,4 +405,87 @@ export function resolveCardStyle(
         ? editor.user
         : editor.scene;
   return mergeStyle(editor.base, override);
+}
+
+export function mergeCardStyleOverride(
+  base: CardVisualEditorCardStyleOverride | undefined,
+  override: CardVisualEditorCardStyleOverride | undefined,
+): CardVisualEditorCardStyleOverride {
+  const next: CardVisualEditorCardStyleOverride = {};
+  if (base?.motionEnabled !== undefined || override?.motionEnabled !== undefined) {
+    next.motionEnabled = override?.motionEnabled ?? base?.motionEnabled;
+  }
+  if (base?.motionIntensity !== undefined || override?.motionIntensity !== undefined) {
+    next.motionIntensity = override?.motionIntensity ?? base?.motionIntensity;
+  }
+  if (base?.root || override?.root) {
+    next.root = { ...(base?.root ?? {}), ...(override?.root ?? {}) };
+  }
+  if (base?.elements || override?.elements) {
+    const mergedElements: Record<string, Partial<CardVisualEditorStylePreset>> = {};
+    const keys = new Set<string>([
+      ...Object.keys(base?.elements ?? {}),
+      ...Object.keys(override?.elements ?? {}),
+    ]);
+    for (const key of keys) {
+      mergedElements[key] = {
+        ...((base?.elements?.[key]) ?? {}),
+        ...((override?.elements?.[key]) ?? {}),
+      };
+    }
+    if (Object.keys(mergedElements).length) next.elements = mergedElements;
+  }
+  if ((override?.layerOrder && override.layerOrder.length) || (base?.layerOrder && base.layerOrder.length)) {
+    next.layerOrder = Array.isArray(override?.layerOrder) ? [...override.layerOrder] : [...(base?.layerOrder ?? [])];
+  }
+  return next;
+}
+
+export function deriveRelativeCardStyleOverride(
+  resolved: CardVisualEditorCardStyleOverride | undefined,
+  base: CardVisualEditorCardStyleOverride | undefined,
+): CardVisualEditorCardStyleOverride {
+  const next = sanitizeCardStyleOverride(resolved);
+  const against = sanitizeCardStyleOverride(base);
+  const out: CardVisualEditorCardStyleOverride = {};
+  if (next.motionEnabled !== undefined && next.motionEnabled !== against.motionEnabled) out.motionEnabled = next.motionEnabled;
+  if (next.motionIntensity !== undefined && next.motionIntensity !== against.motionIntensity) out.motionIntensity = next.motionIntensity;
+  if (next.layerOrder && JSON.stringify(next.layerOrder) !== JSON.stringify(against.layerOrder ?? undefined)) {
+    out.layerOrder = [...next.layerOrder];
+  }
+  if (next.root) {
+    const rootDiff: Partial<CardVisualEditorStylePreset> = {};
+    for (const [key, value] of Object.entries(next.root)) {
+      if ((against.root?.[key as keyof CardVisualEditorStylePreset]) !== value) {
+        rootDiff[key as keyof CardVisualEditorStylePreset] = value as never;
+      }
+    }
+    if (Object.keys(rootDiff).length) out.root = rootDiff;
+  }
+  if (next.elements) {
+    const elementDiff: Record<string, Partial<CardVisualEditorStylePreset>> = {};
+    for (const [layerId, preset] of Object.entries(next.elements)) {
+      const basePreset = against.elements?.[layerId];
+      const diffPreset: Partial<CardVisualEditorStylePreset> = {};
+      for (const [key, value] of Object.entries(preset)) {
+        if ((basePreset?.[key as keyof CardVisualEditorStylePreset]) !== value) {
+          diffPreset[key as keyof CardVisualEditorStylePreset] = value as never;
+        }
+      }
+      if (Object.keys(diffPreset).length) elementDiff[layerId] = diffPreset;
+    }
+    if (Object.keys(elementDiff).length) out.elements = elementDiff;
+  }
+  return out;
+}
+
+export function resolveCardStyleWithOverride(
+  cardType: "character" | "user" | "scene",
+  editor: CardVisualEditorSettings,
+  ownerOverride?: CardVisualEditorCardStyleOverride | null,
+): CardVisualEditorCardStyle | null {
+  const base = resolveCardStyle(cardType, editor);
+  if (!base) return null;
+  if (!ownerOverride) return base;
+  return mergeStyle(base, sanitizeCardStyleOverride(ownerOverride));
 }

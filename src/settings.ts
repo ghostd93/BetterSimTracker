@@ -42,6 +42,7 @@ import {
 } from "./customStatRuntime";
 import {
   createDefaultCardVisualEditorSettings,
+  sanitizeCardStyleOverride,
   sanitizeCardVisualEditorSettings,
 } from "./cardVisualEditor";
 
@@ -1023,6 +1024,10 @@ function sanitizeCharacterDefaults(
     if (obj.cardColor !== undefined) {
       const cardColor = sanitizeHexColor(obj.cardColor);
       if (cardColor) entry.cardColor = cardColor;
+    }
+    if (obj.cardVisualOverride !== undefined) {
+      const cardVisualOverride = sanitizeCardStyleOverride(obj.cardVisualOverride);
+      if (Object.keys(cardVisualOverride).length) entry.cardVisualOverride = cardVisualOverride;
     }
     const customStatDefaults = sanitizeCustomStatDefaults(obj.customStatDefaults, customStats);
     if (customStatDefaults) entry.customStatDefaults = customStatDefaults;

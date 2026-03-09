@@ -29,6 +29,8 @@ import {
   normalizeNonNumericArrayItems,
 } from "./customStatRuntime";
 import { isCustomStatTrackableForOwnerToggle } from "./ownerStatToggles";
+import { openCardVisualEditorModal } from "./cardVisualEditorModal";
+import { deriveRelativeCardStyleOverride, mergeCardStyleOverride } from "./cardVisualEditor";
 
 const PANEL_ID = "bst-persona-panel";
 const DRAWER_SELECTOR = "#persona-management-button";
@@ -60,6 +62,37 @@ type SelectedPersona = {
   avatarId: string;
   personaName: string;
 };
+
+function buildPersonaEditorLayerCatalog(settings: BetterSimTrackerSettings): Parameters<typeof openCardVisualEditorModal>[0]["layerCatalog"] {
+  const builtInUserNodes = [
+    settings.trackAffection ? { id: "stat.affection", label: "Affection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+    settings.trackTrust ? { id: "stat.trust", label: "Trust", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+    settings.trackDesire ? { id: "stat.desire", label: "Desire", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+    settings.trackConnection ? { id: "stat.connection", label: "Connection", parentId: "stats.numeric.row", movable: true, type: "leaf" as const, previewKind: "numeric" as const } : null,
+    settings.enableUserTracking && settings.userTrackMood ? { id: "stat.mood", label: "Mood", parentId: "mood.container", movable: true, type: "leaf" as const, previewKind: "enum_single" as const } : null,
+    settings.enableUserTracking && settings.userTrackLastThought ? { id: "stat.lastThought", label: "Last thought", parentId: "thought.panel", movable: true, type: "leaf" as const, previewKind: "text" as const } : null,
+  ].filter(Boolean) as Array<{
+    id: string;
+    label: string;
+    parentId: string;
+    movable: boolean;
+    type: "leaf";
+    previewKind: "numeric" | "text" | "array" | "date_time" | "boolean" | "enum_single";
+  }>;
+  const customUserNodes = (settings.customStats ?? [])
+    .filter(stat => stat.track && stat.trackUser && !stat.globalScope)
+    .map(stat => ({
+      id: `custom.${String(stat.id ?? "").trim()}`,
+      label: String(stat.label ?? stat.id ?? "Custom stat"),
+      parentId: stat.kind === "numeric" ? "stats.numeric.row" : "stats.nonNumeric.row",
+      movable: true,
+      type: "leaf" as const,
+      previewKind: stat.kind as "numeric" | "text" | "array" | "date_time" | "boolean" | "enum_single",
+    }));
+  return {
+    user: [...builtInUserNodes, ...customUserNodes],
+  };
+}
 
 let initDone = false;
 
@@ -652,6 +685,10 @@ function renderPanel(input: InitInput, force = false): void {
     <div class="bst-character-help">
       These defaults apply to the user tracker when this persona is active.
     </div>
+    <div class="bst-character-actions">
+      <button type="button" class="bst-btn bst-btn-soft" data-action="open-persona-visual-editor">Open Persona Visual Editor</button>
+    </div>
+    <div class="bst-character-help">This persona-scoped visual override wins over the global visual editor, but only for the active persona user card.</div>
     <div class="bst-character-grid">
       <label class="bst-character-wide">Mood Default
         <select data-bst-persona-default="mood" ${(settings.userTrackMood && isStatEnabled("mood")) ? "" : "disabled"}>
@@ -759,6 +796,49 @@ function renderPanel(input: InitInput, force = false): void {
     });
     persistSettings(next);
     renderPanel(input, true);
+  });
+
+  panel.querySelector('[data-action="open-persona-visual-editor"]')?.addEventListener("click", () => {
+    const liveSettings = input.getSettings() ?? settings;
+    const liveDefaults = getDefaults(liveSettings, identity);
+    const ownerOverride = mergeCardStyleOverride(
+      liveSettings.cardVisualEditor.user,
+      (liveDefaults.cardVisualOverride as BetterSimTrackerSettings["characterDefaults"][string]["cardVisualOverride"] | undefined) ?? undefined,
+    );
+    openCardVisualEditorModal({
+      title: "Persona Visual Editor",
+      current: {
+        ...liveSettings.cardVisualEditor,
+        user: ownerOverride,
+      },
+      initialType: "user",
+      allowedTypes: ["user"],
+      legacy: {
+        accentColor: liveSettings.accentColor,
+        userCardColor: liveSettings.userCardColor,
+        sceneCardColor: liveSettings.sceneCardColor,
+        sceneCardValueColor: liveSettings.sceneCardValueColor,
+        cardOpacity: liveSettings.cardOpacity,
+        borderRadius: liveSettings.borderRadius,
+        fontSize: liveSettings.fontSize,
+        sceneCardLayout: liveSettings.sceneCardLayout,
+        sceneCardArrayCollapsedLimit: liveSettings.sceneCardArrayCollapsedLimit,
+      },
+      layerCatalog: buildPersonaEditorLayerCatalog(liveSettings),
+      onApply: (next) => {
+        const relativeOverride = deriveRelativeCardStyleOverride(next.user, liveSettings.cardVisualEditor.user);
+        const persisted = withUpdatedDefaults(input.getSettings() ?? settings, identity, current => {
+          const copy = { ...current };
+          if (Object.keys(relativeOverride).length === 0) {
+            delete copy.cardVisualOverride;
+          } else {
+            copy.cardVisualOverride = relativeOverride;
+          }
+          return copy;
+        });
+        persistSettings(persisted);
+      },
+    });
   });
 
   const stImageOverrideToggle = panel.querySelector<HTMLInputElement>("[data-bst-persona-st-image-override]");

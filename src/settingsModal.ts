@@ -376,13 +376,13 @@ export function openSettingsModal(input: {
           <label class="bst-check"><input data-k="showInactive" type="checkbox">Show Inactive</label>
           <label class="bst-check"><input data-k="showLastThought" type="checkbox">Show Last Thought</label>
         </div>
-        <div class="bst-section-divider">Visual Editor (Experimental)</div>
+        <div class="bst-section-divider">Global Visual Editor (Experimental)</div>
         <div class="bst-help-line">Interactive shell for per-card styling draft (Character/User/Scene). Apply saves editor config; turning styling off keeps original cards untouched.</div>
         <div class="bst-check-grid">
           <label class="bst-check"><input data-k="cardVisualUseStyling" type="checkbox">Use Editor Styling</label>
         </div>
         <div>
-          <button type="button" class="bst-btn bst-btn-soft" data-action="open-visual-editor">Open Visual Card Editor</button>
+          <button type="button" class="bst-btn bst-btn-soft" data-action="open-visual-editor">Open Global Visual Editor</button>
         </div>
       </div>
       <details class="bst-subdrawer" data-bst-row="sceneCardDrawer">
