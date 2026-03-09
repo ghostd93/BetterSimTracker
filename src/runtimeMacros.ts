@@ -7,6 +7,7 @@ const BST_MACRO_STAT_SCOPE_SCENE = "scene";
 const registeredBstMacros = new Set<string>();
 let bstMacroSignature = "";
 const CHARACTER_SLUG_FALLBACK = "character";
+let lastBstMacroDebugSnapshot: Record<string, unknown> | null = null;
 
 function toMacroIdSegment(value: string): string {
   return String(value ?? "")
@@ -236,6 +237,13 @@ export function syncBstMacros(input: {
     .filter(def => def.id.length > 0);
   const customStatIds = customDefs.map(def => def.id);
   const characterTargets = buildCharacterMacroTargets(context, allCharacterNames);
+  const debugCharacterTargets = characterTargets.map(target => ({
+    ownerName: target.ownerName,
+    displayName: target.displayName,
+    macroSlug: target.macroSlug,
+    legacyNameSlug: target.legacyNameSlug,
+    avatar: target.avatar,
+  }));
   const characterSignature = characterTargets
     .map(target => `${target.ownerName}:${target.macroSlug}:${target.legacyNameSlug ?? ""}:${target.avatar ?? ""}`)
     .join("|");
@@ -262,7 +270,16 @@ export function syncBstMacros(input: {
     customStatIds.join("|"),
     characterSignature,
   ].join("::");
-  if (signature === bstMacroSignature && registeredBstMacros.size > 0) return;
+  if (signature === bstMacroSignature && registeredBstMacros.size > 0) {
+    lastBstMacroDebugSnapshot = {
+      signature,
+      skippedBecauseSignatureUnchanged: true,
+      allCharacterNames: [...allCharacterNames],
+      characterTargets: debugCharacterTargets,
+      registeredMacroNames: Array.from(registeredBstMacros).sort(),
+    };
+    return;
+  }
 
   for (const name of registeredBstMacros) {
     unregisterBstMacro(context, name);
@@ -354,9 +371,21 @@ export function syncBstMacros(input: {
     }
   }
   bstMacroSignature = signature;
+  lastBstMacroDebugSnapshot = {
+    signature,
+    skippedBecauseSignatureUnchanged: false,
+    allCharacterNames: [...allCharacterNames],
+    characterTargets: debugCharacterTargets,
+    registeredMacroNames: Array.from(registeredBstMacros).sort(),
+  };
 }
 
 export function resetBstMacroStateForTests(): void {
   registeredBstMacros.clear();
   bstMacroSignature = "";
+  lastBstMacroDebugSnapshot = null;
+}
+
+export function getBstMacroDebugSnapshot(): Record<string, unknown> | null {
+  return lastBstMacroDebugSnapshot ? { ...lastBstMacroDebugSnapshot } : null;
 }

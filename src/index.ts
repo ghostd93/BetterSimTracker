@@ -59,7 +59,7 @@ import {
   overlayLatestGlobalCustomStats,
 } from "./extractionBaselineHelpers";
 import { buildMergedPromptMacroData, resolveLatestStoredTrackerData } from "./runtimeState";
-import { syncBstMacros } from "./runtimeMacros";
+import { getBstMacroDebugSnapshot, syncBstMacros } from "./runtimeMacros";
 import { createPromptRefreshController } from "./runtimePromptSync";
 import {
   countSummarySentences,
@@ -4132,6 +4132,7 @@ function openSettings(): void {
         promptInjectionLastMessage: currentSettings.debug ? lastMessagePromptSnapshot : null,
         promptInjectionLatestDataMessage: currentSettings.debug ? latestDataPrompt : null,
         promptInjectionDebugMeta: currentSettings.debug ? getLastInjectedPromptDebug() : null,
+        macroDebugMeta: currentSettings.debug ? getBstMacroDebugSnapshot() : null,
         traceTailMemory: filterDiagnosticsTrace(debugTrace.slice(-150), currentSettings.includeGraphInDiagnostics),
         traceTailPersisted: filterDiagnosticsTrace(readTraceLines(activeContext).slice(-300), currentSettings.includeGraphInDiagnostics),
         debugRecord: filteredLastDebugRecord,

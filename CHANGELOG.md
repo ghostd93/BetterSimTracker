@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.6-dev4] - 2026-03-09
+### Changed
+- Diagnostics dump now includes BST macro debug metadata (`characterTargets`, registered macro names, and signature-skip state) so character-macro runtime failures can be verified directly from `debug.txt`.
+
 ## [2.2.4.6-dev3] - 2026-03-09
 ### Fixed
 - Fixed character stat macros for unique owners by exposing a backward-safe name-slug alias alongside avatar-first runtime slugs, so prompts using `{{bst_stat_char_<id>_<character_name_slug>}}` continue to resolve when the owner has an avatar-based macro identity.
