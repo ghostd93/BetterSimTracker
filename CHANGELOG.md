@@ -10,6 +10,12 @@ All notable changes to BetterSimTracker are documented here.
 - Fixed array-stat clear regression in manual tracker edit flow so deleting the last array item persists as an explicit empty array (`[]`) instead of reviving stale previous values from fallback history.
 - Fixed storage normalization to preserve explicit empty array values for custom non-numeric stats.
 
+## [2.2.4.6] - 2026-03-08
+### Fixed
+- Fixed array-stat clear regression in manual tracker edit flow: deleting the last array item now persists as an explicit empty array (`[]`) instead of reviving stale previous values from fallback history.
+- Fixed storage normalization to preserve explicit empty array values for custom non-numeric stats.
+- Fixed owner filtering path to keep empty-array clear sentinels, preventing old array values from reappearing on cards/injection.
+
 ## [2.2.4.5] - 2026-03-07
 ### Changed
 - Injection state payload is now standardized under one canonical block: `BST_TRACKER_STATE`.
