@@ -813,6 +813,7 @@ function renderPanel(input: InitInput, force = false): void {
       },
       initialType: "user",
       allowedTypes: ["user"],
+      enablePresets: false,
       legacy: {
         accentColor: liveSettings.accentColor,
         userCardColor: liveSettings.userCardColor,

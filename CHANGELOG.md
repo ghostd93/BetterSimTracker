@@ -1,3 +1,8 @@
+## [2.2.4.6-exp25] - 2026-03-09
+### Changed
+- Owner CSS hooks now use avatar-first identity for tracker cards, with a legacy name alias kept only as a compatibility fallback for older custom CSS.
+- Character and persona visual editors no longer reuse the global preset library; owner-scoped editors now behave as direct override editors with local undo/redo only.
+
 ## [2.2.4.6-exp24] - 2026-03-09
 ### Fixed
 - Resolved owner-scoped visual override lookup to use avatar-aware owner identity at render time, so one character's card-editor styling no longer spills onto other owners.

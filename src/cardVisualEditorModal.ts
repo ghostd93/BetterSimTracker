@@ -45,6 +45,7 @@ type OpenCardVisualEditorModalInput = {
   title?: string;
   initialType?: CardType;
   allowedTypes?: CardType[];
+  enablePresets?: boolean;
   onApply: (next: CardVisualEditorSettings) => void;
 };
 
@@ -465,6 +466,10 @@ function renderLayerTree(
     }).join("");
   };
   return renderBranch(null, 0);
+}
+
+export function shouldShowEditorPresetControls(input: Pick<OpenCardVisualEditorModalInput, "enablePresets">): boolean {
+  return input.enablePresets !== false;
 }
 
 function resolveInspectorKeys(
@@ -1124,6 +1129,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
   const allowedTypes: CardType[] = (Array.isArray(input.allowedTypes) && input.allowedTypes.length
     ? input.allowedTypes.filter((type): type is CardType => type === "character" || type === "user" || type === "scene")
     : ["character", "user", "scene"]);
+  const showPresetControls = shouldShowEditorPresetControls(input);
   let activeType: CardType = allowedTypes.includes(input.initialType ?? "character")
     ? (input.initialType ?? "character")
     : allowedTypes[0]!;
@@ -1242,10 +1248,11 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
           </div>
         </div>
         <div class="bst-card-editor-presets">
-          <div class="bst-card-editor-group-title">Presets + history</div>
-          <div class="bst-card-editor-group-note">Save complete editor layouts, load earlier drafts, or exchange presets as JSON.</div>
+          <div class="bst-card-editor-group-title">${showPresetControls ? "Presets + history" : "History"}</div>
+          <div class="bst-card-editor-group-note">${showPresetControls ? "Save complete editor layouts, load earlier drafts, or exchange presets as JSON." : "Owner-scoped editors save only this owner override. Presets stay global-only; this panel keeps undo/redo history only."}</div>
           <div class="bst-card-editor-presets-controls">
             <div class="bst-card-editor-history-controls">
+              ${showPresetControls ? `
               <select data-k="presetSelect" class="bst-input bst-card-editor-preset-select" aria-label="Current preset">
                 <option value="">Current preset: none</option>
                 ${draft.presets.map(preset => `
@@ -1260,6 +1267,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
                 : ""
               }
               <button type="button" data-act="preset-import" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" title="Import preset from JSON">Import</button>
+              ` : ""}
               <button type="button" data-act="undo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${historyStack.length === 0 ? "disabled" : ""}>Undo</button>
               <button type="button" data-act="redo" class="bst-btn bst-btn-soft bst-card-editor-hist-btn" ${futureStack.length === 0 ? "disabled" : ""}>Redo</button>
             </div>
@@ -1269,7 +1277,7 @@ export function openCardVisualEditorModal(input: OpenCardVisualEditorModalInput)
       <div class="bst-card-editor-toggle-hints">
         <div>Changes stay preview-only until <strong>Apply</strong>. Apply saves the editor style config and refreshes real cards immediately.</div>
       </div>
-      ${presetTransferMode === "none" ? "" : `
+      ${!showPresetControls || presetTransferMode === "none" ? "" : `
         <div class="bst-card-editor-transfer-panel">
           <div class="bst-card-editor-transfer-head">
             <strong>${presetTransferMode === "export" ? "Preset Export" : presetTransferMode === "new" ? "New Preset" : "Preset Import"}</strong>

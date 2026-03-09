@@ -54,6 +54,7 @@ import { getDateTimeStructuredParts, normalizeDateTimeValue, toDateTimeInputValu
 import { renderThoughtMarkup } from "./uiThought";
 import { formatDateTimeTimestampDisplay, renderDateTimeStructuredChips } from "./uiDateTimeDisplay";
 import { formatNonNumericForDisplay, truncateDisplayText } from "./uiNonNumericDisplay";
+import { buildOwnerCssClasses } from "./ownerCss";
 import {
   buildLastPointCircle,
   buildPointCircles,
@@ -420,15 +421,6 @@ function toPercent(value: StatValue): number {
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase();
-}
-
-function toOwnerClassSuffix(value: string): string {
-  const normalized = String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return normalized || "unknown";
 }
 
 function pushUniqueCharacterName(target: string[], seen: Set<string>, raw: unknown): void {
@@ -5431,7 +5423,7 @@ export function renderTracker(
         return a.localeCompare(b);
       });
 
-    const cardHtmlByName: Array<{ name: string; displayName: string; ownerClass: string; html: string; isActive: boolean; isNew: boolean; cardColor: string; cardVisualOverride: import("./types").CardVisualEditorCardStyleOverride | null }> = [];
+    const cardHtmlByName: Array<{ name: string; displayName: string; ownerClassNames: string; html: string; isActive: boolean; isNew: boolean; cardColor: string; cardVisualOverride: import("./types").CardVisualEditorCardStyleOverride | null }> = [];
     const signatureParts: string[] = [
       `msg:${entry.messageIndex}`,
       `collapsed:${collapsed ? "1" : "0"}`,
@@ -5634,8 +5626,8 @@ export function renderTracker(
         ${enabledNumeric.length === 0 && enabledNonNumeric.length === 0 && moodText === "" && !(settings.showLastThought && lastThoughtText !== "") ? `<div class="bst-empty">No stats recorded.</div>` : ""}
         </div>
       `;
-      const ownerClass = `bst-owner-${toOwnerClassSuffix(displayName)}`;
-      cardHtmlByName.push({ name, displayName, ownerClass, html: cardHtml, isActive, isNew, cardColor, cardVisualOverride });
+      const ownerClassNames = buildOwnerCssClasses(displayName, characterAvatar);
+      cardHtmlByName.push({ name, displayName, ownerClassNames, html: cardHtml, isActive, isNew, cardColor, cardVisualOverride });
       const nonNumericSignature = enabledNonNumeric.map(def => {
         const value = resolveEffectiveNonNumericValue(def, name);
         if (value == null) return `${def.id}:not_set`;
@@ -5934,9 +5926,9 @@ export function renderTracker(
     const appendOwnerCards = (): void => {
       for (const item of cardHtmlByName) {
         const card = document.createElement("div");
-        card.className = `bst-card ${item.ownerClass}${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
+        card.className = `bst-card ${item.ownerClassNames}${item.isActive ? "" : " bst-card-inactive"}${item.isNew ? " bst-card-new" : ""}`;
         card.dataset.bstOwner = item.displayName;
-        card.dataset.bstOwnerClass = item.ownerClass;
+        card.dataset.bstOwnerClass = item.ownerClassNames;
         card.style.setProperty("--bst-card-local", item.cardColor);
         const palette = buildActionPalette(item.cardColor);
         card.style.setProperty("--bst-action-bg", palette.bg);

@@ -17,6 +17,7 @@ import {
   resolvePreviewLayerOrder,
   resolvePreviewLayerStyle,
   resolvePreviewRootStyle,
+  shouldShowEditorPresetControls,
   toPresetId,
 } from "../src/cardVisualEditorModal";
 
@@ -158,6 +159,12 @@ test("resolvePreviewViewportWidth returns deterministic widths", () => {
 test("toPresetId normalizes and clamps names", () => {
   assert.equal(toPresetId("  Neon Character Preset  "), "neon_character_preset");
   assert.equal(toPresetId("###"), "preset");
+});
+
+test("shouldShowEditorPresetControls hides presets for owner-scoped editors", () => {
+  assert.equal(shouldShowEditorPresetControls({ enablePresets: false }), false);
+  assert.equal(shouldShowEditorPresetControls({ enablePresets: true }), true);
+  assert.equal(shouldShowEditorPresetControls({}), true);
 });
 
 test("isLayerMovable locks root and structural containers, allows stat leaves", () => {
