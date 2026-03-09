@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.6-dev2] - 2026-03-09
+### Fixed
+- Fixed BST stat macros to register into both SillyTavern macro paths (legacy + new macro engine), so `{{bst_stat_*}}` and `{{bst_injection}}` resolve in prompt-manager/chat-completion prompts even when `Inject Tracker Into Prompt` is off.
+- Added regression coverage for ST contexts where `registerMacro` exists but prompt resolution uses the new macro engine registry.
+
 ## [2.2.4.6-dev1] - 2026-03-09
 ### Fixed
 - Fixed BST stat macros (`{{bst_stat_user_<id>}}`, `{{bst_stat_scene_<id>}}`, `{{bst_stat_char_<id>_<character_slug>}}`) so they resolve against fresh tracker data even when prompt injection is off.

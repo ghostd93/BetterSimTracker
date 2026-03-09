@@ -6,6 +6,6 @@
   "js": "dist/index.js",
   "auto_update": true,
   "author": "BetterSimTracker",
-  "version": "2.2.4.6-dev1",
+  "version": "2.2.4.6-dev2",
   "homePage": "https://github.com/ghostd93/BetterSimTracker"
 }

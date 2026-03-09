@@ -195,18 +195,16 @@ function registerBstMacro(
       registered = true;
     }
   } catch {
-    // fallback below
+    // continue to new engine registration
   }
-  if (!registered) {
-    try {
-      context.macros?.register?.(name, {
-        description,
-        handler: () => getter(),
-      });
-      registered = true;
-    } catch {
-      // ignore
-    }
+  try {
+    context.macros?.register?.(name, {
+      description,
+      handler: () => getter(),
+    });
+    registered = true;
+  } catch {
+    // ignore
   }
   if (registered) {
     registeredBstMacros.add(name);
