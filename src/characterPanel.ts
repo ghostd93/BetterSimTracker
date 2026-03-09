@@ -628,6 +628,7 @@ function renderPanel(input: InitInput, force = false): void {
     ? normalizeHexColor(defaults.cardColor) ?? ""
     : "";
   const cardColorPreview = normalizedCardColor || "#1f2028";
+  const cardVisualOverrideEnabled = defaults.cardVisualOverrideEnabled === true;
   const customStatFieldsHtml = customStatDefinitions.map(definition => {
     const id = String(definition.id ?? "").trim().toLowerCase();
     const label = String(definition.label ?? "").trim();
@@ -800,7 +801,11 @@ function renderPanel(input: InitInput, force = false): void {
     <div class="bst-character-divider">Character Card Visual Override</div>
     <div class="bst-character-help">Override the global visual editor for this character only. This character-scoped style always wins over global card styling.</div>
     <div class="bst-character-actions">
-      <button type="button" class="bst-btn bst-btn-soft" data-action="open-character-visual-editor">Open Character Visual Editor</button>
+      <button type="button" class="bst-custom-stat-toggle bst-custom-stat-toggle-compact ${cardVisualOverrideEnabled ? "is-on" : "is-off"}" data-bst-default-toggle="cardVisualOverrideEnabled" aria-pressed="${cardVisualOverrideEnabled ? "true" : "false"}">
+        <span class="bst-custom-stat-toggle-pill" aria-hidden="true"></span>
+        <span class="bst-custom-stat-toggle-label">Override global editor styling: ${cardVisualOverrideEnabled ? "Enabled" : "Disabled"}</span>
+      </button>
+      ${cardVisualOverrideEnabled ? `<button type="button" class="bst-btn bst-btn-soft" data-action="open-character-visual-editor">Open Character Card Visual Editor</button>` : ""}
     </div>
     <div class="bst-character-divider">Custom Stat Defaults</div>
     ${customStatFieldsHtml
@@ -969,6 +974,17 @@ function renderPanel(input: InitInput, force = false): void {
         persistSettings(persisted);
       },
     });
+  });
+
+  panel.querySelector<HTMLElement>('[data-bst-default-toggle="cardVisualOverrideEnabled"]')?.addEventListener("click", () => {
+    const liveSettings = getLiveSettings();
+    const liveDefaults = getDefaults(liveSettings, characterIdentity);
+    const enabled = liveDefaults.cardVisualOverrideEnabled === true;
+    const next = withUpdatedDefaults(liveSettings, characterIdentity, current => ({
+      ...current,
+      cardVisualOverrideEnabled: !enabled,
+    }));
+    persistSettings(next);
   });
 
   panel.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-bst-default]").forEach(node => {

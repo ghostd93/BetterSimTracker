@@ -7,6 +7,7 @@ import {
   deriveRelativeCardStyleOverride,
   mergeCardStyleOverride,
   migrateLegacyDisplayToCardVisualEditor,
+  resolveOrderedLayerIds,
   resolveCardStyle,
   resolveCardStyleWithOverride,
   sanitizeCardVisualEditorSettings,
@@ -157,6 +158,23 @@ test("resolveCardStyleWithOverride applies owner override on top of global card 
   assert.equal(resolved?.elements["stat.affection"]?.accentColor, "#00ff00");
 });
 
+test("resolveCardStyleWithOverride applies owner override even when global editor styling is disabled", () => {
+  const settings = createDefaultCardVisualEditorSettings();
+  settings.useEditorStyling = false;
+  settings.base.root.backgroundColor = "#111111";
+  settings.character = {
+    root: { backgroundColor: "#222222", borderRadius: 20 },
+  };
+
+  const resolved = resolveCardStyleWithOverride("character", settings, {
+    root: { backgroundColor: "#333333" },
+  });
+
+  assert.ok(resolved);
+  assert.equal(resolved?.root.backgroundColor, "#333333");
+  assert.equal(resolved?.root.borderRadius, 20);
+});
+
 test("mergeCardStyleOverride and deriveRelativeCardStyleOverride preserve only owner delta", () => {
   const globalOverride = {
     root: { backgroundColor: "#202020", borderRadius: 18 },
@@ -171,5 +189,14 @@ test("mergeCardStyleOverride and deriveRelativeCardStyleOverride preserve only o
   const relative = deriveRelativeCardStyleOverride(merged, globalOverride);
 
   assert.deepEqual(relative, ownerOverride);
+});
+
+test("resolveOrderedLayerIds respects configured order and preserves unknown sibling order", () => {
+  const ordered = resolveOrderedLayerIds(
+    ["custom.clothes", "custom.physicality", "custom.pose", "custom.other"],
+    ["custom.physicality", "custom.clothes"],
+  );
+
+  assert.deepEqual(ordered, ["custom.physicality", "custom.clothes", "custom.pose", "custom.other"]);
 });
 

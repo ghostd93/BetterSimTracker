@@ -1,3 +1,12 @@
+## [2.2.4.6-exp26] - 2026-03-09
+### Changed
+- Character and persona defaults now gate owner-scoped visual styling behind an explicit `Override global editor styling` toggle, so owner editors only appear when that scope override is intentionally enabled.
+
+### Fixed
+- Owner-scoped visual overrides now apply even when global editor styling is disabled, so per-owner card styling can render independently instead of silently doing nothing.
+- Runtime tracker cards now respect editor `layerOrder` in the real DOM, so custom stat ordering from owner/global editors matches the preview instead of staying stuck in the old layout.
+- Settings sanitization now preserves the owner visual-override enable flag so character/persona editor toggles survive reloads.
+
 ## [2.2.4.6-exp25] - 2026-03-09
 ### Changed
 - Owner CSS hooks now use avatar-first identity for tracker cards, with a legacy name alias kept only as a compatibility fallback for older custom CSS.

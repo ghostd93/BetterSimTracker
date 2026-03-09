@@ -1003,6 +1003,7 @@ function sanitizeCharacterDefaults(
     const obj = value as Record<string, unknown>;
     const entry: CharacterDefaults = {};
     if (obj.trackerEnabled !== undefined) entry.trackerEnabled = asBool(obj.trackerEnabled, true);
+    if (obj.cardVisualOverrideEnabled !== undefined) entry.cardVisualOverrideEnabled = asBool(obj.cardVisualOverrideEnabled, false);
     if (obj.statEnabled && typeof obj.statEnabled === "object") {
       const statEnabled: Record<string, boolean> = {};
       for (const [statIdRaw, enabledRaw] of Object.entries(obj.statEnabled as Record<string, unknown>)) {

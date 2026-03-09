@@ -515,6 +515,7 @@ function renderPanel(input: InitInput, force = false): void {
   const customNonNumericDefaultsRaw = defaults.customNonNumericStatDefaults && typeof defaults.customNonNumericStatDefaults === "object"
     ? defaults.customNonNumericStatDefaults as Record<string, unknown>
     : {};
+  const cardVisualOverrideEnabled = defaults.cardVisualOverrideEnabled === true;
   const userCustomDefaultFieldsHtml = customStatDefinitions.map(definition => {
     if (!isCustomStatTrackableForOwnerToggle(definition, "user")) return "";
     const id = String(definition.id ?? "").trim().toLowerCase();
@@ -686,7 +687,11 @@ function renderPanel(input: InitInput, force = false): void {
       These defaults apply to the user tracker when this persona is active.
     </div>
     <div class="bst-character-actions">
-      <button type="button" class="bst-btn bst-btn-soft" data-action="open-persona-visual-editor">Open Persona Visual Editor</button>
+      <button type="button" class="bst-custom-stat-toggle bst-custom-stat-toggle-compact ${cardVisualOverrideEnabled ? "is-on" : "is-off"}" data-bst-persona-toggle="cardVisualOverrideEnabled" aria-pressed="${cardVisualOverrideEnabled ? "true" : "false"}">
+        <span class="bst-custom-stat-toggle-pill" aria-hidden="true"></span>
+        <span class="bst-custom-stat-toggle-label">Override global editor styling: ${cardVisualOverrideEnabled ? "Enabled" : "Disabled"}</span>
+      </button>
+      ${cardVisualOverrideEnabled ? `<button type="button" class="bst-btn bst-btn-soft" data-action="open-persona-visual-editor">Open Persona Card Visual Editor</button>` : ""}
     </div>
     <div class="bst-character-help">This persona-scoped visual override wins over the global visual editor, but only for the active persona user card.</div>
     <div class="bst-character-grid">
@@ -923,6 +928,17 @@ function renderPanel(input: InitInput, force = false): void {
         persistSettings(next);
       },
     });
+  });
+
+  panel.querySelector<HTMLElement>('[data-bst-persona-toggle="cardVisualOverrideEnabled"]')?.addEventListener("click", () => {
+    const liveSettings = input.getSettings() ?? settings;
+    const liveDefaults = getDefaults(liveSettings, identity);
+    const enabled = liveDefaults.cardVisualOverrideEnabled === true;
+    const next = withUpdatedDefaults(liveSettings, identity, current => ({
+      ...current,
+      cardVisualOverrideEnabled: !enabled,
+    }));
+    persistSettings(next);
   });
 
   panel.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-bst-persona-default]").forEach(node => {

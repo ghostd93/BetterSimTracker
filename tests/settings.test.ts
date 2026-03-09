@@ -292,3 +292,21 @@ test("sanitizeSettings migrates legacy display fields into cardVisualEditor", ()
   assert.equal(sanitized.cardVisualEditor.scene.root?.sceneValueStyle, "plain");
   assert.equal(sanitized.cardVisualEditor.scene.root?.arrayCollapsedLimit, 7);
 });
+
+test("sanitizeSettings preserves owner visual override enable toggle", () => {
+  const sanitized = sanitizeSettings({
+    characterDefaults: {
+      "avatar:billie.png": {
+        cardVisualOverrideEnabled: true,
+        cardVisualOverride: {
+          root: {
+            backgroundColor: "#8000ff",
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(sanitized.characterDefaults["avatar:billie.png"]?.cardVisualOverrideEnabled, true);
+  assert.equal(sanitized.characterDefaults["avatar:billie.png"]?.cardVisualOverride?.root?.backgroundColor, "#8000ff");
+});

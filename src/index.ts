@@ -1909,6 +1909,7 @@ function getConfiguredCharacterDefaults(
     const connection = parseDefaultNumber(merged.connection);
     const mood = parseDefaultText(merged.mood);
     const lastThought = parseDefaultText(merged.lastThought);
+    const cardVisualOverrideEnabled = merged.cardVisualOverrideEnabled === true;
     const cardVisualOverride = merged.cardVisualOverride && typeof merged.cardVisualOverride === "object"
       ? merged.cardVisualOverride as import("./types").CardVisualEditorCardStyleOverride
       : undefined;
@@ -1967,7 +1968,7 @@ function getConfiguredCharacterDefaults(
       ...(connection != null ? { connection } : {}),
       ...(mood != null ? { mood } : {}),
       ...(lastThought != null ? { lastThought } : {}),
-      ...(cardVisualOverride && Object.keys(cardVisualOverride).length ? { cardVisualOverride } : {}),
+      ...(cardVisualOverrideEnabled && cardVisualOverride && Object.keys(cardVisualOverride).length ? { cardVisualOverride } : {}),
       ...(Object.keys(customStatDefaults).length ? { customStatDefaults } : {}),
       ...(Object.keys(customNonNumericStatDefaults).length ? { customNonNumericStatDefaults } : {}),
     };
@@ -2004,6 +2005,7 @@ function getConfiguredCharacterDefaults(
   const connection = parseDefaultNumber(merged.connection);
   const mood = parseDefaultText(merged.mood);
   const lastThought = parseDefaultText(merged.lastThought);
+  const cardVisualOverrideEnabled = merged.cardVisualOverrideEnabled === true;
   const cardVisualOverride = merged.cardVisualOverride && typeof merged.cardVisualOverride === "object"
     ? merged.cardVisualOverride as import("./types").CardVisualEditorCardStyleOverride
     : undefined;
@@ -2062,7 +2064,7 @@ function getConfiguredCharacterDefaults(
     ...(connection != null ? { connection } : {}),
     ...(mood != null ? { mood } : {}),
     ...(lastThought != null ? { lastThought } : {}),
-    ...(cardVisualOverride && Object.keys(cardVisualOverride).length ? { cardVisualOverride } : {}),
+    ...(cardVisualOverrideEnabled && cardVisualOverride && Object.keys(cardVisualOverride).length ? { cardVisualOverride } : {}),
     ...(Object.keys(customStatDefaults).length ? { customStatDefaults } : {}),
     ...(Object.keys(customNonNumericStatDefaults).length ? { customNonNumericStatDefaults } : {}),
   };

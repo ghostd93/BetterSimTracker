@@ -479,13 +479,51 @@ export function deriveRelativeCardStyleOverride(
   return out;
 }
 
+export function resolveOrderedLayerIds(
+  currentIds: string[],
+  configuredOrder?: string[] | null,
+): string[] {
+  if (!Array.isArray(currentIds) || currentIds.length <= 1) return [...currentIds];
+  const orderIndex = new Map<string, number>();
+  (configuredOrder ?? []).forEach((id, index) => {
+    const key = String(id ?? "").trim();
+    if (!key || orderIndex.has(key)) return;
+    orderIndex.set(key, index);
+  });
+  return [...currentIds].sort((a, b) => {
+    const aRank = orderIndex.get(a);
+    const bRank = orderIndex.get(b);
+    if (aRank != null && bRank != null && aRank !== bRank) return aRank - bRank;
+    if (aRank != null && bRank == null) return -1;
+    if (aRank == null && bRank != null) return 1;
+    return currentIds.indexOf(a) - currentIds.indexOf(b);
+  });
+}
+
 export function resolveCardStyleWithOverride(
   cardType: "character" | "user" | "scene",
   editor: CardVisualEditorSettings,
   ownerOverride?: CardVisualEditorCardStyleOverride | null,
 ): CardVisualEditorCardStyle | null {
-  const base = resolveCardStyle(cardType, editor);
-  if (!base) return null;
-  if (!ownerOverride) return base;
+  const hasOwnerOverride = Boolean(
+    ownerOverride
+    && (
+      ownerOverride.motionEnabled !== undefined
+      || ownerOverride.motionIntensity !== undefined
+      || (ownerOverride.root && Object.keys(ownerOverride.root).length > 0)
+      || (ownerOverride.elements && Object.keys(ownerOverride.elements).length > 0)
+      || (ownerOverride.layerOrder && ownerOverride.layerOrder.length > 0)
+    ),
+  );
+  if (!editor.useEditorStyling && !hasOwnerOverride) return null;
+  const base = mergeStyle(
+    editor.base,
+    cardType === "character"
+      ? editor.character
+      : cardType === "user"
+        ? editor.user
+        : editor.scene,
+  );
+  if (!hasOwnerOverride) return base;
   return mergeStyle(base, sanitizeCardStyleOverride(ownerOverride));
 }

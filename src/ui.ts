@@ -73,7 +73,7 @@ import {
   resolveEnumOption,
   hasScriptLikeContent,
 } from "./customStatRuntime";
-import { resolveCardStyleWithOverride } from "./cardVisualEditor";
+import { resolveCardStyleWithOverride, resolveOrderedLayerIds } from "./cardVisualEditor";
 
 type UiNumericStatDefinition = {
   key: string;
@@ -707,6 +707,19 @@ function applyEditorStyleToTrackerCard(
 ): void {
   const style = resolveCardStyleWithOverride(cardType, settings.cardVisualEditor, ownerOverride);
   if (!style) return;
+  const reorderWithin = (parent: ParentNode): void => {
+    const children = Array.from(parent.childNodes).filter((node): node is HTMLElement =>
+      node instanceof HTMLElement && typeof node.dataset.bstLayer === "string" && node.dataset.bstLayer.trim().length > 0,
+    );
+    if (children.length <= 1) return;
+    const orderedIds = resolveOrderedLayerIds(children.map(node => String(node.dataset.bstLayer).trim()), style.layerOrder);
+    const byId = new Map(children.map(node => [String(node.dataset.bstLayer).trim(), node] as const));
+    for (const layerId of orderedIds) {
+      const node = byId.get(layerId);
+      if (node) parent.appendChild(node);
+    }
+  };
+  reorderWithin(card);
   applyCommonEditorStyles(card, style.root);
   if (style.root.textColor) card.style.color = style.root.textColor;
   if (style.root.fontFamily) card.style.fontFamily = style.root.fontFamily;
@@ -759,6 +772,7 @@ function applyEditorStyleToTrackerCard(
   applyLayer(cardType === "scene" ? "scene.header" : "header", card.querySelector('[data-bst-layer="scene.header"], [data-bst-layer="header"]'));
   applyLayer(cardType === "scene" ? "scene.body" : "body", card.querySelector('[data-bst-layer="scene.body"], [data-bst-layer="body"]'));
   card.querySelectorAll<HTMLElement>("[data-bst-layer]").forEach(node => {
+    reorderWithin(node);
     const layerId = node.dataset.bstLayer?.trim();
     if (!layerId) return;
     applyLayer(layerId, node);
