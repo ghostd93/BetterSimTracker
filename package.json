@@ -1,27 +1,27 @@
 {
-  "name": "better-sim-tracker",
-  "version": "2.2.4.6-dev4",
-  "private": true,
-  "description": "TypeScript SillyTavern extension for relationship tracking",
-  "scripts": {
-    "build": "webpack",
-    "dev": "webpack --watch",
-    "typecheck": "tsc --noEmit",
-    "test:compile": "tsc -p tsconfig.tests.json",
-    "test:run": "node --test --experimental-test-isolation=none .test-dist/tests/*.test.js",
-    "test": "npm run test:compile && npm run test:run",
-    "coverage": "npm run test:compile && node --test --experimental-test-isolation=none --experimental-test-coverage .test-dist/tests/*.test.js",
-    "coverage:gate": "npm run test:compile && node --test --experimental-test-isolation=none --experimental-test-coverage --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=75 .test-dist/tests/*.test.js",
-    "validate:versions": "node scripts/validate-versions.mjs",
-    "validate:release": "node scripts/validate-release.mjs"
-  },
-  "dependencies": {
-    "sillytavern-utils-lib": "^1.0.64"
-  },
-  "devDependencies": {
-    "ts-loader": "^9.5.1",
-    "typescript": "^5.7.3",
-    "webpack": "^5.98.0",
-    "webpack-cli": "^6.0.1"
-  }
+    "name":  "better-sim-tracker",
+    "version":  "2.2.4.6-dev5",
+    "private":  true,
+    "description":  "TypeScript SillyTavern extension for relationship tracking",
+    "scripts":  {
+                    "build":  "webpack",
+                    "dev":  "webpack --watch",
+                    "typecheck":  "tsc --noEmit",
+                    "test:compile":  "tsc -p tsconfig.tests.json",
+                    "test:run":  "node --test --experimental-test-isolation=none .test-dist/tests/*.test.js",
+                    "test":  "npm run test:compile \u0026\u0026 npm run test:run",
+                    "coverage":  "npm run test:compile \u0026\u0026 node --test --experimental-test-isolation=none --experimental-test-coverage .test-dist/tests/*.test.js",
+                    "coverage:gate":  "npm run test:compile \u0026\u0026 node --test --experimental-test-isolation=none --experimental-test-coverage --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=75 .test-dist/tests/*.test.js",
+                    "validate:versions":  "node scripts/validate-versions.mjs",
+                    "validate:release":  "node scripts/validate-release.mjs"
+                },
+    "dependencies":  {
+                         "sillytavern-utils-lib":  "^1.0.64"
+                     },
+    "devDependencies":  {
+                            "ts-loader":  "^9.5.1",
+                            "typescript":  "^5.7.3",
+                            "webpack":  "^5.98.0",
+                            "webpack-cli":  "^6.0.1"
+                        }
 }

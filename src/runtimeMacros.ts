@@ -224,6 +224,16 @@ function registerBstMacro(
   }
 }
 
+function safeSubstituteMacro(context: STContext, macroName: string): string {
+  try {
+    const substitute = (context as STContext & { substituteParams?: (value: string) => string }).substituteParams;
+    if (typeof substitute !== "function") return "";
+    return String(substitute(`{{${macroName}}}`) ?? "");
+  } catch (error) {
+    return `[error:${error instanceof Error ? error.message : String(error)}]`;
+  }
+}
+
 export function syncBstMacros(input: {
   context: STContext;
   settings: BetterSimTrackerSettings;
@@ -371,12 +381,38 @@ export function syncBstMacros(input: {
     }
   }
   bstMacroSignature = signature;
+  const sampleCharacterTarget = characterTargets[0] ?? null;
+  const sampleUserStat = customDefs.find(def => !def.globalScope && def.track && def.trackUser)?.id
+    ?? (settings.enableUserTracking && settings.userTrackMood ? "mood" : settings.enableUserTracking && settings.userTrackLastThought ? "lastThought" : null);
+  const sampleSceneStat = customDefs.find(def => def.globalScope && def.track)?.id ?? null;
+  const sampleCharacterStat = customDefs.find(def => !def.globalScope && def.track && def.trackCharacters)?.id
+    ?? (settings.trackMood ? "mood" : settings.trackLastThought ? "lastThought" : settings.trackAffection ? "affection" : null);
   lastBstMacroDebugSnapshot = {
     signature,
     skippedBecauseSignatureUnchanged: false,
     allCharacterNames: [...allCharacterNames],
     characterTargets: debugCharacterTargets,
     registeredMacroNames: Array.from(registeredBstMacros).sort(),
+    resolutionSamples: {
+      user: sampleUserStat ? {
+        macro: `bst_stat_user_${toMacroIdSegment(sampleUserStat)}`,
+        resolved: safeSubstituteMacro(context, `bst_stat_user_${toMacroIdSegment(sampleUserStat)}`),
+      } : null,
+      scene: sampleSceneStat ? {
+        macro: `bst_stat_scene_${toMacroIdSegment(sampleSceneStat)}`,
+        resolved: safeSubstituteMacro(context, `bst_stat_scene_${toMacroIdSegment(sampleSceneStat)}`),
+      } : null,
+      character: sampleCharacterTarget && sampleCharacterStat ? {
+        macro: `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.macroSlug}`,
+        legacyMacro: sampleCharacterTarget.legacyNameSlug
+          ? `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.legacyNameSlug}`
+          : null,
+        resolved: safeSubstituteMacro(context, `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.macroSlug}`),
+        legacyResolved: sampleCharacterTarget.legacyNameSlug
+          ? safeSubstituteMacro(context, `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.legacyNameSlug}`)
+          : null,
+      } : null,
+    },
   };
 }
 

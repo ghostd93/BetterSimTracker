@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.6-dev5] - 2026-03-09
+### Changed
+- Diagnostics dump now includes direct BST macro resolution samples from ST runtime (`user`, `scene`, and `character`) so unresolved `bst_stat_char_*` behavior can be verified without guessing.
+
 ## [2.2.4.6-dev4] - 2026-03-09
 ### Changed
 - Diagnostics dump now includes BST macro debug metadata (`characterTargets`, registered macro names, and signature-skip state) so character-macro runtime failures can be verified directly from `debug.txt`.
