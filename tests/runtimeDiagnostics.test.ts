@@ -252,6 +252,7 @@ test("buildDiagnosticsReport produces expected core fields", () => {
     },
     promptInjectionLatestDataMessage: "<bst_inject_block>...</bst_inject_block>",
     promptInjectionDebugMeta: { targetOwner: "Seraphina" },
+    macroDebugMeta: { characterTargets: [{ ownerName: "Seraphina", macroSlug: "seraphina" }] },
     traceTailMemory: ["a"],
     traceTailPersisted: ["b"],
     debugRecord: null,

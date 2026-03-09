@@ -2,11 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.4.6] - 2026-03-08
+## [2.2.4.7] - 2026-03-09
 ### Fixed
-- Fixed array-stat clear regression in manual tracker edit flow: deleting the last array item now persists as an explicit empty array (`[]`) instead of reviving stale previous values from fallback history.
+- Fixed BST prompt macros so `{{bst_stat_user_<id>}}`, `{{bst_stat_scene_<id>}}`, `{{bst_stat_char_<id>_<character_slug>}}`, and `{{bst_injection}}` resolve reliably in prompt-manager/chat-completion prompts even when `Inject Tracker Into Prompt` is disabled.
+- Fixed character stat macros for unique owners by exposing a backward-safe name-slug alias alongside avatar-first runtime slugs, so prompts using `{{bst_stat_char_<id>_<character_name_slug>}}` continue to resolve when the owner has an avatar-based macro identity.
+- Fixed macro registration flow to avoid blank BST stat macros when initial sync happened before tracker data existed.
+- Fixed array-stat clear regression in manual tracker edit flow so deleting the last array item persists as an explicit empty array (`[]`) instead of reviving stale previous values from fallback history.
 - Fixed storage normalization to preserve explicit empty array values for custom non-numeric stats.
-- Fixed owner filtering path to keep empty-array clear sentinels, preventing old array values from reappearing on cards/injection.
 
 ## [2.2.4.5] - 2026-03-07
 ### Changed

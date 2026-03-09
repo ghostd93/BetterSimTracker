@@ -102,6 +102,7 @@ export function buildDiagnosticsReport(input: {
   promptInjectionLastMessage: PromptInjectionLastMessageSnapshot;
   promptInjectionLatestDataMessage: string | null;
   promptInjectionDebugMeta: Record<string, unknown> | null;
+  macroDebugMeta: Record<string, unknown> | null;
   traceTailMemory: string[];
   traceTailPersisted: string[];
   debugRecord: DeltaDebugRecord | null;
@@ -158,6 +159,7 @@ export function buildDiagnosticsReport(input: {
     promptInjectionLastMessage: input.promptInjectionLastMessage,
     promptInjectionLatestDataMessage: input.promptInjectionLatestDataMessage,
     promptInjectionDebugMeta: input.promptInjectionDebugMeta,
+    macroDebugMeta: input.macroDebugMeta,
     traceTailMemory: input.traceTailMemory,
     traceTailPersisted: input.traceTailPersisted,
     lastDebugRecord: input.debugRecord,

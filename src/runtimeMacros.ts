@@ -7,6 +7,7 @@ const BST_MACRO_STAT_SCOPE_SCENE = "scene";
 const registeredBstMacros = new Set<string>();
 let bstMacroSignature = "";
 const CHARACTER_SLUG_FALLBACK = "character";
+let lastBstMacroDebugSnapshot: Record<string, unknown> | null = null;
 
 function toMacroIdSegment(value: string): string {
   return String(value ?? "")
@@ -41,6 +42,7 @@ function toAvatarSlug(value: string): string {
 type CharacterMacroTarget = {
   ownerName: string;
   macroSlug: string;
+  legacyNameSlug: string | null;
   displayName: string;
   avatar: string | null;
 };
@@ -71,15 +73,26 @@ function buildCharacterMacroTargets(context: STContext, allCharacterNames: strin
   }
 
   const slugCounts = new Map<string, number>();
+  const nameSlugCounts = new Map<string, number>();
+  for (const candidate of candidates) {
+    const nameSlug = toCharacterSlug(candidate.ownerName);
+    nameSlugCounts.set(nameSlug, (nameSlugCounts.get(nameSlug) ?? 0) + 1);
+  }
+
   const targets: CharacterMacroTarget[] = [];
   for (const candidate of candidates) {
     const base = candidate.baseSlug || CHARACTER_SLUG_FALLBACK;
     const next = (slugCounts.get(base) ?? 0) + 1;
     slugCounts.set(base, next);
     const macroSlug = next === 1 ? base : `${base}_${next}`;
+    const nameSlug = toCharacterSlug(candidate.ownerName);
+    const legacyNameSlug = nameSlug && nameSlug !== macroSlug && (nameSlugCounts.get(nameSlug) ?? 0) === 1
+      ? nameSlug
+      : null;
     targets.push({
       ownerName: candidate.ownerName,
       macroSlug,
+      legacyNameSlug,
       displayName: candidate.displayName,
       avatar: candidate.avatar,
     });
@@ -195,21 +208,29 @@ function registerBstMacro(
       registered = true;
     }
   } catch {
-    // fallback below
+    // continue to new engine registration
   }
-  if (!registered) {
-    try {
-      context.macros?.register?.(name, {
-        description,
-        handler: () => getter(),
-      });
-      registered = true;
-    } catch {
-      // ignore
-    }
+  try {
+    context.macros?.register?.(name, {
+      description,
+      handler: () => getter(),
+    });
+    registered = true;
+  } catch {
+    // ignore
   }
   if (registered) {
     registeredBstMacros.add(name);
+  }
+}
+
+function safeSubstituteMacro(context: STContext, macroName: string): string {
+  try {
+    const substitute = (context as STContext & { substituteParams?: (value: string) => string }).substituteParams;
+    if (typeof substitute !== "function") return "";
+    return String(substitute(`{{${macroName}}}`) ?? "");
+  } catch (error) {
+    return `[error:${error instanceof Error ? error.message : String(error)}]`;
   }
 }
 
@@ -217,17 +238,24 @@ export function syncBstMacros(input: {
   context: STContext;
   settings: BetterSimTrackerSettings;
   allCharacterNames: string[];
-  latestPromptMacroData: TrackerData | null;
+  getLatestPromptMacroData: () => TrackerData | null;
   getLastInjectedPrompt: () => string;
 }): void {
-  const { context, settings, allCharacterNames, latestPromptMacroData, getLastInjectedPrompt } = input;
+  const { context, settings, allCharacterNames, getLatestPromptMacroData, getLastInjectedPrompt } = input;
   const customDefs = (settings.customStats ?? [])
     .map(def => ({ ...def, id: String(def.id ?? "").trim().toLowerCase() }))
     .filter(def => def.id.length > 0);
   const customStatIds = customDefs.map(def => def.id);
   const characterTargets = buildCharacterMacroTargets(context, allCharacterNames);
+  const debugCharacterTargets = characterTargets.map(target => ({
+    ownerName: target.ownerName,
+    displayName: target.displayName,
+    macroSlug: target.macroSlug,
+    legacyNameSlug: target.legacyNameSlug,
+    avatar: target.avatar,
+  }));
   const characterSignature = characterTargets
-    .map(target => `${target.ownerName}:${target.macroSlug}:${target.avatar ?? ""}`)
+    .map(target => `${target.ownerName}:${target.macroSlug}:${target.legacyNameSlug ?? ""}:${target.avatar ?? ""}`)
     .join("|");
   const signature = [
     "v1",
@@ -252,7 +280,16 @@ export function syncBstMacros(input: {
     customStatIds.join("|"),
     characterSignature,
   ].join("::");
-  if (signature === bstMacroSignature && registeredBstMacros.size > 0) return;
+  if (signature === bstMacroSignature && registeredBstMacros.size > 0) {
+    lastBstMacroDebugSnapshot = {
+      signature,
+      skippedBecauseSignatureUnchanged: true,
+      allCharacterNames: [...allCharacterNames],
+      characterTargets: debugCharacterTargets,
+      registeredMacroNames: Array.from(registeredBstMacros).sort(),
+    };
+    return;
+  }
 
   for (const name of registeredBstMacros) {
     unregisterBstMacro(context, name);
@@ -312,7 +349,7 @@ export function syncBstMacros(input: {
         context,
         macroName,
         `BetterSimTracker stat macro for "${statId}" (${BST_MACRO_STAT_SCOPE_USER} scope).`,
-        () => resolveMacroStatValue(latestPromptMacroData, settings, statId, BST_MACRO_STAT_SCOPE_USER),
+        () => resolveMacroStatValue(getLatestPromptMacroData(), settings, statId, BST_MACRO_STAT_SCOPE_USER),
       );
     }
     if (allowsScene) {
@@ -321,7 +358,7 @@ export function syncBstMacros(input: {
         context,
         macroName,
         `BetterSimTracker stat macro for "${statId}" (${BST_MACRO_STAT_SCOPE_SCENE} scope).`,
-        () => resolveMacroStatValue(latestPromptMacroData, settings, statId, BST_MACRO_STAT_SCOPE_SCENE),
+        () => resolveMacroStatValue(getLatestPromptMacroData(), settings, statId, BST_MACRO_STAT_SCOPE_SCENE),
       );
     }
     if (allowsCharacter) {
@@ -330,15 +367,61 @@ export function syncBstMacros(input: {
           context,
           `bst_stat_char_${segment}_${target.macroSlug}`,
           `BetterSimTracker stat macro for "${statId}" (character "${target.displayName}").`,
-          () => resolveMacroStatValue(latestPromptMacroData, settings, statId, "char_target", target.ownerName),
+          () => resolveMacroStatValue(getLatestPromptMacroData(), settings, statId, "char_target", target.ownerName),
         );
+        if (target.legacyNameSlug) {
+          registerBstMacro(
+            context,
+            `bst_stat_char_${segment}_${target.legacyNameSlug}`,
+            `BetterSimTracker legacy stat macro alias for "${statId}" (character "${target.displayName}").`,
+            () => resolveMacroStatValue(getLatestPromptMacroData(), settings, statId, "char_target", target.ownerName),
+          );
+        }
       }
     }
   }
   bstMacroSignature = signature;
+  const sampleCharacterTarget = characterTargets[0] ?? null;
+  const sampleUserStat = customDefs.find(def => !def.globalScope && def.track && def.trackUser)?.id
+    ?? (settings.enableUserTracking && settings.userTrackMood ? "mood" : settings.enableUserTracking && settings.userTrackLastThought ? "lastThought" : null);
+  const sampleSceneStat = customDefs.find(def => def.globalScope && def.track)?.id ?? null;
+  const sampleCharacterStat = customDefs.find(def => !def.globalScope && def.track && def.trackCharacters)?.id
+    ?? (settings.trackMood ? "mood" : settings.trackLastThought ? "lastThought" : settings.trackAffection ? "affection" : null);
+  lastBstMacroDebugSnapshot = {
+    signature,
+    skippedBecauseSignatureUnchanged: false,
+    allCharacterNames: [...allCharacterNames],
+    characterTargets: debugCharacterTargets,
+    registeredMacroNames: Array.from(registeredBstMacros).sort(),
+    resolutionSamples: {
+      user: sampleUserStat ? {
+        macro: `bst_stat_user_${toMacroIdSegment(sampleUserStat)}`,
+        resolved: safeSubstituteMacro(context, `bst_stat_user_${toMacroIdSegment(sampleUserStat)}`),
+      } : null,
+      scene: sampleSceneStat ? {
+        macro: `bst_stat_scene_${toMacroIdSegment(sampleSceneStat)}`,
+        resolved: safeSubstituteMacro(context, `bst_stat_scene_${toMacroIdSegment(sampleSceneStat)}`),
+      } : null,
+      character: sampleCharacterTarget && sampleCharacterStat ? {
+        macro: `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.macroSlug}`,
+        legacyMacro: sampleCharacterTarget.legacyNameSlug
+          ? `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.legacyNameSlug}`
+          : null,
+        resolved: safeSubstituteMacro(context, `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.macroSlug}`),
+        legacyResolved: sampleCharacterTarget.legacyNameSlug
+          ? safeSubstituteMacro(context, `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.legacyNameSlug}`)
+          : null,
+      } : null,
+    },
+  };
 }
 
 export function resetBstMacroStateForTests(): void {
   registeredBstMacros.clear();
   bstMacroSignature = "";
+  lastBstMacroDebugSnapshot = null;
+}
+
+export function getBstMacroDebugSnapshot(): Record<string, unknown> | null {
+  return lastBstMacroDebugSnapshot ? { ...lastBstMacroDebugSnapshot } : null;
 }
