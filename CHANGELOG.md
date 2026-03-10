@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.7-dev5] - 2026-03-10
+### Fixed
+- Fixed owner-scoped custom stat resolution so tracker UI, prompt/injection helpers, prompt builders, graphs, and BST stat macros no longer fall back to global values for non-global stats.
+
 ## [2.2.4.7-dev4] - 2026-03-10
 ### Changed
 - Manual retrack flows and message-edited retrack flows now bypass confidence dampening and mood stickiness, so retrying a tracker reflects the model output directly instead of silently preserving the old state.

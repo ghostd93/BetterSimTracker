@@ -430,10 +430,6 @@ function resolveScopedCustomNumericValue(
   }
   const ownerValue = byOwner[ownerName];
   if (ownerValue !== undefined) return Number(ownerValue);
-  if (!globalScope) {
-    const globalFallback = byOwner[GLOBAL_TRACKER_KEY];
-    if (globalFallback !== undefined) return Number(globalFallback);
-  }
   return undefined;
 }
 
@@ -462,10 +458,6 @@ function resolveScopedCustomNonNumericValue(
   }
   const ownerValue = byOwner[ownerName];
   if (ownerValue !== undefined) return ownerValue;
-  if (!globalScope) {
-    const globalFallback = byOwner[GLOBAL_TRACKER_KEY];
-    if (globalFallback !== undefined) return globalFallback;
-  }
   return undefined;
 }
 

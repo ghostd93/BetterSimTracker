@@ -34,7 +34,7 @@ function getNumericRawValue(
 
   const customRaw = globalScope
     ? (byOwner[GLOBAL_TRACKER_KEY] ?? byOwner[name] ?? legacyFallback())
-    : (byOwner[name] ?? byOwner[GLOBAL_TRACKER_KEY]);
+    : byOwner[name];
   if (customRaw === undefined) return undefined;
   return Number(customRaw);
 }

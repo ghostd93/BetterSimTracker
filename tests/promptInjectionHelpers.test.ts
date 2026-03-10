@@ -57,7 +57,7 @@ test("customStatTracksScope resolves track flags per owner scope", () => {
   assert.equal(customStatTracksAnyScope({ track: false, trackUser: false, trackCharacters: false }), false);
 });
 
-test("resolveScopedCustomNumericValue uses owner/global/legacy fallbacks correctly", () => {
+test("resolveScopedCustomNumericValue keeps owner and global scopes separate", () => {
   const data = makeData();
   data.customStatistics = {
     score: {
@@ -67,14 +67,14 @@ test("resolveScopedCustomNumericValue uses owner/global/legacy fallbacks correct
     },
   };
   assert.equal(resolveScopedCustomNumericValue(data, "score", "Seraphina", false), 71);
-  assert.equal(resolveScopedCustomNumericValue(data, "score", "Unknown", false), 55);
+  assert.equal(resolveScopedCustomNumericValue(data, "score", "Unknown", false), undefined);
   assert.equal(resolveScopedCustomNumericValue(data, "score", "Unknown", true), 55);
 
   delete data.customStatistics.score[GLOBAL_TRACKER_KEY];
   assert.equal(resolveScopedCustomNumericValue(data, "score", "Unknown", true), 71);
 });
 
-test("resolveScopedCustomNonNumericValue uses owner/global/legacy fallbacks correctly", () => {
+test("resolveScopedCustomNonNumericValue keeps owner and global scopes separate", () => {
   const data = makeData();
   data.customNonNumericStatistics = {
     clothes: {
@@ -84,7 +84,7 @@ test("resolveScopedCustomNonNumericValue uses owner/global/legacy fallbacks corr
     },
   };
   assert.deepEqual(resolveScopedCustomNonNumericValue(data, "clothes", "Seraphina", false), ["black sundress"]);
-  assert.deepEqual(resolveScopedCustomNonNumericValue(data, "clothes", "Unknown", false), ["global outfit"]);
+  assert.equal(resolveScopedCustomNonNumericValue(data, "clothes", "Unknown", false), undefined);
   assert.deepEqual(resolveScopedCustomNonNumericValue(data, "clothes", "Unknown", true), ["global outfit"]);
 
   delete data.customNonNumericStatistics.clothes[GLOBAL_TRACKER_KEY];

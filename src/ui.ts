@@ -263,7 +263,7 @@ export function getNumericRawValue(entry: TrackerData, key: string, name: string
   };
   const customRaw = globalScope
     ? (byOwner[GLOBAL_TRACKER_KEY] ?? byOwner[name] ?? legacyFallback())
-    : (byOwner[name] ?? byOwner[GLOBAL_TRACKER_KEY]);
+    : byOwner[name];
   if (customRaw === undefined) return undefined;
   return Number(customRaw);
 }
@@ -285,7 +285,7 @@ function getNonNumericRawValue(
   };
   return globalScope
     ? (byOwner[GLOBAL_TRACKER_KEY] ?? byOwner[name] ?? legacyFallback())
-    : (byOwner[name] ?? byOwner[GLOBAL_TRACKER_KEY]);
+    : byOwner[name];
 }
 
 function hasNumericValue(entry: TrackerData, key: string, name: string, globalScope = false): boolean {

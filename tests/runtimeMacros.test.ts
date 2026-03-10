@@ -294,3 +294,28 @@ test("syncBstMacros exposes a legacy name-slug alias for unique characters when 
   assert.equal(registeredNewEngine.get("bst_stat_char_clothes_sera_alt")?.(), "black sundress, sandals");
   assert.equal(registeredNewEngine.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
 });
+
+test("syncBstMacros does not fall back to global values for owner-scoped character stats", () => {
+  const { context, registered, registeredNewEngine } = makeContext();
+  const tracker = makeTracker();
+  tracker.customNonNumericStatistics = {
+    ...tracker.customNonNumericStatistics,
+    clothes: {
+      __bst_global__: ["global robe"],
+      [USER_TRACKER_KEY]: ["hoodie"],
+    },
+  };
+
+  syncBstMacros({
+    context,
+    settings: makeSettings(),
+    allCharacterNames: ["Seraphina", USER_TRACKER_KEY],
+    getLatestPromptMacroData: () => tracker,
+    getLastInjectedPrompt: () => "",
+  });
+
+  assert.equal(registered.get("bst_stat_char_clothes")?.(), "");
+  assert.equal(registered.get("bst_stat_char_clothes_seraphina")?.(), "");
+  assert.equal(registeredNewEngine.get("bst_stat_char_clothes")?.(), "");
+  assert.equal(registeredNewEngine.get("bst_stat_char_clothes_seraphina")?.(), "");
+});

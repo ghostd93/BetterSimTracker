@@ -36,7 +36,7 @@ test("hasNumericSnapshot detects built-in and global custom numeric entries", ()
   ];
 
   assert.equal(hasNumericSnapshot(entry, "Seraphina", defs), true);
-  assert.equal(hasNumericSnapshot(entry, USER_TRACKER_KEY, [{ key: "scene_score", defaultValue: 50, globalScope: false }]), true);
+  assert.equal(hasNumericSnapshot(entry, USER_TRACKER_KEY, [{ key: "scene_score", defaultValue: 50, globalScope: false }]), false);
   assert.equal(hasNumericSnapshot(entry, USER_TRACKER_KEY, [{ key: "missing_stat", defaultValue: 50, globalScope: false }]), false);
 });
 

@@ -137,6 +137,67 @@ test("buildUnifiedAllStatsPrompt includes custom numeric and non-numeric values"
   assert.match(prompt, /Custom non-numeric stats to update \(clothes\):/);
 });
 
+test("buildUnifiedAllStatsPrompt does not leak global fallback into owner-scoped custom stats", () => {
+  const prompt = buildUnifiedAllStatsPrompt({
+    stats: [],
+    customStats: [
+      {
+        id: "clothes",
+        kind: "array",
+        label: "Clothes",
+        defaultValue: [],
+        textMaxLength: 80,
+        track: true,
+        trackCharacters: true,
+        trackUser: false,
+        globalScope: false,
+        privateToOwner: false,
+        showOnCard: true,
+        showInGraph: false,
+        includeInInjection: true,
+      },
+      {
+        id: "scene_date_time",
+        kind: "date_time",
+        label: "Scene Date/Time",
+        defaultValue: "2026-03-06 20:00",
+        dateTimeMode: "timestamp",
+        track: true,
+        trackCharacters: true,
+        trackUser: true,
+        globalScope: true,
+        privateToOwner: false,
+        showOnCard: true,
+        showInGraph: false,
+        includeInInjection: true,
+      },
+    ],
+    userName: "User",
+    characters: ["Seraphina"],
+    contextText: "Scene text",
+    current: {
+      affection: {},
+      trust: {},
+      desire: {},
+      connection: {},
+      mood: {},
+      lastThought: {},
+    },
+    currentCustom: {},
+    currentCustomNonNumeric: {
+      clothes: { "__bst_global__": ["global robe"] },
+      scene_date_time: { "__bst_global__": "2026-03-06 20:05" },
+    },
+    history: [],
+    maxDeltaPerTurn: 8,
+    includeCharacterCardsInPrompt: true,
+    includeLorebookInExtraction: false,
+  });
+
+  assert.doesNotMatch(prompt, /clothes=\["global robe"\]/);
+  assert.match(prompt, /scene_date_time="2026-03-06 20:05"/);
+});
+
 test("buildSequentialPrompt respects built-in tracking and source priority wording", () => {
   const prompt = buildSequentialPrompt(
     "trust",

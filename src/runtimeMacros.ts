@@ -198,9 +198,6 @@ function resolveMacroStatValue(
     if (raw === undefined && owner !== GLOBAL_TRACKER_KEY && customDef.globalScope) {
       raw = bucket[GLOBAL_TRACKER_KEY];
     }
-    if (raw === undefined && owner !== GLOBAL_TRACKER_KEY && !customDef.globalScope) {
-      raw = bucket[GLOBAL_TRACKER_KEY];
-    }
     const numeric = Number(raw);
     if (Number.isNaN(numeric)) return "";
     return String(Math.max(0, Math.min(100, Math.round(numeric))));
@@ -210,9 +207,6 @@ function resolveMacroStatValue(
   if (!bucket) return "";
   let raw: unknown = bucket[owner];
   if (raw === undefined && owner !== GLOBAL_TRACKER_KEY && customDef.globalScope) {
-    raw = bucket[GLOBAL_TRACKER_KEY];
-  }
-  if (raw === undefined && owner !== GLOBAL_TRACKER_KEY && !customDef.globalScope) {
     raw = bucket[GLOBAL_TRACKER_KEY];
   }
   return formatMacroValue(raw);
