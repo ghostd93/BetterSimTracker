@@ -2,6 +2,7 @@ import { getAllTrackedCharacterNames, buildRecentContext, resolveActiveCharacter
 import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
+import { shouldBypassConfidenceControls } from "./extractorHelpers";
 import { isTrackableAiMessage, isTrackableMessage, isTrackableUserMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, getLastInjectedPromptDebug } from "./promptInjection";
 import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
@@ -3308,6 +3309,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       previousCustomNonNumericStatistics: previousSeededCustomNonNumericStatistics,
       hasPriorTrackerData: Boolean(previousEntry?.data),
       history: seededHistory,
+      bypassConfidenceControls: shouldBypassConfidenceControls(reason),
       isOwnerStatEnabled: (ownerName, statId) => isOwnerStatEnabled(context, runScopedSettings, ownerName, statId),
       isCancelled: () => cancelledExtractionRuns.has(runId),
       onProgress: (done, total, label) => {

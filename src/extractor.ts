@@ -17,9 +17,12 @@ import {
 } from "./prompts";
 import { normalizeDateTimeWithMode } from "./dateTime";
 import {
+  applyConfidenceScaledDelta,
   enabledBuiltInAndTextStats,
   enabledCustomStats,
   groupCustomStatsForSequential,
+  resolveMoodWithConfidence,
+  shouldBypassConfidenceControls,
 } from "./extractorHelpers";
 import {
   buildProgressApply,
@@ -269,6 +272,7 @@ export async function extractStatisticsParallel(input: {
   isCancelled?: () => boolean;
   onProgress?: (done: number, total: number, label?: string) => void;
   isOwnerStatEnabled?: (ownerName: string, statId: string) => boolean;
+  bypassConfidenceControls?: boolean;
 }): Promise<{
   statistics: Statistics;
   customStatistics: CustomStatistics;
@@ -289,6 +293,7 @@ export async function extractStatisticsParallel(input: {
     history,
     onProgress,
     isOwnerStatEnabled,
+    bypassConfidenceControls = false,
   } = input;
   const builtInAndTextStats = enabledBuiltInAndTextStats(settings).filter(stat =>
     activeCharacters.some(name => isOwnerStatEnabled?.(name, stat) !== false),
@@ -394,14 +399,16 @@ export async function extractStatisticsParallel(input: {
 
   try {
     const applyDelta = (prev: number, delta: number, confidence: number, maxDeltaOverride?: number): number => {
-      const conf = Math.max(0, Math.min(1, confidence));
-      const damp = Math.max(0, Math.min(1, settings.confidenceDampening));
-      const scale = (1 - damp) + conf * damp;
       const fallbackLimit = Math.max(1, Math.round(settings.maxDeltaPerTurn || 15));
       const limit = Math.max(1, Math.round(Number(maxDeltaOverride ?? fallbackLimit) || fallbackLimit));
-      const bounded = Math.max(-limit, Math.min(limit, delta));
-      const scaledDelta = Math.round(bounded * scale);
-      return clamp(prev + scaledDelta);
+      return applyConfidenceScaledDelta({
+        previousValue: prev,
+        delta,
+        confidence,
+        confidenceDampening: settings.confidenceDampening,
+        maxDeltaPerTurn: limit,
+        bypassConfidenceControls,
+      });
     };
 
     const applied = {
@@ -469,10 +476,14 @@ export async function extractStatisticsParallel(input: {
         }
         if (stat === "mood" && parsedOne.mood[name] !== undefined) {
           parsed.mood[name] = parsedOne.mood[name];
-          const stick = Math.max(0, Math.min(1, settings.moodStickiness));
           const prevMood = String(previousStatistics?.mood?.[name] ?? settings.defaultMood);
-          const keepPrev = confidence < stick;
-          output.mood[name] = keepPrev ? prevMood : parsedOne.mood[name];
+          output.mood[name] = resolveMoodWithConfidence({
+            previousMood: prevMood,
+            nextMood: parsedOne.mood[name],
+            confidence,
+            moodStickiness: settings.moodStickiness,
+            bypassConfidenceControls,
+          });
           applied.mood[name] = output.mood[name] as string;
         }
         if (stat === "lastThought" && parsedOne.lastThought[name] !== undefined) {

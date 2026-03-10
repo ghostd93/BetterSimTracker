@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 
 import { defaultSettings } from "../src/settings";
 import {
+  applyConfidenceScaledDelta,
   enabledBuiltInAndTextStats,
   enabledCustomStats,
   groupCustomStatsForSequential,
   isManualExtractionReason,
   normalizeSequentialGroupId,
+  resolveMoodWithConfidence,
+  shouldBypassConfidenceControls,
 } from "../src/extractorHelpers";
 import type { BetterSimTrackerSettings, CustomStatDefinition } from "../src/types";
 
@@ -89,4 +92,57 @@ test("isManualExtractionReason only allows manual refresh flows", () => {
   assert.equal(isManualExtractionReason("manual_refresh_retry"), true);
   assert.equal(isManualExtractionReason("GENERATION_ENDED"), false);
   assert.equal(isManualExtractionReason("USER_MESSAGE_RENDERED"), false);
+});
+
+test("shouldBypassConfidenceControls covers retrack and edited-message flows", () => {
+  assert.equal(shouldBypassConfidenceControls("manual_refresh"), true);
+  assert.equal(shouldBypassConfidenceControls("manual_refresh_retry"), true);
+  assert.equal(shouldBypassConfidenceControls("USER_MESSAGE_EDITED"), true);
+  assert.equal(shouldBypassConfidenceControls("MESSAGE_EDITED"), true);
+  assert.equal(shouldBypassConfidenceControls("GENERATION_ENDED"), false);
+});
+
+test("applyConfidenceScaledDelta uses confidence scaling by default", () => {
+  const next = applyConfidenceScaledDelta({
+    previousValue: 50,
+    delta: 10,
+    confidence: 0.2,
+    confidenceDampening: 1,
+    maxDeltaPerTurn: 15,
+  });
+  assert.equal(next, 52);
+});
+
+test("applyConfidenceScaledDelta bypasses confidence scaling when requested", () => {
+  const next = applyConfidenceScaledDelta({
+    previousValue: 50,
+    delta: 10,
+    confidence: 0.2,
+    confidenceDampening: 1,
+    maxDeltaPerTurn: 15,
+    bypassConfidenceControls: true,
+  });
+  assert.equal(next, 60);
+});
+
+test("resolveMoodWithConfidence keeps previous mood only when confidence controls are active", () => {
+  assert.equal(
+    resolveMoodWithConfidence({
+      previousMood: "Neutral",
+      nextMood: "Excited",
+      confidence: 0.2,
+      moodStickiness: 0.5,
+    }),
+    "Neutral",
+  );
+  assert.equal(
+    resolveMoodWithConfidence({
+      previousMood: "Neutral",
+      nextMood: "Excited",
+      confidence: 0.2,
+      moodStickiness: 0.5,
+      bypassConfidenceControls: true,
+    }),
+    "Excited",
+  );
 });

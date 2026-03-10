@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.7-dev4] - 2026-03-10
+### Changed
+- Manual retrack flows and message-edited retrack flows now bypass confidence dampening and mood stickiness, so retrying a tracker reflects the model output directly instead of silently preserving the old state.
+
+### Fixed
+- Fixed a retrack/edit regression where confidence controls could make user or character tracker values appear "stuck" after manual refresh or after editing a tracked message.
+
 ## [2.2.4.7-dev3] - 2026-03-10
 ### Changed
 - Diagnostics dump now includes a consolidated `promptInjection` summary block with current prompt status, latest stored tracker data, latest macro-source data, and prompt/data match flags.

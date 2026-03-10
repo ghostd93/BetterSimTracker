@@ -46,3 +46,44 @@ export function groupCustomStatsForSequential(
 export function isManualExtractionReason(reason: string): boolean {
   return reason === "manual_refresh" || reason === "manual_refresh_retry";
 }
+
+export function shouldBypassConfidenceControls(reason: string): boolean {
+  return (
+    isManualExtractionReason(reason)
+    || reason === "USER_MESSAGE_EDITED"
+    || reason === "MESSAGE_EDITED"
+  );
+}
+
+export function applyConfidenceScaledDelta(input: {
+  previousValue: number;
+  delta: number;
+  confidence: number;
+  confidenceDampening: number;
+  maxDeltaPerTurn: number;
+  bypassConfidenceControls?: boolean;
+}): number {
+  const clamp = (value: number): number => Math.max(0, Math.min(100, Math.round(value)));
+  const conf = Math.max(0, Math.min(1, Number(input.confidence) || 0));
+  const damp = input.bypassConfidenceControls
+    ? 0
+    : Math.max(0, Math.min(1, Number(input.confidenceDampening) || 0));
+  const scale = (1 - damp) + conf * damp;
+  const limit = Math.max(1, Math.round(Number(input.maxDeltaPerTurn) || 15));
+  const bounded = Math.max(-limit, Math.min(limit, Number(input.delta) || 0));
+  const scaledDelta = Math.round(bounded * scale);
+  return clamp(Number(input.previousValue) + scaledDelta);
+}
+
+export function resolveMoodWithConfidence(input: {
+  previousMood: string;
+  nextMood: string;
+  confidence: number;
+  moodStickiness: number;
+  bypassConfidenceControls?: boolean;
+}): string {
+  if (input.bypassConfidenceControls) return input.nextMood;
+  const conf = Math.max(0, Math.min(1, Number(input.confidence) || 0));
+  const stick = Math.max(0, Math.min(1, Number(input.moodStickiness) || 0));
+  return conf < stick ? input.previousMood : input.nextMood;
+}
