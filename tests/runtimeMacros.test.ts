@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 
 import { USER_TRACKER_KEY } from "../src/constants";
 import { defaultSettings } from "../src/settings";
-import { resetBstMacroStateForTests, syncBstMacros } from "../src/runtimeMacros";
+import { getBstMacroDebugSnapshot, resetBstMacroStateForTests, syncBstMacros } from "../src/runtimeMacros";
 import type { BetterSimTrackerSettings, STContext, TrackerData } from "../src/types";
 
 function makeContext() {
   const registered = new Map<string, () => string>();
   const registeredNewEngine = new Map<string, () => string>();
   const unregistered: string[] = [];
-  const context: STContext = {
+  const context = {
     chat: [],
     characterId: 0,
     name1: "User",
@@ -23,6 +23,13 @@ function makeContext() {
     unregisterMacro(name) {
       unregistered.push(name);
       registered.delete(name);
+    },
+    substituteParams(value: string) {
+      return String(value ?? "").replace(/\{\{([^{}]+)\}\}/g, (_, rawName) => {
+        const name = String(rawName ?? "").trim();
+        const handler = registeredNewEngine.get(name) ?? registered.get(name);
+        return typeof handler === "function" ? handler() : `{{${name}}}`;
+      });
     },
     macros: {
       register(name, definition) {
@@ -39,7 +46,7 @@ function makeContext() {
         },
       },
     },
-  };
+  } as STContext & { substituteParams: (value: string) => string };
   return { context, registered, registeredNewEngine, unregistered };
 }
 
@@ -135,9 +142,11 @@ test("syncBstMacros registers injection, user, scene, and character macros with 
   assert.equal(registered.get("bst_stat_user_mood")?.(), "Neutral");
   assert.equal(registered.get("bst_stat_user_clothes")?.(), "hoodie");
   assert.equal(registered.get("bst_stat_scene_scene_date_time")?.(), "2026-03-06 20:05");
+  assert.equal(registered.get("bst_stat_char_clothes")?.(), "black sundress, sandals");
   assert.equal(registered.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
   assert.equal(registeredNewEngine.get("bst_stat_user_clothes")?.(), "hoodie");
   assert.equal(registeredNewEngine.get("bst_stat_scene_scene_date_time")?.(), "2026-03-06 20:05");
+  assert.equal(registeredNewEngine.get("bst_stat_char_clothes")?.(), "black sundress, sandals");
   assert.equal(registeredNewEngine.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
 });
 
@@ -165,6 +174,13 @@ test("syncBstMacros unregisters previous macros when signature changes and skips
   assert.equal(registered.size, countAfterFirst);
   assert.deepEqual(unregistered, []);
   assert.equal(registered.get("bst_injection")?.(), "first");
+
+  const debug = getBstMacroDebugSnapshot();
+  assert.equal(debug?.["skippedBecauseSignatureUnchanged"], true);
+  assert.deepEqual(
+    (debug?.["resolutionSamples"] as any)?.character?.resolved,
+    "black sundress, sandals",
+  );
 
   const changedSettings = {
     ...settings,

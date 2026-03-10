@@ -47,6 +47,13 @@ type CharacterMacroTarget = {
   avatar: string | null;
 };
 
+type MacroResolutionSample = {
+  macro: string;
+  resolved: string;
+  legacyMacro?: string | null;
+  legacyResolved?: string | null;
+};
+
 function buildCharacterMacroTargets(context: STContext, allCharacterNames: string[]): CharacterMacroTarget[] {
   const ownerNameSet = new Set(
     (allCharacterNames ?? [])
@@ -98,6 +105,37 @@ function buildCharacterMacroTargets(context: STContext, allCharacterNames: strin
     });
   }
   return targets;
+}
+
+function resolveCurrentCharacterMacroTarget(
+  context: STContext,
+  targets: CharacterMacroTarget[],
+): CharacterMacroTarget | null {
+  if (!targets.length) return null;
+  if (targets.length === 1) return targets[0];
+
+  const selectedById = Number(context.characterId);
+  if (Number.isInteger(selectedById) && selectedById >= 0 && selectedById < (context.characters?.length ?? 0)) {
+    const selectedCharacter = context.characters?.[selectedById];
+    const selectedAvatar = String(selectedCharacter?.avatar ?? "").trim();
+    if (selectedAvatar) {
+      const avatarMatch = targets.find(target => String(target.avatar ?? "").trim() === selectedAvatar);
+      if (avatarMatch) return avatarMatch;
+    }
+    const selectedName = String(selectedCharacter?.name ?? "").trim().toLowerCase();
+    if (selectedName) {
+      const byName = targets.filter(target => target.ownerName.trim().toLowerCase() === selectedName);
+      if (byName.length === 1) return byName[0];
+    }
+  }
+
+  const fallbackName = String(context.name2 ?? "").trim().toLowerCase();
+  if (fallbackName) {
+    const byName = targets.filter(target => target.ownerName.trim().toLowerCase() === fallbackName);
+    if (byName.length === 1) return byName[0];
+  }
+
+  return null;
 }
 
 function resolveMacroTargetOwner(scope: string, globalScope: boolean): string | null {
@@ -234,6 +272,41 @@ function safeSubstituteMacro(context: STContext, macroName: string): string {
   }
 }
 
+function buildResolutionSamples(
+  context: STContext,
+  settings: BetterSimTrackerSettings,
+  customDefs: Array<BetterSimTrackerSettings["customStats"][number] & { id: string }>,
+  characterTargets: CharacterMacroTarget[],
+): { user: MacroResolutionSample | null; scene: MacroResolutionSample | null; character: MacroResolutionSample | null } {
+  const sampleCharacterTarget = characterTargets[0] ?? null;
+  const sampleUserStat = customDefs.find(def => !def.globalScope && def.track && def.trackUser)?.id
+    ?? (settings.enableUserTracking && settings.userTrackMood ? "mood" : settings.enableUserTracking && settings.userTrackLastThought ? "lastThought" : null);
+  const sampleSceneStat = customDefs.find(def => def.globalScope && def.track)?.id ?? null;
+  const sampleCharacterStat = customDefs.find(def => !def.globalScope && def.track && def.trackCharacters)?.id
+    ?? (settings.trackMood ? "mood" : settings.trackLastThought ? "lastThought" : settings.trackAffection ? "affection" : null);
+
+  return {
+    user: sampleUserStat ? {
+      macro: `bst_stat_user_${toMacroIdSegment(sampleUserStat)}`,
+      resolved: safeSubstituteMacro(context, `bst_stat_user_${toMacroIdSegment(sampleUserStat)}`),
+    } : null,
+    scene: sampleSceneStat ? {
+      macro: `bst_stat_scene_${toMacroIdSegment(sampleSceneStat)}`,
+      resolved: safeSubstituteMacro(context, `bst_stat_scene_${toMacroIdSegment(sampleSceneStat)}`),
+    } : null,
+    character: sampleCharacterTarget && sampleCharacterStat ? {
+      macro: `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}`,
+      resolved: safeSubstituteMacro(context, `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}`),
+      legacyMacro: sampleCharacterTarget.legacyNameSlug
+        ? `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.legacyNameSlug}`
+        : `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.macroSlug}`,
+      legacyResolved: sampleCharacterTarget.legacyNameSlug
+        ? safeSubstituteMacro(context, `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.legacyNameSlug}`)
+        : safeSubstituteMacro(context, `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.macroSlug}`),
+    } : null,
+  };
+}
+
 export function syncBstMacros(input: {
   context: STContext;
   settings: BetterSimTrackerSettings;
@@ -254,6 +327,7 @@ export function syncBstMacros(input: {
     legacyNameSlug: target.legacyNameSlug,
     avatar: target.avatar,
   }));
+  const currentCharacterTarget = resolveCurrentCharacterMacroTarget(context, characterTargets);
   const characterSignature = characterTargets
     .map(target => `${target.ownerName}:${target.macroSlug}:${target.legacyNameSlug ?? ""}:${target.avatar ?? ""}`)
     .join("|");
@@ -286,7 +360,17 @@ export function syncBstMacros(input: {
       skippedBecauseSignatureUnchanged: true,
       allCharacterNames: [...allCharacterNames],
       characterTargets: debugCharacterTargets,
+      currentCharacterTarget: currentCharacterTarget
+        ? {
+          ownerName: currentCharacterTarget.ownerName,
+          displayName: currentCharacterTarget.displayName,
+          macroSlug: currentCharacterTarget.macroSlug,
+          legacyNameSlug: currentCharacterTarget.legacyNameSlug,
+          avatar: currentCharacterTarget.avatar,
+        }
+        : null,
       registeredMacroNames: Array.from(registeredBstMacros).sort(),
+      resolutionSamples: buildResolutionSamples(context, settings, customDefs, characterTargets),
     };
     return;
   }
@@ -362,6 +446,14 @@ export function syncBstMacros(input: {
       );
     }
     if (allowsCharacter) {
+      if (currentCharacterTarget) {
+        registerBstMacro(
+          context,
+          `bst_stat_char_${segment}`,
+          `BetterSimTracker stat macro for "${statId}" (current chat character).`,
+          () => resolveMacroStatValue(getLatestPromptMacroData(), settings, statId, "char_target", currentCharacterTarget.ownerName),
+        );
+      }
       for (const target of characterTargets) {
         registerBstMacro(
           context,
@@ -381,38 +473,22 @@ export function syncBstMacros(input: {
     }
   }
   bstMacroSignature = signature;
-  const sampleCharacterTarget = characterTargets[0] ?? null;
-  const sampleUserStat = customDefs.find(def => !def.globalScope && def.track && def.trackUser)?.id
-    ?? (settings.enableUserTracking && settings.userTrackMood ? "mood" : settings.enableUserTracking && settings.userTrackLastThought ? "lastThought" : null);
-  const sampleSceneStat = customDefs.find(def => def.globalScope && def.track)?.id ?? null;
-  const sampleCharacterStat = customDefs.find(def => !def.globalScope && def.track && def.trackCharacters)?.id
-    ?? (settings.trackMood ? "mood" : settings.trackLastThought ? "lastThought" : settings.trackAffection ? "affection" : null);
   lastBstMacroDebugSnapshot = {
     signature,
     skippedBecauseSignatureUnchanged: false,
     allCharacterNames: [...allCharacterNames],
     characterTargets: debugCharacterTargets,
+    currentCharacterTarget: currentCharacterTarget
+      ? {
+        ownerName: currentCharacterTarget.ownerName,
+        displayName: currentCharacterTarget.displayName,
+        macroSlug: currentCharacterTarget.macroSlug,
+        legacyNameSlug: currentCharacterTarget.legacyNameSlug,
+        avatar: currentCharacterTarget.avatar,
+      }
+      : null,
     registeredMacroNames: Array.from(registeredBstMacros).sort(),
-    resolutionSamples: {
-      user: sampleUserStat ? {
-        macro: `bst_stat_user_${toMacroIdSegment(sampleUserStat)}`,
-        resolved: safeSubstituteMacro(context, `bst_stat_user_${toMacroIdSegment(sampleUserStat)}`),
-      } : null,
-      scene: sampleSceneStat ? {
-        macro: `bst_stat_scene_${toMacroIdSegment(sampleSceneStat)}`,
-        resolved: safeSubstituteMacro(context, `bst_stat_scene_${toMacroIdSegment(sampleSceneStat)}`),
-      } : null,
-      character: sampleCharacterTarget && sampleCharacterStat ? {
-        macro: `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.macroSlug}`,
-        legacyMacro: sampleCharacterTarget.legacyNameSlug
-          ? `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.legacyNameSlug}`
-          : null,
-        resolved: safeSubstituteMacro(context, `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.macroSlug}`),
-        legacyResolved: sampleCharacterTarget.legacyNameSlug
-          ? safeSubstituteMacro(context, `bst_stat_char_${toMacroIdSegment(sampleCharacterStat)}_${sampleCharacterTarget.legacyNameSlug}`)
-          : null,
-      } : null,
-    },
+    resolutionSamples: buildResolutionSamples(context, settings, customDefs, characterTargets),
   };
 }
 

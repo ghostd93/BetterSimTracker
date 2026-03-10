@@ -1923,6 +1923,9 @@ export function openSettingsModal(input: {
       const allowsSceneMacro = quickEnabled && Boolean(stat.globalScope);
       const allowsUserMacro = quickEnabled && !Boolean(stat.globalScope) && Boolean(stat.trackUser ?? stat.track);
       const allowsCharMacro = quickEnabled && !Boolean(stat.globalScope) && Boolean(stat.trackCharacters ?? stat.track);
+      const currentCharacterMacro = macroSegment && allowsCharMacro
+        ? `{{bst_stat_char_${macroSegment}}}`
+        : null;
       const characterMacroExamples = (() => {
         if (!macroSegment || !allowsCharMacro) return [] as string[];
         const preview = (input.previewCharacterCandidates ?? [])
@@ -1954,6 +1957,7 @@ export function openSettingsModal(input: {
         ? [
           ...(allowsUserMacro ? [`{{bst_stat_user_${macroSegment}}}`] : []),
           ...(allowsSceneMacro ? [`{{bst_stat_scene_${macroSegment}}}`] : []),
+          ...(currentCharacterMacro ? [currentCharacterMacro] : []),
           ...characterMacroExamples,
         ]
         : [];
@@ -1996,7 +2000,7 @@ export function openSettingsModal(input: {
               ${escapeHtml(defaultMeta)}
             </div>
             ${description ? `<div class="bst-custom-stat-meta">${escapeHtml(description)}</div>` : ""}
-            ${macroScopes.length || allowsCharMacro ? `<div class="bst-custom-stat-meta">Macros: ${macroScopes.map(item => `<code>${escapeHtml(item)}</code>`).join(" ")}${(allowsCharMacro && !characterMacroExamples.length) ? ` <code>{{bst_stat_char_${escapeHtml(macroSegment)}_&lt;character_slug&gt;}}</code>` : ""}</div>` : ""}
+            ${macroScopes.length || allowsCharMacro ? `<div class="bst-custom-stat-meta">Macros: ${macroScopes.map(item => `<code>${escapeHtml(item)}</code>`).join(" ")}${(allowsCharMacro && !characterMacroExamples.length) ? ` <code>{{bst_stat_char_${escapeHtml(macroSegment)}_&lt;character_slug&gt;}}</code>` : ""}${allowsCharMacro ? ` <span class="bst-inline-hint">Current chat character uses <code>{{bst_stat_char_${escapeHtml(macroSegment)}}}</code>; explicit target uses <code>{{bst_stat_char_${escapeHtml(macroSegment)}_&lt;character_slug&gt;}}</code>.</span>` : ""}</div>` : ""}
             <div class="bst-custom-stat-flags">
               ${flags.map(flag => `<span class="bst-custom-stat-flag">${escapeHtml(flag)}</span>`).join("")}
             </div>

@@ -2,6 +2,15 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.7-dev1] - 2026-03-10
+### Changed
+- Added a current-chat character macro form for owner-scoped stats: `{{bst_stat_char_<id>}}`, so prompt macros no longer require guessing a slug in normal 1:1 chats.
+- Custom stat macro hints in Settings now show the supported macro forms more explicitly, including current-chat character usage vs explicit targeted character usage.
+
+### Fixed
+- Fixed BST character stat macro usability by keeping current-chat character aliases available alongside explicit targeted aliases.
+- Fixed BST macro diagnostics so debug dumps retain runtime resolution samples even when macro registration is skipped because the signature is unchanged.
+
 ## [2.2.4.7] - 2026-03-09
 ### Fixed
 - Fixed BST prompt macros so `{{bst_stat_user_<id>}}`, `{{bst_stat_scene_<id>}}`, `{{bst_stat_char_<id>_<character_slug>}}`, and `{{bst_injection}}` resolve reliably in prompt-manager/chat-completion prompts even when `Inject Tracker Into Prompt` is disabled.
