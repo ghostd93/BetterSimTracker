@@ -4128,6 +4128,8 @@ function openSettings(): void {
         },
         historySample,
         activity: lastActivityAnalysis,
+        latestData,
+        latestPromptMacroData,
         promptInjectionPreview: currentSettings.debug ? getLastInjectedPrompt() : undefined,
         promptInjectionCurrentPrompt: currentSettings.debug ? getLastInjectedPrompt() : undefined,
         promptInjectionLastMessage: currentSettings.debug ? lastMessagePromptSnapshot : null,

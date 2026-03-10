@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.7-dev3] - 2026-03-10
+### Changed
+- Diagnostics dump now includes a consolidated `promptInjection` summary block with current prompt status, latest stored tracker data, latest macro-source data, and prompt/data match flags.
+
+### Fixed
+- Fixed misleading prompt diagnostics by separating current injected prompt state from previous generated-message snapshots in the debug report.
+
 ## [2.2.4.7-dev2] - 2026-03-10
 ### Changed
 - Diagnostics dump now exposes explicit current-prompt vs previous-message prompt fields so macro freshness is easier to verify from `debug.txt`.

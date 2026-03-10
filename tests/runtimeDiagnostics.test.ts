@@ -242,6 +242,8 @@ test("buildDiagnosticsReport produces expected core fields", () => {
     profileDebug: { selectedProfile: "", resolvedProfileId: null, activeProfileId: null },
     historySample: buildHistorySample([{ messageIndex: 2, timestamp: 123456, data: makeTracker(123456) }]),
     activity: null,
+    latestData: makeTracker(123456),
+    latestPromptMacroData: makeTracker(123456),
     promptInjectionPreview: "preview",
     promptInjectionCurrentPrompt: "preview",
     promptInjectionLastMessage: {
@@ -277,4 +279,12 @@ test("buildDiagnosticsReport produces expected core fields", () => {
     "<bst_inject_block>...</bst_inject_block>",
   );
   assert.equal(report.promptInjectionCurrentPrompt, "preview");
+  assert.equal(
+    (report.promptInjection as { latestDataMessageIndex: number }).latestDataMessageIndex,
+    2,
+  );
+  assert.equal(
+    (report.promptInjection as { currentPromptMatchesLatestDataMessage: boolean }).currentPromptMatchesLatestDataMessage,
+    false,
+  );
 });

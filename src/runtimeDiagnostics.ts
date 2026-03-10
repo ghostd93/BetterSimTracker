@@ -41,6 +41,57 @@ type PromptInjectionLastMessageSnapshot = {
   generationType: string;
 } | null;
 
+function summarizeTrackerData(data: TrackerData | null): Record<string, unknown> | null {
+  if (!data) return null;
+  return {
+    timestamp: Number(data.timestamp ?? 0),
+    activeCharacters: Array.isArray(data.activeCharacters) ? [...data.activeCharacters] : [],
+    statistics: {
+      affection: data.statistics.affection ?? {},
+      trust: data.statistics.trust ?? {},
+      desire: data.statistics.desire ?? {},
+      connection: data.statistics.connection ?? {},
+      mood: data.statistics.mood ?? {},
+      lastThought: data.statistics.lastThought ?? {},
+    },
+    customStatistics: data.customStatistics ?? {},
+    customNonNumericStatistics: data.customNonNumericStatistics ?? {},
+  };
+}
+
+function buildPromptInjectionSummary(input: {
+  latestDataMessageIndex: number | null;
+  currentPrompt: string | undefined;
+  previousMessage: PromptInjectionLastMessageSnapshot;
+  latestDataMessagePrompt: string | null;
+  promptInjectionDebugMeta: Record<string, unknown> | null;
+  latestData: TrackerData | null;
+  latestPromptMacroData: TrackerData | null;
+}): Record<string, unknown> {
+  const previousMessageIndex = input.previousMessage?.messageIndex ?? null;
+  const currentPrompt = input.currentPrompt ?? "";
+  const latestDataPrompt = input.latestDataMessagePrompt ?? "";
+  const previousPrompt = input.previousMessage?.prompt ?? "";
+  return {
+    latestDataMessageIndex: input.latestDataMessageIndex,
+    previousGeneratedMessageIndex: previousMessageIndex,
+    currentPromptChars: currentPrompt.length,
+    previousPromptChars: previousPrompt.length,
+    latestDataPromptChars: latestDataPrompt.length,
+    currentPromptMatchesLatestDataMessage: Boolean(currentPrompt && latestDataPrompt && currentPrompt === latestDataPrompt),
+    previousPromptMatchesLatestDataMessage: Boolean(previousPrompt && latestDataPrompt && previousPrompt === latestDataPrompt),
+    previousPromptTargetsLatestDataMessage:
+      input.latestDataMessageIndex != null &&
+      previousMessageIndex != null &&
+      previousMessageIndex === input.latestDataMessageIndex,
+    injectedOwnerLines: Array.isArray(input.promptInjectionDebugMeta?.ownerLines)
+      ? (input.promptInjectionDebugMeta?.ownerLines as unknown[]).map(line => String(line ?? ""))
+      : [],
+    latestStoredTrackerData: summarizeTrackerData(input.latestData),
+    latestPromptMacroData: summarizeTrackerData(input.latestPromptMacroData),
+  };
+}
+
 export function filterDiagnosticsTrace(lines: string[], includeGraphInDiagnostics: boolean): string[] {
   if (includeGraphInDiagnostics) return lines;
   return lines.filter(line => !line.includes(" graph.open "));
@@ -98,6 +149,8 @@ export function buildDiagnosticsReport(input: {
   profileDebug: ProfileDebug;
   historySample: ReturnType<typeof buildHistorySample>;
   activity: ActivityAnalysis;
+  latestData: TrackerData | null;
+  latestPromptMacroData: TrackerData | null;
   promptInjectionPreview: string | undefined;
   promptInjectionCurrentPrompt: string | undefined;
   promptInjectionLastMessage: PromptInjectionLastMessageSnapshot;
@@ -157,6 +210,15 @@ export function buildDiagnosticsReport(input: {
       customStats: settings.customStats,
     },
     activity: input.activity,
+    promptInjection: buildPromptInjectionSummary({
+      latestDataMessageIndex: input.latestDataMessageIndex,
+      currentPrompt: input.promptInjectionCurrentPrompt,
+      previousMessage: input.promptInjectionLastMessage,
+      latestDataMessagePrompt: input.promptInjectionLatestDataMessage,
+      promptInjectionDebugMeta: input.promptInjectionDebugMeta,
+      latestData: input.latestData,
+      latestPromptMacroData: input.latestPromptMacroData,
+    }),
     promptInjectionPreview: input.promptInjectionPreview,
     promptInjectionCurrentPrompt: input.promptInjectionCurrentPrompt,
     promptInjectionLastMessage: input.promptInjectionLastMessage,
