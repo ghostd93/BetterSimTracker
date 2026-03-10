@@ -1,6 +1,7 @@
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 
+import { USER_TRACKER_KEY } from "../src/constants";
 import { EXTENSION_KEY } from "../src/constants";
 import { isTrackableMessage } from "../src/messageFilter";
 import { buildMergedPromptMacroData, resolveLatestStoredTrackerData } from "../src/runtimeState";
@@ -218,6 +219,29 @@ test("buildMergedPromptMacroData merges tracker history into one richer snapshot
   assert.deepEqual(merged?.statistics.mood, { Seraphina: "Hopeful" });
   assert.deepEqual(merged?.customNonNumericStatistics?.clothes, { Seraphina: ["Hat"] });
   assert.deepEqual(merged?.customNonNumericStatistics?.pose, { Seraphina: "Standing" });
+});
+
+test("buildMergedPromptMacroData prefers the latest owner array value over older history", () => {
+  const context = makeContext();
+  const olderUser = makeTracker(1000, {
+    activeCharacters: [USER_TRACKER_KEY],
+    customNonNumericStatistics: {
+      clothes: { [USER_TRACKER_KEY]: ["t-shirt", "jeans"] },
+    },
+  });
+  const newerUser = makeTracker(2000, {
+    activeCharacters: [USER_TRACKER_KEY],
+    customNonNumericStatistics: {
+      clothes: { [USER_TRACKER_KEY]: ["jeans"] },
+    },
+  });
+
+  saveTrackerSnapshot(context, olderUser, 1);
+  saveTrackerSnapshot(context, newerUser, 3);
+
+  const merged = buildMergedPromptMacroData(context, newerUser);
+  assert.ok(merged);
+  assert.deepEqual(merged?.customNonNumericStatistics?.clothes, { [USER_TRACKER_KEY]: ["jeans"] });
 });
 
 test("resolveLatestStoredTrackerData prefers latest safe message snapshot", () => {

@@ -37,6 +37,16 @@ export function buildMergedPromptMacroData(
     }
   }
 
+  if (preferred) {
+    mergedStatistics = mergeStatisticsWithFallback(preferred.statistics, mergedStatistics, undefined);
+    mergedCustomStatistics = mergeCustomStatisticsWithFallback(preferred.customStatistics, mergedCustomStatistics);
+    mergedCustomNonNumericStatistics = mergeCustomNonNumericStatisticsWithFallback(
+      preferred.customNonNumericStatistics,
+      mergedCustomNonNumericStatistics,
+    );
+    lastTimestamp = Math.max(lastTimestamp, Number(preferred.timestamp ?? 0));
+  }
+
   const preferredActiveCharacters = Array.isArray(preferred?.activeCharacters)
     ? preferred.activeCharacters.map(name => String(name ?? "").trim()).filter(Boolean)
     : [];

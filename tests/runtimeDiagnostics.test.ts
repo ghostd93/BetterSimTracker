@@ -243,7 +243,15 @@ test("buildDiagnosticsReport produces expected core fields", () => {
     historySample: buildHistorySample([{ messageIndex: 2, timestamp: 123456, data: makeTracker(123456) }]),
     activity: null,
     promptInjectionPreview: "preview",
+    promptInjectionCurrentPrompt: "preview",
     promptInjectionLastMessage: {
+      messageIndex: 2,
+      prompt: "<bst_inject_block>...</bst_inject_block>",
+      capturedAt: 1772800000000,
+      targetIndex: 2,
+      generationType: "normal",
+    },
+    promptInjectionPreviousMessage: {
       messageIndex: 2,
       prompt: "<bst_inject_block>...</bst_inject_block>",
       capturedAt: 1772800000000,
@@ -268,4 +276,5 @@ test("buildDiagnosticsReport produces expected core fields", () => {
     report.promptInjectionLatestDataMessage,
     "<bst_inject_block>...</bst_inject_block>",
   );
+  assert.equal(report.promptInjectionCurrentPrompt, "preview");
 });

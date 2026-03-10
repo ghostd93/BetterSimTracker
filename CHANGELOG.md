@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.7-dev2] - 2026-03-10
+### Changed
+- Diagnostics dump now exposes explicit current-prompt vs previous-message prompt fields so macro freshness is easier to verify from `debug.txt`.
+
+### Fixed
+- Fixed merged prompt-macro state so the latest effective tracker snapshot now overrides older history instead of reviving stale owner array values in prompt macros.
+
 ## [2.2.4.7-dev1] - 2026-03-10
 ### Changed
 - Added a current-chat character macro form for owner-scoped stats: `{{bst_stat_char_<id>}}`, so prompt macros no longer require guessing a slug in normal 1:1 chats.

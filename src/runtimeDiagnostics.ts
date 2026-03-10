@@ -99,7 +99,9 @@ export function buildDiagnosticsReport(input: {
   historySample: ReturnType<typeof buildHistorySample>;
   activity: ActivityAnalysis;
   promptInjectionPreview: string | undefined;
+  promptInjectionCurrentPrompt: string | undefined;
   promptInjectionLastMessage: PromptInjectionLastMessageSnapshot;
+  promptInjectionPreviousMessage: PromptInjectionLastMessageSnapshot;
   promptInjectionLatestDataMessage: string | null;
   promptInjectionDebugMeta: Record<string, unknown> | null;
   macroDebugMeta: Record<string, unknown> | null;
@@ -156,7 +158,9 @@ export function buildDiagnosticsReport(input: {
     },
     activity: input.activity,
     promptInjectionPreview: input.promptInjectionPreview,
+    promptInjectionCurrentPrompt: input.promptInjectionCurrentPrompt,
     promptInjectionLastMessage: input.promptInjectionLastMessage,
+    promptInjectionPreviousMessage: input.promptInjectionPreviousMessage,
     promptInjectionLatestDataMessage: input.promptInjectionLatestDataMessage,
     promptInjectionDebugMeta: input.promptInjectionDebugMeta,
     macroDebugMeta: input.macroDebugMeta,
