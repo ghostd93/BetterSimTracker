@@ -67,6 +67,7 @@ function buildPromptInjectionSummary(input: {
   promptInjectionDebugMeta: Record<string, unknown> | null;
   latestData: TrackerData | null;
   latestPromptMacroData: TrackerData | null;
+  baselineDebugMeta: Record<string, unknown> | null;
 }): Record<string, unknown> {
   const previousMessageIndex = input.previousMessage?.messageIndex ?? null;
   const currentPrompt = input.currentPrompt ?? "";
@@ -87,6 +88,7 @@ function buildPromptInjectionSummary(input: {
     injectedOwnerLines: Array.isArray(input.promptInjectionDebugMeta?.ownerLines)
       ? (input.promptInjectionDebugMeta?.ownerLines as unknown[]).map(line => String(line ?? ""))
       : [],
+    baseline: input.baselineDebugMeta,
     latestStoredTrackerData: summarizeTrackerData(input.latestData),
     latestPromptMacroData: summarizeTrackerData(input.latestPromptMacroData),
   };
@@ -158,6 +160,7 @@ export function buildDiagnosticsReport(input: {
   promptInjectionLatestDataMessage: string | null;
   promptInjectionDebugMeta: Record<string, unknown> | null;
   macroDebugMeta: Record<string, unknown> | null;
+  baselineDebugMeta: Record<string, unknown> | null;
   traceTailMemory: string[];
   traceTailPersisted: string[];
   debugRecord: DeltaDebugRecord | null;
@@ -218,6 +221,7 @@ export function buildDiagnosticsReport(input: {
       promptInjectionDebugMeta: input.promptInjectionDebugMeta,
       latestData: input.latestData,
       latestPromptMacroData: input.latestPromptMacroData,
+      baselineDebugMeta: input.baselineDebugMeta,
     }),
     promptInjectionPreview: input.promptInjectionPreview,
     promptInjectionCurrentPrompt: input.promptInjectionCurrentPrompt,
@@ -226,6 +230,7 @@ export function buildDiagnosticsReport(input: {
     promptInjectionLatestDataMessage: input.promptInjectionLatestDataMessage,
     promptInjectionDebugMeta: input.promptInjectionDebugMeta,
     macroDebugMeta: input.macroDebugMeta,
+    baselineDebugMeta: input.baselineDebugMeta,
     traceTailMemory: input.traceTailMemory,
     traceTailPersisted: input.traceTailPersisted,
     lastDebugRecord: input.debugRecord,

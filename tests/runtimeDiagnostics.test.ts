@@ -263,6 +263,7 @@ test("buildDiagnosticsReport produces expected core fields", () => {
     promptInjectionLatestDataMessage: "<bst_inject_block>...</bst_inject_block>",
     promptInjectionDebugMeta: { targetOwner: "Seraphina" },
     macroDebugMeta: { characterTargets: [{ ownerName: "Seraphina", macroSlug: "seraphina" }] },
+    baselineDebugMeta: { baselineBeforeIndex: 4, previousEntryMessageIndex: 3, currentMessageWasUsedAsBaseline: false },
     traceTailMemory: ["a"],
     traceTailPersisted: ["b"],
     debugRecord: null,
@@ -286,5 +287,9 @@ test("buildDiagnosticsReport produces expected core fields", () => {
   assert.equal(
     (report.promptInjection as { currentPromptMatchesLatestDataMessage: boolean }).currentPromptMatchesLatestDataMessage,
     false,
+  );
+  assert.deepEqual(
+    (report.promptInjection as { baseline: Record<string, unknown> }).baseline,
+    { baselineBeforeIndex: 4, previousEntryMessageIndex: 3, currentMessageWasUsedAsBaseline: false },
   );
 });

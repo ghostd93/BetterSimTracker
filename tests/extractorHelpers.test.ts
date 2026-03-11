@@ -9,6 +9,7 @@ import {
   groupCustomStatsForSequential,
   isManualExtractionReason,
   normalizeSequentialGroupId,
+  resolveBaselineBeforeIndex,
   resolveMoodWithConfidence,
   shouldBypassConfidenceControls,
 } from "../src/extractorHelpers";
@@ -144,5 +145,20 @@ test("resolveMoodWithConfidence keeps previous mood only when confidence control
       bypassConfidenceControls: true,
     }),
     "Excited",
+  );
+});
+
+test("resolveBaselineBeforeIndex excludes the current message for retrack baselines", () => {
+  assert.equal(
+    resolveBaselineBeforeIndex({ targetMessageIndex: 4, lastIndex: 4 }),
+    4,
+  );
+  assert.equal(
+    resolveBaselineBeforeIndex({ targetMessageIndex: 2, lastIndex: 4 }),
+    2,
+  );
+  assert.equal(
+    resolveBaselineBeforeIndex({ lastIndex: 4 }),
+    4,
   );
 });

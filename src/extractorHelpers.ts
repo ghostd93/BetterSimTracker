@@ -55,6 +55,16 @@ export function shouldBypassConfidenceControls(reason: string): boolean {
   );
 }
 
+export function resolveBaselineBeforeIndex(input: {
+  targetMessageIndex?: number;
+  lastIndex: number;
+}): number {
+  if (typeof input.targetMessageIndex === "number" && input.targetMessageIndex >= 0) {
+    return input.targetMessageIndex;
+  }
+  return input.lastIndex;
+}
+
 export function applyConfidenceScaledDelta(input: {
   previousValue: number;
   delta: number;

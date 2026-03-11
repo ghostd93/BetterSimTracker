@@ -2,6 +2,14 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.8-dev1] - 2026-03-11
+### Changed
+- Manual retrack baseline now seeds from the previous message snapshot instead of reusing the current message's tracker state, so retrack can actually correct a bad extraction instead of preserving it.
+
+### Fixed
+- Debug diagnostics now expose the exact extraction baseline source (baselineBeforeIndex, previous snapshot indices, and whether the current message was reused), making retrack-state bugs directly visible in debug.txt.
+- Added regression coverage for manual-retrack baseline selection and baseline diagnostics output.
+
 ## [2.2.4.8] - 2026-03-11
 ### Added
 - Added stable current-chat character stat macros like `{{bst_stat_char_<id>}}`, so prompt presets no longer need a character-specific slug for normal 1:1 usage.
@@ -835,3 +843,5 @@ And more...
 ## [1.0.0] - 2026-02-18
 
 - First stable public release.
+
+

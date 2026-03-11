@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildBuiltInSequentialPromptGenerationPrompt,
+  buildCustomStatBehaviorGuidanceGenerationPrompt,
   buildSequentialCustomNumericPrompt,
+  buildSequentialCustomOverrideGenerationPrompt,
   buildSequentialCustomNonNumericPrompt,
   buildSequentialPrompt,
   buildTrackerSummaryGenerationPrompt,
@@ -318,4 +321,43 @@ test("buildTrackerSummaryGenerationPrompt keeps tracked-dimension scope explicit
   assert.match(prompt, /Tracked dimensions \(only these\):/);
   assert.match(prompt, /mood, connection, clothes/);
   assert.match(prompt, /Do not use numerals or percentages\./);
+});
+
+test("buildSequentialCustomOverrideGenerationPrompt emphasizes continuity and disambiguation-only card usage", () => {
+  const prompt = buildSequentialCustomOverrideGenerationPrompt({
+    statId: "clothes",
+    statLabel: "Clothes",
+    statDescription: "Track currently worn clothing/accessory items as a live list.",
+    statKind: "array",
+    textMaxLength: 120,
+  });
+
+  assert.match(prompt, /Treat the previous Clothes tracker value as the current known state for continuity\./);
+  assert.match(prompt, /Change clothes only when recent messages provide clear evidence of change; otherwise preserve the previous value\./);
+  assert.match(prompt, /Use recent messages as the primary source of change and previous tracker state as the primary source of continuity\./);
+  assert.match(prompt, /Use character cards, defaults, and lorebook only when clothes is empty, unknown, or genuinely unclear from the recent scene\./);
+  assert.match(prompt, /Never overwrite a known current Clothes value only because background\/card text mentions a different baseline state\./);
+});
+
+test("buildBuiltInSequentialPromptGenerationPrompt reinforces continuity for built-ins", () => {
+  const prompt = buildBuiltInSequentialPromptGenerationPrompt({
+    stat: "trust",
+    currentInstruction: "",
+  });
+
+  assert.match(prompt, /Prioritize recent messages for changes and previous tracker state for continuity; use character cards only for disambiguation\./);
+  assert.match(prompt, /Require preserving the current Trust state unless recent messages clearly justify movement\./);
+});
+
+test("buildCustomStatBehaviorGuidanceGenerationPrompt asks for continuity-aware guidance", () => {
+  const prompt = buildCustomStatBehaviorGuidanceGenerationPrompt({
+    statId: "pose",
+    statLabel: "Pose",
+    statDescription: "Current posture, immediate action, and local position.",
+    statKind: "text_short",
+    textMaxLength: 120,
+  });
+
+  assert.match(prompt, /Keep the guidance anchored to the current Pose state instead of generic label synonyms\./);
+  assert.match(prompt, /describe how the model should remain consistent with an already-established pose value across nearby turns/i);
 });

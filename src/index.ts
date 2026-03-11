@@ -2,7 +2,7 @@ import { getAllTrackedCharacterNames, buildRecentContext, resolveActiveCharacter
 import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
-import { shouldBypassConfidenceControls } from "./extractorHelpers";
+import { resolveBaselineBeforeIndex, shouldBypassConfidenceControls } from "./extractorHelpers";
 import { isTrackableAiMessage, isTrackableMessage, isTrackableUserMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, getLastInjectedPromptDebug } from "./promptInjection";
 import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
@@ -95,6 +95,7 @@ let allCharacterNames: string[] = [];
 let latestData: TrackerData | null = null;
 let latestDataMessageIndex: number | null = null;
 let latestPromptMacroData: TrackerData | null = null;
+let lastExtractionBaselineDebugMeta: Record<string, unknown> | null = null;
 let trackerUiState: TrackerUiState = { phase: "idle", done: 0, total: 0, messageIndex: null, stepLabel: null };
 const trackerRecoveryByMessage = new Map<number, TrackerRecoveryEntry>();
 let renderQueued = false;
@@ -3100,16 +3101,10 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
           customStats: scopedCustomStats,
         };
 
-    const includeCurrentTrackerAsBaseline =
-      isManualRefreshReason &&
-      typeof targetMessageIndex === "number" &&
-      targetMessageIndex >= 0;
-    const baselineBeforeIndex =
-      includeCurrentTrackerAsBaseline
-        ? targetMessageIndex! + 1
-        : (typeof targetMessageIndex === "number" && targetMessageIndex >= 0
-          ? targetMessageIndex
-          : lastIndex);
+    const baselineBeforeIndex = resolveBaselineBeforeIndex({
+      targetMessageIndex,
+      lastIndex,
+    });
     const previousEntry = userExtraction
       ? getLatestRelevantTrackerDataWithIndexBefore(
           context,
@@ -3140,6 +3135,18 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
     if (previous && !userExtraction) {
       previous = overlayLatestGlobalCustomStats(previous, previousGlobalEntry?.data ?? null, runScopedSettings);
     }
+    lastExtractionBaselineDebugMeta = {
+      reason,
+      userExtraction,
+      targetMessageIndex: targetMessageIndex ?? null,
+      resolvedMessageIndex: lastIndex,
+      baselineBeforeIndex,
+      previousEntryMessageIndex: previousEntry?.messageIndex ?? null,
+      previousGlobalEntryMessageIndex: previousGlobalEntry?.messageIndex ?? null,
+      usedDefaultBaseline: !previousEntry?.data,
+      currentMessageWasUsedAsBaseline: Boolean(previousEntry && previousEntry.messageIndex === lastIndex),
+    };
+    pushTrace("extract.baseline.source", lastExtractionBaselineDebugMeta);
     if (!previous) {
       previous = buildBaselineData(activeCharacters, runScopedSettings);
       pushTrace("extract.baseline", { runId, forMessageIndex: lastIndex, activeCharacters: activeCharacters.length });
@@ -4139,6 +4146,7 @@ function openSettings(): void {
         promptInjectionLatestDataMessage: currentSettings.debug ? latestDataPrompt : null,
         promptInjectionDebugMeta: currentSettings.debug ? getLastInjectedPromptDebug() : null,
         macroDebugMeta: currentSettings.debug ? getBstMacroDebugSnapshot() : null,
+        baselineDebugMeta: currentSettings.debug ? lastExtractionBaselineDebugMeta : null,
         traceTailMemory: filterDiagnosticsTrace(debugTrace.slice(-150), currentSettings.includeGraphInDiagnostics),
         traceTailPersisted: filterDiagnosticsTrace(readTraceLines(activeContext).slice(-300), currentSettings.includeGraphInDiagnostics),
         debugRecord: filteredLastDebugRecord,
