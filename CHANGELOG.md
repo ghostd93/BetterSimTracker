@@ -2,52 +2,17 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.4.7-dev5] - 2026-03-10
-### Fixed
-- Fixed owner-scoped custom stat resolution so tracker UI, prompt/injection helpers, prompt builders, graphs, and BST stat macros no longer fall back to global values for non-global stats.
-
 ## [2.2.4.8] - 2026-03-11
 ### Added
 - Added stable current-chat character stat macros like `{{bst_stat_char_<id>}}`, so prompt presets no longer need a character-specific slug for normal 1:1 usage.
 
 ### Changed
 - Manual retrack and edited-message retrack now bypass confidence dampening and mood stickiness, so retrying a tracker reflects the fresh model output instead of preserving stale values.
-- Debug dumps now expose clearer prompt-injection and macro-resolution state, making macro and prompt-state issues easier to verify from `debug.txt`.
 
 ### Fixed
 - Fixed BST stat macros so user, scene, and character stat macros resolve reliably in prompt-manager/chat-completion prompts even when prompt injection is disabled.
 - Fixed prompt macro freshness so the latest effective tracker state wins over older history instead of reviving stale owner array values.
 - Fixed owner-scoped custom stats so tracker UI, prompt/injection helpers, prompt builders, graphs, and BST stat macros no longer fall back to global values for non-global stats.
-
-## [2.2.4.7-dev4] - 2026-03-10
-### Changed
-- Manual retrack flows and message-edited retrack flows now bypass confidence dampening and mood stickiness, so retrying a tracker reflects the model output directly instead of silently preserving the old state.
-
-### Fixed
-- Fixed a retrack/edit regression where confidence controls could make user or character tracker values appear "stuck" after manual refresh or after editing a tracked message.
-
-## [2.2.4.7-dev3] - 2026-03-10
-### Changed
-- Diagnostics dump now includes a consolidated `promptInjection` summary block with current prompt status, latest stored tracker data, latest macro-source data, and prompt/data match flags.
-
-### Fixed
-- Fixed misleading prompt diagnostics by separating current injected prompt state from previous generated-message snapshots in the debug report.
-
-## [2.2.4.7-dev2] - 2026-03-10
-### Changed
-- Diagnostics dump now exposes explicit current-prompt vs previous-message prompt fields so macro freshness is easier to verify from `debug.txt`.
-
-### Fixed
-- Fixed merged prompt-macro state so the latest effective tracker snapshot now overrides older history instead of reviving stale owner array values in prompt macros.
-
-## [2.2.4.7-dev1] - 2026-03-10
-### Changed
-- Added a current-chat character macro form for owner-scoped stats: `{{bst_stat_char_<id>}}`, so prompt macros no longer require guessing a slug in normal 1:1 chats.
-- Custom stat macro hints in Settings now show the supported macro forms more explicitly, including current-chat character usage vs explicit targeted character usage.
-
-### Fixed
-- Fixed BST character stat macro usability by keeping current-chat character aliases available alongside explicit targeted aliases.
-- Fixed BST macro diagnostics so debug dumps retain runtime resolution samples even when macro registration is skipped because the signature is unchanged.
 
 ## [2.2.4.7] - 2026-03-09
 ### Fixed
