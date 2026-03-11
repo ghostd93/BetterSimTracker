@@ -2,13 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.4.8-dev1] - 2026-03-11
+## [2.2.4.9] - 2026-03-11
 ### Changed
-- Manual retrack baseline now seeds from the previous message snapshot instead of reusing the current message's tracker state, so retrack can actually correct a bad extraction instead of preserving it.
+- Manual retrack now seeds from the previous message snapshot instead of reusing the current message tracker state, so retrying a bad extraction can actually correct the tracker.
 
 ### Fixed
-- Debug diagnostics now expose the exact extraction baseline source (baselineBeforeIndex, previous snapshot indices, and whether the current message was reused), making retrack-state bugs directly visible in debug.txt.
-- Added regression coverage for manual-retrack baseline selection and baseline diagnostics output.
+- Debug diagnostics now expose the exact extraction baseline source (`baselineBeforeIndex`, previous snapshot indices, and whether the current message was reused), making retrack-state bugs directly visible in `debug.txt`.
 
 ## [2.2.4.8] - 2026-03-11
 ### Added
