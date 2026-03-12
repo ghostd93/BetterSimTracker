@@ -244,6 +244,48 @@ test("buildMergedPromptMacroData prefers the latest owner array value over older
   assert.deepEqual(merged?.customNonNumericStatistics?.clothes, { [USER_TRACKER_KEY]: ["jeans"] });
 });
 
+test("buildMergedPromptMacroData prefers a newer manual edit on an older message over a stale later snapshot", () => {
+  const context = makeContext();
+  context.chat.push(
+    { mes: "User edited later", is_user: true, is_system: false, extra: {} },
+    { mes: "AI snapshot became stale", name: "Seraphina", is_user: false, is_system: false, extra: {} },
+  );
+  const editedUserSnapshot = makeTracker(3000, {
+    activeCharacters: [USER_TRACKER_KEY],
+    customNonNumericStatistics: {
+      clothes: { [USER_TRACKER_KEY]: ["jeans"] },
+      pose: { [USER_TRACKER_KEY]: "Standing in place" },
+    },
+  });
+  const staleLaterAiSnapshot = makeTracker(2000, {
+    activeCharacters: ["Seraphina"],
+    statistics: {
+      affection: { Seraphina: 4 },
+      trust: {},
+      desire: {},
+      connection: {},
+      mood: { Seraphina: "Playful" },
+      lastThought: {},
+    },
+    customNonNumericStatistics: {
+      clothes: {
+        [USER_TRACKER_KEY]: ["t-shirt", "jeans"],
+        Seraphina: ["black sundress"],
+      },
+    },
+  });
+
+  saveTrackerSnapshot(context, editedUserSnapshot, 3);
+  saveTrackerSnapshot(context, staleLaterAiSnapshot, 4);
+
+  const merged = buildMergedPromptMacroData(context, staleLaterAiSnapshot);
+  assert.ok(merged);
+  assert.deepEqual(merged?.customNonNumericStatistics?.clothes, {
+    [USER_TRACKER_KEY]: ["jeans"],
+    Seraphina: ["black sundress"],
+  });
+});
+
 test("resolveLatestStoredTrackerData prefers latest safe message snapshot", () => {
   const context = makeContext();
   const chatStateTracker = makeTracker(1000);

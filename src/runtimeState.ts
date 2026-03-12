@@ -9,9 +9,35 @@ export function buildMergedPromptMacroData(
   preferred: TrackerData | null,
 ): TrackerData | null {
   const historyEntries = getRecentTrackerHistoryEntries(context, Math.max(120, context.chat.length + 8));
-  const entries = [...historyEntries].sort((a, b) => {
-    if (a.messageIndex !== b.messageIndex) return a.messageIndex - b.messageIndex;
-    return a.timestamp - b.timestamp;
+  const entries: Array<{
+    data: TrackerData;
+    timestamp: number;
+    messageIndex: number | null;
+    preferred: boolean;
+  }> = historyEntries.map(entry => ({
+    data: entry.data,
+    timestamp: Number(entry.data.timestamp ?? entry.timestamp ?? 0),
+    messageIndex: entry.messageIndex,
+    preferred: false,
+  }));
+
+  if (preferred) {
+    entries.push({
+      data: preferred,
+      timestamp: Number(preferred.timestamp ?? 0),
+      messageIndex: null,
+      preferred: true,
+    });
+  }
+
+  entries.sort((a, b) => {
+    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+    if (a.messageIndex == null && b.messageIndex != null) return 1;
+    if (a.messageIndex != null && b.messageIndex == null) return -1;
+    if (a.messageIndex != null && b.messageIndex != null && a.messageIndex !== b.messageIndex) {
+      return a.messageIndex - b.messageIndex;
+    }
+    return Number(a.preferred) - Number(b.preferred);
   });
 
   if (!entries.length) {
@@ -35,16 +61,6 @@ export function buildMergedPromptMacroData(
     if (Array.isArray(entry.data.activeCharacters) && entry.data.activeCharacters.length) {
       fallbackActiveCharacters = entry.data.activeCharacters.map(name => String(name ?? "").trim()).filter(Boolean);
     }
-  }
-
-  if (preferred) {
-    mergedStatistics = mergeStatisticsWithFallback(preferred.statistics, mergedStatistics, undefined);
-    mergedCustomStatistics = mergeCustomStatisticsWithFallback(preferred.customStatistics, mergedCustomStatistics);
-    mergedCustomNonNumericStatistics = mergeCustomNonNumericStatisticsWithFallback(
-      preferred.customNonNumericStatistics,
-      mergedCustomNonNumericStatistics,
-    );
-    lastTimestamp = Math.max(lastTimestamp, Number(preferred.timestamp ?? 0));
   }
 
   const preferredActiveCharacters = Array.isArray(preferred?.activeCharacters)
