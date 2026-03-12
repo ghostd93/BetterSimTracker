@@ -909,6 +909,69 @@ function getLatestRelevantTrackerDataWithIndexBefore(
   return null;
 }
 
+function getMergedRelevantTrackerDataWithIndexBefore(
+  context: STContext,
+  beforeIndex: number,
+  activeCharacters: string[],
+  settingsInput: BetterSimTrackerSettings,
+): { data: TrackerData; messageIndex: number } | null {
+  if (beforeIndex <= 0 || context.chat.length === 0) return null;
+  const historyEntries = getRecentTrackerHistoryEntries(context, Math.max(120, context.chat.length));
+  const relevantEntries = historyEntries
+    .filter(entry => entry.messageIndex < beforeIndex)
+    .filter(entry => activeCharacters.some(name => hasTrackedValueForCharacter(entry.data, name, settingsInput)))
+    .map(entry => ({
+      data: entry.data,
+      messageIndex: entry.messageIndex,
+      timestamp: Number(entry.data.timestamp ?? entry.timestamp ?? 0),
+    }));
+
+  if (!relevantEntries.length) return null;
+
+  relevantEntries.sort((a, b) => {
+    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+    return a.messageIndex - b.messageIndex;
+  });
+
+  let mergedStatistics: Statistics | null = null;
+  let mergedCustomStatistics: CustomStatistics | null = null;
+  let mergedCustomNonNumericStatistics: CustomNonNumericStatistics | null = null;
+  let mergedTimestamp = 0;
+  let fallbackActiveCharacters: string[] = [];
+
+  for (const entry of relevantEntries) {
+    mergedStatistics = mergeStatisticsWithFallback(entry.data.statistics, mergedStatistics, undefined);
+    mergedCustomStatistics = mergeCustomStatisticsWithFallback(entry.data.customStatistics, mergedCustomStatistics);
+    mergedCustomNonNumericStatistics = mergeCustomNonNumericStatisticsWithFallback(
+      entry.data.customNonNumericStatistics,
+      mergedCustomNonNumericStatistics,
+    );
+    mergedTimestamp = Math.max(mergedTimestamp, entry.timestamp);
+    if (Array.isArray(entry.data.activeCharacters) && entry.data.activeCharacters.length) {
+      fallbackActiveCharacters = entry.data.activeCharacters.map(name => String(name ?? "").trim()).filter(Boolean);
+    }
+  }
+
+  const latestEntry = relevantEntries[relevantEntries.length - 1];
+  return {
+    messageIndex: latestEntry.messageIndex,
+    data: {
+      timestamp: mergedTimestamp || Number(latestEntry.data.timestamp ?? Date.now()),
+      activeCharacters: fallbackActiveCharacters,
+      statistics: mergedStatistics ?? {
+        affection: {},
+        trust: {},
+        desire: {},
+        connection: {},
+        mood: {},
+        lastThought: {},
+      },
+      customStatistics: mergedCustomStatistics ?? {},
+      customNonNumericStatistics: mergedCustomNonNumericStatistics ?? {},
+    },
+  };
+}
+
 function getLatestCharacterOwnedTrackerDataWithIndexBefore(
   context: STContext,
   beforeIndex: number,
@@ -3106,7 +3169,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       lastIndex,
     });
     const previousEntry = userExtraction
-      ? getLatestRelevantTrackerDataWithIndexBefore(
+      ? getMergedRelevantTrackerDataWithIndexBefore(
           context,
           baselineBeforeIndex,
           activeCharacters,

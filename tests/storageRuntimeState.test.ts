@@ -286,6 +286,39 @@ test("buildMergedPromptMacroData prefers a newer manual edit on an older message
   });
 });
 
+test("buildMergedPromptMacroData preserves a newer explicit nude user clothes edit over a later stale AI snapshot", () => {
+  const context = makeContext();
+  context.chat.push(
+    { mes: "User manual edit", is_user: true, is_system: false, extra: {} },
+    { mes: "AI response with stale user state", name: "Seraphina", is_user: false, is_system: false, extra: {} },
+  );
+  const editedUserSnapshot = makeTracker(4000, {
+    activeCharacters: [USER_TRACKER_KEY],
+    customNonNumericStatistics: {
+      clothes: { [USER_TRACKER_KEY]: ["nude"] },
+    },
+  });
+  const staleLaterAiSnapshot = makeTracker(3000, {
+    activeCharacters: ["Seraphina"],
+    customNonNumericStatistics: {
+      clothes: {
+        [USER_TRACKER_KEY]: ["t-shirt", "jeans"],
+        Seraphina: ["black sundress"],
+      },
+    },
+  });
+
+  saveTrackerSnapshot(context, editedUserSnapshot, 3);
+  saveTrackerSnapshot(context, staleLaterAiSnapshot, 4);
+
+  const merged = buildMergedPromptMacroData(context, staleLaterAiSnapshot);
+  assert.ok(merged);
+  assert.deepEqual(merged?.customNonNumericStatistics?.clothes, {
+    [USER_TRACKER_KEY]: ["nude"],
+    Seraphina: ["black sundress"],
+  });
+});
+
 test("resolveLatestStoredTrackerData prefers latest safe message snapshot", () => {
   const context = makeContext();
   const chatStateTracker = makeTracker(1000);
