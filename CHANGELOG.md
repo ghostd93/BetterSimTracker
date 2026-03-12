@@ -2,6 +2,11 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.10] - 2026-03-12
+### Fixed
+- Manual user tracker edits now propagate correctly into subsequent prompt state and later user-message continuity, instead of being overwritten by stale older user values carried in later snapshots.
+- Fixed the user-message continuity chain so newer manual user tracker edits remain the active baseline until the scene actually changes them.
+
 ## [2.2.4.9] - 2026-03-11
 ### Changed
 - Manual retrack now seeds from the previous message snapshot instead of reusing the current message tracker state, so retrying a bad extraction can actually correct the tracker.
