@@ -2,11 +2,6 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.4.9-dev1] - 2026-03-12
-### Fixed
-- Prompt/macro state merging now respects the newest tracker timestamp, so a newer manual user edit is not overwritten by an older later-message snapshot when generating subsequent prompts and tracker updates.
-- Added a regression test for the user-edit -> AI message -> next user message flow to keep manual edits as the latest continuity state until the scene actually changes.
-
 ## [2.2.4.9] - 2026-03-11
 ### Changed
 - Manual retrack now seeds from the previous message snapshot instead of reusing the current message tracker state, so retrying a bad extraction can actually correct the tracker.
