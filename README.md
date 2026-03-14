@@ -11,6 +11,7 @@ It tracks character relationship stats over time, stores them per AI message, vi
 - Works in both extraction modes (`unified` and `sequential`), including grouped sequential custom stats.
 - Includes Scene Card support for global stats, owner-scoped/private stats, and macro support (`{{bst_injection}}`, `{{bst_stat_*}}`).
 - Manual mode is available via `Auto-Generate Tracker` toggle (with in-chat `Generate Tracker` entry points).
+- Lorebook extraction prefers already-activated ST lorebook context, with an optional internal fallback scan toggle.
 - Character/persona defaults, mood-image integrations (BST + ST expressions), graphing, and diagnostics are built-in.
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/dogzera)

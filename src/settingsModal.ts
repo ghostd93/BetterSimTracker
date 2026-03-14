@@ -227,9 +227,11 @@ export function openSettingsModal(input: {
         <div class="bst-check-grid">
           <label class="bst-check"><input data-k="includeCharacterCardsInPrompt" type="checkbox">Include Character Cards in Extraction Prompt</label>
           <label class="bst-check"><input data-k="includeLorebookInExtraction" type="checkbox">Include Activated Lorebook in Extraction Prompt</label>
+          <label class="bst-check" data-bst-row="useInternalLorebookScanFallback"><input data-k="useInternalLorebookScanFallback" type="checkbox">Use Internal Lorebook Scan Fallback</label>
         </div>
         <label data-bst-row="lorebookExtractionMaxChars">Lorebook Extraction Limit <input data-k="lorebookExtractionMaxChars" type="number" min="0" max="12000"></label>
         <div class="bst-help-line bst-toggle-help" data-bst-row="lorebookExtractionHelp">Maximum lorebook characters included in extraction context (0 = no trim).</div>
+        <div class="bst-help-line bst-toggle-help" data-bst-row="lorebookFallbackHelp">Fallback only. BST performs its own lorebook activation scan if ST does not expose activated entries. Disable this to avoid BST-triggered lorebook matching and follow quiet-style lorebook behavior more strictly.</div>
 
         <div class="bst-section-divider">Extraction Toggles</div>
         <div class="bst-check-grid">
@@ -1040,6 +1042,7 @@ export function openSettingsModal(input: {
   set("truncationLengthOverride", String(input.settings.truncationLengthOverride));
   set("includeCharacterCardsInPrompt", String(input.settings.includeCharacterCardsInPrompt));
   set("includeLorebookInExtraction", String(input.settings.includeLorebookInExtraction));
+  set("useInternalLorebookScanFallback", String(input.settings.useInternalLorebookScanFallback));
   set("lorebookExtractionMaxChars", String(input.settings.lorebookExtractionMaxChars));
   set("confidenceDampening", String(input.settings.confidenceDampening));
   set("moodStickiness", String(input.settings.moodStickiness));
@@ -4015,6 +4018,7 @@ export function openSettingsModal(input: {
       truncationLengthOverride: readNumber("truncationLengthOverride", input.settings.truncationLengthOverride, 0, 200000),
       includeCharacterCardsInPrompt: readBool("includeCharacterCardsInPrompt", input.settings.includeCharacterCardsInPrompt),
       includeLorebookInExtraction: readBool("includeLorebookInExtraction", input.settings.includeLorebookInExtraction),
+      useInternalLorebookScanFallback: readBool("useInternalLorebookScanFallback", input.settings.useInternalLorebookScanFallback),
       lorebookExtractionMaxChars: readNumber("lorebookExtractionMaxChars", input.settings.lorebookExtractionMaxChars, 0, 12000),
       confidenceDampening: readNumber("confidenceDampening", input.settings.confidenceDampening, 0, 1),
       moodStickiness: readNumber("moodStickiness", input.settings.moodStickiness, 0, 1),
@@ -4127,6 +4131,8 @@ export function openSettingsModal(input: {
     const injectSummarizationNoteRow = modal.querySelector('[data-bst-row="injectSummarizationNote"]') as HTMLElement | null;
     const lorebookExtractionMaxCharsRow = modal.querySelector('[data-bst-row="lorebookExtractionMaxChars"]') as HTMLElement | null;
     const lorebookExtractionHelpRow = modal.querySelector('[data-bst-row="lorebookExtractionHelp"]') as HTMLElement | null;
+    const lorebookFallbackRow = modal.querySelector('[data-bst-row="useInternalLorebookScanFallback"]') as HTMLElement | null;
+    const lorebookFallbackHelpRow = modal.querySelector('[data-bst-row="lorebookFallbackHelp"]') as HTMLElement | null;
     const injectionPromptMaxCharsRow = modal.querySelector('[data-bst-row="injectionPromptMaxChars"]') as HTMLElement | null;
     const moodAdvancedBlock = modal.querySelector('[data-bst-row="moodAdvancedBlock"]') as HTMLElement | null;
     const globalMoodExpressionMap = modal.querySelector('[data-bst-row="globalMoodExpressionMap"]') as HTMLElement | null;
@@ -4232,6 +4238,12 @@ export function openSettingsModal(input: {
     }
     if (lorebookExtractionHelpRow) {
       lorebookExtractionHelpRow.style.display = current.includeLorebookInExtraction ? "block" : "none";
+    }
+    if (lorebookFallbackRow) {
+      lorebookFallbackRow.style.display = current.includeLorebookInExtraction ? "" : "none";
+    }
+    if (lorebookFallbackHelpRow) {
+      lorebookFallbackHelpRow.style.display = current.includeLorebookInExtraction ? "block" : "none";
     }
     if (injectionPromptMaxCharsRow) {
       injectionPromptMaxCharsRow.style.display = current.injectTrackerIntoPrompt ? "flex" : "none";
@@ -4342,6 +4354,7 @@ export function openSettingsModal(input: {
     moodStickiness: "Higher values keep previous mood unless confidence is strong.",
     injectTrackerIntoPrompt: "Inject current relationship state into generation prompt for behavioral coherence.",
     includeLorebookInExtraction: "Include activated lorebook context in extraction prompt building (for stat analysis only).",
+    useInternalLorebookScanFallback: "Fallback only: BST runs its own lorebook activation scan if activated entries are not already exposed by ST.",
     lorebookExtractionMaxChars: "Maximum lorebook characters included in extraction context (0 means no trim).",
     injectionPromptMaxChars: "Maximum size of hidden injection prompt block sent to generation.",
     summarizationNoteVisibleForAI: "Controls visibility mode for newly generated Summarize notes (prose summaries of current tracked stats). Existing notes are unchanged for safety.",

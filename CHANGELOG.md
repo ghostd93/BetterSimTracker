@@ -2,6 +2,13 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.10-dev3] - 2026-03-14
+### Changed
+- Lorebook extraction now prefers activated ST lorebook context directly instead of reading prompt-style extension WI blocks.
+
+### Fixed
+- Added a dedicated fallback toggle for BST's internal lorebook scan, so extraction can avoid BST-triggered lorebook matching and behave more predictably with quiet-style lorebook setups.
+
 ## [2.2.4.10-dev2] - 2026-03-14
 ### Fixed
 - Fixed user tracker cards so configured stat display order now applies consistently to both user and character cards.

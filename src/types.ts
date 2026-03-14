@@ -114,6 +114,7 @@ export interface BetterSimTrackerSettings {
   connectionProfile: string;
   injectTrackerIntoPrompt: boolean;
   includeLorebookInExtraction: boolean;
+  useInternalLorebookScanFallback: boolean;
   lorebookExtractionMaxChars: number;
   injectPromptDepth: number;
   injectionPromptMaxChars: number;

@@ -199,6 +199,7 @@ export function buildDiagnosticsReport(input: {
       truncationLengthOverride: settings.truncationLengthOverride,
       includeCharacterCardsInPrompt: settings.includeCharacterCardsInPrompt,
       includeLorebookInExtraction: settings.includeLorebookInExtraction,
+      useInternalLorebookScanFallback: settings.useInternalLorebookScanFallback,
       lorebookExtractionMaxChars: settings.lorebookExtractionMaxChars,
       autoDetectActive: settings.autoDetectActive,
       activityLookback: settings.activityLookback,

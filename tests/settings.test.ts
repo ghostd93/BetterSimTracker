@@ -260,3 +260,15 @@ test("sanitizeSettings keeps autoGenerateTracker toggle", () => {
   assert.equal(disabled.autoGenerateTracker, false);
   assert.equal(enabled.autoGenerateTracker, true);
 });
+
+test("sanitizeSettings defaults lorebook scan fallback to enabled and accepts explicit override", () => {
+  const defaults = sanitizeSettings({});
+  assert.equal(defaults.useInternalLorebookScanFallback, true);
+
+  const disabled = sanitizeSettings({
+    includeLorebookInExtraction: true,
+    useInternalLorebookScanFallback: false,
+  });
+  assert.equal(disabled.includeLorebookInExtraction, true);
+  assert.equal(disabled.useInternalLorebookScanFallback, false);
+});

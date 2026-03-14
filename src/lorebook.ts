@@ -1,7 +1,4 @@
 import type { STContext } from "./types";
-
-const WI_DEPTH_PREFIX = "customDepthWI_";
-const WI_OUTLET_PREFIX = "customWIOutlet_";
 const DEFAULT_LOREBOOK_MAX_CHARS = 1200;
 const MAX_LOREBOOK_PARSE_DEPTH = 6;
 const TEXT_FIELD_KEYS = new Set([
@@ -154,18 +151,6 @@ function collectActivatedLorebookStrings(source: unknown): string[] {
   return out;
 }
 
-function collectLorebookFromExtensionPrompts(context: STContext): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  const prompts = context.extensionPrompts;
-  if (!prompts || typeof prompts !== "object") return out;
-  for (const [key, rawPrompt] of Object.entries(prompts)) {
-    if (!key.startsWith(WI_DEPTH_PREFIX) && !key.startsWith(WI_OUTLET_PREFIX)) continue;
-    extractLorebookNode(rawPrompt, out, seen, 0, 120);
-  }
-  return out;
-}
-
 export function extractLorebookEntriesFromPayload(payload: unknown, maxItems = 120): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -183,7 +168,6 @@ export function readLorebookContext(context: STContext, maxChars: number, maxCap
     ...collectActivatedLorebookStrings(context.world_info),
     ...collectActivatedLorebookStrings(context.worldInfo),
     ...collectActivatedLorebookStrings(context.lorebook),
-    ...collectLorebookFromExtensionPrompts(context),
   ];
   if (!chunks.length) return "";
   const deduped = Array.from(new Set(chunks.map(item => item.trim()).filter(Boolean)));

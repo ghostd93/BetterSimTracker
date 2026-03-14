@@ -3293,7 +3293,11 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       ? String(lastMessage?.name ?? "").trim() || undefined
       : undefined;
     if (activeSettings.includeLorebookInExtraction && userExtraction) {
-      await refreshLorebookEntriesFromWorldInfoScan(context, runId, reason);
+      if (activeSettings.useInternalLorebookScanFallback) {
+        await refreshLorebookEntriesFromWorldInfoScan(context, runId, reason);
+      } else {
+        pushTrace("lorebook.scan.skip", { runId, reason, detail: "internal_fallback_disabled" });
+      }
     }
     let contextText = buildRecentContext(context, settings.contextMessages);
     if (activeSettings.includeCharacterCardsInPrompt) {
@@ -4272,7 +4276,7 @@ function applyLorebookCharLimit(text: string, maxChars: number, maxCap = 12000):
 
 function buildLorebookExtractionContext(context: STContext, maxChars: number): string {
   let lorebookText = readLorebookContext(context, maxChars, 12000);
-  if (!lorebookText && lastActivatedLorebookEntries.length) {
+  if (!lorebookText && settings?.useInternalLorebookScanFallback && lastActivatedLorebookEntries.length) {
     lorebookText = applyLorebookCharLimit(lastActivatedLorebookEntries.join("\n\n"), maxChars, 12000);
   }
   if (!lorebookText) return "";

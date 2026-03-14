@@ -66,6 +66,7 @@ export const defaultSettings: BetterSimTrackerSettings = {
   connectionProfile: "",
   injectTrackerIntoPrompt: true,
   includeLorebookInExtraction: false,
+  useInternalLorebookScanFallback: true,
   lorebookExtractionMaxChars: 1200,
   injectPromptDepth: 0,
   injectionPromptMaxChars: 6000,
@@ -554,6 +555,10 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     legacyInput.includeLorebookInExtraction,
     asBool(legacyInput.injectLorebookInGeneration, defaultSettings.includeLorebookInExtraction),
   );
+  const useInternalLorebookScanFallback = asBool(
+    legacyInput.useInternalLorebookScanFallback,
+    defaultSettings.useInternalLorebookScanFallback,
+  );
   const lorebookExtractionMaxChars = clampInt(
     legacyInput.lorebookExtractionMaxChars ?? legacyInput.lorebookGenerationMaxChars,
     defaultSettings.lorebookExtractionMaxChars,
@@ -569,6 +574,7 @@ export function sanitizeSettings(input: Partial<BetterSimTrackerSettings>): Bett
     connectionProfile: asProfileIdCandidate(input.connectionProfile) ?? defaultSettings.connectionProfile,
     injectTrackerIntoPrompt: asBool(input.injectTrackerIntoPrompt, defaultSettings.injectTrackerIntoPrompt),
     includeLorebookInExtraction,
+    useInternalLorebookScanFallback,
     lorebookExtractionMaxChars,
     injectPromptDepth: clampInt(input.injectPromptDepth, defaultSettings.injectPromptDepth, 0, 8),
     injectionPromptMaxChars: clampInt(input.injectionPromptMaxChars, defaultSettings.injectionPromptMaxChars, 500, 100000),
