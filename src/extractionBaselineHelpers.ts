@@ -1,6 +1,12 @@
 import { GLOBAL_TRACKER_KEY } from "./constants";
 import type { BetterSimTrackerSettings, TrackerData } from "./types";
 
+export type TrackerHistoryEntry = {
+  data: TrackerData;
+  messageIndex: number;
+  timestamp: number;
+};
+
 export function hasCharacterOwnedTrackedValueForCharacter(
   data: TrackerData,
   characterName: string,
@@ -28,6 +34,25 @@ export function hasCharacterOwnedTrackedValueForCharacter(
   }
 
   return false;
+}
+
+export function selectLatestRelevantHistoryEntry(
+  entries: TrackerHistoryEntry[],
+  beforeIndex: number,
+  predicate: (data: TrackerData) => boolean,
+): TrackerHistoryEntry | null {
+  const relevant = entries
+    .filter(entry => entry.messageIndex < beforeIndex)
+    .filter(entry => predicate(entry.data));
+
+  if (!relevant.length) return null;
+
+  relevant.sort((a, b) => {
+    if (a.messageIndex !== b.messageIndex) return b.messageIndex - a.messageIndex;
+    return b.timestamp - a.timestamp;
+  });
+
+  return relevant[0] ?? null;
 }
 
 export function overlayLatestGlobalCustomStats(

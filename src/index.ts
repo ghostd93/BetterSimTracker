@@ -62,6 +62,7 @@ import {
 import {
   hasCharacterOwnedTrackedValueForCharacter,
   overlayLatestGlobalCustomStats,
+  selectLatestRelevantHistoryEntry,
 } from "./extractionBaselineHelpers";
 import { buildMergedPromptMacroData, resolveLatestStoredTrackerData } from "./runtimeState";
 import { getBstMacroDebugSnapshot, syncBstMacros } from "./runtimeMacros";
@@ -965,25 +966,19 @@ function getLatestCharacterOwnedTrackerDataWithIndexBefore(
   }
 
   const historyEntries = getRecentTrackerHistoryEntries(context, Math.max(120, context.chat.length));
-  const relevantEntries = historyEntries
-    .filter(entry => entry.messageIndex < beforeIndex)
-    .filter(entry => activeCharacters.some(name =>
-      hasCharacterOwnedTrackedValueForCharacter(entry.data, name, settingsInput),
-    ))
-    .map(entry => ({
+  const latestEntry = selectLatestRelevantHistoryEntry(
+    historyEntries.map(entry => ({
       data: entry.data,
       messageIndex: entry.messageIndex,
       timestamp: Number(entry.data.timestamp ?? entry.timestamp ?? 0),
-    }));
-  if (!relevantEntries.length) return null;
-  relevantEntries.sort((a, b) => {
-    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-    return a.messageIndex - b.messageIndex;
-  });
-  const latestEntry = relevantEntries[relevantEntries.length - 1];
-  const merged = mergeTrackerDataChronologically(relevantEntries.map(entry => entry.data));
-  if (!merged) return null;
-  return { data: merged, messageIndex: latestEntry.messageIndex };
+    })),
+    beforeIndex,
+    data => activeCharacters.some(name =>
+      hasCharacterOwnedTrackedValueForCharacter(data, name, settingsInput),
+    ),
+  );
+  if (!latestEntry) return null;
+  return { data: latestEntry.data, messageIndex: latestEntry.messageIndex };
 }
 
 function isRenderableTrackerIndex(context: STContext, index: number): boolean {
@@ -3191,7 +3186,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       lastIndex,
     });
     const previousEntry = userExtraction
-      ? getMergedRelevantTrackerDataWithIndexBefore(
+      ? getLatestCharacterOwnedTrackerDataWithIndexBefore(
           context,
           baselineBeforeIndex,
           activeCharacters,
@@ -3209,7 +3204,12 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
           runScopedSettings,
         ));
     const previousGlobalEntry = userExtraction
-      ? null
+      ? getLatestRelevantTrackerDataWithIndexBefore(
+          context,
+          baselineBeforeIndex,
+          activeCharacters,
+          runScopedSettings,
+        )
       : getLatestRelevantTrackerDataWithIndexBefore(
           context,
           baselineBeforeIndex,
@@ -3217,7 +3217,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
           runScopedSettings,
         );
     let previous = previousEntry?.data ?? null;
-    if (previous && !userExtraction) {
+    if (previous) {
       previous = overlayLatestGlobalCustomStats(previous, previousGlobalEntry?.data ?? null, runScopedSettings);
     }
     lastExtractionBaselineDebugMeta = {

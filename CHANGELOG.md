@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.10-dev5] - 2026-03-14
+### Fixed
+- Fixed user-message continuity so neutral follow-up turns no longer revive stale owner state from older edited messages or later AI carry-forward snapshots.
+
 ## [2.2.4.10-dev4] - 2026-03-14
 ### Fixed
 - Improved diagnostics for lorebook extraction by exposing the effective lorebook source, prompt size, and whether cached fallback entries were used.
