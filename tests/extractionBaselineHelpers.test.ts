@@ -48,3 +48,27 @@ test("selectLatestRelevantHistoryEntry prefers later message chronology over new
   assert.equal(selected?.messageIndex, 3);
   assert.deepEqual(selected?.data.customNonNumericStatistics?.clothes?.[USER_TRACKER_KEY], ["nude"]);
 });
+
+test("selectLatestRelevantHistoryEntry can restrict continuity source to user-message indexes", () => {
+  const userContinuity = {
+    data: makeTracker(3000, ["nude"]),
+    messageIndex: 5,
+    timestamp: 3000,
+  };
+  const laterAiCarryForward = {
+    data: makeTracker(4000, ["t-shirt", "jeans"]),
+    messageIndex: 6,
+    timestamp: 4000,
+  };
+
+  const selected = selectLatestRelevantHistoryEntry(
+    [userContinuity, laterAiCarryForward],
+    7,
+    data => data.customNonNumericStatistics?.clothes?.[USER_TRACKER_KEY] !== undefined,
+    messageIndex => messageIndex === 5,
+  );
+
+  assert.ok(selected);
+  assert.equal(selected?.messageIndex, 5);
+  assert.deepEqual(selected?.data.customNonNumericStatistics?.clothes?.[USER_TRACKER_KEY], ["nude"]);
+});

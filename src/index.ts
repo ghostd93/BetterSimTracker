@@ -981,6 +981,43 @@ function getLatestCharacterOwnedTrackerDataWithIndexBefore(
   return { data: latestEntry.data, messageIndex: latestEntry.messageIndex };
 }
 
+function getLatestCharacterOwnedUserTrackerDataWithIndexBefore(
+  context: STContext,
+  beforeIndex: number,
+  activeCharacters: string[],
+  settingsInput: BetterSimTrackerSettings,
+): { data: TrackerData; messageIndex: number } | null {
+  if (beforeIndex <= 0 || context.chat.length === 0) return null;
+  const start = Math.min(beforeIndex - 1, context.chat.length - 1);
+  for (let i = start; i >= 0; i -= 1) {
+    if (!isTrackableUserMessage(context.chat[i])) continue;
+    const found = getTrackerDataFromMessage(context.chat[i]);
+    if (!found) continue;
+    const hasRelevantValue = activeCharacters.some(name =>
+      hasCharacterOwnedTrackedValueForCharacter(found, name, settingsInput),
+    );
+    if (hasRelevantValue) {
+      return { data: found, messageIndex: i };
+    }
+  }
+
+  const historyEntries = getRecentTrackerHistoryEntries(context, Math.max(120, context.chat.length));
+  const latestEntry = selectLatestRelevantHistoryEntry(
+    historyEntries.map(entry => ({
+      data: entry.data,
+      messageIndex: entry.messageIndex,
+      timestamp: Number(entry.data.timestamp ?? entry.timestamp ?? 0),
+    })),
+    beforeIndex,
+    data => activeCharacters.some(name =>
+      hasCharacterOwnedTrackedValueForCharacter(data, name, settingsInput),
+    ),
+    messageIndex => isTrackableUserMessage(context.chat[messageIndex]),
+  );
+  if (!latestEntry) return null;
+  return { data: latestEntry.data, messageIndex: latestEntry.messageIndex };
+}
+
 function isRenderableTrackerIndex(context: STContext, index: number): boolean {
   if (index < 0) return false;
   if (index >= context.chat.length) return true;
@@ -3186,7 +3223,7 @@ async function runExtraction(reason: string, targetMessageIndex?: number): Promi
       lastIndex,
     });
     const previousEntry = userExtraction
-      ? getLatestCharacterOwnedTrackerDataWithIndexBefore(
+      ? getLatestCharacterOwnedUserTrackerDataWithIndexBefore(
           context,
           baselineBeforeIndex,
           activeCharacters,

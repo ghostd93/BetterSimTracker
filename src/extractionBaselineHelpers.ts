@@ -40,9 +40,11 @@ export function selectLatestRelevantHistoryEntry(
   entries: TrackerHistoryEntry[],
   beforeIndex: number,
   predicate: (data: TrackerData) => boolean,
+  messageIndexPredicate?: (messageIndex: number) => boolean,
 ): TrackerHistoryEntry | null {
   const relevant = entries
     .filter(entry => entry.messageIndex < beforeIndex)
+    .filter(entry => (messageIndexPredicate ? messageIndexPredicate(entry.messageIndex) : true))
     .filter(entry => predicate(entry.data));
 
   if (!relevant.length) return null;
