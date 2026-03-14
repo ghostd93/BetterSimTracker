@@ -340,6 +340,27 @@ export function getNumericStatsForHistory(
   );
 }
 
+type OrderedStatLike = { key?: string; id?: string };
+
+export function orderOwnerCardStats<T extends OrderedStatLike>(
+  defs: T[],
+  configuredOrder: string[],
+  readId: (def: T) => string,
+): T[] {
+  const statOrderMap = new Map(configuredOrder.map((id, index) => [String(id ?? "").trim().toLowerCase(), index]));
+  const fallbackOrder = new Map(defs.map((def, index) => [readId(def), index]));
+  return [...defs].sort((a, b) => {
+    const aId = readId(a);
+    const bId = readId(b);
+    const aOrder = statOrderMap.get(aId);
+    const bOrder = statOrderMap.get(bId);
+    if (aOrder != null && bOrder != null && aOrder !== bOrder) return aOrder - bOrder;
+    if (aOrder != null && bOrder == null) return -1;
+    if (aOrder == null && bOrder != null) return 1;
+    return (fallbackOrder.get(aId) ?? 0) - (fallbackOrder.get(bId) ?? 0);
+  });
+}
+
 export function resolveNonNumericValue(
   entry: TrackerData,
   def: UiNonNumericStatDefinition,
@@ -4676,33 +4697,16 @@ export function renderTracker(
       const ownerStatEnabled = (statId: string): boolean => isOwnerStatEnabled?.(name, statId) !== false;
       const baseEnabledNumericScoped = baseEnabledNumeric.filter(def => ownerStatEnabled(String(def.key)));
       const baseEnabledNonNumericScoped = baseEnabledNonNumeric.filter(def => ownerStatEnabled(String(def.id)));
-      const statOrderMap = new Map((settings.characterCardStatOrder ?? []).map((id, index) => [String(id ?? "").trim().toLowerCase(), index]));
-      const numericFallbackOrder = new Map(baseEnabledNumericScoped.map((def, index) => [String(def.key).trim().toLowerCase(), index]));
-      const nonNumericFallbackOrder = new Map(baseEnabledNonNumericScoped.map((def, index) => [String(def.id).trim().toLowerCase(), index]));
-      const enabledNumeric = isUserCard
-        ? baseEnabledNumericScoped
-        : [...baseEnabledNumericScoped].sort((a, b) => {
-          const aId = String(a.key).trim().toLowerCase();
-          const bId = String(b.key).trim().toLowerCase();
-          const aOrder = statOrderMap.get(aId);
-          const bOrder = statOrderMap.get(bId);
-          if (aOrder != null && bOrder != null && aOrder !== bOrder) return aOrder - bOrder;
-          if (aOrder != null && bOrder == null) return -1;
-          if (aOrder == null && bOrder != null) return 1;
-          return (numericFallbackOrder.get(aId) ?? 0) - (numericFallbackOrder.get(bId) ?? 0);
-        });
-      const enabledNonNumeric = isUserCard
-        ? baseEnabledNonNumericScoped
-        : [...baseEnabledNonNumericScoped].sort((a, b) => {
-          const aId = String(a.id).trim().toLowerCase();
-          const bId = String(b.id).trim().toLowerCase();
-          const aOrder = statOrderMap.get(aId);
-          const bOrder = statOrderMap.get(bId);
-          if (aOrder != null && bOrder != null && aOrder !== bOrder) return aOrder - bOrder;
-          if (aOrder != null && bOrder == null) return -1;
-          if (aOrder == null && bOrder != null) return 1;
-          return (nonNumericFallbackOrder.get(aId) ?? 0) - (nonNumericFallbackOrder.get(bId) ?? 0);
-        });
+      const enabledNumeric = orderOwnerCardStats(
+        baseEnabledNumericScoped,
+        settings.characterCardStatOrder ?? [],
+        def => String(def.key).trim().toLowerCase(),
+      );
+      const enabledNonNumeric = orderOwnerCardStats(
+        baseEnabledNonNumericScoped,
+        settings.characterCardStatOrder ?? [],
+        def => String(def.id).trim().toLowerCase(),
+      );
       const moodText = getEffectiveMoodText(name);
       const previousMoodData = findPreviousDataWithMood(entry.messageIndex, name);
       const prevMood = previousMoodData?.statistics.mood?.[name] !== undefined

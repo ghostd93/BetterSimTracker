@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.10-dev2] - 2026-03-14
+### Fixed
+- Fixed user tracker cards so configured stat display order now applies consistently to both user and character cards.
+
 ## [2.2.4.10-dev1] - 2026-03-14
 ### Fixed
 - Fixed manual tracker edits so explicitly cleared values no longer get repopulated later from older snapshot history.

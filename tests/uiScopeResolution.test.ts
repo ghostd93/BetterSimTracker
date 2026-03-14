@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "../src/constants";
-import { getNumericRawValue, resolveNonNumericValue } from "../src/ui";
+import { getNumericRawValue, orderOwnerCardStats, resolveNonNumericValue } from "../src/ui";
 import type { TrackerData } from "../src/types";
 
 type TestNonNumericDef = {
@@ -105,4 +105,28 @@ test("owner-scoped non-numeric UI lookup does not fall back to global value", ()
   assert.deepEqual(resolveNonNumericValue(data, ownerDef as never, USER_TRACKER_KEY), ["t-shirt", "jeans"]);
   assert.deepEqual(resolveNonNumericValue(data, ownerDef as never, "Seraphina"), []);
   assert.equal(resolveNonNumericValue(data, globalDef as never, USER_TRACKER_KEY), "2026-03-10 12:00");
+});
+
+test("orderOwnerCardStats applies configured display order to user and character card stat lists", () => {
+  const orderedNumeric = orderOwnerCardStats(
+    [
+      { key: "trust" },
+      { key: "affection" },
+      { key: "connection" },
+    ],
+    ["connection", "affection"],
+    def => String(def.key).trim().toLowerCase(),
+  );
+  assert.deepEqual(orderedNumeric.map(def => def.key), ["connection", "affection", "trust"]);
+
+  const orderedNonNumeric = orderOwnerCardStats(
+    [
+      { id: "pose" },
+      { id: "clothes" },
+      { id: "physicality" },
+    ],
+    ["physicality", "clothes"],
+    def => String(def.id).trim().toLowerCase(),
+  );
+  assert.deepEqual(orderedNonNumeric.map(def => def.id), ["physicality", "clothes", "pose"]);
 });
