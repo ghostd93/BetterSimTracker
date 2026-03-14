@@ -71,6 +71,8 @@ export function resolveScopedCustomNumericValue(
   ownerName: string,
   globalScope?: boolean,
 ): number | undefined {
+  const numericOwnerKey = globalScope ? GLOBAL_TRACKER_KEY : ownerName;
+  if (data.clearedCustomStatistics?.[statId]?.[numericOwnerKey]) return undefined;
   const byOwner = data.customStatistics?.[statId];
   if (!byOwner) return undefined;
   const legacyFallback = (): number | undefined => {
@@ -100,6 +102,8 @@ export function resolveScopedCustomNonNumericValue(
   ownerName: string,
   globalScope?: boolean,
 ): unknown {
+  const nonNumericOwnerKey = globalScope ? GLOBAL_TRACKER_KEY : ownerName;
+  if (data.clearedCustomNonNumericStatistics?.[statId]?.[nonNumericOwnerKey]) return undefined;
   const byOwner = data.customNonNumericStatistics?.[statId];
   if (!byOwner) return undefined;
   const legacyFallback = (): unknown => {

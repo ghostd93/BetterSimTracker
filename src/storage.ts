@@ -3,6 +3,9 @@ import { isTrackableMessage } from "./messageFilter";
 import type {
   BetterSimTrackerSettings,
   ChatMessage,
+  ClearedCustomNonNumericStatistics,
+  ClearedCustomStatistics,
+  ClearedStatistics,
   CustomNonNumericStatistics,
   CustomStatistics,
   STContext,
@@ -32,6 +35,9 @@ export function getTrackerDataFromMessage(message: ChatMessage): TrackerData | n
 }
 
 function normalizeTrackerData(data: Partial<TrackerData>): TrackerData {
+  const clearedStatistics = normalizeClearedStatistics(data.clearedStatistics);
+  const clearedCustomStatistics = normalizeClearedOwnerBuckets(data.clearedCustomStatistics);
+  const clearedCustomNonNumericStatistics = normalizeClearedOwnerBuckets(data.clearedCustomNonNumericStatistics);
   return {
     timestamp: Number(data.timestamp ?? Date.now()),
     activeCharacters: Array.isArray(data.activeCharacters) ? data.activeCharacters : [],
@@ -41,7 +47,126 @@ function normalizeTrackerData(data: Partial<TrackerData>): TrackerData {
     },
     customStatistics: normalizeCustomStatistics(data.customStatistics),
     customNonNumericStatistics: normalizeCustomNonNumericStatistics(data.customNonNumericStatistics),
+    clearedStatistics: pruneClearedStatistics(clearedStatistics),
+    clearedCustomStatistics: pruneClearedOwnerBuckets(clearedCustomStatistics),
+    clearedCustomNonNumericStatistics: pruneClearedOwnerBuckets(clearedCustomNonNumericStatistics),
   };
+}
+
+function normalizeClearedOwnerMap(raw: unknown): Record<string, true> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, true> = {};
+  for (const [owner, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value) continue;
+    const key = String(owner ?? "").trim();
+    if (!key) continue;
+    out[key] = true;
+  }
+  return out;
+}
+
+function normalizeClearedStatistics(raw: unknown): ClearedStatistics {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: ClearedStatistics = {};
+  for (const [statId, value] of Object.entries(raw as Record<string, unknown>)) {
+    const key = String(statId ?? "").trim();
+    if (!key) continue;
+    const owners = normalizeClearedOwnerMap(value);
+    if (Object.keys(owners).length) out[key as StatKey] = owners;
+  }
+  return out;
+}
+
+function normalizeClearedOwnerBuckets<T extends ClearedCustomStatistics | ClearedCustomNonNumericStatistics>(raw: unknown): T {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {} as T;
+  const out: Record<string, Record<string, true>> = {};
+  for (const [statId, value] of Object.entries(raw as Record<string, unknown>)) {
+    const key = String(statId ?? "").trim().toLowerCase();
+    if (!key) continue;
+    const owners = normalizeClearedOwnerMap(value);
+    if (Object.keys(owners).length) out[key] = owners;
+  }
+  return out as T;
+}
+
+function cloneClearedStatistics(raw: ClearedStatistics | null | undefined): ClearedStatistics {
+  const out: ClearedStatistics = {};
+  for (const [statId, value] of Object.entries(raw ?? {})) {
+    const owners = normalizeClearedOwnerMap(value);
+    if (Object.keys(owners).length) out[statId as StatKey] = owners;
+  }
+  return out;
+}
+
+function cloneClearedOwnerBuckets<T extends ClearedCustomStatistics | ClearedCustomNonNumericStatistics>(raw: T | null | undefined): T {
+  const out: Record<string, Record<string, true>> = {};
+  for (const [statId, value] of Object.entries(raw ?? {})) {
+    const owners = normalizeClearedOwnerMap(value);
+    if (Object.keys(owners).length) out[statId] = owners;
+  }
+  return out as T;
+}
+
+function applyClearsToStatistics(
+  statistics: Statistics,
+  cleared: ClearedStatistics | undefined,
+): Statistics {
+  const out: Statistics = {
+    affection: { ...(statistics.affection ?? {}) },
+    trust: { ...(statistics.trust ?? {}) },
+    desire: { ...(statistics.desire ?? {}) },
+    connection: { ...(statistics.connection ?? {}) },
+    mood: { ...(statistics.mood ?? {}) },
+    lastThought: { ...(statistics.lastThought ?? {}) },
+  };
+  for (const [statId, owners] of Object.entries(cleared ?? {})) {
+    const bucket = out[statId as StatKey];
+    if (!bucket) continue;
+    for (const owner of Object.keys(owners ?? {})) {
+      delete bucket[owner];
+    }
+  }
+  return out;
+}
+
+function applyClearsToCustomStatistics(
+  custom: CustomStatistics | undefined,
+  cleared: ClearedCustomStatistics | undefined,
+): CustomStatistics {
+  const out: CustomStatistics = {};
+  for (const [statId, values] of Object.entries(custom ?? {})) {
+    out[statId] = { ...(values ?? {}) };
+  }
+  for (const [statId, owners] of Object.entries(cleared ?? {})) {
+    if (!out[statId]) continue;
+    for (const owner of Object.keys(owners ?? {})) {
+      delete out[statId][owner];
+    }
+    if (!Object.keys(out[statId]).length) delete out[statId];
+  }
+  return out;
+}
+
+function applyClearsToCustomNonNumericStatistics(
+  custom: CustomNonNumericStatistics | undefined,
+  cleared: ClearedCustomNonNumericStatistics | undefined,
+): CustomNonNumericStatistics {
+  const out: CustomNonNumericStatistics = {};
+  for (const [statId, values] of Object.entries(custom ?? {})) {
+    const next: Record<string, string | boolean | string[]> = {};
+    for (const [owner, value] of Object.entries(values ?? {})) {
+      next[owner] = Array.isArray(value) ? [...value] : value;
+    }
+    out[statId] = next;
+  }
+  for (const [statId, owners] of Object.entries(cleared ?? {})) {
+    if (!out[statId]) continue;
+    for (const owner of Object.keys(owners ?? {})) {
+      delete out[statId][owner];
+    }
+    if (!Object.keys(out[statId]).length) delete out[statId];
+  }
+  return out;
 }
 
 function normalizeCustomStatistics(raw: unknown): CustomStatistics {
@@ -582,6 +707,115 @@ export function mergeCustomNonNumericStatisticsWithFallback(
     }
   }
   return merged;
+}
+
+export function mergeClearedStatisticsWithFallback(
+  incoming: ClearedStatistics | undefined,
+  previous: ClearedStatistics | null | undefined,
+): ClearedStatistics {
+  const next = cloneClearedStatistics(incoming);
+  const prev = cloneClearedStatistics(previous);
+  const merged: ClearedStatistics = {};
+  const allKeys = new Set<string>([
+    ...Object.keys(prev),
+    ...Object.keys(next),
+  ]);
+  for (const key of allKeys) {
+    const combined = { ...(prev[key as StatKey] ?? {}), ...(next[key as StatKey] ?? {}) };
+    if (Object.keys(combined).length > 0) {
+      merged[key as StatKey] = combined;
+    }
+  }
+  return merged;
+}
+
+export function mergeClearedOwnerBucketsWithFallback<T extends ClearedCustomStatistics | ClearedCustomNonNumericStatistics>(
+  incoming: T | undefined,
+  previous: T | null | undefined,
+): T {
+  const next = cloneClearedOwnerBuckets(incoming) as Record<string, Record<string, true>>;
+  const prev = cloneClearedOwnerBuckets(previous) as Record<string, Record<string, true>>;
+  const merged: Record<string, Record<string, true>> = {};
+  const allKeys = new Set<string>([
+    ...Object.keys(prev),
+    ...Object.keys(next),
+  ]);
+  for (const key of allKeys) {
+    const combined = { ...(prev[key] ?? {}), ...(next[key] ?? {}) };
+    if (Object.keys(combined).length > 0) {
+      merged[key] = combined;
+    }
+  }
+  return merged as T;
+}
+
+function pruneClearedStatistics(raw: ClearedStatistics | undefined): ClearedStatistics | undefined {
+  if (!raw) return undefined;
+  const out: ClearedStatistics = {};
+  for (const [statId, owners] of Object.entries(raw)) {
+    if (!owners || !Object.keys(owners).length) continue;
+    out[statId as StatKey] = owners;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function pruneClearedOwnerBuckets<T extends ClearedCustomStatistics | ClearedCustomNonNumericStatistics>(raw: T | undefined): T | undefined {
+  if (!raw) return undefined;
+  const out: Record<string, Record<string, true>> = {};
+  for (const [statId, owners] of Object.entries(raw)) {
+    if (!owners || !Object.keys(owners).length) continue;
+    out[statId] = owners;
+  }
+  return Object.keys(out).length ? (out as T) : undefined;
+}
+
+export function mergeTrackerDataChronologically(entries: TrackerData[]): TrackerData | null {
+  if (!entries.length) return null;
+  const sorted = [...entries].sort((a, b) => Number(a.timestamp ?? 0) - Number(b.timestamp ?? 0));
+  let mergedStatistics: Statistics | null = null;
+  let mergedCustomStatistics: CustomStatistics | null = null;
+  let mergedCustomNonNumericStatistics: CustomNonNumericStatistics | null = null;
+  let mergedClearedStatistics: ClearedStatistics | null = null;
+  let mergedClearedCustomStatistics: ClearedCustomStatistics | null = null;
+  let mergedClearedCustomNonNumericStatistics: ClearedCustomNonNumericStatistics | null = null;
+  let mergedTimestamp = 0;
+  let fallbackActiveCharacters: string[] = [];
+
+  for (const entry of sorted) {
+    mergedStatistics = mergeStatisticsWithFallback(entry.statistics, mergedStatistics, undefined);
+    mergedCustomStatistics = mergeCustomStatisticsWithFallback(entry.customStatistics, mergedCustomStatistics);
+    mergedCustomNonNumericStatistics = mergeCustomNonNumericStatisticsWithFallback(
+      entry.customNonNumericStatistics,
+      mergedCustomNonNumericStatistics,
+    );
+    mergedClearedStatistics = mergeClearedStatisticsWithFallback(entry.clearedStatistics, mergedClearedStatistics);
+    mergedClearedCustomStatistics = mergeClearedOwnerBucketsWithFallback(entry.clearedCustomStatistics, mergedClearedCustomStatistics);
+    mergedClearedCustomNonNumericStatistics = mergeClearedOwnerBucketsWithFallback(
+      entry.clearedCustomNonNumericStatistics,
+      mergedClearedCustomNonNumericStatistics,
+    );
+    mergedStatistics = applyClearsToStatistics(mergedStatistics ?? createEmptyStatistics(), mergedClearedStatistics);
+    mergedCustomStatistics = applyClearsToCustomStatistics(mergedCustomStatistics ?? {}, mergedClearedCustomStatistics);
+    mergedCustomNonNumericStatistics = applyClearsToCustomNonNumericStatistics(
+      mergedCustomNonNumericStatistics ?? {},
+      mergedClearedCustomNonNumericStatistics,
+    );
+    mergedTimestamp = Math.max(mergedTimestamp, Number(entry.timestamp ?? 0));
+    if (Array.isArray(entry.activeCharacters) && entry.activeCharacters.length) {
+      fallbackActiveCharacters = entry.activeCharacters.map(name => String(name ?? "").trim()).filter(Boolean);
+    }
+  }
+
+  return {
+    timestamp: mergedTimestamp || Date.now(),
+    activeCharacters: fallbackActiveCharacters,
+    statistics: mergedStatistics ?? createEmptyStatistics(),
+    customStatistics: mergedCustomStatistics ?? {},
+    customNonNumericStatistics: mergedCustomNonNumericStatistics ?? {},
+    clearedStatistics: pruneClearedStatistics(mergedClearedStatistics ?? undefined),
+    clearedCustomStatistics: pruneClearedOwnerBuckets(mergedClearedCustomStatistics ?? undefined),
+    clearedCustomNonNumericStatistics: pruneClearedOwnerBuckets(mergedClearedCustomNonNumericStatistics ?? undefined),
+  };
 }
 
 export function clearTrackerDataForCurrentChat(context: STContext): void {

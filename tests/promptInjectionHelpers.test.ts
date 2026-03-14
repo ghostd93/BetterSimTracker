@@ -74,6 +74,21 @@ test("resolveScopedCustomNumericValue keeps owner and global scopes separate", (
   assert.equal(resolveScopedCustomNumericValue(data, "score", "Unknown", true), 71);
 });
 
+test("resolveScopedCustomNumericValue respects explicit clears", () => {
+  const data = makeData();
+  data.customStatistics = {
+    score: {
+      Seraphina: 71,
+    },
+  };
+  data.clearedCustomStatistics = {
+    score: {
+      Seraphina: true,
+    },
+  };
+  assert.equal(resolveScopedCustomNumericValue(data, "score", "Seraphina", false), undefined);
+});
+
 test("resolveScopedCustomNonNumericValue keeps owner and global scopes separate", () => {
   const data = makeData();
   data.customNonNumericStatistics = {
@@ -89,4 +104,19 @@ test("resolveScopedCustomNonNumericValue keeps owner and global scopes separate"
 
   delete data.customNonNumericStatistics.clothes[GLOBAL_TRACKER_KEY];
   assert.deepEqual(resolveScopedCustomNonNumericValue(data, "clothes", "Unknown", true), ["black sundress"]);
+});
+
+test("resolveScopedCustomNonNumericValue respects explicit clears", () => {
+  const data = makeData();
+  data.customNonNumericStatistics = {
+    clothes: {
+      Seraphina: ["black sundress"],
+    },
+  };
+  data.clearedCustomNonNumericStatistics = {
+    clothes: {
+      Seraphina: true,
+    },
+  };
+  assert.equal(resolveScopedCustomNonNumericValue(data, "clothes", "Seraphina", false), undefined);
 });

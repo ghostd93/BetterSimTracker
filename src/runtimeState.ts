@@ -1,6 +1,6 @@
-import { getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistoryEntries, mergeCustomNonNumericStatisticsWithFallback, mergeCustomStatisticsWithFallback, mergeStatisticsWithFallback } from "./storage";
+import { getChatStateLatestTrackerData, getLatestTrackerDataWithIndex, getLocalLatestTrackerData, getMetadataLatestTrackerData, getRecentTrackerHistoryEntries, mergeTrackerDataChronologically } from "./storage";
 import { isTrackableMessage } from "./messageFilter";
-import type { CustomNonNumericStatistics, CustomStatistics, STContext, Statistics, TrackerData } from "./types";
+import type { STContext, TrackerData } from "./types";
 
 export type StoredTrackerSource = "message" | "chatState" | "metadata" | "local" | "none";
 
@@ -44,23 +44,9 @@ export function buildMergedPromptMacroData(
     return preferred ? { ...preferred } : null;
   }
 
-  let mergedStatistics: Statistics | null = null;
-  let mergedCustomStatistics: CustomStatistics | null = null;
-  let mergedCustomNonNumericStatistics: CustomNonNumericStatistics | null = null;
-  let lastTimestamp = 0;
-  let fallbackActiveCharacters: string[] = [];
-
-  for (const entry of entries) {
-    mergedStatistics = mergeStatisticsWithFallback(entry.data.statistics, mergedStatistics, undefined);
-    mergedCustomStatistics = mergeCustomStatisticsWithFallback(entry.data.customStatistics, mergedCustomStatistics);
-    mergedCustomNonNumericStatistics = mergeCustomNonNumericStatisticsWithFallback(
-      entry.data.customNonNumericStatistics,
-      mergedCustomNonNumericStatistics,
-    );
-    lastTimestamp = Math.max(lastTimestamp, Number(entry.data.timestamp ?? entry.timestamp ?? 0));
-    if (Array.isArray(entry.data.activeCharacters) && entry.data.activeCharacters.length) {
-      fallbackActiveCharacters = entry.data.activeCharacters.map(name => String(name ?? "").trim()).filter(Boolean);
-    }
+  const merged = mergeTrackerDataChronologically(entries.map(entry => entry.data));
+  if (!merged) {
+    return preferred ? { ...preferred } : null;
   }
 
   const preferredActiveCharacters = Array.isArray(preferred?.activeCharacters)
@@ -68,18 +54,8 @@ export function buildMergedPromptMacroData(
     : [];
 
   return {
-    timestamp: lastTimestamp || Number(preferred?.timestamp ?? Date.now()),
-    activeCharacters: preferredActiveCharacters.length ? preferredActiveCharacters : fallbackActiveCharacters,
-    statistics: mergedStatistics ?? {
-      affection: {},
-      trust: {},
-      desire: {},
-      connection: {},
-      mood: {},
-      lastThought: {},
-    },
-    customStatistics: mergedCustomStatistics ?? {},
-    customNonNumericStatistics: mergedCustomNonNumericStatistics ?? {},
+    ...merged,
+    activeCharacters: preferredActiveCharacters.length ? preferredActiveCharacters : merged.activeCharacters,
   };
 }
 

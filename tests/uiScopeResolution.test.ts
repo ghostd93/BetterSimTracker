@@ -64,6 +64,16 @@ test("owner-scoped numeric UI lookup does not fall back to global value", () => 
   assert.equal(getNumericRawValue(data, "shared_score", USER_TRACKER_KEY, true), 88);
 });
 
+test("owner-scoped numeric UI lookup respects explicit clears", () => {
+  const data = makeTracker();
+  data.clearedCustomStatistics = {
+    owner_score: {
+      Seraphina: true,
+    },
+  };
+  assert.equal(getNumericRawValue(data, "owner_score", "Seraphina", false), undefined);
+});
+
 test("owner-scoped non-numeric UI lookup does not fall back to global value", () => {
   const data = makeTracker();
   const ownerDef: TestNonNumericDef = {

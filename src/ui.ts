@@ -246,6 +246,7 @@ export function getNumericStatDefinitions(settings: BetterSimTrackerSettings): U
 }
 
 export function getNumericRawValue(entry: TrackerData, key: string, name: string, globalScope = false): number | undefined {
+  if (isNumericExplicitlyCleared(entry, key, name, globalScope)) return undefined;
   if (BUILT_IN_NUMERIC_STAT_KEYS.has(key)) {
     const raw = entry.statistics[key as "affection" | "trust" | "desire" | "connection"]?.[name];
     if (raw === undefined) return undefined;
@@ -268,12 +269,22 @@ export function getNumericRawValue(entry: TrackerData, key: string, name: string
   return Number(customRaw);
 }
 
+function isNumericExplicitlyCleared(entry: TrackerData, key: string, name: string, globalScope = false): boolean {
+  if (BUILT_IN_NUMERIC_STAT_KEYS.has(key)) {
+    const ownerKey = name;
+    return Boolean(entry.clearedStatistics?.[key as keyof typeof entry.clearedStatistics]?.[ownerKey]);
+  }
+  const ownerKey = globalScope ? GLOBAL_TRACKER_KEY : name;
+  return Boolean(entry.clearedCustomStatistics?.[key]?.[ownerKey]);
+}
+
 function getNonNumericRawValue(
   entry: TrackerData,
   statId: string,
   name: string,
   globalScope = false,
 ): CustomNonNumericValue | undefined {
+  if (isNonNumericExplicitlyCleared(entry, statId, name, globalScope)) return undefined;
   const byOwner = entry.customNonNumericStatistics?.[statId];
   if (!byOwner) return undefined;
   const legacyFallback = (): CustomNonNumericValue | undefined => {
@@ -286,6 +297,20 @@ function getNonNumericRawValue(
   return globalScope
     ? (byOwner[GLOBAL_TRACKER_KEY] ?? byOwner[name] ?? legacyFallback())
     : byOwner[name];
+}
+
+function isNonNumericExplicitlyCleared(
+  entry: TrackerData,
+  statId: string,
+  name: string,
+  globalScope = false,
+): boolean {
+  const ownerKey = globalScope ? GLOBAL_TRACKER_KEY : name;
+  return Boolean(entry.clearedCustomNonNumericStatistics?.[statId]?.[ownerKey]);
+}
+
+function isTextStatExplicitlyCleared(entry: TrackerData, stat: "mood" | "lastThought", name: string): boolean {
+  return Boolean(entry.clearedStatistics?.[stat]?.[name]);
 }
 
 function hasNumericValue(entry: TrackerData, key: string, name: string, globalScope = false): boolean {
@@ -4082,19 +4107,19 @@ export function renderTracker(
     const isUserOwner = owner === USER_TRACKER_KEY;
 
     if (!isGlobalOwner && !isUserOwner) {
-      if (settings.trackAffection && out.statistics.affection?.[owner] === undefined) {
+      if (settings.trackAffection && out.statistics.affection?.[owner] === undefined && !isNumericExplicitlyCleared(out, "affection", owner, false)) {
         const prev = findPreviousDataWithNumericStat(messageIndex, "affection", owner);
         if (prev) out.statistics.affection[owner] = prev.value;
       }
-      if (settings.trackTrust && out.statistics.trust?.[owner] === undefined) {
+      if (settings.trackTrust && out.statistics.trust?.[owner] === undefined && !isNumericExplicitlyCleared(out, "trust", owner, false)) {
         const prev = findPreviousDataWithNumericStat(messageIndex, "trust", owner);
         if (prev) out.statistics.trust[owner] = prev.value;
       }
-      if (settings.trackDesire && out.statistics.desire?.[owner] === undefined) {
+      if (settings.trackDesire && out.statistics.desire?.[owner] === undefined && !isNumericExplicitlyCleared(out, "desire", owner, false)) {
         const prev = findPreviousDataWithNumericStat(messageIndex, "desire", owner);
         if (prev) out.statistics.desire[owner] = prev.value;
       }
-      if (settings.trackConnection && out.statistics.connection?.[owner] === undefined) {
+      if (settings.trackConnection && out.statistics.connection?.[owner] === undefined && !isNumericExplicitlyCleared(out, "connection", owner, false)) {
         const prev = findPreviousDataWithNumericStat(messageIndex, "connection", owner);
         if (prev) out.statistics.connection[owner] = prev.value;
       }
@@ -4107,6 +4132,7 @@ export function renderTracker(
     });
     for (const def of nonNumericDefs) {
       if (hasNonNumericValue(out, def, owner)) continue;
+      if (isNonNumericExplicitlyCleared(out, def.id, owner, def.globalScope)) continue;
       const prev = findPreviousDataWithNonNumericStat(messageIndex, def, owner);
       if (!prev) continue;
       const prevByOwner = prev.customNonNumericStatistics?.[def.id];
@@ -4122,13 +4148,13 @@ export function renderTracker(
     }
 
     if (!isGlobalOwner) {
-      if (settings.trackMood && out.statistics.mood?.[owner] === undefined) {
+      if (settings.trackMood && out.statistics.mood?.[owner] === undefined && !isTextStatExplicitlyCleared(out, "mood", owner)) {
         const prevMood = findPreviousDataWithMood(messageIndex, owner);
         if (prevMood?.statistics.mood?.[owner] !== undefined) {
           out.statistics.mood[owner] = prevMood.statistics.mood[owner];
         }
       }
-      if (settings.trackLastThought && out.statistics.lastThought?.[owner] === undefined) {
+      if (settings.trackLastThought && out.statistics.lastThought?.[owner] === undefined && !isTextStatExplicitlyCleared(out, "lastThought", owner)) {
         const prevThought = findPreviousDataWithLastThought(messageIndex, owner);
         if (prevThought?.statistics.lastThought?.[owner] !== undefined) {
           out.statistics.lastThought[owner] = prevThought.statistics.lastThought[owner];
@@ -4533,9 +4559,10 @@ export function renderTracker(
     const ownerCardNonNumericDefs = cardNonNumericDefs.filter(
       def => !(settings.sceneCardEnabled && def.globalScope),
     );
-    const getEffectiveNumericRawValue = (key: string, name: string): number | undefined => {
+  const getEffectiveNumericRawValue = (key: string, name: string): number | undefined => {
       const current = getNumericRawValue(data, key, name, isNumericGlobalScope(key));
       if (current !== undefined && !Number.isNaN(current)) return current;
+      if (isNumericExplicitlyCleared(data, key, name, isNumericGlobalScope(key))) return undefined;
       const previous = findPreviousDataWithNumericStat(entry.messageIndex, key, name);
       if (previous) return previous.value;
       return undefined;
@@ -4543,12 +4570,17 @@ export function renderTracker(
     const hasEffectiveNumericValue = (key: string, name: string): boolean =>
       getEffectiveNumericRawValue(key, name) !== undefined;
     const hasEffectiveNonNumericValue = (def: UiNonNumericStatDefinition, name: string): boolean =>
-      hasNonNumericValue(data, def, name) || Boolean(findPreviousDataWithNonNumericStat(entry.messageIndex, def, name));
+      hasNonNumericValue(data, def, name)
+        || (!isNonNumericExplicitlyCleared(data, def.id, name, def.globalScope)
+          && Boolean(findPreviousDataWithNonNumericStat(entry.messageIndex, def, name)));
     const resolveEffectiveNonNumericValue = (
       def: UiNonNumericStatDefinition,
       name: string,
     ): string | boolean | string[] | null => {
       if (hasNonNumericValue(data, def, name)) return resolveNonNumericValue(data, def, name);
+      if (isNonNumericExplicitlyCleared(data, def.id, name, def.globalScope)) {
+        return def.kind === "array" ? [] : null;
+      }
       const previous = findPreviousDataWithNonNumericStat(entry.messageIndex, def, name);
       if (previous) return resolveNonNumericValue(previous, def, name);
       return resolveNonNumericValue(data, def, name);
@@ -4556,6 +4588,7 @@ export function renderTracker(
     const getEffectiveMoodText = (name: string): string => {
       if (isOwnerStatEnabled?.(name, "mood") === false) return "";
       if (data.statistics.mood?.[name] !== undefined) return String(data.statistics.mood?.[name] ?? "");
+      if (isTextStatExplicitlyCleared(data, "mood", name)) return "";
       const previous = findPreviousDataWithMood(entry.messageIndex, name);
       if (previous?.statistics.mood?.[name] !== undefined) return String(previous.statistics.mood?.[name] ?? "");
       return "";
@@ -4563,6 +4596,7 @@ export function renderTracker(
     const getEffectiveLastThoughtText = (name: string): string => {
       if (isOwnerStatEnabled?.(name, "lastthought") === false) return "";
       if (data.statistics.lastThought?.[name] !== undefined) return String(data.statistics.lastThought?.[name] ?? "");
+      if (isTextStatExplicitlyCleared(data, "lastThought", name)) return "";
       const previous = findPreviousDataWithLastThought(entry.messageIndex, name);
       if (previous?.statistics.lastThought?.[name] !== undefined) return String(previous.statistics.lastThought?.[name] ?? "");
       return "";

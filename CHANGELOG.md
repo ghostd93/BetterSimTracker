@@ -2,6 +2,12 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.10-dev1] - 2026-03-14
+### Fixed
+- Fixed manual tracker edits so explicitly cleared values no longer get repopulated later from older snapshot history.
+- Fixed continuity merging for both user and character flows so newer manual tracker edits are not overwritten by stale state carried in later snapshots.
+- Fixed card/render and prompt/injection state resolution to respect explicit manual clears instead of falling back to older history.
+
 ## [2.2.4.10] - 2026-03-12
 ### Fixed
 - Manual user tracker edits now propagate correctly into subsequent prompt state and later user-message continuity, instead of being overwritten by stale older user values carried in later snapshots.

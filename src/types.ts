@@ -55,6 +55,10 @@ export type CharacterStatMap = Record<string, StatValue>;
 export type Statistics = Record<StatKey, CharacterStatMap>;
 export type CustomStatistics = Record<CustomStatKey, Record<string, number>>;
 export type CustomNonNumericStatistics = Record<CustomStatKey, Record<string, CustomNonNumericValue>>;
+export type ClearedOwnerMap = Record<string, true>;
+export type ClearedStatistics = Partial<Record<StatKey, ClearedOwnerMap>>;
+export type ClearedCustomStatistics = Record<CustomStatKey, ClearedOwnerMap>;
+export type ClearedCustomNonNumericStatistics = Record<CustomStatKey, ClearedOwnerMap>;
 
 export interface CustomStatDefinition {
   id: CustomStatKey;
@@ -98,6 +102,9 @@ export interface TrackerData {
   statistics: Statistics;
   customStatistics?: CustomStatistics;
   customNonNumericStatistics?: CustomNonNumericStatistics;
+  clearedStatistics?: ClearedStatistics;
+  clearedCustomStatistics?: ClearedCustomStatistics;
+  clearedCustomNonNumericStatistics?: ClearedCustomNonNumericStatistics;
 }
 
 export interface BetterSimTrackerSettings {

@@ -9,6 +9,7 @@ import {
   clearTrackerDataForCurrentChat,
   getRecentTrackerHistoryEntries,
   getTrackerDataFromMessage,
+  mergeTrackerDataChronologically,
   mergeCustomNonNumericStatisticsWithFallback,
   mergeCustomStatisticsWithFallback,
   mergeStatisticsWithFallback,
@@ -51,6 +52,9 @@ function makeTracker(timestamp: number, overrides: Partial<TrackerData> = {}): T
     },
     customStatistics: overrides.customStatistics ?? {},
     customNonNumericStatistics: overrides.customNonNumericStatistics ?? {},
+    clearedStatistics: overrides.clearedStatistics,
+    clearedCustomStatistics: overrides.clearedCustomStatistics,
+    clearedCustomNonNumericStatistics: overrides.clearedCustomNonNumericStatistics,
   };
 }
 
@@ -317,6 +321,60 @@ test("buildMergedPromptMacroData preserves a newer explicit nude user clothes ed
     [USER_TRACKER_KEY]: ["nude"],
     Seraphina: ["black sundress"],
   });
+});
+
+test("buildMergedPromptMacroData preserves explicit clears over older history", () => {
+  const context = makeContext();
+  const older = makeTracker(1000, {
+    activeCharacters: ["Seraphina"],
+    statistics: {
+      affection: {},
+      trust: {},
+      desire: {},
+      connection: {},
+      mood: { Seraphina: "Playful" },
+      lastThought: { Seraphina: "Older thought" },
+    },
+    customNonNumericStatistics: {
+      physicality: { Seraphina: "Flawless pale skin" },
+    },
+  });
+  const cleared = makeTracker(2000, {
+    activeCharacters: ["Seraphina"],
+    clearedStatistics: {
+      mood: { Seraphina: true },
+      lastThought: { Seraphina: true },
+    },
+    clearedCustomNonNumericStatistics: {
+      physicality: { Seraphina: true },
+    },
+  });
+  saveTrackerSnapshot(context, older, 1);
+  saveTrackerSnapshot(context, cleared, 2);
+  const merged = buildMergedPromptMacroData(context, cleared);
+  assert.ok(merged);
+  assert.equal(merged?.statistics.mood?.Seraphina, undefined);
+  assert.equal(merged?.statistics.lastThought?.Seraphina, undefined);
+  assert.equal(merged?.customNonNumericStatistics?.physicality?.Seraphina, undefined);
+  assert.equal(merged?.clearedCustomNonNumericStatistics?.physicality?.Seraphina, true);
+});
+
+test("mergeTrackerDataChronologically preserves newer character manual edit over stale later snapshot", () => {
+  const editedCharacter = makeTracker(3000, {
+    activeCharacters: ["Seraphina"],
+    customNonNumericStatistics: {
+      physicality: { Seraphina: "Edited physicality" },
+    },
+  });
+  const staleLaterUserSnapshot = makeTracker(2000, {
+    activeCharacters: [USER_TRACKER_KEY],
+    customNonNumericStatistics: {
+      physicality: { Seraphina: "Older physicality" },
+    },
+  });
+  const merged = mergeTrackerDataChronologically([editedCharacter, staleLaterUserSnapshot]);
+  assert.ok(merged);
+  assert.equal(merged?.customNonNumericStatistics?.physicality?.Seraphina, "Edited physicality");
 });
 
 test("resolveLatestStoredTrackerData prefers latest safe message snapshot", () => {

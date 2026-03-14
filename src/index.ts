@@ -21,12 +21,16 @@ import {
   getTrackerDataFromMessage,
   mergeCustomNonNumericStatisticsWithFallback,
   mergeCustomStatisticsWithFallback,
+  mergeTrackerDataChronologically,
   mergeStatisticsWithFallback,
   writeTrackerDataToMessage
 } from "./storage";
 import { getAllNumericStatDefinitions } from "./statRegistry";
 import type {
   BetterSimTrackerSettings,
+  ClearedCustomNonNumericStatistics,
+  ClearedCustomStatistics,
+  ClearedStatistics,
   CustomNonNumericValue,
   CustomNonNumericStatistics,
   CustomStatistics,
@@ -932,43 +936,12 @@ function getMergedRelevantTrackerDataWithIndexBefore(
     if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
     return a.messageIndex - b.messageIndex;
   });
-
-  let mergedStatistics: Statistics | null = null;
-  let mergedCustomStatistics: CustomStatistics | null = null;
-  let mergedCustomNonNumericStatistics: CustomNonNumericStatistics | null = null;
-  let mergedTimestamp = 0;
-  let fallbackActiveCharacters: string[] = [];
-
-  for (const entry of relevantEntries) {
-    mergedStatistics = mergeStatisticsWithFallback(entry.data.statistics, mergedStatistics, undefined);
-    mergedCustomStatistics = mergeCustomStatisticsWithFallback(entry.data.customStatistics, mergedCustomStatistics);
-    mergedCustomNonNumericStatistics = mergeCustomNonNumericStatisticsWithFallback(
-      entry.data.customNonNumericStatistics,
-      mergedCustomNonNumericStatistics,
-    );
-    mergedTimestamp = Math.max(mergedTimestamp, entry.timestamp);
-    if (Array.isArray(entry.data.activeCharacters) && entry.data.activeCharacters.length) {
-      fallbackActiveCharacters = entry.data.activeCharacters.map(name => String(name ?? "").trim()).filter(Boolean);
-    }
-  }
-
   const latestEntry = relevantEntries[relevantEntries.length - 1];
+  const merged = mergeTrackerDataChronologically(relevantEntries.map(entry => entry.data));
+  if (!merged) return null;
   return {
     messageIndex: latestEntry.messageIndex,
-    data: {
-      timestamp: mergedTimestamp || Number(latestEntry.data.timestamp ?? Date.now()),
-      activeCharacters: fallbackActiveCharacters,
-      statistics: mergedStatistics ?? {
-        affection: {},
-        trust: {},
-        desire: {},
-        connection: {},
-        mood: {},
-        lastThought: {},
-      },
-      customStatistics: mergedCustomStatistics ?? {},
-      customNonNumericStatistics: mergedCustomNonNumericStatistics ?? {},
-    },
+    data: merged,
   };
 }
 
@@ -992,18 +965,25 @@ function getLatestCharacterOwnedTrackerDataWithIndexBefore(
   }
 
   const historyEntries = getRecentTrackerHistoryEntries(context, Math.max(120, context.chat.length));
-  let best: { data: TrackerData; messageIndex: number } | null = null;
-  for (const entry of historyEntries) {
-    if (entry.messageIndex >= beforeIndex) continue;
-    const hasRelevantValue = activeCharacters.some(name =>
+  const relevantEntries = historyEntries
+    .filter(entry => entry.messageIndex < beforeIndex)
+    .filter(entry => activeCharacters.some(name =>
       hasCharacterOwnedTrackedValueForCharacter(entry.data, name, settingsInput),
-    );
-    if (!hasRelevantValue) continue;
-    if (!best || entry.messageIndex > best.messageIndex) {
-      best = { data: entry.data, messageIndex: entry.messageIndex };
-    }
-  }
-  return best;
+    ))
+    .map(entry => ({
+      data: entry.data,
+      messageIndex: entry.messageIndex,
+      timestamp: Number(entry.data.timestamp ?? entry.timestamp ?? 0),
+    }));
+  if (!relevantEntries.length) return null;
+  relevantEntries.sort((a, b) => {
+    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+    return a.messageIndex - b.messageIndex;
+  });
+  const latestEntry = relevantEntries[relevantEntries.length - 1];
+  const merged = mergeTrackerDataChronologically(relevantEntries.map(entry => entry.data));
+  if (!merged) return null;
+  return { data: merged, messageIndex: latestEntry.messageIndex };
 }
 
 function isRenderableTrackerIndex(context: STContext, index: number): boolean {
@@ -2759,12 +2739,37 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
   };
   const custom: CustomStatistics = {};
   const customNonNumeric: CustomNonNumericStatistics = {};
+  const clearedStatistics: ClearedStatistics = {};
+  const clearedCustom: ClearedCustomStatistics = {};
+  const clearedCustomNonNumeric: ClearedCustomNonNumericStatistics = {};
   for (const [key, values] of Object.entries(current.customStatistics ?? {})) {
     custom[key] = { ...(values ?? {}) };
   }
   for (const [key, values] of Object.entries(current.customNonNumericStatistics ?? {})) {
     customNonNumeric[key] = { ...(values ?? {}) };
   }
+  for (const [key, values] of Object.entries(current.clearedStatistics ?? {})) {
+    clearedStatistics[key as keyof ClearedStatistics] = { ...(values ?? {}) };
+  }
+  for (const [key, values] of Object.entries(current.clearedCustomStatistics ?? {})) {
+    clearedCustom[key] = { ...(values ?? {}) };
+  }
+  for (const [key, values] of Object.entries(current.clearedCustomNonNumericStatistics ?? {})) {
+    clearedCustomNonNumeric[key] = { ...(values ?? {}) };
+  }
+
+  const clearClearedBucketOwner = (bucket: Record<string, Record<string, true>>, statId: string, ownerKey: string): void => {
+    if (!bucket[statId]) return;
+    delete bucket[statId][ownerKey];
+    if (Object.keys(bucket[statId]).length === 0) {
+      delete bucket[statId];
+    }
+  };
+
+  const markClearedBucketOwner = (bucket: Record<string, Record<string, true>>, statId: string, ownerKey: string): void => {
+    if (!bucket[statId]) bucket[statId] = {};
+    bucket[statId][ownerKey] = true;
+  };
 
   for (const [rawKey, rawValue] of Object.entries(payload.numeric ?? {})) {
     const statKey = rawKey.trim().toLowerCase();
@@ -2773,8 +2778,10 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
       const bucket = stats[statKey as "affection" | "trust" | "desire" | "connection"];
       if (rawValue == null) {
         delete bucket[character];
+        markClearedBucketOwner(clearedStatistics as Record<string, Record<string, true>>, statKey, character);
       } else if (Number.isFinite(rawValue)) {
         bucket[character] = clampEditedNumber(rawValue);
+        clearClearedBucketOwner(clearedStatistics as Record<string, Record<string, true>>, statKey, character);
       }
       continue;
     }
@@ -2787,11 +2794,13 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
           delete custom[statKey];
         }
       }
+      markClearedBucketOwner(clearedCustom, statKey, ownerKey);
       continue;
     }
     if (!Number.isFinite(rawValue)) continue;
     if (!custom[statKey]) custom[statKey] = {};
     custom[statKey][ownerKey] = clampEditedNumber(rawValue);
+    clearClearedBucketOwner(clearedCustom, statKey, ownerKey);
   }
 
   for (const [rawKey, rawValue] of Object.entries(payload.nonNumeric ?? {})) {
@@ -2804,6 +2813,7 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
         if (!customNonNumeric[statKey]) customNonNumeric[statKey] = {};
         // Keep an explicit empty array so fallback logic does not revive stale items.
         customNonNumeric[statKey][ownerKey] = [];
+        clearClearedBucketOwner(clearedCustomNonNumeric, statKey, ownerKey);
         continue;
       }
       if (customNonNumeric[statKey]) {
@@ -2812,33 +2822,40 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
           delete customNonNumeric[statKey];
         }
       }
+      markClearedBucketOwner(clearedCustomNonNumeric, statKey, ownerKey);
       continue;
     }
     if (!customNonNumeric[statKey]) customNonNumeric[statKey] = {};
     if (typeof rawValue === "boolean") {
       customNonNumeric[statKey][ownerKey] = rawValue;
+      clearClearedBucketOwner(clearedCustomNonNumeric, statKey, ownerKey);
       continue;
     }
     if (Array.isArray(rawValue)) {
       customNonNumeric[statKey][ownerKey] = normalizeNonNumericArrayItems(rawValue, 200);
+      clearClearedBucketOwner(clearedCustomNonNumeric, statKey, ownerKey);
       continue;
     }
     if ((statDef?.kind ?? "text_short") === "date_time") {
       const normalized = normalizeDateTimeWithMode(rawValue, statDef?.dateTimeMode ?? "timestamp");
       if (!normalized) continue;
       customNonNumeric[statKey][ownerKey] = normalized;
+      clearClearedBucketOwner(clearedCustomNonNumeric, statKey, ownerKey);
       continue;
     }
     const text = String(rawValue).trim().replace(/\s+/g, " ");
     customNonNumeric[statKey][ownerKey] = text.slice(0, 200);
+    clearClearedBucketOwner(clearedCustomNonNumeric, statKey, ownerKey);
   }
 
   if (payload.mood !== undefined) {
     const moodValue = normalizeEditMood(payload.mood);
     if (!moodValue) {
       delete stats.mood[character];
+      markClearedBucketOwner(clearedStatistics as Record<string, Record<string, true>>, "mood", character);
     } else {
       stats.mood[character] = moodValue;
+      clearClearedBucketOwner(clearedStatistics as Record<string, Record<string, true>>, "mood", character);
     }
   }
 
@@ -2846,8 +2863,10 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
     const thought = String(payload.lastThought ?? "").trim();
     if (!thought) {
       delete stats.lastThought[character];
+      markClearedBucketOwner(clearedStatistics as Record<string, Record<string, true>>, "lastThought", character);
     } else {
       stats.lastThought[character] = thought.slice(0, 600);
+      clearClearedBucketOwner(clearedStatistics as Record<string, Record<string, true>>, "lastThought", character);
     }
   }
 
@@ -2857,6 +2876,9 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
     statistics: stats,
     customStatistics: Object.keys(custom).length ? custom : undefined,
     customNonNumericStatistics: Object.keys(customNonNumeric).length ? customNonNumeric : undefined,
+    clearedStatistics: Object.keys(clearedStatistics).length ? clearedStatistics : undefined,
+    clearedCustomStatistics: Object.keys(clearedCustom).length ? clearedCustom : undefined,
+    clearedCustomNonNumericStatistics: Object.keys(clearedCustomNonNumeric).length ? clearedCustomNonNumeric : undefined,
   };
 
   if (payload.active !== undefined && character !== USER_TRACKER_KEY) {
