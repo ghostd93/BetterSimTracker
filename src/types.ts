@@ -98,6 +98,7 @@ export type BuiltInNumericStatUiSettings = Record<NumericStatKey, BuiltInNumeric
 
 export interface TrackerData {
   timestamp: number;
+  manualEditTimestamp?: number;
   activeCharacters: string[];
   statistics: Statistics;
   customStatistics?: CustomStatistics;

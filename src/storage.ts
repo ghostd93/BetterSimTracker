@@ -38,8 +38,12 @@ function normalizeTrackerData(data: Partial<TrackerData>): TrackerData {
   const clearedStatistics = normalizeClearedStatistics(data.clearedStatistics);
   const clearedCustomStatistics = normalizeClearedOwnerBuckets(data.clearedCustomStatistics);
   const clearedCustomNonNumericStatistics = normalizeClearedOwnerBuckets(data.clearedCustomNonNumericStatistics);
+  const manualEditTimestamp = Number.isFinite(Number(data.manualEditTimestamp))
+    ? Number(data.manualEditTimestamp)
+    : undefined;
   return {
     timestamp: Number(data.timestamp ?? Date.now()),
+    ...(manualEditTimestamp !== undefined ? { manualEditTimestamp } : {}),
     activeCharacters: Array.isArray(data.activeCharacters) ? data.activeCharacters : [],
     statistics: {
       ...createEmptyStatistics(),

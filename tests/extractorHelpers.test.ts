@@ -7,6 +7,7 @@ import {
   enabledBuiltInAndTextStats,
   enabledCustomStats,
   groupCustomStatsForSequential,
+  hasManualTrackerEdits,
   isManualExtractionReason,
   normalizeSequentialGroupId,
   resolveBaselineBeforeIndex,
@@ -101,6 +102,36 @@ test("shouldBypassConfidenceControls covers retrack and edited-message flows", (
   assert.equal(shouldBypassConfidenceControls("USER_MESSAGE_EDITED"), true);
   assert.equal(shouldBypassConfidenceControls("MESSAGE_EDITED"), true);
   assert.equal(shouldBypassConfidenceControls("GENERATION_ENDED"), false);
+});
+
+test("hasManualTrackerEdits only returns true for explicit manual edit markers", () => {
+  assert.equal(hasManualTrackerEdits(null), false);
+  assert.equal(hasManualTrackerEdits(undefined), false);
+  assert.equal(hasManualTrackerEdits({
+    timestamp: 1,
+    activeCharacters: [],
+    statistics: {
+      affection: {},
+      trust: {},
+      desire: {},
+      connection: {},
+      mood: {},
+      lastThought: {},
+    },
+  }), false);
+  assert.equal(hasManualTrackerEdits({
+    timestamp: 1,
+    manualEditTimestamp: 2,
+    activeCharacters: [],
+    statistics: {
+      affection: {},
+      trust: {},
+      desire: {},
+      connection: {},
+      mood: {},
+      lastThought: {},
+    },
+  }), true);
 });
 
 test("applyConfidenceScaledDelta uses confidence scaling by default", () => {

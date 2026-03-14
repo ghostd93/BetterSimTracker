@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.10-dev5] - 2026-03-14
+### Fixed
+- Prevented auto-regeneration from overwriting manual tracker edits when the text of that same message is edited later.
+
 ## [2.2.4.10-dev4] - 2026-03-14
 ### Fixed
 - Improved diagnostics for lorebook extraction by exposing the effective lorebook source, prompt size, and whether cached fallback entries were used.
