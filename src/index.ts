@@ -2,7 +2,7 @@ import { getAllTrackedCharacterNames, buildRecentContext, resolveActiveCharacter
 import { resolveCharacterDefaultsEntry } from "./characterDefaults";
 import type { Character } from "./types";
 import { extractStatisticsParallel } from "./extractor";
-import { hasManualTrackerEdits, resolveBaselineBeforeIndex, shouldBypassConfidenceControls } from "./extractorHelpers";
+import { resolveBaselineBeforeIndex, shouldBypassConfidenceControls } from "./extractorHelpers";
 import { isTrackableAiMessage, isTrackableMessage, isTrackableUserMessage } from "./messageFilter";
 import { clearPromptInjection, getLastInjectedPrompt, getLastInjectedPromptDebug } from "./promptInjection";
 import { GLOBAL_TRACKER_KEY, USER_TRACKER_KEY } from "./constants";
@@ -2872,7 +2872,6 @@ function applyManualTrackerEdits(payload: ManualEditPayload): void {
 
   const next: TrackerData = {
     timestamp: Date.now(),
-    manualEditTimestamp: Date.now(),
     activeCharacters: Array.isArray(current.activeCharacters) ? [...current.activeCharacters] : [],
     statistics: stats,
     customStatistics: Object.keys(custom).length ? custom : undefined,
@@ -4080,16 +4079,6 @@ function registerEvents(context: STContext): void {
           reason: "edited_message_has_no_tracker_data",
           trigger: "MESSAGE_EDITED",
           messageIndex,
-        });
-        return;
-      }
-      const editedTracker = getTrackerDataFromMessage(editedMessage);
-      if (hasManualTrackerEdits(editedTracker)) {
-        pushTrace("extract.skip", {
-          reason: "edited_message_has_manual_tracker_edits",
-          trigger: "MESSAGE_EDITED",
-          messageIndex,
-          manualEditTimestamp: editedTracker?.manualEditTimestamp ?? null,
         });
         return;
       }

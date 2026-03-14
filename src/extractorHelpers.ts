@@ -1,4 +1,4 @@
-import type { BetterSimTrackerSettings, CustomStatDefinition, StatKey, TrackerData } from "./types";
+import type { BetterSimTrackerSettings, CustomStatDefinition, StatKey } from "./types";
 
 export function enabledBuiltInAndTextStats(settings: BetterSimTrackerSettings): StatKey[] {
   const selected: StatKey[] = [];
@@ -53,10 +53,6 @@ export function shouldBypassConfidenceControls(reason: string): boolean {
     || reason === "USER_MESSAGE_EDITED"
     || reason === "MESSAGE_EDITED"
   );
-}
-
-export function hasManualTrackerEdits(data: TrackerData | null | undefined): boolean {
-  return Boolean(data && Number.isFinite(Number(data.manualEditTimestamp)) && Number(data.manualEditTimestamp) > 0);
 }
 
 export function resolveBaselineBeforeIndex(input: {
