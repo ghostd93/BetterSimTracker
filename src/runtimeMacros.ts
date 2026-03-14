@@ -213,15 +213,19 @@ function resolveMacroStatValue(
 }
 
 function unregisterBstMacro(context: STContext, name: string): void {
+  const hasNewEngine = typeof context.macros?.register === "function";
+  if (hasNewEngine) {
+    try {
+      context.macros?.registry?.unregisterMacro?.(name);
+    } catch {
+      // ignore
+    }
+    return;
+  }
   try {
     if (typeof context.unregisterMacro === "function") {
       context.unregisterMacro(name);
     }
-  } catch {
-    // ignore
-  }
-  try {
-    context.macros?.registry?.unregisterMacro?.(name);
   } catch {
     // ignore
   }
@@ -233,23 +237,27 @@ function registerBstMacro(
   description: string,
   getter: () => string,
 ): void {
+  const hasNewEngine = typeof context.macros?.register === "function";
   let registered = false;
-  try {
-    if (typeof context.registerMacro === "function") {
-      context.registerMacro(name, getter, description);
+  if (hasNewEngine) {
+    try {
+      context.macros?.register?.(name, {
+        description,
+        handler: () => getter(),
+      });
       registered = true;
+    } catch {
+      // ignore
     }
-  } catch {
-    // continue to new engine registration
-  }
-  try {
-    context.macros?.register?.(name, {
-      description,
-      handler: () => getter(),
-    });
-    registered = true;
-  } catch {
-    // ignore
+  } else {
+    try {
+      if (typeof context.registerMacro === "function") {
+        context.registerMacro(name, getter, description);
+        registered = true;
+      }
+    } catch {
+      // ignore
+    }
   }
   if (registered) {
     registeredBstMacros.add(name);

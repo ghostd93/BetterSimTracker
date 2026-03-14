@@ -2,13 +2,17 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.4.10-dev5] - 2026-03-14
+## [2.2.4.10-dev7] - 2026-03-14
 ### Fixed
-- Fixed user-message continuity so neutral follow-up turns no longer revive stale owner state from older edited messages or later AI carry-forward snapshots.
+- Reduced BST macro registration warnings on current SillyTavern builds by preferring the modern macro engine and using legacy macro registration only as a fallback for older hosts.
 
 ## [2.2.4.10-dev6] - 2026-03-14
 ### Fixed
 - Fixed user-message continuity so follow-up user turns now seed owner-scoped continuity from the last tracked user message instead of reviving stale owner state carried forward by an intervening AI tracker snapshot.
+
+## [2.2.4.10-dev5] - 2026-03-14
+### Fixed
+- Fixed user-message continuity so neutral follow-up turns no longer revive stale owner state from older edited messages or later AI carry-forward snapshots.
 
 ## [2.2.4.10-dev4] - 2026-03-14
 ### Fixed

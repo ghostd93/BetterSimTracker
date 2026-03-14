@@ -6,7 +6,8 @@ import { defaultSettings } from "../src/settings";
 import { getBstMacroDebugSnapshot, resetBstMacroStateForTests, syncBstMacros } from "../src/runtimeMacros";
 import type { BetterSimTrackerSettings, STContext, TrackerData } from "../src/types";
 
-function makeContext() {
+function makeContext(options?: { includeNewEngine?: boolean }) {
+  const includeNewEngine = options?.includeNewEngine ?? true;
   const registered = new Map<string, () => string>();
   const registeredNewEngine = new Map<string, () => string>();
   const unregistered: string[] = [];
@@ -31,7 +32,10 @@ function makeContext() {
         return typeof handler === "function" ? handler() : `{{${name}}}`;
       });
     },
-    macros: {
+  } as STContext & { substituteParams: (value: string) => string; macros?: unknown };
+
+  if (includeNewEngine) {
+    context.macros = {
       register(name, definition) {
         const handler = typeof definition?.handler === "function"
           ? (definition.handler as () => string)
@@ -45,8 +49,9 @@ function makeContext() {
           registeredNewEngine.delete(name);
         },
       },
-    },
-  } as STContext & { substituteParams: (value: string) => string };
+    };
+  }
+
   return { context, registered, registeredNewEngine, unregistered };
 }
 
@@ -126,7 +131,7 @@ afterEach(() => {
   resetBstMacroStateForTests();
 });
 
-test("syncBstMacros registers injection, user, scene, and character macros with resolved values", () => {
+test("syncBstMacros registers BST macros in the new macro engine by default", () => {
   const { context, registered, registeredNewEngine } = makeContext();
   syncBstMacros({
     context,
@@ -136,22 +141,36 @@ test("syncBstMacros registers injection, user, scene, and character macros with 
     getLastInjectedPrompt: () => "<bst_inject_block>demo</bst_inject_block>",
   });
 
-  assert.equal(registered.get("bst_injection")?.(), "<bst_inject_block>demo</bst_inject_block>");
-  assert.equal(registered.get("bst_stat_char_affection_seraphina")?.(), "61");
-  assert.equal(registered.get("bst_stat_char_mood_seraphina")?.(), "Hopeful");
-  assert.equal(registered.get("bst_stat_user_mood")?.(), "Neutral");
-  assert.equal(registered.get("bst_stat_user_clothes")?.(), "hoodie");
-  assert.equal(registered.get("bst_stat_scene_scene_date_time")?.(), "2026-03-06 20:05");
-  assert.equal(registered.get("bst_stat_char_clothes")?.(), "black sundress, sandals");
-  assert.equal(registered.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
+  assert.equal(registered.size, 0);
+  assert.equal(registeredNewEngine.get("bst_injection")?.(), "<bst_inject_block>demo</bst_inject_block>");
+  assert.equal(registeredNewEngine.get("bst_stat_char_affection_seraphina")?.(), "61");
+  assert.equal(registeredNewEngine.get("bst_stat_char_mood_seraphina")?.(), "Hopeful");
+  assert.equal(registeredNewEngine.get("bst_stat_user_mood")?.(), "Neutral");
   assert.equal(registeredNewEngine.get("bst_stat_user_clothes")?.(), "hoodie");
   assert.equal(registeredNewEngine.get("bst_stat_scene_scene_date_time")?.(), "2026-03-06 20:05");
   assert.equal(registeredNewEngine.get("bst_stat_char_clothes")?.(), "black sundress, sandals");
   assert.equal(registeredNewEngine.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
 });
 
+test("syncBstMacros falls back to legacy registration only when new engine is unavailable", () => {
+  const { context, registered, registeredNewEngine } = makeContext({ includeNewEngine: false });
+  syncBstMacros({
+    context,
+    settings: makeSettings(),
+    allCharacterNames: ["Seraphina", USER_TRACKER_KEY],
+    getLatestPromptMacroData: () => makeTracker(),
+    getLastInjectedPrompt: () => "<bst_inject_block>demo</bst_inject_block>",
+  });
+
+  assert.equal(registered.get("bst_injection")?.(), "<bst_inject_block>demo</bst_inject_block>");
+  assert.equal(registered.get("bst_stat_user_clothes")?.(), "hoodie");
+  assert.equal(registered.get("bst_stat_scene_scene_date_time")?.(), "2026-03-06 20:05");
+  assert.equal(registered.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
+  assert.equal(registeredNewEngine.size, 0);
+});
+
 test("syncBstMacros unregisters previous macros when signature changes and skips re-registering identical signatures", () => {
-  const { context, registered, unregistered } = makeContext();
+  const { context, registered, registeredNewEngine, unregistered } = makeContext();
   const settings = makeSettings();
   const tracker = makeTracker();
 
@@ -162,7 +181,7 @@ test("syncBstMacros unregisters previous macros when signature changes and skips
     getLatestPromptMacroData: () => tracker,
     getLastInjectedPrompt: () => "first",
   });
-  const countAfterFirst = registered.size;
+  const countAfterFirst = registeredNewEngine.size;
 
   syncBstMacros({
     context,
@@ -171,9 +190,10 @@ test("syncBstMacros unregisters previous macros when signature changes and skips
     getLatestPromptMacroData: () => tracker,
     getLastInjectedPrompt: () => "second",
   });
-  assert.equal(registered.size, countAfterFirst);
+  assert.equal(registered.size, 0);
+  assert.equal(registeredNewEngine.size, countAfterFirst);
   assert.deepEqual(unregistered, []);
-  assert.equal(registered.get("bst_injection")?.(), "first");
+  assert.equal(registeredNewEngine.get("bst_injection")?.(), "first");
 
   const debug = getBstMacroDebugSnapshot();
   assert.equal(debug?.["skippedBecauseSignatureUnchanged"], true);
@@ -193,13 +213,13 @@ test("syncBstMacros unregisters previous macros when signature changes and skips
     getLatestPromptMacroData: () => tracker,
     getLastInjectedPrompt: () => "third",
   });
-  assert.ok(unregistered.length > 0);
-  assert.equal(registered.get("bst_injection")?.(), "third");
-  assert.equal(registered.has("bst_stat_user_clothes"), false);
+  assert.equal(unregistered.length, 0);
+  assert.equal(registeredNewEngine.get("bst_injection")?.(), "third");
+  assert.equal(registeredNewEngine.has("bst_stat_user_clothes"), false);
 });
 
 test("syncBstMacros creates collision-safe character macros for duplicate names", () => {
-  const { context, registered } = makeContext();
+  const { context, registered, registeredNewEngine } = makeContext();
   context.characters = [
     { name: "Chloe", avatar: "chloe_a.png" } as any,
     { name: "Chloe", avatar: "chloe_b.png" } as any,
@@ -217,11 +237,11 @@ test("syncBstMacros creates collision-safe character macros for duplicate names"
     getLastInjectedPrompt: () => "demo",
   });
 
-  assert.equal(registered.has("bst_stat_char_affection_chloe_a"), true);
-  assert.equal(registered.has("bst_stat_char_affection_chloe_b"), true);
-  assert.equal(registered.get("bst_stat_char_affection_chloe_a")?.(), "42");
-  assert.equal(registered.get("bst_stat_char_affection_chloe_b")?.(), "42");
-  assert.equal(registered.has("bst_stat_char_affection_chloe"), false);
+  assert.equal(registered.has("bst_stat_char_affection_chloe_a"), false);
+  assert.equal(registered.has("bst_stat_char_affection_chloe_b"), false);
+  assert.equal(registeredNewEngine.get("bst_stat_char_affection_chloe_a")?.(), "42");
+  assert.equal(registeredNewEngine.get("bst_stat_char_affection_chloe_b")?.(), "42");
+  assert.equal(registeredNewEngine.has("bst_stat_char_affection_chloe"), false);
 });
 
 test("syncBstMacros stat getters read fresh tracker data even when registration signature is unchanged", () => {
@@ -237,7 +257,7 @@ test("syncBstMacros stat getters read fresh tracker data even when registration 
     getLastInjectedPrompt: () => "",
   });
 
-  assert.equal(registered.get("bst_stat_user_clothes")?.(), "");
+  assert.equal(registered.get("bst_stat_user_clothes")?.(), undefined);
   assert.equal(registeredNewEngine.get("bst_stat_user_clothes")?.(), "");
 
   tracker = makeTracker();
@@ -250,26 +270,9 @@ test("syncBstMacros stat getters read fresh tracker data even when registration 
     getLastInjectedPrompt: () => "",
   });
 
-  assert.equal(registered.get("bst_stat_user_clothes")?.(), "hoodie");
-  assert.equal(registered.get("bst_stat_scene_scene_date_time")?.(), "2026-03-06 20:05");
-  assert.equal(registered.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
-  assert.equal(registeredNewEngine.get("bst_stat_user_clothes")?.(), "hoodie");
-  assert.equal(registeredNewEngine.get("bst_stat_scene_scene_date_time")?.(), "2026-03-06 20:05");
-  assert.equal(registeredNewEngine.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
-});
-
-test("syncBstMacros registers macros in the new ST macro engine even when legacy registerMacro exists", () => {
-  const { context, registeredNewEngine } = makeContext();
-
-  syncBstMacros({
-    context,
-    settings: makeSettings(),
-    allCharacterNames: ["Seraphina", USER_TRACKER_KEY],
-    getLatestPromptMacroData: () => makeTracker(),
-    getLastInjectedPrompt: () => "<bst_inject_block>demo</bst_inject_block>",
-  });
-
-  assert.equal(registeredNewEngine.get("bst_injection")?.(), "<bst_inject_block>demo</bst_inject_block>");
+  assert.equal(registered.get("bst_stat_user_clothes")?.(), undefined);
+  assert.equal(registered.get("bst_stat_scene_scene_date_time")?.(), undefined);
+  assert.equal(registered.get("bst_stat_char_clothes_seraphina")?.(), undefined);
   assert.equal(registeredNewEngine.get("bst_stat_user_clothes")?.(), "hoodie");
   assert.equal(registeredNewEngine.get("bst_stat_scene_scene_date_time")?.(), "2026-03-06 20:05");
   assert.equal(registeredNewEngine.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
@@ -289,8 +292,8 @@ test("syncBstMacros exposes a legacy name-slug alias for unique characters when 
     getLastInjectedPrompt: () => "",
   });
 
-  assert.equal(registered.get("bst_stat_char_clothes_sera_alt")?.(), "black sundress, sandals");
-  assert.equal(registered.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
+  assert.equal(registered.get("bst_stat_char_clothes_sera_alt")?.(), undefined);
+  assert.equal(registered.get("bst_stat_char_clothes_seraphina")?.(), undefined);
   assert.equal(registeredNewEngine.get("bst_stat_char_clothes_sera_alt")?.(), "black sundress, sandals");
   assert.equal(registeredNewEngine.get("bst_stat_char_clothes_seraphina")?.(), "black sundress, sandals");
 });
@@ -314,8 +317,8 @@ test("syncBstMacros does not fall back to global values for owner-scoped charact
     getLastInjectedPrompt: () => "",
   });
 
-  assert.equal(registered.get("bst_stat_char_clothes")?.(), "");
-  assert.equal(registered.get("bst_stat_char_clothes_seraphina")?.(), "");
+  assert.equal(registered.get("bst_stat_char_clothes")?.(), undefined);
+  assert.equal(registered.get("bst_stat_char_clothes_seraphina")?.(), undefined);
   assert.equal(registeredNewEngine.get("bst_stat_char_clothes")?.(), "");
   assert.equal(registeredNewEngine.get("bst_stat_char_clothes_seraphina")?.(), "");
 });
