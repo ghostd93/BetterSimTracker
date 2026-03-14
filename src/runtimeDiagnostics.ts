@@ -94,6 +94,38 @@ function buildPromptInjectionSummary(input: {
   };
 }
 
+function summarizeLorebookContext(input: {
+  context: STContext;
+  settings: BetterSimTrackerSettings;
+  promptInjectionDebugMeta: Record<string, unknown> | null;
+}): Record<string, unknown> {
+  const directContextSources = [
+    input.context.chatMetadata,
+    input.context.world_info,
+    input.context.worldInfo,
+    input.context.lorebook,
+  ];
+  const hasDirectActivatedContext = directContextSources.some(source =>
+    source && typeof source === "object" && Object.keys(source as Record<string, unknown>).length > 0,
+  );
+  const cachedEntries = Array.isArray(input.context.chatMetadata?.bstLorebookActivatedEntries)
+    ? input.context.chatMetadata.bstLorebookActivatedEntries.length
+    : 0;
+  const promptChars = Number(input.promptInjectionDebugMeta?.lorebookContextChars ?? 0);
+  const source = promptChars > 0
+    ? (hasDirectActivatedContext ? "direct_context" : (cachedEntries > 0 && input.settings.useInternalLorebookScanFallback ? "internal_scan_fallback" : "unknown"))
+    : "none";
+
+  return {
+    source,
+    promptChars,
+    includeLorebookInExtraction: input.settings.includeLorebookInExtraction,
+    useInternalLorebookScanFallback: input.settings.useInternalLorebookScanFallback,
+    usedCachedActivatedLorebookEntries: source === "internal_scan_fallback",
+    cachedActivatedLorebookEntryCount: cachedEntries,
+  };
+}
+
 export function filterDiagnosticsTrace(lines: string[], includeGraphInDiagnostics: boolean): string[] {
   if (includeGraphInDiagnostics) return lines;
   return lines.filter(line => !line.includes(" graph.open "));
@@ -230,6 +262,11 @@ export function buildDiagnosticsReport(input: {
     promptInjectionPreviousMessage: input.promptInjectionPreviousMessage,
     promptInjectionLatestDataMessage: input.promptInjectionLatestDataMessage,
     promptInjectionDebugMeta: input.promptInjectionDebugMeta,
+    lorebook: summarizeLorebookContext({
+      context,
+      settings,
+      promptInjectionDebugMeta: input.promptInjectionDebugMeta,
+    }),
     macroDebugMeta: input.macroDebugMeta,
     baselineDebugMeta: input.baselineDebugMeta,
     traceTailMemory: input.traceTailMemory,

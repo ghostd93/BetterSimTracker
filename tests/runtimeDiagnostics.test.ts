@@ -44,6 +44,7 @@ function makeSettings(): BetterSimTrackerSettings {
     truncationLengthOverride: 0,
     includeCharacterCardsInPrompt: true,
     includeLorebookInExtraction: true,
+    useInternalLorebookScanFallback: true,
     lorebookExtractionMaxChars: 1200,
     autoDetectActive: true,
     activityLookback: 5,
@@ -291,5 +292,16 @@ test("buildDiagnosticsReport produces expected core fields", () => {
   assert.deepEqual(
     (report.promptInjection as { baseline: Record<string, unknown> }).baseline,
     { baselineBeforeIndex: 4, previousEntryMessageIndex: 3, currentMessageWasUsedAsBaseline: false },
+  );
+  assert.deepEqual(
+    report.lorebook,
+    {
+      source: "none",
+      promptChars: 0,
+      includeLorebookInExtraction: true,
+      useInternalLorebookScanFallback: true,
+      usedCachedActivatedLorebookEntries: false,
+      cachedActivatedLorebookEntryCount: 0,
+    },
   );
 });

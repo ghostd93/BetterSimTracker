@@ -2,6 +2,10 @@
 
 All notable changes to BetterSimTracker are documented here.
 
+## [2.2.4.10-dev4] - 2026-03-14
+### Fixed
+- Improved diagnostics for lorebook extraction by exposing the effective lorebook source, prompt size, and whether cached fallback entries were used.
+
 ## [2.2.4.10-dev3] - 2026-03-14
 ### Changed
 - Lorebook extraction now prefers activated ST lorebook context directly instead of reading prompt-style extension WI blocks.
