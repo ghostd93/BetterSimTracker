@@ -2,38 +2,16 @@
 
 All notable changes to BetterSimTracker are documented here.
 
-## [2.2.4.10-dev7] - 2026-03-14
-### Fixed
-- Reduced BST macro registration warnings on current SillyTavern builds by preferring the modern macro engine and using legacy macro registration only as a fallback for older hosts.
-
-## [2.2.4.10-dev6] - 2026-03-14
-### Fixed
-- Fixed user-message continuity so follow-up user turns now seed owner-scoped continuity from the last tracked user message instead of reviving stale owner state carried forward by an intervening AI tracker snapshot.
-
-## [2.2.4.10-dev5] - 2026-03-14
-### Fixed
-- Fixed user-message continuity so neutral follow-up turns no longer revive stale owner state from older edited messages or later AI carry-forward snapshots.
-
-## [2.2.4.10-dev4] - 2026-03-14
-### Fixed
-- Improved diagnostics for lorebook extraction by exposing the effective lorebook source, prompt size, and whether cached fallback entries were used.
-
-## [2.2.4.10-dev3] - 2026-03-14
+## [2.2.4.11] - 2026-03-14
 ### Changed
-- Lorebook extraction now prefers activated ST lorebook context directly instead of reading prompt-style extension WI blocks.
+- Lorebook extraction now prefers SillyTavern's already-activated lorebook context directly, with an optional internal fallback scan for setups that still need BST-side recovery.
 
 ### Fixed
-- Added a dedicated fallback toggle for BST's internal lorebook scan, so extraction can avoid BST-triggered lorebook matching and behave more predictably with quiet-style lorebook setups.
-
-## [2.2.4.10-dev2] - 2026-03-14
-### Fixed
+- Fixed manual tracker edits so newer edited values and explicit clears no longer get overwritten later by older snapshot history in either user or character continuity.
+- Fixed user-message continuity so follow-up user turns inherit the last tracked user state instead of reviving stale owner state from intervening AI snapshots or older edited messages.
 - Fixed user tracker cards so configured stat display order now applies consistently to both user and character cards.
-
-## [2.2.4.10-dev1] - 2026-03-14
-### Fixed
-- Fixed manual tracker edits so explicitly cleared values no longer get repopulated later from older snapshot history.
-- Fixed continuity merging for both user and character flows so newer manual tracker edits are not overwritten by stale state carried in later snapshots.
-- Fixed card/render and prompt/injection state resolution to respect explicit manual clears instead of falling back to older history.
+- Improved lorebook diagnostics by exposing the effective lorebook source, prompt size, and whether cached fallback entries were used.
+- Reduced BST macro registration warnings on current SillyTavern builds by preferring the modern macro engine and using legacy macro registration only as a fallback for older hosts.
 
 ## [2.2.4.10] - 2026-03-12
 ### Fixed
