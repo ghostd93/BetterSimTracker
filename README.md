@@ -1,3 +1,5 @@
+# Extension is abandoned. I don't have time to maintain it anymore :(
+
 # BetterSimTracker
 
 BetterSimTracker is a SillyTavern extension for relationship/state tracking in roleplay chats.
